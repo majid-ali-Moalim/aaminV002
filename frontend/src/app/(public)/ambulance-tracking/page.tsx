@@ -79,7 +79,7 @@ function TrackingContent() {
   };
 
   const getStatusProgress = (status: string) => {
-    const steps = ['PENDING', 'ASSIGNED', 'DISPATCHED', 'ON_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED']
+    const steps = ['PENDING', 'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED']
     const idx = steps.indexOf(status)
     return Math.max(0, (idx / (steps.length - 1)) * 100)
   }
@@ -89,7 +89,7 @@ function TrackingContent() {
       case 'PENDING': return 'text-amber-500 bg-amber-50 border-amber-500/20'
       case 'ASSIGNED': return 'text-blue-500 bg-blue-50 border-blue-500/20'
       case 'DISPATCHED': return 'text-red-600 bg-red-50 border-red-600/20'
-      case 'ON_SCENE': return 'text-purple-500 bg-purple-50 border-purple-500/20'
+      case 'ARRIVED_SCENE': return 'text-purple-500 bg-purple-50 border-purple-500/20'
       case 'TRANSPORTING': return 'text-blue-600 bg-blue-50 border-blue-600/20'
       case 'ARRIVED_HOSPITAL': return 'text-sky-500 bg-sky-50 border-sky-500/20'
       case 'COMPLETED': return 'text-emerald-500 bg-emerald-50 border-emerald-500/20'

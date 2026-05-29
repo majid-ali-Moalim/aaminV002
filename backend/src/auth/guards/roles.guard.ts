@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
@@ -17,6 +17,40 @@ export class RolesGuard implements CanActivate {
     }
     
     const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.some((role) => user.role === role);
+    
+    // Check if user exists and is authenticated
+    if (!user) {
+      throw new ForbiddenException('User not authenticated');
+    }
+    
+    // Check if user is active (undefined/missing defaults to active)
+    if (user.isActive === false) {
+      throw new ForbiddenException('User account is not active');
+    }
+    
+    // Check if user has required role (supports EMPLOYEE + employeeRole mapping)
+    const hasRole = requiredRoles.some((role) => this.userHasRole(user, role));
+    if (!hasRole) {
+      throw new ForbiddenException(`Access denied. Required roles: ${requiredRoles.join(', ')}`);
+    }
+
+    if (user.role === 'EMPLOYEE' && user.employeeStatus && user.employeeStatus !== 'ACTIVE') {
+      throw new ForbiddenException('Employee account is not active');
+    }
+    
+    return true;
+  }
+
+  private userHasRole(user: { role?: string; employeeRole?: string | null }, required: string): boolean {
+    if (user.role === required) return true;
+    if (user.role !== 'EMPLOYEE' || !user.employeeRole) return false;
+
+    const name = String(user.employeeRole).toUpperCase();
+    const want = required.toUpperCase();
+
+    if (want === 'DISPATCHER') return name.includes('DISPATCH');
+    if (want === 'DRIVER') return name.includes('DRIVER');
+    if (want === 'NURSE') return name.includes('NURSE');
+    return name === want;
   }
 }

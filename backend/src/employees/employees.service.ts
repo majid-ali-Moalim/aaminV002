@@ -22,8 +22,18 @@ export class EmployeesService {
         user: true,
         employeeRole: true,
         department: true,
-        station: true,
-        assignedAmbulance: true,
+        station: {
+          include: {
+            region: true,
+            district: true,
+          },
+        },
+        assignedAmbulance: {
+          include: {
+            equipmentLevel: true,
+            station: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -36,8 +46,18 @@ export class EmployeesService {
         user: true,
         employeeRole: true,
         department: true,
-        station: true,
-        assignedAmbulance: true,
+        station: {
+          include: {
+            region: true,
+            district: true,
+          },
+        },
+        assignedAmbulance: {
+          include: {
+            equipmentLevel: true,
+            station: true,
+          },
+        },
       },
     });
   }
@@ -158,7 +178,12 @@ export class EmployeesService {
           employeeRole: true,
           department: true,
           station: true,
-          assignedAmbulance: true,
+          assignedAmbulance: {
+          include: {
+            equipmentLevel: true,
+            station: true,
+          },
+        },
         },
       });
 
@@ -192,37 +217,105 @@ export class EmployeesService {
     }
   }
 
-  async update(id: string, data: Prisma.EmployeeUpdateInput) {
+  private normalizeUpdateData(data: Record<string, unknown>): Prisma.EmployeeUpdateInput {
+    const payload: Prisma.EmployeeUpdateInput = { ...data } as Prisma.EmployeeUpdateInput;
+
+    const dateFields = [
+      'dateOfBirth',
+      'licenseIssueDate',
+      'licenseExpiryDate',
+      'medicalExpiry',
+      'employmentDate',
+    ] as const;
+
+    for (const field of dateFields) {
+      if (field in data) {
+        const raw = data[field];
+        if (raw === null || raw === '') {
+          (payload as Record<string, unknown>)[field] = null;
+        } else if (typeof raw === 'string') {
+          (payload as Record<string, unknown>)[field] = this.parseDate(raw) ?? null;
+        }
+      }
+    }
+
+    if ('yearsOfExperience' in data && data.yearsOfExperience !== undefined && data.yearsOfExperience !== null) {
+      const years = Number(data.yearsOfExperience);
+      payload.yearsOfExperience = Number.isFinite(years) ? years : undefined;
+    }
+
+    // Strip fields that are not on Employee model
+    delete (payload as Record<string, unknown>).notes;
+    delete (payload as Record<string, unknown>).password;
+    delete (payload as Record<string, unknown>).email;
+    delete (payload as Record<string, unknown>).username;
+
+    return payload;
+  }
+
+  async update(id: string, data: Record<string, unknown>) {
+    const existing = await this.prisma.employee.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Employee not found');
+
+    const normalized = this.normalizeUpdateData(data);
+    const statusChanged =
+      typeof normalized.status === 'string' && normalized.status !== existing.status;
+    const shiftChanged =
+      typeof normalized.shiftStatus === 'string' && normalized.shiftStatus !== existing.shiftStatus;
+
     const result = await this.prisma.employee.update({
       where: { id },
-      data,
+      data: normalized,
       include: {
         user: true,
         employeeRole: true,
         department: true,
-        station: true,
-        assignedAmbulance: true,
+        station: {
+          include: {
+            region: true,
+            district: true,
+          },
+        },
+        assignedAmbulance: {
+          include: {
+            equipmentLevel: true,
+            station: true,
+          },
+        },
       },
     });
 
-    if (data.status || data.shiftStatus) {
-      await this.notifications.create({
-        title: 'Staff Status Update',
-        message: `${result.firstName} ${result.lastName} is now ${data.status || result.status} (${data.shiftStatus || result.shiftStatus})`,
-        type: 'STAFF',
-        priority: 'LOW',
-        relatedModule: 'Employee',
-        relatedId: result.id,
-        actionUrl: `/admin/employees?id=${result.id}`,
-      });
+    if (statusChanged || shiftChanged) {
+      try {
+        await this.notifications.create({
+          title: 'Staff Status Update',
+          message: `${result.firstName} ${result.lastName} is now ${result.status} (${result.shiftStatus})`,
+          type: NotificationType.STAFF,
+          priority: 'LOW',
+          relatedModule: 'Employee',
+          relatedId: result.id,
+          actionUrl: `/admin/employees?id=${result.id}`,
+        });
+      } catch (err) {
+        console.warn('Staff status notification skipped:', err);
+      }
     }
 
     return result;
   }
 
-  delete(id: string) {
-    return this.prisma.employee.delete({
-      where: { id },
-    });
+  async delete(id: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    if (!employee) throw new NotFoundException('Employee not found');
+
+    await this.prisma.employee.delete({ where: { id } });
+
+    try {
+      await this.prisma.user.delete({ where: { id: employee.userId } });
+    } catch {
+      // User may remain if other relations exist; employee record is already removed.
+    }
+
+    return { success: true };
   }
 }

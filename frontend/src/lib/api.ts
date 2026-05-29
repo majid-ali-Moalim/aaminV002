@@ -34,7 +34,13 @@ class ApiService {
       (error) => {
         if (error.response?.status === 401) {
           localStorage.removeItem('token')
-          window.location.href = '/login'
+          if (typeof window !== 'undefined') {
+            window.location.replace('/login')
+          }
+        }
+        if (error.response?.status === 429) {
+          error.message =
+            'Too many requests — please wait a moment before refreshing.'
         }
         return Promise.reject(error)
       }
@@ -81,9 +87,9 @@ class ApiService {
 
 // Auth service
 export const authService = {
-  login: async (username: string, password: string) => {
+  login: async (email: string, password: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/login', { username, password })
+    return await api.post('/api/auth/login', { email, password })
   },
 
   getMe: async (token: string) => {
@@ -367,6 +373,78 @@ export const reportsService = {
   getStaffPerformance: async (filters?: any) => {
     const api = new ApiService()
     return await api.post('/api/reports/staff-performance', filters)
+  },
+
+  // Enhanced dashboard API methods
+  getEmergencyKPIs: async (timeRange?: string) => {
+    const api = new ApiService()
+    const params = timeRange ? `?timeRange=${timeRange}` : ''
+    return await api.get(`/api/reports/kpi/emergency${params}`)
+  },
+
+  getPerformanceMetrics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/kpi/performance')
+  },
+
+  getResourceUtilization: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/kpi/resources')
+  },
+
+  getPatientAnalytics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/kpi/patients')
+  },
+
+  getGeographicAnalytics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/kpi/geographic')
+  },
+
+  getWeeklyTrends: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/trends/weekly')
+  },
+
+  getMonthlyTrends: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/trends/monthly')
+  },
+
+  getSuccessRateAnalytics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/analytics/success-rate')
+  },
+
+  getResponseTimeAnalytics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/analytics/response-time')
+  },
+
+  getFleetUtilization: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/fleet/utilization')
+  },
+
+  getStaffProductivity: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/staff/productivity')
+  },
+
+  getIncidentHeatmap: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/geographic/heatmap')
+  },
+
+  getRealTimeMetrics: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/realtime/metrics')
+  },
+
+  getSystemHealth: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/system/health')
   }
 }
 
@@ -529,6 +607,25 @@ export const driversService = {
     const api = new ApiService()
     return await api.put(`/api/drivers/${id}/ambulance`, { ambulanceId })
   }
+}
+
+// Dispatchers service
+export const dispatchersService = {
+  getAll: async (filters?: { stationId?: string; status?: string; shiftStatus?: string; searchTerm?: string }) => {
+    const api = new ApiService()
+    const params = new URLSearchParams()
+    if (filters?.stationId) params.append('stationId', filters.stationId)
+    if (filters?.status) params.append('status', filters.status)
+    if (filters?.shiftStatus) params.append('shiftStatus', filters.shiftStatus)
+    if (filters?.searchTerm) params.append('searchTerm', filters.searchTerm)
+    const qs = params.toString()
+    return await api.get(`/api/dispatchers${qs ? `?${qs}` : ''}`)
+  },
+
+  getStats: async () => {
+    const api = new ApiService()
+    return await api.get('/api/dispatchers/stats')
+  },
 }
 
 // Nurses service

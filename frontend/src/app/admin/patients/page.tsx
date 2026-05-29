@@ -188,7 +188,7 @@ export default function PatientsDashboard() {
               <option value="PENDING">Pending</option>
               <option value="ASSIGNED">Assigned</option>
               <option value="DISPATCHED">Dispatched</option>
-              <option value="ON_SCENE">On Scene</option>
+              <option value="ARRIVED_SCENE">Arrived Scene</option>
               <option value="TRANSPORTING">Transporting</option>
               <option value="ARRIVED_HOSPITAL">At Hospital</option>
               <option value="COMPLETED">Completed</option>

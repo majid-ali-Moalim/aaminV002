@@ -16,12 +16,9 @@ export default function HireAmbulancePage() {
 
   const [regions, setRegions] = useState<any[]>([])
   const [districts, setDistricts] = useState<any[]>([])
-  const [areas, setAreas] = useState<any[]>([])
+  // Removed areas state as it's now a text input
   
-  const [stations, setStations] = useState<any[]>([])
-  const [ambulances, setAmbulances] = useState<any[]>([])
-  const [drivers, setDrivers] = useState<any[]>([])
-  const [nurses, setNurses] = useState<any[]>([])
+  const [hospitals, setHospitals] = useState<any[]>([])
 
   const {
     register,
@@ -42,6 +39,7 @@ export default function HireAmbulancePage() {
       bloodGroup: '',
       medicalStatus: '',
       hospitalStatus: '',
+      destinationHospital: '',
       nationalityType: '',
       country: '',
       emergencyType: '',
@@ -50,17 +48,14 @@ export default function HireAmbulancePage() {
       breathingStatus: '',
       regionId: '',
       districtId: '',
-      areaId: '',
+      areaName: '',
       landmarkDescription: '',
       additionalDirections: '',
       preferredLanguage: '',
       specialInstructions: '',
       requestType: 'EMERGENCY',
       consent: false,
-      stationId: '',
-      ambulanceId: '',
-      driverId: '',
-      nurseId: ''
+      maritalStatus: '',
     }
   })
 
@@ -72,33 +67,60 @@ export default function HireAmbulancePage() {
 
   // Load Regions and Dispatch Availability
   useEffect(() => {
-    systemSetupService.getRegions().then(setRegions).catch(console.error)
-    systemSetupService.getStations().then(setStations).catch(console.error)
-    emergencyRequestsService.getAvailableAmbulances().then(setAmbulances).catch(console.error)
-    emergencyRequestsService.getAvailableDrivers().then(setDrivers).catch(console.error)
-    emergencyRequestsService.getAvailableNurses().then(setNurses).catch(console.error)
+    // Load public data without authentication
+    fetchPublicRegions()
+    fetchPublicHospitals()
   }, [])
+
+  const fetchPublicHospitals = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/hospitals')
+      if (response.ok) {
+        const data = await response.json()
+        setHospitals(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch hospitals:', error)
+    }
+  }
+
+  const fetchPublicRegions = async () => {
+    try {
+      // Direct fetch without authentication
+      const response = await fetch('http://localhost:3001/api/setup/regions')
+      if (response.ok) {
+        const data = await response.json()
+        setRegions(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch regions:', error)
+    }
+  }
 
   // Load Districts when Region changes
   useEffect(() => {
     if (watchedRegionId) {
-      systemSetupService.getDistricts(watchedRegionId).then(setDistricts).catch(console.error)
+      fetchPublicDistricts(watchedRegionId)
       setValue('districtId', '')
-      setValue('areaId', '')
     } else {
       setDistricts([])
     }
   }, [watchedRegionId, setValue])
 
-  // Load Areas when District changes
-  useEffect(() => {
-    if (watchedDistrictId) {
-      systemSetupService.getAreas(watchedDistrictId).then(setAreas).catch(console.error)
-      setValue('areaId', '')
-    } else {
-      setAreas([])
+  const fetchPublicDistricts = async (regionId: string) => {
+    try {
+      // Direct fetch without authentication
+      const response = await fetch(`http://localhost:3001/api/setup/districts?regionId=${regionId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDistricts(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch districts:', error)
     }
-  }, [watchedDistrictId, setValue])
+  }
+
+
 
   const onSubmit = async (data: any) => {
     if (!watchedConsent) {
@@ -112,7 +134,6 @@ export default function HireAmbulancePage() {
       const finalCallerName = data.isPatient === 'YES' ? data.patientName : (data.callerName || 'Unknown Caller')
       const finalRelationship = data.isPatient === 'YES' ? 'SELF' : (data.callerRelationship || 'OTHER')
       
-      const finalGender = data.isPatient === 'YES' ? 'UNKNOWN' : (data.gender === 'Other' ? 'UNKNOWN' : data.gender || 'UNKNOWN')
       const finalAge = data.isPatient === 'YES' ? 0 : (Number(data.estimatedAge) || 0)
       const finalCountry = data.nationalityType === 'LOCAL' ? 'Somalia' : (data.country || 'Unknown')
 
@@ -124,9 +145,9 @@ export default function HireAmbulancePage() {
 
         newPatient: {
           fullName: data.patientName,
-          gender: finalGender,
+          gender: data.gender || 'UNKNOWN',
           age: finalAge,
-          maritalStatus: 'UNKNOWN',
+          maritalStatus: data.maritalStatus || 'UNKNOWN',
           nationalityType: data.nationalityType,
           country: finalCountry,
           phone: data.callerPhone
@@ -135,29 +156,39 @@ export default function HireAmbulancePage() {
         patientCondition: data.conditionDescription,
         consciousStatus: data.consciousStatus,
         breathingStatus: data.breathingStatus,
+        destination: data.destinationHospital,
         priority: 'HIGH', // Default priority or extract from logic if needed
 
         regionId: data.regionId,
         districtId: data.districtId,
-        areaId: data.areaId,
-        pickupLocation: data.landmarkDescription,
+        pickupLocation: data.areaName ? `${data.areaName}, ${data.landmarkDescription}` : data.landmarkDescription,
         pickupLandmark: data.landmarkDescription,
         notes: `Directions: ${data.additionalDirections || 'N/A'}\nLanguage: ${data.preferredLanguage}\nSpecial Instructions: ${data.specialInstructions || 'None'}\nRequest Type: ${data.requestType}`,
 
-        ambulanceId: data.ambulanceId,
-        driverId: data.driverId,
-        nurseId: data.nurseId,
-        
-        requestSource: 'ONLINE'
+        requestSource: 'OTHER'
       }
 
-      const response = await emergencyRequestsService.create(payload)
-      setCaseId(response.trackingCode)
-      setSuccess(true)
-      toast.success('Ambulance request created successfully!')
+      // Direct fetch without authentication to avoid login redirect
+      const response = await fetch('http://localhost:3001/api/emergency-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        setCaseId(result.trackingCode)
+        setSuccess(true)
+        toast.success('Ambulance request created successfully!')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Failed to create ambulance request')
+      }
     } catch (error: any) {
       console.error(error)
-      toast.error(error.response?.data?.message || 'Failed to submit request')
+      toast.error(error.message || 'Failed to submit request')
     } finally {
       setLoading(false)
     }
@@ -185,7 +216,7 @@ export default function HireAmbulancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white py-8">
+    <div className="min-h-screen bg-white pt-16 pb-8">
       <div className="max-w-4xl mx-auto px-4">
         
         {/* Ambulance Availability Status */}
@@ -231,6 +262,25 @@ export default function HireAmbulancePage() {
                 <div>
                   <label className="block mb-1 font-medium text-gray-700">Date of Birth*</label>
                   <input type="date" {...register('dateOfBirth')} className="w-full border border-gray-300 p-2 rounded outline-none focus:border-blue-500" required />
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium text-gray-700">Gender*</label>
+                  <select {...register('gender')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500" required>
+                    <option value="">Select Gender</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 font-medium text-gray-700">Marital Status*</label>
+                  <select {...register('maritalStatus')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500" required>
+                    <option value="">Select Status</option>
+                    <option value="SINGLE">Single</option>
+                    <option value="MARRIED">Married</option>
+                    <option value="DIVORCED">Divorced</option>
+                    <option value="WIDOWED">Widowed</option>
+                    <option value="UNKNOWN">Other</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block mb-1 font-medium text-gray-700">Blood Group*</label>
@@ -303,6 +353,17 @@ export default function HireAmbulancePage() {
                     <div>
                       <label className="block mb-1 font-medium text-gray-700">Date of Birth*</label>
                       <input type="date" {...register('dateOfBirth')} className="w-full border border-gray-300 p-2 rounded outline-none focus:border-blue-500" required />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-medium text-gray-700">Marital Status*</label>
+                      <select {...register('maritalStatus')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500" required>
+                        <option value="">Select Status</option>
+                        <option value="SINGLE">Single</option>
+                        <option value="MARRIED">Married</option>
+                        <option value="DIVORCED">Divorced</option>
+                        <option value="WIDOWED">Widowed</option>
+                        <option value="UNKNOWN">Other</option>
+                      </select>
                     </div>
                     <div>
                       <label className="block mb-1 font-medium text-gray-700">Blood Group*</label>
@@ -423,6 +484,18 @@ export default function HireAmbulancePage() {
                   <option value="TRANSFERRED">Transferred</option>
                 </select>
               </div>
+              <div>
+                <label className="block mb-1 font-medium text-gray-700">Destination Hospital (Optional)</label>
+                <input 
+                  list="hospitals-list" 
+                  {...register('destinationHospital')} 
+                  placeholder="Type or select a hospital" 
+                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-blue-500" 
+                />
+                <datalist id="hospitals-list">
+                  {hospitals.map(h => <option key={h.id} value={h.name} />)}
+                </datalist>
+              </div>
             </div>
           </section>
 
@@ -448,10 +521,7 @@ export default function HireAmbulancePage() {
 
               <div>
                 <label className="block mb-1 font-medium text-gray-700">Area / Sub-area*</label>
-                <select {...register('areaId')} disabled={!watchedDistrictId} className="w-full border border-gray-300 p-2 rounded bg-white disabled:bg-gray-100 outline-none focus:border-blue-500" required>
-                  <option value="">Select Area</option>
-                  {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
+                <input type="text" placeholder="Enter area name" {...register('areaName')} className="w-full border border-gray-300 p-2 rounded outline-none focus:border-blue-500" required />
               </div>
 
               <div>
@@ -486,47 +556,9 @@ export default function HireAmbulancePage() {
             </div>
           </section>
 
-          {/* STEP 7: Dispatch Assignment */}
+          {/* STEP 7: Final */}
           <section>
-            <h2 className="text-lg font-bold mb-3 border-b pb-1 text-gray-800">🚑 STEP 7: Dispatch Assignment (Optional)</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">Station</label>
-                <select {...register('stationId')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500">
-                  <option value="">Auto-Assign</option>
-                  {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">Ambulance Unit</label>
-                <select {...register('ambulanceId')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500">
-                  <option value="">Select Ambulance</option>
-                  {ambulances.map(a => <option key={a.id} value={a.id}>{a.ambulanceNumber} - {a.plateNumber}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">Driver</label>
-                <select {...register('driverId')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500">
-                  <option value="">Select Driver</option>
-                  {drivers.map(d => <option key={d.id} value={d.id}>{d.user?.username || d.phone}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block mb-1 font-medium text-gray-700">Nurse</label>
-                <select {...register('nurseId')} className="w-full border border-gray-300 p-2 rounded bg-white outline-none focus:border-blue-500">
-                  <option value="">Select Nurse</option>
-                  {nurses.map(n => <option key={n.id} value={n.id}>{n.user?.username || n.phone}</option>)}
-                </select>
-              </div>
-            </div>
-          </section>
-
-          {/* STEP 8: Final */}
-          <section>
-            <h2 className="text-lg font-bold mb-3 border-b pb-1 text-gray-800">⚙️ STEP 8: Final Confirmation</h2>
+            <h2 className="text-lg font-bold mb-3 border-b pb-1 text-gray-800">⚙️ STEP 7: Final Confirmation</h2>
              <div className="space-y-4">
               <div>
                 <label className="block mb-1 font-medium text-gray-700">Request Type*</label>

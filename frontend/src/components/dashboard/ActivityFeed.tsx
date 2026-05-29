@@ -13,7 +13,7 @@ interface RecentActivity {
 export function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
   return (
     <div className="bg-white rounded-[2rem] p-6 border border-gray-100 shadow-sm h-[600px] flex flex-col relative overflow-hidden group">
-       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-rose-500 opacity-0 group-hover:opacity-100 transition-opacity" />
        
        <h3 className="text-sm font-black text-secondary tracking-widest uppercase mb-6 flex items-center justify-between">
           Live Intelligence

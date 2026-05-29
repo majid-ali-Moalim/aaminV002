@@ -14,6 +14,10 @@ import { ReportsModule } from './reports/reports.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { DriversModule } from './drivers/drivers.module';
 import { NursesModule } from './nurses/nurses.module';
+import { DispatchersModule } from './dispatchers/dispatchers.module';
+import { TrackingModule } from './tracking/tracking.module';
+import { DriversAppModule } from './drivers-app/drivers-app.module';
+import { DispatchersAppModule } from './dispatchers-app/dispatchers-app.module';
 
 @Module({
   imports: [
@@ -36,6 +40,10 @@ import { NursesModule } from './nurses/nurses.module';
     HospitalsModule,
     DriversModule,
     NursesModule,
+    DispatchersModule,
+    TrackingModule,
+    DriversAppModule,
+    DispatchersAppModule,
   ],
   controllers: [],
   providers: [],

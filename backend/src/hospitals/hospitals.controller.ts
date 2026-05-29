@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } f
 import { HospitalsService } from './hospitals.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('hospitals')
 @Controller('hospitals')
@@ -16,6 +17,7 @@ export class HospitalsController {
     return this.hospitalsService.create(createHospitalDto);
   }
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'Get all hospitals' })
   findAll(

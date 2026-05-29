@@ -39,7 +39,7 @@ export enum EmergencyRequestStatus {
   PENDING = 'PENDING',
   ASSIGNED = 'ASSIGNED',
   DISPATCHED = 'DISPATCHED',
-  ON_SCENE = 'ON_SCENE',
+  ARRIVED_SCENE = 'ARRIVED_SCENE',
   TRANSPORTING = 'TRANSPORTING',
   ARRIVED_HOSPITAL = 'ARRIVED_HOSPITAL',
   COMPLETED = 'COMPLETED',
@@ -96,6 +96,18 @@ export interface Station {
   phone?: string | null;
   isActive: boolean;
   region?: Region;
+  district?: District;
+}
+
+export interface Area {
+  id: string;
+  name: string;
+  districtId: string;
+  landmarkDescription?: string | null;
+  directionNotes?: string | null;
+  accessibilityLevel?: string | null;
+  riskLevel?: string | null;
+  isActive: boolean;
   district?: District;
 }
 

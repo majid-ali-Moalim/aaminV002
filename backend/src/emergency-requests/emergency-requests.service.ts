@@ -5,12 +5,18 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TrackingGateway } from '../tracking/tracking.gateway';
+import { TrackingService } from '../tracking/tracking.service';
+import { AuditLogService } from '../tracking/audit-log.service';
 
 @Injectable()
 export class EmergencyRequestsService {
   constructor(
     private prisma: PrismaService,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private trackingGateway: TrackingGateway,
+    private trackingService: TrackingService,
+    private auditLog: AuditLogService
   ) {}
 
   async create(data: any) {
@@ -221,7 +227,16 @@ export class EmergencyRequestsService {
             user: true,
           },
         },
+        nurse: {
+          include: {
+            user: true,
+          },
+        },
         ambulance: true,
+        region: true,
+        district: true,
+        destinationHospital: true,
+        incidentCategory: true,
         referrals: true,
         statusLogs: {
           orderBy: { createdAt: 'desc' }
@@ -256,7 +271,14 @@ export class EmergencyRequestsService {
             user: true,
           },
         },
+        region: true,
+        district: true,
+        destinationHospital: true,
+        incidentCategory: true,
         referrals: true,
+        statusLogs: {
+          orderBy: { createdAt: 'desc' }
+        }
       },
     });
   }
@@ -305,6 +327,10 @@ export class EmergencyRequestsService {
             },
           },
         },
+        region: true,
+        district: true,
+        destinationHospital: true,
+        incidentCategory: true,
         statusLogs: {
           orderBy: { createdAt: 'desc' }
         },
@@ -332,20 +358,49 @@ export class EmergencyRequestsService {
     const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Emergency request not found');
 
-    const updateData: any = { ...data, assignedAt: new Date() };
+    // Logic: Prevent assigning a driver/ambulance already on another active request
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+    
+    if (data.driverId) {
+      const busyDriver = await this.prisma.emergencyRequest.findFirst({
+        where: { 
+          driverId: data.driverId, 
+          status: { in: activeStatuses as any },
+          id: { not: id } 
+        }
+      });
+      if (busyDriver) throw new ConflictException('Driver is already assigned to another active emergency');
+    }
+
+    if (data.ambulanceId) {
+      const busyAmbulance = await this.prisma.emergencyRequest.findFirst({
+        where: { 
+          ambulanceId: data.ambulanceId, 
+          status: { in: activeStatuses as any },
+          id: { not: id } 
+        }
+      });
+      if (busyAmbulance) throw new ConflictException('Ambulance is already assigned to another active emergency');
+    }
+
+    if (data.driverId === '') delete data.driverId;
+    if (data.ambulanceId === '') delete data.ambulanceId;
+    if (data.nurseId === '') delete data.nurseId;
+
+    const newStatus = data.status || 'ASSIGNED';
+    const updateData: any = { ...data, status: newStatus, assignedAt: new Date() };
 
     const result = await this.prisma.emergencyRequest.update({
       where: { id },
       data: {
         ...updateData,
-        nurse: data.nurseId ? { connect: { id: data.nurseId } } : undefined,
-        statusLogs: data.status ? {
+        statusLogs: {
           create: {
             fromStatus: existing.status,
-            toStatus: data.status,
+            toStatus: newStatus,
             notes: `Team assigned`,
           }
-        } : undefined
+        }
       },
       include: {
         patient: true,
@@ -391,7 +446,23 @@ export class EmergencyRequestsService {
       });
     }
 
-    return result;
+    // Emit real-time tracking update
+    const trackingData = await this.trackingService.findByCodeOrPhone(result.trackingCode);
+    this.trackingGateway.emitTrackingUpdate(result.trackingCode, trackingData);
+
+    // Audit log
+    await this.auditLog.logCaseActivity(
+      data.dispatcherId || 'SYSTEM', 
+      'ASSIGNED_TEAM', 
+      result.id, 
+      existing.status, 
+      newStatus,
+      {
+        driverId: data.driverId,
+        nurseId: data.nurseId,
+        ambulanceId: data.ambulanceId
+      }
+    );
 
     return result;
   }
@@ -402,7 +473,7 @@ export class EmergencyRequestsService {
 
     const updateData: any = { status };
     if (status === 'DISPATCHED') updateData.dispatchedAt = new Date();
-    else if (status === 'ON_SCENE') updateData.arrivedAtSceneAt = new Date();
+    else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
     else if (status === 'ARRIVED_HOSPITAL') updateData.arrivedDestinationAt = new Date();
     else if (status === 'COMPLETED') updateData.completedAt = new Date();
@@ -449,6 +520,141 @@ export class EmergencyRequestsService {
       });
     }
 
+    // Emit real-time tracking update
+    const trackingData = await this.trackingService.findByCodeOrPhone(existing.trackingCode);
+    this.trackingGateway.emitTrackingUpdate(existing.trackingCode, trackingData);
+
+    // Audit log
+    await this.auditLog.logCaseActivity(
+      employeeId || 'SYSTEM',
+      'STATUS_UPDATED',
+      existing.id,
+      existing.status,
+      status
+    );
+
+    return updated;
+  }
+
+  async cancelRequest(id: string, reason: string, employeeId?: string) {
+    const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        statusLogs: {
+          create: {
+            fromStatus: existing.status,
+            toStatus: 'CANCELLED',
+            changedByEmployeeId: employeeId,
+            notes: `Request cancelled. Reason: ${reason}`,
+          }
+        }
+      },
+      include: {
+        statusLogs: true,
+        patient: true,
+      }
+    });
+
+    await this.notifications.create({
+      title: 'Emergency Cancelled',
+      message: `Request ${existing.trackingCode} was cancelled. Reason: ${reason}`,
+      type: 'EMERGENCY',
+      priority: existing.priority as any,
+      relatedModule: 'EmergencyRequest',
+      relatedId: existing.id,
+      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+    });
+
+    // Emit real-time tracking update
+    const trackingData = await this.trackingService.findByCodeOrPhone(existing.trackingCode);
+    this.trackingGateway.emitTrackingUpdate(existing.trackingCode, trackingData);
+
+    // Audit log
+    await this.auditLog.logCaseActivity(
+      employeeId || 'SYSTEM',
+      'STATUS_UPDATED',
+      existing.id,
+      existing.status,
+      'CANCELLED'
+    );
+
+    return updated;
+  }
+
+  async markFailed(id: string, reason: string, employeeId?: string) {
+    const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED', // A "failed" dispatch might be classified as cancelled or closed in the DB
+        statusLogs: {
+          create: {
+            fromStatus: existing.status,
+            toStatus: 'CANCELLED',
+            changedByEmployeeId: employeeId,
+            notes: `Mission Failed. Reason: ${reason}`,
+          }
+        }
+      },
+      include: {
+        statusLogs: true,
+        patient: true,
+      }
+    });
+
+    await this.notifications.create({
+      title: 'Emergency Failed',
+      message: `Request ${existing.trackingCode} failed. Reason: ${reason}`,
+      type: 'EMERGENCY',
+      priority: 'CRITICAL',
+      relatedModule: 'EmergencyRequest',
+      relatedId: existing.id,
+      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+    });
+
+    return updated;
+  }
+
+  async escalateRequest(id: string, reason?: string, employeeId?: string) {
+    const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id },
+      data: {
+        priority: 'CRITICAL',
+        statusLogs: {
+          create: {
+            fromStatus: existing.status,
+            toStatus: existing.status,
+            changedByEmployeeId: employeeId,
+            notes: `Request ESCALATED to CRITICAL. ${reason ? `Reason: ${reason}` : ''}`,
+          }
+        }
+      },
+      include: {
+        statusLogs: true,
+        patient: true,
+      }
+    });
+
+    await this.notifications.create({
+      title: 'Emergency ESCALATED',
+      message: `Request ${existing.trackingCode} was escalated to CRITICAL priority.`,
+      type: 'EMERGENCY',
+      priority: 'CRITICAL',
+      relatedModule: 'EmergencyRequest',
+      relatedId: existing.id,
+      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+    });
+
     return updated;
   }
 
@@ -488,9 +694,18 @@ export class EmergencyRequestsService {
   }
 
   async getAvailableAmbulances() {
+    // Only get ambulances that are marked as AVAILABLE and NOT currently on a mission
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+    
+    const busyAmbulanceIds = (await this.prisma.emergencyRequest.findMany({
+      where: { status: { in: activeStatuses as any } },
+      select: { ambulanceId: true }
+    })).map(r => r.ambulanceId).filter(Boolean);
+
     return this.prisma.ambulance.findMany({
       where: {
         status: 'AVAILABLE',
+        id: { notIn: busyAmbulanceIds as string[] }
       },
     });
   }
@@ -502,11 +717,19 @@ export class EmergencyRequestsService {
     
     if (!driverRole) return [];
 
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+    
+    // Find drivers currently on a mission
+    const busyDriverIds = (await this.prisma.emergencyRequest.findMany({
+      where: { status: { in: activeStatuses as any } },
+      select: { driverId: true }
+    })).map(r => r.driverId).filter(Boolean);
+
     return this.prisma.employee.findMany({
       where: {
         employeeRoleId: driverRole.id,
         status: 'ACTIVE',
-        // Removed assignedAmbulanceId: null to allow assigning drivers with vehicles
+        id: { notIn: busyDriverIds as string[] }
       },
       include: {
         user: {
@@ -529,10 +752,19 @@ export class EmergencyRequestsService {
     
     if (!nurseRole) return [];
 
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+    
+    // Find nurses currently on a mission
+    const busyNurseIds = (await this.prisma.emergencyRequest.findMany({
+      where: { status: { in: activeStatuses as any } },
+      select: { nurseId: true }
+    })).map(r => r.nurseId).filter(Boolean);
+
     return this.prisma.employee.findMany({
       where: {
         employeeRoleId: nurseRole.id,
         status: 'ACTIVE',
+        id: { notIn: busyNurseIds as string[] }
       },
       include: {
         user: {

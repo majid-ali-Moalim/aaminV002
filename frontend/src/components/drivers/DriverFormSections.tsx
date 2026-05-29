@@ -80,28 +80,58 @@ export const FormInput = ({ label, required, icon: Icon, prefix, error, ...props
   </div>
 )
 
-export const FormSelect = ({ label, required, options, icon: Icon, error, ...props }: any) => (
+export const FormSelect = ({
+  label,
+  required,
+  options,
+  icon: Icon,
+  error,
+  loading,
+  emptyHint,
+  disabled,
+  ...props
+}: any) => (
   <div className="space-y-1.5 group">
     <div className="flex items-center justify-between">
       <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
         {label} {required && <span className="text-red-500 ml-1 font-bold">*</span>}
       </label>
-      {error && <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">{error}</span>}
+      {loading && (
+        <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter animate-pulse">
+          Loading…
+        </span>
+      )}
+      {error && !loading && (
+        <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">{error}</span>
+      )}
     </div>
     <div className="relative group/input">
-       <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
-       <div className={`relative flex items-center h-12 bg-white border ${error ? 'border-red-300' : 'border-gray-200'} rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}>
-        {Icon && <Icon className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors" />}
+      <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
+      <div
+        className={`relative flex items-center h-12 bg-white border ${
+          error ? 'border-red-300 shadow-red-50' : 'border-gray-200'
+        } ${disabled ? 'opacity-60 bg-slate-50' : ''} rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}
+      >
+        {Icon && (
+          <Icon className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors shrink-0" />
+        )}
         <select
           {...props}
-          className={`flex-1 h-full ${Icon ? 'px-3' : 'px-0'} bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 cursor-pointer appearance-none outline-none`}
+          disabled={disabled || loading}
+          className={`flex-1 h-full min-w-0 ${Icon ? 'px-3' : 'px-0'} bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 cursor-pointer appearance-none outline-none disabled:cursor-not-allowed`}
         >
-          <option value="">Select {label}</option>
+          <option value="">
+            {loading ? `Loading ${label}…` : emptyHint || `Select ${label}`}
+          </option>
           {options?.map((opt: any) => (
-            <option key={opt.id} value={opt.id}>{opt.name || opt.ambulanceNumber || opt.label}</option>
+            <option key={opt.id} value={opt.id}>
+              {opt.name || opt.ambulanceNumber || opt.label}
+              {opt.plateNumber ? ` · ${opt.plateNumber}` : ''}
+              {opt.address ? ` · ${opt.address}` : ''}
+            </option>
           ))}
         </select>
-        <ChevronRight className="w-3.5 h-3.5 text-gray-300 rotate-90 ml-2" />
+        <ChevronRight className="w-3.5 h-3.5 text-gray-300 rotate-90 ml-2 shrink-0" />
       </div>
     </div>
   </div>
@@ -136,10 +166,17 @@ export const FileUploadCard = ({ label, icon: Icon, value, onChange, accept = "*
       const res = await uploadService.uploadFile(file)
       onChange(res.url)
       toast.success(`${label} uploaded`)
-    } catch (err) {
-      toast.error('Upload failed')
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Upload failed'
+      toast.error(Array.isArray(message) ? message.join(', ') : message)
     } finally {
       setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
   }
 
@@ -149,7 +186,7 @@ export const FileUploadCard = ({ label, icon: Icon, value, onChange, accept = "*
       <div 
         onClick={() => fileInputRef.current?.click()}
         className={`relative p-6 border-2 border-dashed rounded-2xl transition-all cursor-pointer flex flex-col items-center justify-center text-center
-          ${value ? 'border-green-500 bg-green-50/30' : 'border-gray-100 bg-gray-50/50 hover:border-blue-500 hover:bg-blue-50/30'}
+          ${value ? 'border-red-500 bg-red-50/30' : 'border-red-100 bg-red-50/20 hover:border-red-400 hover:bg-red-50/40'}
         `}
       >
         {isUploading ? (

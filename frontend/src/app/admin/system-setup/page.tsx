@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { systemSetupService } from '@/lib/api'
+import { systemSetupService, hospitalsService } from '@/lib/api'
 import { 
   Region, 
   District, 
@@ -118,7 +118,7 @@ export default function SystemSetupPage() {
         case 'hospitals':
           setRegions(await systemSetupService.getRegions())
           setDistricts(await systemSetupService.getDistricts())
-          setHospitals(await systemSetupService.getHospitals())
+          setHospitals(await hospitalsService.getAll())
           break
       }
     } catch (error) {
@@ -153,20 +153,27 @@ export default function SystemSetupPage() {
         areas: 'area',
         hospitals: 'hospital'
       }
-      
-      const model = modelMap[activeTab]
       const submissionData = data || formData
       
-      if (editingItem) {
-        await systemSetupService.update(model, editingItem.id, submissionData)
+      if (activeTab === 'hospitals') {
+        if (editingItem) {
+          await hospitalsService.update(editingItem.id, submissionData)
+        } else {
+          await hospitalsService.create(submissionData)
+        }
       } else {
-        await systemSetupService.create(model, submissionData)
+        const model = modelMap[activeTab]
+        if (editingItem) {
+          await systemSetupService.update(model, editingItem.id, submissionData)
+        } else {
+          await systemSetupService.create(model, submissionData)
+        }
       }
       setIsModalOpen(false)
       loadData()
     } catch (error: any) {
       console.error('Failed to save', error)
-      const errorMessage = error.response?.data?.message || 'Failed to save the record. It may already exist.'
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save the record. It may already exist.'
       alert(errorMessage)
     } finally {
       setLoading(false)
@@ -185,7 +192,11 @@ export default function SystemSetupPage() {
         categories: 'incidentCategory',
         stations: 'station'
       }
-      await systemSetupService.delete(modelMap[activeTab], id)
+      if (activeTab === 'hospitals') {
+        await hospitalsService.delete(id)
+      } else {
+        await systemSetupService.delete(modelMap[activeTab], id)
+      }
       loadData()
     } catch (error) {
       console.error('Delete failed', error)
@@ -240,7 +251,7 @@ export default function SystemSetupPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/admin/system-setup/regions')}
+              onClick={() => handleTabChange('regions')}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all"
             >
               <Settings className="w-4 h-4 mr-2" />
@@ -249,7 +260,7 @@ export default function SystemSetupPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/admin/system-setup/districts')}
+              onClick={() => handleTabChange('districts')}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all"
             >
               <Settings className="w-4 h-4 mr-2" />
@@ -258,7 +269,7 @@ export default function SystemSetupPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/admin/system-setup/areas')}
+              onClick={() => handleTabChange('areas')}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all font-bold"
             >
               <MapPin className="w-4 h-4 mr-2" />
@@ -267,7 +278,7 @@ export default function SystemSetupPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/admin/system-setup/stations')}
+              onClick={() => handleTabChange('stations')}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all font-bold"
             >
               <Warehouse className="w-4 h-4 mr-2" />
@@ -276,7 +287,7 @@ export default function SystemSetupPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/admin/hospitals')}
+              onClick={() => handleTabChange('hospitals')}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 transition-all font-bold"
             >
               <Building2 className="w-4 h-4 mr-2" />
@@ -404,7 +415,7 @@ export default function SystemSetupPage() {
 
       {/* Modern Slide-up/Fade-in Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all sm:p-6 md:p-8">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all sm:p-6 md:p-8 overflow-y-auto pt-10 pb-20">
           {activeTab === 'regions' ? (
             <div className="max-w-lg w-full text-left">
               <RegionForm 

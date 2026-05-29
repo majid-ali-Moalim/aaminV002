@@ -44,7 +44,7 @@ export default function NurseShiftsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'AVAILABLE': return 'bg-green-100 text-green-600 border-green-200'
-      case 'ON_DUTY': return 'bg-blue-100 text-blue-600 border-blue-200'
+      case 'ON_DUTY': return 'bg-red-100 text-red-600 border-red-200'
       case 'ON_BREAK': return 'bg-yellow-100 text-yellow-600 border-yellow-200'
       case 'OFF_DUTY': return 'bg-gray-100 text-gray-500 border-gray-200'
       default: return 'bg-gray-100 text-gray-500 border-gray-200'
@@ -57,7 +57,7 @@ export default function NurseShiftsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center">
-            <Clock className="w-8 h-8 mr-3 text-blue-600" />
+            <Clock className="w-8 h-8 mr-3 text-red-600" />
             Shift & Availability
           </h1>
           <p className="text-gray-500 font-medium mt-1">Real-time scheduling and medical staff availability monitoring</p>
@@ -69,12 +69,12 @@ export default function NurseShiftsPage() {
             <input 
               type="text"
               placeholder="Search nurse name or code..."
-              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64 transition-all"
+              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 outline-none w-64 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-200">
+          <button className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all font-black text-xs uppercase tracking-widest shadow-lg shadow-red-200">
             <CalendarDays className="w-4 h-4" />
             Duty Roster
           </button>
@@ -83,7 +83,7 @@ export default function NurseShiftsPage() {
 
       {loading ? (
         <div className="flex flex-col items-center justify-center h-64">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-red-600 mb-4" />
           <p className="text-gray-500 font-bold animate-pulse">Fetching global availability...</p>
         </div>
       ) : (
@@ -103,7 +103,7 @@ export default function NurseShiftsPage() {
                  <tr key={nurse.id} className="hover:bg-gray-50/50 transition-colors">
                    <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center font-black text-blue-600 text-xs shadow-inner">
+                         <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center font-black text-red-600 text-xs shadow-inner">
                            {nurse.firstName[0]}{nurse.lastName[0]}
                          </div>
                          <div>

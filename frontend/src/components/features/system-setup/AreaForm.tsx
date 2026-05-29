@@ -187,7 +187,7 @@ export default function AreaForm({ initialData, districts, onSubmit, onCancel, l
           <label className="flex items-center gap-2 cursor-pointer group">
             <div className={cn(
               'w-10 h-6 flex items-center rounded-full p-1 transition-colors',
-              formData.isActive ? 'bg-green-500' : 'bg-slate-300'
+              formData.isActive ? 'bg-red-500' : 'bg-slate-300'
             )}>
               <div className={cn('bg-white w-4 h-4 rounded-full shadow-sm transition-transform', formData.isActive ? 'translate-x-4' : 'translate-x-0')} />
             </div>

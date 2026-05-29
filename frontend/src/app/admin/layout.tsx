@@ -18,7 +18,7 @@ export default function AdminLayout({
   const pathname = usePathname()
 
   // Full-screen immersive routes (no sidebar / topbar)
-  const isFullScreen = ['/admin/emergency-requests/new', '/admin/drivers/add'].includes(pathname)
+  const isFullScreen = ['/admin/emergency-requests/new', '/admin/drivers/add', '/admin/nurses/add', '/admin/dispatchers/add'].includes(pathname)
 
   useEffect(() => {
     if (!loading) {
@@ -59,7 +59,7 @@ export default function AdminLayout({
     <div className="min-h-screen bg-gray-50">
       <LiveToastContainer />
       <AdminSidebar />
-      <div className="ml-56">
+      <div className="ml-64">
         <AdminTopBar />
         <main className="p-6">
           {children}

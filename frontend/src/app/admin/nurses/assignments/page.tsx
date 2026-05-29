@@ -47,7 +47,7 @@ export default function NurseAssignmentsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center">
-            <Shuffle className="w-8 h-8 mr-3 text-blue-600" />
+            <Shuffle className="w-8 h-8 mr-3 text-red-600" />
             Mission Assignments
           </h1>
           <p className="text-gray-500 font-medium mt-1">Real-time nurse to ambulance pairing and deployment</p>
@@ -59,7 +59,7 @@ export default function NurseAssignmentsPage() {
             <input 
               type="text"
               placeholder="Search nurse or ambulance..."
-              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64 transition-all"
+              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 outline-none w-64 transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -72,7 +72,7 @@ export default function NurseAssignmentsPage() {
 
       {loading ? (
         <div className="flex flex-col items-center justify-center h-64">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-red-600 mb-4" />
           <p className="text-gray-500 font-bold animate-pulse">Synchronizing assignments...</p>
         </div>
       ) : (
@@ -80,15 +80,15 @@ export default function NurseAssignmentsPage() {
           {filtered.map((item) => (
             <div 
               key={item.id}
-              className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-500 group"
+              className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:shadow-xl hover:shadow-red-900/5 transition-all duration-500 group"
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center overflow-hidden border-2 border-white shadow-inner">
+                  <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center overflow-hidden border-2 border-white shadow-inner">
                     {item.profilePhoto ? (
                       <img src={item.profilePhoto} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <User className="w-8 h-8 text-blue-300" />
+                      <User className="w-8 h-8 text-red-300" />
                     )}
                   </div>
                   <div>
@@ -97,7 +97,7 @@ export default function NurseAssignmentsPage() {
                     </h3>
                     <div className="flex items-center mt-2">
                        <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
-                         item.shiftStatus === 'AVAILABLE' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                         item.shiftStatus === 'AVAILABLE' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                        }`}>
                          {item.shiftStatus}
                        </span>
@@ -105,7 +105,7 @@ export default function NurseAssignmentsPage() {
                   </div>
                 </div>
 
-                <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+                <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-red-600 group-hover:text-white transition-all duration-300">
                   <ArrowRight className="w-5 h-5" />
                 </div>
               </div>
@@ -138,8 +138,8 @@ export default function NurseAssignmentsPage() {
                    <span className="text-xs font-bold text-gray-400">Connection: Active</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-500" />
-                  <span className="text-[10px] font-black text-blue-600 uppercase">Paramedic Certified</span>
+                  <ShieldCheck className="w-4 h-4 text-red-500" />
+                  <span className="text-[10px] font-black text-red-600 uppercase">Paramedic Certified</span>
                 </div>
               </div>
             </div>

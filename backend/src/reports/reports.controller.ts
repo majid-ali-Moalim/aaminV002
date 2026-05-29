@@ -1,10 +1,60 @@
-import { Controller, Get, Post, Body, Param, Delete, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Query } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  // ─── Dashboard overview ───
+  @Get('dashboard')
+  getDashboardStats() {
+    return this.reportsService.getDashboardStats();
+  }
+
+  // ─── KPI endpoints (used by /admin/dashboard and /admin/dashboard/kpi) ───
+  @Get('kpi/emergency')
+  getEmergencyKPIs(@Query('timeRange') timeRange?: string) {
+    return this.reportsService.getEmergencyKPIs(timeRange);
+  }
+
+  @Get('kpi/performance')
+  getPerformanceMetrics() {
+    return this.reportsService.getPerformanceMetrics();
+  }
+
+  @Get('kpi/resources')
+  getResourceUtilization() {
+    return this.reportsService.getResourceUtilization();
+  }
+
+  @Get('kpi/patients')
+  getPatientAnalytics() {
+    return this.reportsService.getPatientAnalytics();
+  }
+
+  @Get('kpi/geographic')
+  getGeographicAnalytics() {
+    return this.reportsService.getGeographicAnalytics();
+  }
+
+  // ─── Trend endpoints (used by /admin/dashboard overview charts) ───
+  @Get('trends/weekly')
+  getWeeklyTrends() {
+    return this.reportsService.getWeeklyTrends();
+  }
+
+  @Get('trends/monthly')
+  getMonthlyTrends() {
+    return this.reportsService.getMonthlyTrends();
+  }
+
+  // ─── Real-time metrics (used by live dashboard) ───
+  @Get('realtime/metrics')
+  getRealTimeMetrics() {
+    return this.reportsService.getRealTimeMetrics();
+  }
+
+  // ─── Legacy report endpoints ───
   @Post()
   create(@Body() createReportDto: any) {
     return this.reportsService.create(createReportDto);
@@ -13,11 +63,6 @@ export class ReportsController {
   @Get()
   findAll() {
     return this.reportsService.findAll();
-  }
-
-  @Get('dashboard')
-  getDashboardStats() {
-    return this.reportsService.getDashboardStats();
   }
 
   @Get(':id')

@@ -50,7 +50,11 @@ export class AuthService {
         ]
       },
       include: {
-        employee: true,
+        employee: {
+          include: {
+            employeeRole: true,
+          },
+        },
         patient: true,
       },
     });
@@ -73,24 +77,73 @@ export class AuthService {
     return null;
   }
 
-  async login(user: any) {
+  async login(loginDto: any) {
+    // Validate user credentials
+    const user = await this.validateUser(loginDto.email || loginDto.username, loginDto.password);
+    
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.role === Role.EMPLOYEE) {
+      if (!user.employee) {
+        throw new UnauthorizedException('Employee profile not found');
+      }
+      if (user.employee.status !== 'ACTIVE') {
+        throw new UnauthorizedException('Employee account is inactive. Contact your administrator.');
+      }
+    }
+
+    const employeeRoleName = user.employee?.employeeRole?.name ?? null;
+
     const payload = {
       username: user.username,
       sub: user.id,
       role: user.role,
-      employeeType: user.employee?.employeeType,
+      email: user.email,
+      isActive: true,
+      employeeRole: employeeRoleName,
+      employeeStatus: user.employee?.status ?? null,
+      employeeId: user.employee?.id ?? null,
     };
-    
+
+    const accessToken = this.jwtService.sign(payload);
+    const refreshToken = this.generateRefreshToken();
+
+    // Log successful login
+    this.log(`[AuthService] Login successful: ${user.username} (${user.role}${employeeRoleName ? ` / ${employeeRoleName}` : ''})`);
+
     return {
-      access_token: this.jwtService.sign(payload),
       user: {
         id: user.id,
-        username: user.username,
         email: user.email,
+        username: user.username,
+        firstName: user.employee?.firstName || user.patient?.firstName || '',
+        lastName: user.employee?.lastName || user.patient?.lastName || '',
         role: user.role,
-        employee: user.employee,
-        patient: user.patient,
+        employeeRole: employeeRoleName,
+        isActive: true,
+        employee: user.employee
+          ? {
+              id: user.employee.id,
+              employeeCode: user.employee.employeeCode,
+              status: user.employee.status,
+              shiftStatus: user.employee.shiftStatus,
+              stationId: user.employee.stationId,
+              employeeRole: user.employee.employeeRole,
+            }
+          : null,
+        profile: {
+          phone: user.employee?.phone || user.patient?.phone,
+          avatar: user.employee?.profilePhoto || user.patient?.avatar,
+          department: user.employee?.department,
+          licenseNumber: user.employee?.licenseNumber,
+          employeeId: user.employee?.employeeCode,
+        }
       },
+      accessToken,
+      refreshToken,
+      expiresIn: 900, // 15 minutes
     };
   }
 
@@ -103,5 +156,74 @@ export class AuthService {
     };
     
     return this.jwtService.sign(payload);
+  }
+
+  async refreshToken(user: any) {
+    const payload = {
+      username: user.username,
+      sub: user.userId,
+      role: user.role,
+    };
+
+    return {
+      accessToken: this.jwtService.sign(payload),
+      refreshToken: this.generateRefreshToken(),
+      expiresIn: 900, // 15 minutes
+    };
+  }
+
+  async getProfile(userId: string) {
+    // Handle hardcoded admin fallback
+    if (userId === 'hardcoded-admin-uuid') {
+      return {
+        id: 'hardcoded-admin-uuid',
+        username: 'aamin@admin',
+        email: 'aamin@admin',
+        role: Role.ADMIN,
+        isActive: true,
+        employee: null,
+        patient: null,
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        employee: {
+          include: {
+            employeeRole: true,
+          },
+        },
+        patient: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const { passwordHash, ...result } = user;
+    return result;
+  }
+
+  async logout(userId: string) {
+    // In a real implementation, you would invalidate the refresh token
+    // For now, we'll just log the logout
+    this.log(`[AuthService] User logged out: ${userId}`);
+    
+    return {
+      message: 'Logout successful',
+      success: true,
+    };
+  }
+
+  private generateRefreshToken(): string {
+    // Generate a random refresh token
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 32; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 }

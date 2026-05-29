@@ -23,22 +23,27 @@ export class SystemSetupController {
   @ApiOperation({ summary: 'Get all active districts' })
   getDistricts(@Query('regionId') regionId?: string) { return this.setupService.getDistricts(regionId); }
 
+  @Public()
   @Get('departments')
   @ApiOperation({ summary: 'Get all active departments' })
   getDepartments() { return this.setupService.getDepartments(); }
 
+  @Public()
   @Get('roles')
   @ApiOperation({ summary: 'Get all active employee roles' })
   getEmployeeRoles() { return this.setupService.getEmployeeRoles(); }
 
+  @Public()
   @Get('equipment-levels')
   @ApiOperation({ summary: 'Get all active equipment levels' })
   getEquipmentLevels() { return this.setupService.getEquipmentLevels(); }
 
+  @Public()
   @Get('incident-categories')
   @ApiOperation({ summary: 'Get all active incident categories' })
   getIncidentCategories() { return this.setupService.getIncidentCategories(); }
 
+  @Public()
   @Get('stations')
   @ApiOperation({ summary: 'Get all active stations' })
   getStations(@Query('districtId') districtId?: string) { return this.setupService.getStations(districtId); }

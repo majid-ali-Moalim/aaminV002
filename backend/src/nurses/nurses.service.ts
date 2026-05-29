@@ -94,6 +94,13 @@ export class NursesService {
     const available = nurses.filter(n => n.shiftStatus === 'AVAILABLE').length;
     const onDuty = nurses.filter(n => n.shiftStatus === 'ON_DUTY' || n.shiftStatus === 'TRANSPORTING').length;
     const pendingClearance = nurses.filter(n => n.medicalClearanceStatus === 'PENDING').length;
+
+    const now = new Date();
+    const in30Days = new Date();
+    in30Days.setDate(in30Days.getDate() + 30);
+    const expiringLicenses = nurses.filter(
+      (n) => n.licenseExpiryDate && n.licenseExpiryDate > now && n.licenseExpiryDate <= in30Days
+    ).length;
     
     // Performance metrics
     const totalCases = nurses.reduce((acc, n) => acc + n.nurseRequests.length, 0);
@@ -105,6 +112,7 @@ export class NursesService {
       available,
       onDuty,
       pendingClearance,
+      expiringLicenses,
       totalCases,
       totalRecords,
       totalIncidents,

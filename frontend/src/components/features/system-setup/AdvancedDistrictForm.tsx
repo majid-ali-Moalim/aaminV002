@@ -258,7 +258,7 @@ export default function AdvancedDistrictForm({
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     'p-1.5 rounded-lg transition-colors',
-                    formData.isActive ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'
+                    formData.isActive ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400'
                   )}>
                     <Activity className="w-4 h-4" />
                   </div>
@@ -276,7 +276,7 @@ export default function AdvancedDistrictForm({
                   onClick={() => setFormData({ ...formData, isActive: !formData.isActive })}
                   className={cn(
                     'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/30',
-                    formData.isActive ? 'bg-green-500' : 'bg-slate-300'
+                    formData.isActive ? 'bg-red-500' : 'bg-slate-300'
                   )}
                 >
                   <span className={cn(

@@ -26,7 +26,6 @@ export class EmergencyRequestsController {
 
   @Public()
   @Post()
-  @Roles('PATIENT', 'ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Create a new emergency request' })
   create(@Body() createEmergencyRequestDto: any) {
     return this.emergencyRequestsService.create(createEmergencyRequestDto);
@@ -53,22 +52,22 @@ export class EmergencyRequestsController {
     return this.emergencyRequestsService.getDashboardStats();
   }
 
+  @Public()
   @Get('available/ambulances')
-  @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Get available ambulances' })
   getAvailableAmbulances() {
     return this.emergencyRequestsService.getAvailableAmbulances();
   }
 
+  @Public()
   @Get('available/drivers')
-  @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Get available drivers' })
   getAvailableDrivers() {
     return this.emergencyRequestsService.getAvailableDrivers();
   }
  
+  @Public()
   @Get('available/nurses')
-  @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Get available nurses' })
   getAvailableNurses() {
     return this.emergencyRequestsService.getAvailableNurses();
@@ -96,6 +95,27 @@ export class EmergencyRequestsController {
     @Body() updateStatusDto: { status: string }
   ) {
     return this.emergencyRequestsService.updateStatus(id, updateStatusDto.status as EmergencyRequestStatus);
+  }
+
+  @Patch(':id/cancel')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Cancel emergency request' })
+  cancel(@Param('id') id: string, @Body() cancelDto: { reason: string }) {
+    return this.emergencyRequestsService.cancelRequest(id, cancelDto.reason);
+  }
+
+  @Patch(':id/fail')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Mark emergency request as failed' })
+  markFailed(@Param('id') id: string, @Body() failDto: { reason: string }) {
+    return this.emergencyRequestsService.markFailed(id, failDto.reason);
+  }
+
+  @Patch(':id/escalate')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Escalate emergency request' })
+  escalate(@Param('id') id: string, @Body() escalateDto: { reason?: string }) {
+    return this.emergencyRequestsService.escalateRequest(id, escalateDto.reason);
   }
 
   @Patch(':id')

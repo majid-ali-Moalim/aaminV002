@@ -9,6 +9,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
+import { mkdirSync } from 'fs';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -34,7 +35,11 @@ export class UploadsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: './uploads',
+        destination: (req, file, callback) => {
+          const uploadDir = join(process.cwd(), 'uploads');
+          mkdirSync(uploadDir, { recursive: true });
+          callback(null, uploadDir);
+        },
         filename: (req, file, callback) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = extname(file.originalname);
@@ -42,8 +47,10 @@ export class UploadsController {
         },
       }),
       fileFilter: (req, file, callback) => {
-        if (!file.originalname.match(/\.(jpg|jpeg|png|pdf)$/)) {
-          return callback(new BadRequestException('Only images and PDFs are allowed!'), false);
+        const isImage = file.mimetype?.startsWith('image/');
+        const isPdf = file.mimetype === 'application/pdf';
+        if (!isImage && !isPdf) {
+          return callback(new BadRequestException('Only image files or PDFs are allowed!'), false);
         }
         callback(null, true);
       },

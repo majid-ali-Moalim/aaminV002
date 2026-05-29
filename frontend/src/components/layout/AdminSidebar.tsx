@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { 
-  LayoutDashboard, 
-  Users, 
+import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
+import {
+  LayoutDashboard,
+  Users,
   Truck, 
   Activity,
   FileText,
@@ -58,7 +59,7 @@ import {
 function SectionLabel({ label }: { label: string }) {
   return (
     <div className="pt-5 pb-1.5 px-3">
-      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/20">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{label}</span>
     </div>
   )
 }
@@ -74,21 +75,7 @@ const dashboardSubMenu = [
   { href: '/admin/audit-logs/recent', label: 'Recent Activity', icon: History },
 ]
 
-// 2. Emergency Operations
-const emergencyOperationsSubMenu = [
-  { href: '/admin/emergency-requests', label: 'All Emergency Cases', icon: ClipboardList, exact: true },
-  { href: '/admin/emergency-requests/new', label: 'New Emergency Case', icon: PlusCircle },
-  { href: '/admin/emergency-requests/pending', label: 'Pending Cases', icon: Clock },
-  { href: '/admin/emergency-requests/triage', label: 'Triage Queue', icon: Shield },
-  { href: '/admin/assignment-board', label: 'Assignment Board', icon: LayoutGrid },
-  { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
-  { href: '/admin/emergency-requests/critical', label: 'Critical Cases', icon: AlertCircle },
-  { href: '/admin/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle },
-  { href: '/admin/emergency-requests/completed', label: 'Completed Cases', icon: CheckSquare },
-  { href: '/admin/emergency-requests/cancelled', label: 'Cancelled / Failed', icon: XCircle },
-  { href: '/admin/emergency-requests/timeline', label: 'Case Timeline / Status Logs', icon: TimerIcon },
-  { href: '/admin/emergency-requests/public-tracking', label: 'Public Tracking', icon: MapPin },
-]
+// 2. Emergency Operations — rendered via EmergencyOperationsSidebar component
 
 // 3. Patients & Case Records
 const patientsSubMenu = [
@@ -108,6 +95,25 @@ const dispatchResourcesSubMenu = [
   { href: '/admin/nurses/availability', label: 'Nurse Availability', icon: Stethoscope },
   { href: '/admin/dispatch-management/readiness', label: 'Readiness Status', icon: Activity },
   { href: '/admin/system-setup/coverage', label: 'Area / Station Coverage', icon: MapPin },
+]
+
+// 4b. Dispatch Center — Dispatcher Management
+const dispatcherManagementSubMenu = [
+  { href: '/admin/dispatchers', label: 'All Dispatchers', icon: Users, exact: true },
+  { href: '/admin/dispatchers/add', label: 'Add New Dispatcher', icon: UserPlus },
+  { href: '/admin/dispatchers/shifts', label: 'Shift & Availability', icon: Calendar },
+  { href: '/admin/dispatchers/cases', label: 'Assigned Cases', icon: ClipboardList },
+  { href: '/admin/dispatchers/duty-logs', label: 'Duty Logs', icon: FileText },
+  { href: '/admin/dispatchers/performance', label: 'Performance Reports', icon: BarChart2 },
+  { href: '/admin/dispatchers/activity', label: 'Dispatch Activity', icon: Activity },
+]
+
+// 4c. Dispatch Center — Operations
+const dispatchCenterOperationsSubMenu = [
+  { href: '/admin/dispatch-management', label: 'Live Dispatch Board', icon: Monitor, exact: true },
+  { href: '/admin/assignment-board', label: 'Assignment Board', icon: LayoutGrid },
+  { href: '/admin/emergency-requests/pending', label: 'Pending Case Queue', icon: Clock },
+  { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
 ]
 
 // 5. Drivers
@@ -158,13 +164,12 @@ const hospitalCoordinationSubMenu = [
 // 9. Workforce & Organization
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
-  { href: '/admin/dispatchers', label: 'Dispatchers', icon: Radio },
-  { href: '/admin/drivers/list', label: 'Drivers', icon: Truck },
-  { href: '/admin/nurses/list', label: 'Nurses / Paramedics', icon: Stethoscope },
+  { href: '/admin/drivers', label: 'Drivers', icon: Truck },
+  { href: '/admin/nurses', label: 'Nurses / Paramedics', icon: Stethoscope },
   { href: '/admin/permissions', label: 'Roles & Permissions', icon: Lock },
-  { href: '/admin/departments', label: 'Departments', icon: Building2 },
+  { href: '/admin/system-setup?tab=departments', label: 'Departments', icon: Building2 },
   { href: '/admin/employees/attendance', label: 'Attendance & Duty Logs', icon: Clock },
-  { href: '/admin/employees/performance', label: 'Staff Performance', icon: BarChart2 },
+  { href: '/admin/reports/performance', label: 'Staff Performance', icon: BarChart2 },
 ]
 
 // 10. Analytics & Reports
@@ -217,14 +222,24 @@ export default function AdminSidebar() {
 
   // ─── Active state checks ───
   const isDashboardActive = pathname.startsWith('/admin/dashboard')
-  const isEmergencyOperationsActive = pathname.startsWith('/admin/emergency-requests') || pathname.startsWith('/admin/assignment-board')
+  const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = pathname.startsWith('/admin/patients')
   const isDispatchResourcesActive = pathname.startsWith('/admin/ambulances/availability') || pathname.startsWith('/admin/drivers/availability')
+  const isDispatchCenterOperationsActive =
+    pathname.startsWith('/admin/dispatch-management') ||
+    pathname.startsWith('/admin/assignment-board') ||
+    pathname === '/admin/emergency-requests/pending' ||
+    pathname === '/admin/emergency-requests/active'
+  const isDispatcherManagementActive = pathname.startsWith('/admin/dispatchers')
   const isDriversActive = pathname.startsWith('/admin/drivers') && !isDispatchResourcesActive
   const isNursesActive = pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive
   const isAmbulancesActive = pathname.startsWith('/admin/ambulances') && !isDispatchResourcesActive
   const isHospitalCoordinationActive = pathname.startsWith('/admin/hospitals')
-  const isWorkforceActive = pathname.startsWith('/admin/employees') || pathname.startsWith('/admin/dispatchers') || pathname.startsWith('/admin/permissions')
+  const isWorkforceActive =
+    pathname.startsWith('/admin/employees') ||
+    pathname.startsWith('/admin/permissions') ||
+    (pathname.startsWith('/admin/drivers') && !isDispatchResourcesActive) ||
+    (pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive)
   const isAnalyticsActive = pathname.startsWith('/admin/reports')
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isSystemSetupActive = pathname.startsWith('/admin/system-setup')
@@ -235,6 +250,8 @@ export default function AdminSidebar() {
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
   const [dispatchResourcesOpen, setDispatchResourcesOpen] = useState(isDispatchResourcesActive)
+  const [dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen] = useState(isDispatchCenterOperationsActive)
+  const [dispatcherManagementOpen, setDispatcherManagementOpen] = useState(isDispatcherManagementActive)
   const [driversOpen, setDriversOpen] = useState(isDriversActive)
   const [nursesOpen, setNursesOpen] = useState(isNursesActive)
   const [ambulancesOpen, setAmbulancesOpen] = useState(isAmbulancesActive)
@@ -250,11 +267,11 @@ export default function AdminSidebar() {
       href={href}
       className={`flex items-center px-2.5 py-2 text-[13px] font-medium rounded-lg transition-all duration-200 ${
         isActive
-          ? 'bg-red-600 text-white shadow-lg shadow-red-900/30 font-semibold'
-          : 'text-white/50 hover:bg-white/5 hover:text-white'
+          ? 'bg-red-600 text-white shadow-md shadow-red-200 font-semibold'
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
       }`}
     >
-      <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-white/40'}`} />
+      <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
       <span className="truncate">{label}</span>
     </Link>
   )
@@ -270,21 +287,26 @@ export default function AdminSidebar() {
   ) => (
     <div>
       <button
+        type="button"
         onClick={() => setOpen(!isOpen)}
         className={`w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-medium rounded-lg transition-all duration-200 ${
           isActive
-            ? 'bg-red-600 text-white shadow-lg shadow-red-900/30 font-semibold'
-            : 'text-white/50 hover:bg-white/5 hover:text-white'
+            ? 'bg-red-600 text-white shadow-md shadow-red-200 font-semibold'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
         }`}
       >
         <div className="flex items-center min-w-0">
-          <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-white/40'}`} />
+          <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
           <span className="truncate">{label}</span>
         </div>
-        {isOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0 ml-1 opacity-50" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 ml-1 opacity-50" />}
+        {isOpen ? (
+          <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-1 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+        ) : (
+          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ml-1 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+        )}
       </button>
       {isOpen && (
-        <div className="mt-0.5 ml-2 pl-3 border-l border-white/10 space-y-px">
+        <div className="mt-0.5 ml-2 pl-3 border-l border-slate-200 space-y-px">
           {subItems.map((sub) => {
             const SubIcon = sub.icon
             let active = false
@@ -301,11 +323,11 @@ export default function AdminSidebar() {
                 href={sub.href}
                 className={`flex items-center px-2.5 py-1.5 text-xs rounded-md transition-all duration-200 ${
                   active
-                    ? 'bg-white/10 text-white font-semibold'
-                    : 'text-white/40 hover:bg-white/5 hover:text-white'
+                    ? 'bg-red-600 text-white font-semibold shadow-sm shadow-red-100'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                 }`}
               >
-                <SubIcon className={`w-3.5 h-3.5 mr-2 shrink-0 ${active ? 'text-red-400' : 'text-white/25'}`} />
+                <SubIcon className={`w-3.5 h-3.5 mr-2 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
                 <span className="truncate">{sub.label}</span>
               </Link>
             )
@@ -316,14 +338,16 @@ export default function AdminSidebar() {
   )
 
   return (
-    <div className="w-64 bg-[#0F1C2E] text-white h-screen fixed left-0 top-0 flex flex-col border-r border-white/5 shadow-xl z-30">
+    <div className="w-64 bg-white text-slate-700 h-screen fixed left-0 top-0 flex flex-col border-r border-slate-200 shadow-sm z-30">
       {/* Logo */}
-      <div className="p-4 border-b border-white/10 shrink-0">
-        <h1 className="text-base font-black tracking-tight text-white flex items-center">
-          <div className="bg-red-600 p-1.5 rounded-lg mr-2.5 shadow-lg shadow-red-900/30">
+      <div className="p-4 border-b border-slate-100 shrink-0">
+        <h1 className="text-base font-black tracking-tight text-slate-900 flex items-center">
+          <div className="bg-red-600 p-1.5 rounded-lg mr-2.5 shadow-md shadow-red-200">
             <Activity className="w-4 h-4 text-white" />
           </div>
-          <span>Aamin <span className="text-white/40 font-light text-xs">Ambulance</span></span>
+          <span>
+            Aamin <span className="text-slate-400 font-light text-xs">Ambulance</span>
+          </span>
         </h1>
       </div>
       
@@ -336,9 +360,19 @@ export default function AdminSidebar() {
 
         {/* ══════ Emergency Command ══════ */}
         <SectionLabel label="Emergency Command" />
-        {renderCollapsible('Emergency Operations', Siren, isEmergencyOperationsActive, emergencyOperationsOpen, setEmergencyOperationsOpen, emergencyOperationsSubMenu)}
+        <div className="px-0.5">
+          <EmergencyOperationsSidebar
+            isOpen={emergencyOperationsOpen}
+            setOpen={setEmergencyOperationsOpen}
+          />
+        </div>
         {renderCollapsible('Patients & Case Records', HeartPulse, isPatientsActive, patientsOpen, setPatientsOpen, patientsSubMenu)}
         {renderCollapsible('Dispatch Resources', Warehouse, isDispatchResourcesActive, dispatchResourcesOpen, setDispatchResourcesOpen, dispatchResourcesSubMenu)}
+
+        {/* ══════ Dispatch Center ══════ */}
+        <SectionLabel label="Dispatch Center" />
+        {renderCollapsible('Dispatch Operations', Monitor, isDispatchCenterOperationsActive, dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen, dispatchCenterOperationsSubMenu)}
+        {renderCollapsible('Dispatcher Management', Radio, isDispatcherManagementActive, dispatcherManagementOpen, setDispatcherManagementOpen, dispatcherManagementSubMenu)}
 
         {/* ══════ Field Operations ══════ */}
         <SectionLabel label="Field Operations" />
@@ -361,8 +395,11 @@ export default function AdminSidebar() {
       </nav>
       
       {/* Bottom Logout */}
-      <div className="p-2.5 border-t border-white/10 bg-black/20 shrink-0">
-        <Link href="/logout" className="flex items-center px-2.5 py-2 text-[12px] font-medium text-white/30 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 group">
+      <div className="p-2.5 border-t border-slate-100 bg-slate-50/50 shrink-0">
+        <Link
+          href="/logout"
+          className="flex items-center px-2.5 py-2 text-[12px] font-medium text-slate-500 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 group"
+        >
           <LogOut className="w-3.5 h-3.5 mr-2.5 transition-transform group-hover:-translate-x-1" />
           Logout
         </Link>

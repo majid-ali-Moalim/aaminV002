@@ -1,10 +1,38 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Plus, Eye, Edit, Trash2, User, Mail, Phone, Shield, Activity, Clock, AlertCircle, X, Loader2, Award, Briefcase, Key, ClipboardList, Lock } from 'lucide-react'
+import { Search, Filter, Plus, Edit, Trash2, User, Mail, Phone, Shield, Activity, Clock, AlertCircle, X, Loader2, Briefcase, Key, ClipboardList, Lock, RefreshCw, Download, Users, Building2, MapPin, Truck, Stethoscope, CheckCircle2, UserCog, Eye } from 'lucide-react'
 import { employeesService, systemSetupService } from '@/lib/api'
-import { Employee, Role, EmployeeRole, Department } from '@/types'
+import { Employee, Role, EmployeeRole, Department, Region } from '@/types'
+import { EmployeeAvatar } from '@/components/employees/EmployeeAvatar'
+import { EmployeeProfileModal } from '@/components/employees/EmployeeProfileModal'
+
+const ON_DUTY_SHIFT_STATUSES = new Set(['ON_DUTY', 'AVAILABLE', 'ON_SHIFT', 'TRANSPORTING'])
+
+function getRoleTheme(roleName?: string | null) {
+  const name = roleName?.toUpperCase() || ''
+  if (name.includes('DRIVER')) {
+    return { gradient: 'from-orange-500 to-amber-500', chip: 'bg-orange-50 text-orange-700 border-orange-100', ring: 'ring-orange-100' }
+  }
+  if (name.includes('NURSE')) {
+    return { gradient: 'from-rose-600 to-red-500', chip: 'bg-red-50 text-red-700 border-red-100', ring: 'ring-red-100' }
+  }
+  if (name.includes('DISPATCH')) {
+    return { gradient: 'from-blue-500 to-indigo-500', chip: 'bg-blue-50 text-blue-700 border-blue-100', ring: 'ring-blue-100' }
+  }
+  if (name.includes('ADMIN')) {
+    return { gradient: 'from-purple-500 to-violet-600', chip: 'bg-purple-50 text-purple-700 border-purple-100', ring: 'ring-purple-100' }
+  }
+  return { gradient: 'from-slate-500 to-slate-600', chip: 'bg-slate-50 text-slate-700 border-slate-100', ring: 'ring-slate-100' }
+}
+
+function formatShiftStatus(status?: string | null) {
+  if (!status) return 'Unknown'
+  return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -13,15 +41,20 @@ export default function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [regionFilter, setRegionFilter] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Master Data States
   const [availableRoles, setAvailableRoles] = useState<EmployeeRole[]>([])
   const [availableDepartments, setAvailableDepartments] = useState<Department[]>([])
+  const [availableRegions, setAvailableRegions] = useState<Region[]>([])
 
   const [newEmployee, setNewEmployee] = useState({
     firstName: '',
@@ -36,43 +69,44 @@ export default function EmployeesPage() {
     status: 'ACTIVE'
   })
 
-  useEffect(() => {
-    fetchInitialData()
-    const interval = setInterval(() => {
-      employeesService.getAll().then(setEmployees).catch(console.error)
-    }, 10000) // 10s for "Live" feel
-    return () => clearInterval(interval)
+  const loadAll = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false
+    try {
+      if (silent) setIsRefreshing(true)
+      else setIsLoading(true)
+      setFetchError(null)
+
+      const [employeesData, rolesData, deptsData, regionsData] = await Promise.all([
+        employeesService.getAll(),
+        systemSetupService.getRoles(),
+        systemSetupService.getDepartments(),
+        systemSetupService.getRegions(),
+      ])
+
+      setEmployees(Array.isArray(employeesData) ? employeesData : [])
+      setAvailableRoles(Array.isArray(rolesData) ? rolesData : [])
+      setAvailableDepartments(Array.isArray(deptsData) ? deptsData : [])
+      setAvailableRegions(Array.isArray(regionsData) ? regionsData : [])
+    } catch (err: any) {
+      const status = err?.response?.status
+      const raw =
+        status === 429
+          ? 'Too many requests — wait a few seconds, then click Refresh.'
+          : err?.response?.data?.message ||
+            err?.message ||
+            'Failed to load employees. Check that the backend is running on port 3001.'
+      const message = Array.isArray(raw) ? raw.join(', ') : raw
+      setFetchError(message)
+      if (!silent) setEmployees([])
+    } finally {
+      if (silent) setIsRefreshing(false)
+      else setIsLoading(false)
+    }
   }, [])
 
-  const fetchInitialData = () => {
-    fetchEmployees()
-    fetchMasterData()
-  }
-
-  const fetchMasterData = async () => {
-    try {
-      const [rolesData, deptsData] = await Promise.all([
-        systemSetupService.getRoles(),
-        systemSetupService.getDepartments()
-      ])
-      setAvailableRoles(rolesData)
-      setAvailableDepartments(deptsData)
-    } catch (err) {
-      console.error('Failed to fetch master data:', err)
-    }
-  }
-
-  const fetchEmployees = async () => {
-    try {
-      setIsLoading(true)
-      const data = await employeesService.getAll()
-      setEmployees(data)
-    } catch (err) {
-      console.error('Failed to fetch employees:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
 
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,7 +127,7 @@ export default function EmployeesPage() {
         departmentId: '',
         status: 'ACTIVE'
       })
-      fetchEmployees()
+      loadAll({ silent: true })
     } catch (err: any) {
       console.error('Failed to add employee:', err)
       setError(
@@ -138,24 +172,41 @@ export default function EmployeesPage() {
   const filteredEmployees = useMemo(() => {
     return employees.filter(employee => {
       const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.toLowerCase()
+      const deptName = employee.department?.name?.toLowerCase() || ''
+      const roleName = employee.employeeRole?.name?.toLowerCase() || ''
+      const code = employee.employeeCode?.toLowerCase() || ''
       const matchesSearch = searchTerm === '' || 
         fullName.includes(searchTerm.toLowerCase()) ||
         employee.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         employee.phone?.includes(searchTerm) ||
-        employee.id.toLowerCase().includes(searchTerm.toLowerCase())
+        employee.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        code.includes(searchTerm.toLowerCase()) ||
+        deptName.includes(searchTerm.toLowerCase()) ||
+        roleName.includes(searchTerm.toLowerCase())
       
       const matchesRole = roleFilter === '' || employee.employeeRoleId === roleFilter
       const matchesStatus = statusFilter === '' || employee.status === statusFilter
+      const matchesDepartment = departmentFilter === '' || employee.departmentId === departmentFilter
+      const matchesRegion = regionFilter === '' || employee.station?.regionId === regionFilter
       
-      return matchesSearch && matchesRole && matchesStatus
+      return matchesSearch && matchesRole && matchesStatus && matchesDepartment && matchesRegion
     })
-  }, [employees, searchTerm, roleFilter, statusFilter])
+  }, [employees, searchTerm, roleFilter, statusFilter, departmentFilter, regionFilter])
+
+  const roleStats = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const employee of employees) {
+      const label = employee.employeeRole?.name || 'Unassigned'
+      counts[label] = (counts[label] || 0) + 1
+    }
+    return counts
+  }, [employees])
 
   const stats = useMemo(() => {
     return {
       total: employees.length,
       active: employees.filter(e => e.status === 'ACTIVE').length,
-      onDuty: employees.filter(e => e.status === 'ACTIVE').length,
+      onDuty: employees.filter(e => e.status === 'ACTIVE' && ON_DUTY_SHIFT_STATUSES.has(e.shiftStatus || '')).length,
       departments: new Set(employees.map(e => e.departmentId).filter(Boolean)).size
     }
   }, [employees])
@@ -165,257 +216,378 @@ export default function EmployeesPage() {
     setShowDetails(true)
   }
 
-  const handleAssignRole = (employeeId: string) => {
-    console.log('Assign role for employee:', employeeId)
-  }
-
-  const handleUpdateStatus = (employeeId: string, newStatus: string) => {
-    console.log('Update status for employee:', employeeId, 'to:', newStatus)
-  }
-
-  const handleDeleteEmployee = (employeeId: string) => {
-    if (confirm('Are you sure you want to delete this employee?')) {
-      console.log('Delete employee:', employeeId)
+  const handleAssignRole = async (employeeId: string, employeeRoleId: string) => {
+    if (!employeeRoleId) return
+    try {
+      await employeesService.update(employeeId, { employeeRoleId })
+      toast.success('Role updated')
+      await loadAll({ silent: true })
+      if (selectedEmployee?.id === employeeId) {
+        setSelectedEmployee((prev) =>
+          prev ? { ...prev, employeeRoleId, employeeRole: availableRoles.find((r) => r.id === employeeRoleId) || prev.employeeRole } : prev
+        )
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update role')
     }
   }
 
+  const handleUpdateStatus = async (employeeId: string, newStatus: string) => {
+    try {
+      await employeesService.update(employeeId, { status: newStatus })
+      toast.success(`Status updated to ${newStatus}`)
+      await loadAll({ silent: true })
+      if (selectedEmployee?.id === employeeId) {
+        setSelectedEmployee((prev) => (prev ? { ...prev, status: newStatus } : prev))
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update status')
+    }
+  }
+
+  const handleDeleteEmployee = async (employeeId: string) => {
+    if (!confirm('Are you sure you want to remove this employee? This cannot be undone.')) return
+    try {
+      await employeesService.delete(employeeId)
+      toast.success('Employee removed')
+      setShowDetails(false)
+      setSelectedEmployee(null)
+      await loadAll({ silent: true })
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || 'Failed to delete employee'
+      toast.error(Array.isArray(message) ? message.join(', ') : message)
+    }
+  }
+
+  const handleExportReport = () => {
+    const rows = filteredEmployees.map((e) => ({
+      code: e.employeeCode || '',
+      name: `${e.firstName || ''} ${e.lastName || ''}`.trim(),
+      role: e.employeeRole?.name || '',
+      department: e.department?.name || '',
+      status: e.status,
+      shift: e.shiftStatus || '',
+      email: e.user?.email || '',
+      phone: e.phone || '',
+      station: e.station?.name || '',
+    }))
+    if (!rows.length) {
+      toast.error('No employees to export')
+      return
+    }
+    const headers = Object.keys(rows[0])
+    const csv = [
+      headers.join(','),
+      ...rows.map((row) =>
+        headers.map((h) => `"${String(row[h as keyof typeof row]).replace(/"/g, '""')}"`).join(',')
+      ),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `aamin-employees-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${rows.length} employees`)
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Employees Management</h1>
-          <p className="text-gray-500 mt-1">Manage and track your operational personnel</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="rounded-xl font-bold h-11 px-6 shadow-sm">
-            Export Report
-          </Button>
-          <Button 
-            className="bg-primary hover:bg-destructive rounded-xl shadow-lg shadow-primary/20 transition-all font-black h-11 px-6"
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            REGISTER STAFF
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Total Employees</p>
-              <p className="text-3xl font-black text-secondary mt-1 tracking-tighter">{stats.total}</p>
-              <p className="text-[10px] text-green-600 mt-2 font-bold bg-green-50 inline-block px-2 py-0.5 rounded-full">LIVE COVERAGE</p>
+    <div className="space-y-6 pb-8">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#C62828] via-[#D32F2F] to-[#E53935] text-white shadow-xl shadow-red-900/20">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,_white,_transparent_55%)]" />
+        <div className="relative p-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-[10px] font-black uppercase tracking-widest mb-3">
+              <UserCog className="w-3.5 h-3.5" />
+              Workforce & Organization
             </div>
-            <div className="bg-blue-50 p-4 rounded-2xl">
-              <User className="w-8 h-8 text-blue-600" />
-            </div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight">All Employees</h1>
+            <p className="text-red-100 mt-2 max-w-xl">
+              Unified registry for drivers, nurses, dispatchers, and admin staff across all departments and stations.
+            </p>
           </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Active Staff</p>
-              <p className="text-3xl font-black text-secondary mt-1 tracking-tighter">{stats.active}</p>
-              <p className="text-[10px] text-green-600 mt-2 font-bold bg-green-50 inline-block px-2 py-0.5 rounded-full">OPERATIONAL</p>
-            </div>
-            <div className="bg-green-50 p-4 rounded-2xl">
-              <Activity className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-400 uppercase tracking-widest">On Duty</p>
-              <p className="text-3xl font-black text-secondary mt-1 tracking-tighter">{stats.onDuty}</p>
-              <p className="text-[10px] text-blue-600 mt-2 font-bold bg-blue-50 inline-block px-2 py-0.5 rounded-full">ACTIVE NOW</p>
-            </div>
-            <div className="bg-blue-50 p-4 rounded-2xl">
-              <Clock className="w-8 h-8 text-blue-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Departments</p>
-              <p className="text-3xl font-black text-secondary mt-1 tracking-tighter">{stats.departments}</p>
-              <p className="text-[10px] text-purple-600 mt-2 font-bold bg-purple-50 inline-block px-2 py-0.5 rounded-full">ORGANIZED UNITS</p>
-            </div>
-            <div className="bg-purple-50 p-4 rounded-2xl">
-              <Shield className="w-8 h-8 text-purple-600" />
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              className="rounded-xl font-bold h-11 px-5 bg-white/10 border-white/25 text-white hover:bg-white/20"
+              onClick={() => loadAll({ silent: true })}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-xl font-bold h-11 px-5 bg-white text-red-700 hover:bg-red-50 border-0"
+              onClick={handleExportReport}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+            <Link href="/admin/employees/add">
+              <Button variant="outline" className="rounded-xl font-bold h-11 px-5 bg-white/10 border-white/25 text-white hover:bg-white/20">
+                Full Registration
+              </Button>
+            </Link>
+            <Button
+              className="bg-white text-red-700 hover:bg-red-50 rounded-xl shadow-lg font-black h-11 px-6"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Quick Add
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Filters & Actions */}
-      <div className="bg-white rounded-3xl shadow-sm p-8 border border-gray-100">
-        <div className="flex items-center gap-6">
+      {fetchError && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+          <div className="flex items-start gap-3 flex-1">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold">Could not load workforce data</p>
+              <p className="text-xs mt-1">{fetchError}</p>
+            </div>
+          </div>
+          <Button variant="outline" className="shrink-0 border-amber-300" onClick={() => loadAll()}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {[
+          { label: 'Total Staff', value: stats.total, icon: Users, tone: 'text-red-600', bg: 'bg-red-50' },
+          { label: 'Active', value: stats.active, icon: CheckCircle2, tone: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'On Duty', value: stats.onDuty, icon: Activity, tone: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Departments', value: stats.departments, icon: Building2, tone: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Drivers', value: roleStats['Driver'] || 0, icon: Truck, tone: 'text-orange-600', bg: 'bg-orange-50' },
+          { label: 'Nurses', value: roleStats['Nurse'] || 0, icon: Stethoscope, tone: 'text-rose-600', bg: 'bg-rose-50' },
+        ].map((item) => (
+          <div key={item.label} className="bg-white rounded-2xl border border-red-50 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center mb-3`}>
+              <item.icon className={`w-5 h-5 ${item.tone}`} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Role breakdown */}
+      {Object.keys(roleStats).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(roleStats).map(([role, count]) => {
+            const theme = getRoleTheme(role)
+            return (
+              <span key={role} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold ${theme.chip}`}>
+                {role}
+                <span className="opacity-70">{count}</span>
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8 border border-red-50">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="flex-1 relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-red-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search by name, ID, email, or department..."
-              className="w-full pl-12 pr-6 h-14 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all font-medium text-secondary"
+              placeholder="Search name, code, role, department, email, phone…"
+              className="w-full pl-12 pr-6 h-13 min-h-[52px] bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-red-100 focus:border-red-200 focus:bg-white transition-all font-medium text-slate-800"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <select 
-              className="h-14 bg-gray-50 border-none rounded-2xl px-6 font-bold text-secondary focus:ring-2 focus:ring-primary/20 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231D3557%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:10px] bg-[right_1.5rem_center] bg-no-repeat min-w-[200px]"
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className="h-[52px] bg-slate-50 border border-slate-100 rounded-2xl px-5 font-bold text-slate-700 focus:ring-2 focus:ring-red-100 min-w-[160px]"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
             >
               <option value="">All Roles</option>
-              {availableRoles.map(role => (
+              {availableRoles.map((role) => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>
-            <Button 
-              variant="outline" 
-              className={`rounded-2xl h-14 px-6 border-none font-bold transition-all ${showFilters ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-gray-50 text-secondary'}`}
+            <Button
+              variant="outline"
+              className={`rounded-2xl h-[52px] px-5 font-bold border-slate-100 ${showFilters ? 'bg-red-600 text-white border-red-600 hover:bg-red-700' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
               onClick={() => setShowFilters(!showFilters)}
             >
               <Filter className="w-5 h-5 mr-2" />
-              Advanced
+              Filters
             </Button>
           </div>
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-3 gap-6 mt-8 pt-8 border-t border-gray-100 animate-in fade-in slide-in-from-top-4 duration-300">
-             <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status</label>
-              <select 
-                className="w-full h-12 bg-gray-50 border-none rounded-xl px-4 font-bold text-secondary"
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status</label>
+              <select
+                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-700"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="">All Statuses</option>
-                <option value="ACTIVE">Currently Active</option>
-                <option value="INACTIVE">Inactive / Offline</option>
-                <option value="ON_LEAVE">Medical Leave</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="ON_LEAVE">On Leave</option>
+                <option value="SUSPENDED">Suspended</option>
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Department</label>
-              <select className="w-full h-12 bg-gray-50 border-none rounded-xl px-4 font-bold text-secondary">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Department</label>
+              <select
+                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-700"
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+              >
                 <option value="">All Departments</option>
-                {availableDepartments.map(dept => (
+                {availableDepartments.map((dept) => (
                   <option key={dept.id} value={dept.id}>{dept.name}</option>
                 ))}
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Assigned Area</label>
-              <select className="w-full h-12 bg-gray-50 border-none rounded-xl px-4 font-bold text-secondary">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Region</label>
+              <select
+                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-700"
+                value={regionFilter}
+                onChange={(e) => setRegionFilter(e.target.value)}
+              >
                 <option value="">All Regions</option>
-                <option value="HQ">Central HQ</option>
-                <option value="NORTH">North Division</option>
-                <option value="SOUTH">South Division</option>
+                {availableRegions.map((region) => (
+                  <option key={region.id} value={region.id}>{region.name}</option>
+                ))}
               </select>
             </div>
           </div>
         )}
+
+        <p className="text-xs text-slate-500 mt-4 font-medium">
+          Showing <span className="font-bold text-red-600">{filteredEmployees.length}</span> of {employees.length} employees
+        </p>
       </div>
 
-      {/* Grid Display */}
+      {/* Employee grid */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center p-20 space-y-4">
-          <Loader2 className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-secondary/40 font-black uppercase tracking-widest text-xs">Synchronizing Personnel Records...</p>
+        <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white rounded-3xl border border-red-50">
+          <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading workforce…</p>
         </div>
       ) : filteredEmployees.length === 0 ? (
-        <div className="bg-white rounded-3xl p-20 text-center border-2 border-dashed border-gray-100">
-          <div className="bg-gray-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Search className="w-10 h-10 text-gray-200" />
+        <div className="bg-white rounded-3xl p-16 text-center border-2 border-dashed border-red-100">
+          <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6">
+            <Users className="w-10 h-10 text-red-200" />
           </div>
-          <h3 className="text-xl font-black text-secondary mb-2">No Personnel Found</h3>
-          <p className="text-secondary/50 max-w-md mx-auto">We couldn't find any staff members matching your search criteria. Try broadening your search or register a new team member.</p>
+          <h3 className="text-xl font-black text-slate-800 mb-2">
+            {employees.length === 0 && !fetchError ? 'No employees yet' : 'No matches found'}
+          </h3>
+          <p className="text-slate-500 max-w-md mx-auto mb-6">
+            {employees.length === 0 && !fetchError
+              ? 'Register your first team member to start building your workforce.'
+              : 'Try clearing filters or broadening your search.'}
+          </p>
+          {employees.length === 0 && !fetchError && (
+            <Button className="bg-red-600 hover:bg-red-700 rounded-xl font-bold" onClick={() => setIsAddModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Employee
+            </Button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredEmployees.map((employee) => (
-            <div key={employee.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group">
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-secondary/5 p-4 rounded-2xl group-hover:bg-primary/10 transition-colors">
-                      <User className="w-6 h-6 text-secondary group-hover:text-primary transition-colors" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-secondary text-lg leading-tight uppercase tracking-tight">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredEmployees.map((employee) => {
+            const theme = getRoleTheme(employee.employeeRole?.name)
+            const isActive = employee.status === 'ACTIVE'
+            return (
+              <div
+                key={employee.id}
+                className={`bg-white rounded-3xl border overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all group ${theme.ring} ring-1`}
+              >
+                <div className={`h-1.5 bg-gradient-to-r ${theme.gradient}`} />
+                <div className="p-6">
+                  <div className="flex items-start gap-4 mb-5">
+                    <EmployeeAvatar
+                      profilePhoto={employee.profilePhoto}
+                      firstName={employee.firstName}
+                      lastName={employee.lastName}
+                      gradient={theme.gradient}
+                      size="md"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-black text-slate-900 text-lg leading-tight truncate">
                         {employee.firstName} {employee.lastName}
                       </h3>
-                      <p className="text-[10px] font-black text-secondary/30 uppercase tracking-[0.2em]">{employee.department?.name || 'GENERAL STAFF'}</p>
+                      <p className="text-xs text-slate-500 font-bold mt-0.5 truncate">
+                        {employee.employeeCode || 'No code'} · {employee.department?.name || 'General'}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${theme.chip}`}>
+                          {employee.employeeRole?.name || 'Unassigned'}
+                        </span>
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${getStatusColor(employee.status)}`}>
+                          {employee.status}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${getStatusColor(employee.status)}`}>
-                    {employee.status}
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-gray-50 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest mb-1 leading-none">Specialization</p>
-                    <div className="flex items-center gap-2">
-                       <span className="text-xs font-black text-secondary">{employee.employeeRole?.name || 'UNASSIGNED ROLE'}</span>
+                  <div className="space-y-2.5 mb-5 text-sm">
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate font-medium">{employee.user?.email || '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="font-medium">{employee.phone || '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate font-medium">{employee.station?.name || 'No station assigned'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="font-medium">{formatShiftStatus(employee.shiftStatus)}</span>
                     </div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-2xl">
-                    <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest mb-1 leading-none">Fleet ID</p>
-                    <p className="text-xs font-black text-secondary truncate">{employee.assignedAmbulanceId || 'UNASSIGNED'}</p>
-                  </div>
-                </div>
 
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center justify-between text-xs px-1">
-                    <div className="flex items-center text-secondary/50 font-bold">
-                      <Mail className="w-3 h-3 mr-2" />
-                      Email
-                    </div>
-                    <span className="font-black text-secondary max-w-[150px] truncate">{employee.user?.email || 'N/A'}</span>
+                  <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
+                    <Button
+                      className="flex-1 rounded-xl h-10 font-bold text-xs bg-slate-900 hover:bg-slate-800"
+                      onClick={() => handleViewDetails(employee)}
+                    >
+                      View Profile
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl h-10 w-10 p-0 border-slate-200"
+                      title={isActive ? 'Deactivate' : 'Activate'}
+                      onClick={() => handleUpdateStatus(employee.id, isActive ? 'INACTIVE' : 'ACTIVE')}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl h-10 w-10 p-0 border-red-100 text-red-600 hover:bg-red-50"
+                      onClick={() => handleDeleteEmployee(employee.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <div className="flex items-center justify-between text-xs px-1">
-                    <div className="flex items-center text-secondary/50 font-bold">
-                      <Phone className="w-3 h-3 mr-2" />
-                      Phone
-                    </div>
-                    <span className="font-black text-secondary">{employee.phone || 'N/A'}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button 
-                    className="flex-1 rounded-xl h-11 font-black text-[10px] tracking-widest bg-secondary hover:bg-secondary/90 shadow-sm"
-                    onClick={() => handleViewDetails(employee)}
-                  >
-                    PROFILE
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl h-11 w-11 p-0 border-2 hover:bg-primary/5 hover:text-primary border-gray-100"
-                    onClick={() => handleUpdateStatus(employee.id, 'ACTIVE')}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl h-11 w-11 p-0 border-2 hover:bg-destructive/5 hover:text-destructive border-gray-100"
-                    onClick={() => handleDeleteEmployee(employee.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -646,160 +818,15 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* Details Modal - Side Sheet Refactor */}
-      {showDetails && selectedEmployee && (
-        <div className="fixed inset-0 bg-secondary/40 backdrop-blur-sm flex justify-end z-[100] transition-all duration-500 overflow-hidden">
-          <div 
-            className="bg-white h-full w-full max-w-xl shadow-[-20px_0_50px_rgba(29,53,87,0.1)] border-l border-gray-100 relative animate-in slide-in-from-right duration-500 flex flex-col"
-          >
-             <div className="p-8 pb-4 flex items-center justify-between border-b border-gray-50">
-               <div className="flex items-center gap-4">
-                 <div className="bg-primary/5 p-3 rounded-2xl">
-                   <User className="w-6 h-6 text-primary" />
-                 </div>
-                 <div>
-                   <h2 className="text-xl font-black text-secondary uppercase tracking-tight">Staff Profile</h2>
-                   <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest">Operative Overview</p>
-                 </div>
-               </div>
-               <button 
-                onClick={() => setShowDetails(false)}
-                className="bg-gray-50 p-2 rounded-xl text-secondary/30 hover:text-primary transition-all hover:rotate-90"
-              >
-                <X className="w-5 h-5" />
-              </button>
-             </div>
-
-             <div className="flex-1 overflow-y-auto p-8 space-y-10">
-               <div className="flex flex-col items-center text-center space-y-4">
-                 <div className="relative">
-                   <div className="bg-primary/5 p-10 rounded-[3rem] relative group">
-                     <User className="w-20 h-20 text-primary group-hover:scale-110 transition-transform" />
-                   </div>
-                   <div className="absolute -bottom-2 -right-2 bg-success p-3 rounded-2xl shadow-xl border-4 border-white">
-                     <Activity className="w-6 h-6 text-white animate-pulse" />
-                   </div>
-                 </div>
-                 <div>
-                    <h2 className="text-4xl font-black text-secondary tracking-tighter uppercase leading-none mb-2">
-                      {selectedEmployee.firstName} {selectedEmployee.lastName}
-                    </h2>
-                    <div className="flex items-center justify-center gap-3">
-                      <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800`}>
-                        {selectedEmployee.employeeRole?.name || 'N/A'}
-                      </span>
-                      <div className="h-1 w-1 bg-gray-200 rounded-full" />
-                      <span className="text-xs text-secondary/40 font-black uppercase tracking-[0.2em]">ID: {selectedEmployee.id}</span>
-                    </div>
-                 </div>
-               </div>
-
-               <div className="space-y-10">
-                 <div className="space-y-8">
-                   <div>
-                     <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                       <div className="w-2 h-4 bg-primary rounded-full" />
-                       CORE DATA
-                     </h3>
-                     <div className="space-y-4 bg-gray-50/50 p-6 rounded-[2rem] border border-gray-100">
-                       <div className="grid grid-cols-2 gap-6">
-                         <div className="space-y-1">
-                           <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest">Full Operative Name</p>
-                           <p className="text-lg font-black text-secondary leading-none">{selectedEmployee.firstName} {selectedEmployee.lastName}</p>
-                         </div>
-                         <div className="space-y-1">
-                           <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest">Phone Link</p>
-                           <p className="text-lg font-black text-secondary leading-none">{selectedEmployee.phone}</p>
-                         </div>
-                       </div>
-                       <div className="pt-4 space-y-1 border-t border-gray-100">
-                         <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest">Secure Communication</p>
-                         <p className="text-lg font-black text-secondary lowercase flex items-center gap-2">
-                           {selectedEmployee.user?.email}
-                         </p>
-                       </div>
-                     </div>
-                   </div>
-
-                   <div>
-                      <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                       <div className="w-2 h-4 bg-primary rounded-full" />
-                       ASSET DEPLOYMENT
-                     </h3>
-                     <div className="bg-gradient-to-br from-success/10 to-transparent p-6 rounded-[2rem] border-2 border-success/20 group hover:shadow-lg transition-all">
-                       <div className="flex items-center justify-between">
-                         <div>
-                           <p className="text-[10px] font-black text-success uppercase tracking-[0.3em] mb-2">Fleet Integration</p>
-                           <p className="text-2xl font-black text-secondary tracking-tighter">{selectedEmployee.assignedAmbulanceId || 'PENDING ASSIGNMENT'}</p>
-                         </div>
-                         <div className="bg-white p-5 rounded-[1.5rem] shadow-xl border border-success/10">
-                           <Activity className="w-8 h-8 text-success animate-pulse" />
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-
-                 <div className="space-y-8">
-                   <div>
-                     <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                       <div className="w-2 h-4 bg-primary rounded-full" />
-                       OPERATIONAL PARAMETERS
-                     </h3>
-                     <div className="space-y-6 bg-secondary p-6 rounded-[2rem] shadow-2xl">
-                       <div className="grid grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Division</p>
-                            <p className="text-lg font-black text-white">{selectedEmployee.department?.name || 'OFFICE'}</p>
-                          </div>
-                         <div>
-                           <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Status</p>
-                            <span className={`inline-flex items-center px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${getStatusColor(selectedEmployee.status)} bg-white/10 text-white border border-white/20`}>
-                             {selectedEmployee.status}
-                           </span>
-                         </div>
-                       </div>
-                       <div className="pt-6 border-t border-white/10">
-                         <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Record Created</p>
-                         <p className="text-sm font-bold text-white/70 italic">Synchronized at Deployment</p>
-                       </div>
-                     </div>
-                   </div>
-
-                   <div>
-                      <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                       <div className="w-2 h-4 bg-primary rounded-full" />
-                       PERFORMANCE METRICS
-                     </h3>
-                     <div className="grid grid-cols-2 gap-6">
-                       <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-gray-100 flex flex-col items-center justify-center text-center hover:border-primary/30 transition-all group">
-                         <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest mb-2 group-hover:text-primary transition-colors">Emergency Calls</p>
-                         <p className="text-2xl font-black text-secondary tracking-tighter">00</p>
-                       </div>
-                       <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-gray-100 flex flex-col items-center justify-center text-center hover:border-primary/30 transition-all group">
-                         <p className="text-[10px] font-black text-secondary/30 uppercase tracking-widest mb-2 group-hover:text-primary transition-colors">Expertise Score</p>
-                         <p className="text-2xl font-black text-secondary tracking-tighter">N/A</p>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             </div>
-
-             <div className="p-8 bg-gray-50 border-t border-gray-100 flex gap-4">
-               <Button className="flex-1 bg-primary hover:bg-destructive h-14 rounded-2xl font-black text-[10px] tracking-widest shadow-lg shadow-primary/20 active:scale-95 transition-all">
-                 MODIFY STATUS
-               </Button>
-               <Button variant="outline" className="flex-1 h-14 rounded-2xl font-black text-[10px] tracking-widest border-2 hover:bg-white active:scale-95 transition-all">
-                 EDIT ROLE
-               </Button>
-               <Button variant="outline" className="h-14 w-14 p-0 rounded-2xl flex items-center justify-center border-2 text-destructive border-destructive/10 hover:bg-destructive/5 active:scale-95 transition-all">
-                 <Trash2 className="w-5 h-5" />
-               </Button>
-             </div>
-          </div>
-        </div>
-      )}
+      <EmployeeProfileModal
+        employee={selectedEmployee}
+        open={showDetails}
+        onClose={() => setShowDetails(false)}
+        availableRoles={availableRoles}
+        onAssignRole={handleAssignRole}
+        onUpdateStatus={handleUpdateStatus}
+        onDelete={handleDeleteEmployee}
+      />
     </div>
   )
 }

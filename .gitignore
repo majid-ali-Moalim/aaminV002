@@ -2,5 +2,19 @@ node_modules/
 *.log
 *.tsbuildinfo
 .env
-dist/
 .env.local
+.env.*
+dist/
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Uploads & local data
+backend/uploads/
+backend/auth.log
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/

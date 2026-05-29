@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import {
   Grid3X3, List, Trash2, Settings, X, Save,
   AlertTriangle, Star, TrendingUp, TrendingDown
 } from 'lucide-react'
-import { driversService, systemSetupService, ambulancesService, employeesService } from '@/lib/api'
+import { driversService, systemSetupService, ambulancesService, employeesService, uploadService } from '@/lib/api'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -91,6 +91,8 @@ export default function DriversPage() {
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null)
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -428,6 +430,32 @@ export default function DriversPage() {
     window.URL.revokeObjectURL(url)
     
     toast.success('Drivers exported successfully')
+  }
+
+  const toPublicImageUrl = (url?: string) => {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    if (url.startsWith('/uploads')) return `http://localhost:3001${url}`
+    return url
+  }
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      setIsUploadingPhoto(true)
+      const response: any = await uploadService.uploadFile(file)
+      if (!response?.url) throw new Error('Upload did not return file URL')
+      setFormData((prev) => ({ ...prev, profilePhoto: response.url }))
+      toast.success('Profile photo uploaded successfully')
+    } catch (error: any) {
+      console.error('Profile upload failed:', error)
+      toast.error(error?.response?.data?.message || 'Failed to upload profile photo')
+    } finally {
+      setIsUploadingPhoto(false)
+      event.target.value = ''
+    }
   }
 
   return (
@@ -936,37 +964,79 @@ export default function DriversPage() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 md:col-span-2">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                       Profile Photo
                     </label>
-                    <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center font-bold text-slate-500 shadow-inner overflow-hidden">
-                        {formData.profilePhoto ? (
-                          <img src={formData.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
-                        ) : (
-                          `${formData.fullName?.[0] || 'D'}`
+                    <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
+                      <div className="flex items-center gap-4">
+                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center font-bold text-slate-500 shadow-inner overflow-hidden border border-slate-200">
+                          {isUploadingPhoto ? (
+                            <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+                          ) : formData.profilePhoto ? (
+                            <img src={toPublicImageUrl(formData.profilePhoto)} alt="Profile" className="w-full h-full object-cover" />
+                          ) : (
+                            `${formData.firstName?.[0] || 'D'}`
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-slate-800">
+                            {formData.firstName || 'New'} {formData.lastName || 'Driver'}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Upload a clear face photo (JPG, PNG, WEBP). Max size: 5MB.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          disabled={isUploadingPhoto}
+                          className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-medium bg-white text-slate-800 hover:bg-slate-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {isUploadingPhoto ? 'Uploading...' : 'Upload Photo'}
+                        </button>
+                        {formData.profilePhoto && (
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                            Photo attached
+                          </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 hover:bg-white transition-all"
-                      >
-                        Upload Photo
-                      </button>
                     </div>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoUpload}
+                    />
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Full Name <span className="text-red-500">*</span>
+                      First Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="Enter full name (e.g., John Michael Doe)"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      placeholder="Enter first name"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter last name"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     />
                   </div>

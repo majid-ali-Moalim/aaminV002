@@ -53,17 +53,17 @@ export default function NursePerformancePage() {
       {/* Premium Header */}
       <div className="bg-[#0A1128] rounded-[2.5rem] p-10 border border-white/5 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-full h-full opacity-10 pointer-events-none">
-           <div className="absolute top-[-20%] right-[-10%] w-96 h-96 bg-blue-600 blur-[120px] rounded-full" />
+           <div className="absolute top-[-20%] right-[-10%] w-96 h-96 bg-red-600 blur-[120px] rounded-full" />
            <div className="absolute bottom-[-20%] left-[-10%] w-72 h-72 bg-purple-600 blur-[100px] rounded-full" />
         </div>
         
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
            <div>
               <div className="flex items-center gap-3 mb-4">
-                 <div className="bg-blue-600/20 p-2 rounded-xl text-blue-400 border border-blue-500/20">
+                 <div className="bg-red-600/20 p-2 rounded-xl text-red-400 border border-red-500/20">
                     <Award className="w-5 h-5" />
                  </div>
-                 <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Clinical Excellence Unit</span>
+                 <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.3em]">Clinical Excellence Unit</span>
               </div>
               <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Personnel Performance & Outcomes</h1>
               <p className="text-white/40 text-sm mt-3 font-medium max-w-2xl leading-relaxed">
@@ -81,7 +81,7 @@ export default function NursePerformancePage() {
 
       {isLoading ? (
          <div className="p-24 flex flex-col items-center gap-4">
-            <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+            <Loader2 className="w-12 h-12 text-red-600 animate-spin" />
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Aggregating Clinical Metrics...</p>
          </div>
       ) : (
@@ -92,12 +92,12 @@ export default function NursePerformancePage() {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {[
                      { label: 'Overall Rating', value: '4.85', change: '+2.4%', icon: Star, color: 'text-amber-400' },
-                     { label: 'Total Missions', value: totalMissions, change: '+12%', icon: Activity, color: 'text-blue-400' },
+                     { label: 'Total Missions', value: totalMissions, change: '+12%', icon: Activity, color: 'text-red-400' },
                      { label: 'Care Awards', value: '14', change: '+2', icon: Medal, color: 'text-purple-400' }
                   ].map((stat, i) => (
                      <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-gray-50 shadow-sm hover:shadow-xl transition-all group">
                         <div className="flex justify-between items-start mb-6">
-                           <div className={`p-4 rounded-2xl bg-gray-50 group-hover:bg-blue-50 group-hover:scale-110 transition-all ${stat.color}`}>
+                           <div className={`p-4 rounded-2xl bg-gray-50 group-hover:bg-red-50 group-hover:scale-110 transition-all ${stat.color}`}>
                               <stat.icon className="w-6 h-6" />
                            </div>
                            <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase">
@@ -118,7 +118,7 @@ export default function NursePerformancePage() {
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Weekly volume distribution</p>
                      </div>
                      <div className="flex gap-2">
-                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-xl">7 DAY VIEW</span>
+                        <span className="text-[10px] font-black text-red-600 bg-red-50 px-3 py-1 rounded-xl">7 DAY VIEW</span>
                      </div>
                   </div>
                   <div className="h-72 w-full">
@@ -152,7 +152,7 @@ export default function NursePerformancePage() {
                         <div key={i} className="flex items-center justify-between group">
                            <div className="flex items-center gap-4">
                               <div className="relative">
-                                 <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center font-black text-gray-300 text-xs overflow-hidden group-hover:border-blue-200 transition-all">
+                                 <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center font-black text-gray-300 text-xs overflow-hidden group-hover:border-red-200 transition-all">
                                     {nurse.firstName[0]}{nurse.lastName[0]}
                                  </div>
                                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
@@ -160,12 +160,12 @@ export default function NursePerformancePage() {
                                  </div>
                               </div>
                               <div>
-                                 <p className="text-xs font-black text-secondary uppercase tracking-tight group-hover:text-blue-600 transition-all">{nurse.firstName} {nurse.lastName}</p>
+                                 <p className="text-xs font-black text-secondary uppercase tracking-tight group-hover:text-red-600 transition-all">{nurse.firstName} {nurse.lastName}</p>
                                  <div className="flex items-center gap-2 mt-0.5">
                                     <div className="flex gap-0.5">
                                        {[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-2.5 h-2.5 ${s <= 4 ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />)}
                                     </div>
-                                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{Math.floor(Math.random() * 20) + 80} Missions</span>
+                                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">{Math.floor(Math.random() * 20) + 80} Missions</span>
                                  </div>
                               </div>
                            </div>
@@ -176,15 +176,15 @@ export default function NursePerformancePage() {
                         </div>
                      ))}
                   </div>
-                  <Button variant="ghost" className="w-full mt-8 h-12 rounded-2xl bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:bg-blue-50 hover:text-blue-600 transition-all">
+                  <Button variant="ghost" className="w-full mt-8 h-12 rounded-2xl bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all">
                      View Full League Table
                   </Button>
                </div>
 
-               <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] p-8 text-white shadow-xl shadow-blue-200 relative overflow-hidden">
+               <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-[2.5rem] p-8 text-white shadow-xl shadow-red-200 relative overflow-hidden">
                   <Medal className="absolute -bottom-4 -right-4 w-32 h-32 opacity-10 rotate-12" />
                   <h3 className="text-xl font-black italic tracking-tighter uppercase mb-2">Training Pulse</h3>
-                  <p className="text-blue-100/60 text-xs font-medium mb-8 leading-relaxed">
+                  <p className="text-red-100/60 text-xs font-medium mb-8 leading-relaxed">
                      Monitor continuous medical education and certification compliance across the nursing department.
                   </p>
                   <div className="space-y-4">

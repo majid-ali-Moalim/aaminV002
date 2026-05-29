@@ -115,7 +115,7 @@ export default function PatientCareRecordsPage() {
                     <span className="text-sm font-black text-gray-900">{record.heartRate || '82'}</span>
                   </div>
                   <div className="flex flex-col items-center px-4 border-x border-gray-100">
-                     <Droplets className="w-4 h-4 text-blue-500 mb-1" />
+                     <Droplets className="w-4 h-4 text-red-500 mb-1" />
                      <span className="text-[10px] font-black text-gray-400">O2 SAT</span>
                      <span className="text-sm font-black text-gray-900">{record.oxygenSaturation || '98'}%</span>
                   </div>

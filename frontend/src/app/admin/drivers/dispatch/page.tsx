@@ -71,7 +71,7 @@ export default function DispatchActivityPage() {
   }
 
   const getStepProgress = (status: string) => {
-    const steps = ['PENDING', 'ASSIGNED', 'DISPATCHED', 'ON_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED']
+    const steps = ['PENDING', 'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED']
     const index = steps.indexOf(status)
     return index === -1 ? 0 : ((index + 1) / steps.length) * 100
   }

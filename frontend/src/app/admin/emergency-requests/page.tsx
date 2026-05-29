@@ -83,182 +83,212 @@ export default function EmergencyRequestsPage() {
   }
 
   return (
-    <div className="bg-[#F3F4F6] min-h-screen">
-      {/* Tactical Header */}
-      <header className="bg-[#E32929] text-white px-8 py-5 flex items-center justify-between shadow-lg sticky top-0 z-50">
+    <div className="bg-slate-50 min-h-screen font-sans">
+      {/* Modern Header */}
+      <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="bg-white p-2 rounded-none">
-            <Truck className="w-8 h-8 text-[#E32929]" />
+          <div className="bg-red-600 p-2.5 rounded-xl shadow-lg shadow-red-200">
+            <Truck className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black uppercase tracking-tight italic">Emergency Case Log</h1>
-            <p className="text-[10px] font-bold opacity-80 uppercase tracking-[0.3em] leading-none">Global Mission Control</p>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Emergency Requests</h1>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aamin Ambulance Dispatch Center</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
            <Button 
-            variant="outline" 
+            variant="ghost" 
             onClick={fetchRequests}
-            className="bg-transparent border-white/20 text-white hover:bg-white/10 rounded-none h-12 uppercase font-black text-xs"
+            className="text-slate-600 hover:bg-slate-100 h-11 px-4 font-bold text-sm rounded-xl"
            >
              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
              Refresh
            </Button>
            <Button
-            className="h-12 px-8 bg-[#1E293B] hover:bg-[#0F172A] text-white font-black uppercase tracking-widest rounded-none shadow-xl border border-[#0F172A] flex items-center gap-2"
+            className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center gap-2"
             onClick={() => router.push('/admin/emergency-requests/new')}
            >
-             <Plus className="w-5 h-5 text-red-500" />
-             New Case Intake
+             <Plus className="w-5 h-5" />
+             New Request
            </Button>
         </div>
       </header>
 
       <main className="p-8 max-w-[1600px] mx-auto space-y-8">
         
-        {/* Dynamic Stats Bar */}
-        <EmergencyStatsBar stats={stats} />
+        {/* Simplified Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { label: 'Total Cases', value: stats.total, color: 'blue' },
+            { label: 'Active', value: stats.active, color: 'emerald' },
+            { label: 'Pending', value: stats.pending, color: 'amber' },
+            { label: 'Critical', value: stats.critical, color: 'red' },
+          ].map((item) => (
+            <div key={item.label} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{item.label}</p>
+                <p className="text-3xl font-black text-slate-900">{item.value}</p>
+              </div>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                item.color === 'blue' ? 'bg-blue-50 text-blue-600' :
+                item.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
+                item.color === 'amber' ? 'bg-amber-50 text-amber-600' :
+                'bg-red-50 text-red-600'
+              }`}>
+                {item.label === 'Total Cases' && <Truck className="w-6 h-6" />}
+                {item.label === 'Active' && <RefreshCw className="w-6 h-6" />}
+                {item.label === 'Pending' && <Clock className="w-6 h-6" />}
+                {item.label === 'Critical' && <AlertTriangle className="w-6 h-6" />}
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {/* Tactical Search & Filter Panel */}
-        <div className="bg-[#1E293B] border-2 border-[#1E293B] p-4 shadow-lg flex flex-wrap gap-4 rounded-none">
+        {/* Clean Filter Panel */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center">
            <div className="relative flex-1 min-w-[300px]">
-             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
              <input
                type="text"
-               placeholder="SEARCH TRACKING CODE, PATIENT OR LOCATION..."
+               placeholder="Search tracking code, patient or location..."
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
-               className="w-full pl-12 pr-4 h-12 bg-[#0F172A] border border-gray-700 text-white font-black text-sm uppercase tracking-wider focus:outline-none focus:border-blue-500 rounded-none placeholder:text-gray-600 transition-colors"
+               className="w-full pl-12 pr-4 h-12 bg-slate-50 border border-slate-200 text-slate-900 font-semibold text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all"
              />
            </div>
            
            <select
              value={statusFilter}
              onChange={(e) => setStatusFilter(e.target.value)}
-             className="h-12 px-6 bg-white border border-gray-300 text-[#1E293B] font-black text-[11px] uppercase tracking-widest focus:outline-none rounded-none cursor-pointer"
+             className="h-12 px-6 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/10 cursor-pointer transition-all"
            >
-             <option value="">-- ALL STATUSES --</option>
+             <option value="">All Statuses</option>
              {Object.keys(EmergencyRequestStatus).map(status => (
-               <option key={status} value={status}>{status.replace('_', ' ')}</option>
-             ))}
+                <option key={status} value={status}>{status.replace('_', ' ').toLowerCase()}</option>
+              ))}
            </select>
            
            <select
              value={priorityFilter}
              onChange={(e) => setPriorityFilter(e.target.value)}
-             className="h-12 px-6 bg-white border border-gray-300 text-[#1E293B] font-black text-[11px] uppercase tracking-widest focus:outline-none rounded-none cursor-pointer"
+             className="h-12 px-6 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/10 cursor-pointer transition-all"
            >
-             <option value="">-- ALL PRIORITIES --</option>
+             <option value="">All Priorities</option>
              {Object.keys(Priority).map(priority => (
-               <option key={priority} value={priority}>{priority}</option>
-             ))}
+                <option key={priority} value={priority}>{priority}</option>
+              ))}
            </select>
 
-           <Button className="h-12 px-6 bg-gray-700 hover:bg-gray-600 text-white rounded-none border border-gray-600 font-black">
+           <Button variant="outline" className="h-12 w-12 p-0 rounded-xl border-slate-200 text-slate-500">
               <Filter className="w-5 h-5" />
            </Button>
         </div>
 
-        {/* Unified Request Grid */}
-        <div className="bg-white border-2 border-[#1E293B] shadow-2xl overflow-hidden rounded-none">
+        {/* Clean Modern Table */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
            <div className="overflow-x-auto">
-             <table className="min-w-full">
-                <thead className="bg-[#E2E8F0] border-b-2 border-[#1E293B]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-[#1E293B] uppercase tracking-widest border-r border-gray-300">Case Intel</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-[#1E293B] uppercase tracking-widest border-r border-gray-300 text-center">Protocol State</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-[#1E293B] uppercase tracking-widest border-r border-gray-300">Location Data</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-[#1E293B] uppercase tracking-widest border-r border-gray-300 whitespace-nowrap">Time Delta</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-black text-[#1E293B] uppercase tracking-widest whitespace-nowrap text-center">Protocol Actions</th>
+             <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-200">
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Case Details</th>
+                    <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-widest">Current Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Location</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-widest">Time</th>
+                    <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-100">
                    {isLoading && requests.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-20 text-center">
-                        <Loader2 className="w-10 h-10 animate-spin mx-auto text-blue-500 mb-4" />
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Synching with network...</p>
+                        <Loader2 className="w-10 h-10 animate-spin mx-auto text-red-500 mb-4" />
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading incidents...</p>
                       </td>
                     </tr>
                    ) : filteredRequests.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-20 text-center text-xs font-black text-gray-400 uppercase tracking-[0.3em]">No incidents detected in current matrix</td>
+                      <td colSpan={5} className="px-6 py-20 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No matching cases found</td>
                     </tr>
                    ) : (
-                    filteredRequests.map((request, idx) => (
-                      <tr key={request.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-blue-50/50 transition-colors group`}>
-                        <td className="px-6 py-5 border-r border-gray-100">
-                          <div className="space-y-1">
+                    filteredRequests.map((request) => (
+                      <tr key={request.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-5">
+                          <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-[#1E293B]">{request.trackingCode}</span>
+                              <span className="text-sm font-bold text-slate-900 font-mono tracking-tight">{request.trackingCode}</span>
                               <PriorityBadge priority={request.priority} size="sm" />
                             </div>
-                            <p className="text-[11px] font-bold text-gray-600 uppercase italic">{request.patient?.fullName || 'IDENTITY UNKNOWN'}</p>
-                            <p className="text-[10px] font-black text-blue-500 font-mono tracking-tighter">{request.patient?.phone || 'COMMS OFFLINE'}</p>
+                            <p className="text-sm font-semibold text-slate-600">{request.patient?.fullName || 'Anonymous Patient'}</p>
+                            <p className="text-xs text-slate-400 font-medium">{request.patient?.phone || 'No phone provided'}</p>
                           </div>
                         </td>
-                        <td className="px-6 py-5 border-r border-gray-100 text-center">
+                        <td className="px-6 py-5 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <StatusBadge status={request.status} />
                             {request.ambulance && (
-                              <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-black uppercase tracking-tight">
+                              <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-lg border border-blue-100">
                                 <Truck className="w-3 h-3" />
                                 {request.ambulance.ambulanceNumber}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-5 border-r border-gray-100 max-w-xs">
-                          <div className="space-y-2">
-                            <div className="flex items-start gap-1.5 bg-gray-100 px-2.5 py-1.5 border border-gray-200 text-gray-800 text-[10px] font-bold uppercase leading-tight">
-                              <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                              {request.pickupLocation}
+                        <td className="px-6 py-5 max-w-xs">
+                          <div className="space-y-1.5">
+                            <div className="flex items-start gap-2 text-slate-700 text-xs font-semibold leading-relaxed">
+                              <MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                              <span className="line-clamp-2">{request.pickupLocation}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 px-2 text-[9px] font-black text-gray-400 uppercase tracking-widest overflow-hidden">
-                              <ChevronRight className="w-3 h-3 shrink-0" />
-                              <span className="truncate">Dest: {request.destination || 'TBD'}</span>
-                            </div>
+                            {request.destination && (
+                              <div className="flex items-center gap-2 text-slate-400 text-[11px] font-medium pl-6">
+                                <ArrowRight className="w-3 h-3" />
+                                <span className="truncate">{request.destination}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
-                        <td className="px-6 py-5 border-r border-gray-100 whitespace-nowrap">
-                          <div className="flex flex-col">
-                             <div className="flex items-center gap-1.5 text-xs font-black text-gray-800">
-                               <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                             <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                               <Clock className="w-4 h-4 text-slate-400" />
                                {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
                              </div>
-                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">LOGGED {new Date(request.createdAt).toLocaleTimeString()}</span>
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{new Date(request.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-6 py-5">
                           <div className="flex items-center justify-center gap-2">
                             {request.status === 'PENDING' ? (
                               <button 
                                 onClick={() => openModal(request, 'assign')}
-                                className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 shadow-md border-b-2 border-blue-900 active:translate-y-0.5 transition-all"
-                                title="Primary Dispatch"
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-xl shadow-sm transition-all hover:shadow-md active:scale-95"
+                                title="Assign Resources"
                               >
                                 <Truck className="w-5 h-5" />
                               </button>
                             ) : !['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status) ? (
                               <button 
                                 onClick={() => openModal(request, 'status')}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 shadow-md border-b-2 border-emerald-900 active:translate-y-0.5 transition-all flex items-center gap-1"
-                                title="Advance Status"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition-all hover:shadow-md active:scale-95 flex items-center gap-2"
+                                title="Update Status"
                               >
-                                <ArrowRight className="w-5 h-5" />
-                                <span className="text-[10px] font-black px-1">NEXT</span>
+                                <span className="text-xs font-bold uppercase tracking-wider">Next</span>
+                                <ArrowRight className="w-4 h-4" />
                               </button>
                             ) : null}
 
-                            <button className="bg-gray-200 hover:bg-gray-300 text-[#1E293B] p-2.5 border-b-2 border-gray-400 active:translate-y-0.5 transition-all">
+                            <button 
+                              onClick={() => router.push(`/admin/emergency-requests/${request.id}`)}
+                              className="p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                            >
                               <Eye className="w-5 h-5" />
                             </button>
 
                             {!['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status) && (
                               <button 
                                 onClick={() => openModal(request, 'cancel')}
-                                className="bg-red-50 hover:bg-red-100 text-red-600 p-2.5 border-b-2 border-red-200 active:translate-y-0.5 transition-all"
-                                title="Abort Protocol"
+                                className="p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                                title="Cancel Request"
                               >
                                 <Trash2 className="w-5 h-5" />
                               </button>
@@ -296,22 +326,6 @@ export default function EmergencyRequestsPage() {
           onSuccess={fetchRequests} 
         />
       )}
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #F1F5F9;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #94A3B8;
-          border-radius: 0;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #475569;
-        }
-      `}</style>
     </div>
   )
 }

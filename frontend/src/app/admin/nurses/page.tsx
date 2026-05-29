@@ -38,7 +38,7 @@ export default function NursesDashboard() {
         nursesService.getAll(),
         nursesService.getStats()
       ])
-      setNurses(nursesData)
+      setNurses(Array.isArray(nursesData) ? nursesData : [])
       setStats(statsData)
     } catch (err) {
       console.error('Failed to fetch nurses data:', err)
@@ -50,7 +50,7 @@ export default function NursesDashboard() {
   const fetchMasterData = async () => {
     try {
       const stationsData = await systemSetupService.getStations()
-      setStations(stationsData)
+      setStations(Array.isArray(stationsData) ? stationsData.filter((s) => s.isActive !== false) : [])
     } catch (err) {
       console.error('Failed to fetch master data:', err)
     }
@@ -74,7 +74,7 @@ export default function NursesDashboard() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'AVAILABLE': return 'bg-success/10 text-success border-success/20'
-      case 'ON_DUTY': return 'bg-blue-100 text-blue-600 border-blue-200'
+      case 'ON_DUTY': return 'bg-red-100 text-red-600 border-red-200'
       case 'ON_BREAK': return 'bg-warning/10 text-warning border-warning/20'
       case 'UNAVAILABLE': return 'bg-destructive/10 text-destructive border-destructive/20'
       default: return 'bg-gray-100 text-gray-500 border-gray-200'
@@ -99,12 +99,12 @@ export default function NursesDashboard() {
           <p className="text-gray-500 mt-1">Manage medical personnel, certifications, and clinical assignments</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="rounded-xl font-bold h-11 px-5 shadow-sm bg-white border-blue-100 text-blue-600 hover:bg-blue-50">
+          <Button variant="outline" className="rounded-xl font-bold h-11 px-5 shadow-sm bg-white border-red-100 text-red-600 hover:bg-red-50">
             <Download className="w-4 h-4 mr-2" />
             Certifications
           </Button>
           <Button 
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-900/20 font-black h-11 px-6"
+            className="bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg shadow-red-900/20 font-black h-11 px-6"
             onClick={() => router.push('/admin/nurses/add')}
           >
             <Plus className="w-5 h-5 mr-2" />
@@ -114,19 +114,19 @@ export default function NursesDashboard() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { label: 'Total Nurses', value: stats?.total || 0, icon: Users, color: 'blue' },
-          { label: 'Available', value: stats?.available || 0, icon: CheckCircle2, color: 'green' },
-          { label: 'On Duty', value: stats?.onDuty || 0, icon: Activity, color: 'orange' },
-          { label: 'Pending Clearance', value: stats?.pendingClearance || 0, icon: Shield, color: 'red' },
-          { label: 'ICU Specialists', value: nurses.filter(n => (n as any).specialization?.includes('ICU')).length, icon: Stethoscope, color: 'purple' },
-          { label: 'Expiring License', value: stats?.expiringLicenses || 0, icon: AlertCircle, color: 'cyan' },
+          { label: 'Total Nurses', value: stats?.total || 0, icon: Users, iconClass: 'text-red-600', bgClass: 'bg-red-50' },
+          { label: 'Available', value: stats?.available || 0, icon: CheckCircle2, iconClass: 'text-green-600', bgClass: 'bg-green-50' },
+          { label: 'On Duty', value: stats?.onDuty || 0, icon: Activity, iconClass: 'text-orange-600', bgClass: 'bg-orange-50' },
+          { label: 'Pending Clearance', value: stats?.pendingClearance || 0, icon: Shield, iconClass: 'text-amber-600', bgClass: 'bg-amber-50' },
+          { label: 'ICU Specialists', value: nurses.filter(n => (n as any).specialization?.includes('ICU')).length, icon: Stethoscope, iconClass: 'text-purple-600', bgClass: 'bg-purple-50' },
+          { label: 'Expiring License', value: stats?.expiringLicenses || 0, icon: AlertCircle, iconClass: 'text-cyan-600', bgClass: 'bg-cyan-50' },
         ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col justify-between hover:border-blue-200 transition-colors cursor-default">
+          <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col justify-between hover:border-red-200 transition-colors cursor-default">
             <div className="flex items-center justify-between mb-2">
-              <div className={`p-2 rounded-xl bg-${stat.color}-50`}>
-                <stat.icon className={`w-5 h-5 text-${stat.color}-600`} />
+              <div className={`p-2 rounded-xl ${stat.bgClass}`}>
+                <stat.icon className={`w-5 h-5 ${stat.iconClass}`} />
               </div>
               <span className="text-2xl font-black text-gray-900 leading-none">{stat.value}</span>
             </div>
@@ -141,18 +141,18 @@ export default function NursesDashboard() {
       <div className="bg-white rounded-3xl shadow-sm p-4 border border-gray-100">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1 relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 group-focus-within:text-blue-500 transition-colors" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 group-focus-within:text-red-500 transition-colors" />
             <input
               type="text"
               placeholder="Search by name, code, phone, or specialization..."
-              className="w-full pl-12 pr-6 h-12 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/10 focus:bg-white transition-all font-medium text-gray-900"
+              className="w-full pl-12 pr-6 h-12 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-red-500/10 focus:bg-white transition-all font-medium text-gray-900"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="flex flex-wrap gap-3">
             <select 
-              className="h-12 bg-gray-50 border-none rounded-2xl px-6 font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/10 min-w-[160px]"
+              className="h-12 bg-gray-50 border-none rounded-2xl px-6 font-bold text-gray-700 focus:ring-2 focus:ring-red-500/10 min-w-[160px]"
               value={stationFilter}
               onChange={(e) => setStationFilter(e.target.value)}
             >
@@ -160,7 +160,7 @@ export default function NursesDashboard() {
               {stations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select 
-              className="h-12 bg-gray-50 border-none rounded-2xl px-6 font-bold text-gray-700 focus:ring-2 focus:ring-blue-500/10 min-w-[160px]"
+              className="h-12 bg-gray-50 border-none rounded-2xl px-6 font-bold text-gray-700 focus:ring-2 focus:ring-red-500/10 min-w-[160px]"
               value={specializationFilter}
               onChange={(e) => setSpecializationFilter(e.target.value)}
             >
@@ -183,13 +183,13 @@ export default function NursesDashboard() {
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center p-20 space-y-4">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+              <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
               <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Syncing Medical Staff...</p>
             </div>
           ) : filteredNurses.length === 0 ? (
             <div className="p-20 text-center">
-              <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Users className="w-10 h-10 text-blue-200" />
+              <div className="bg-red-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Users className="w-10 h-10 text-red-200" />
               </div>
               <h3 className="text-xl font-black text-gray-900 mb-2">No Nurses Found</h3>
               <p className="text-gray-500 max-w-md mx-auto">Try adjusting your filters or add a new nurse to the clinic.</p>
@@ -208,10 +208,10 @@ export default function NursesDashboard() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredNurses.map(nurse => (
-                  <tr key={nurse.id} className="hover:bg-blue-50/20 transition-colors">
+                  <tr key={nurse.id} className="hover:bg-red-50/20 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center font-bold text-blue-500 shadow-inner overflow-hidden shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center font-bold text-red-500 shadow-inner overflow-hidden shrink-0">
                           {nurse.profilePhoto ? (
                              <img 
                                src={nurse.profilePhoto.startsWith('/uploads') ? `http://localhost:3001${nurse.profilePhoto}` : nurse.profilePhoto} 
@@ -230,7 +230,7 @@ export default function NursesDashboard() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center text-xs font-bold text-gray-700">
-                        <GraduationCap className="w-3 h-3 mr-1.5 text-blue-500" />
+                        <GraduationCap className="w-3 h-3 mr-1.5 text-red-500" />
                         {(nurse as any).qualification || 'BSc Nursing'}
                       </div>
                       <div className="text-[10px] text-gray-400 mt-1">{(nurse as any).yearsOfExperience || 0} Years Experience</div>

@@ -1,0 +1,541 @@
+/* ═══════════════════════════════════════════════════════════════════
+   EADS Driver Portal — driver.css
+   Mobile-first. Emergency red #dc2626 + dark #0f0f0f brand.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Reset / Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Root shell ────────────────────────────────────────────────────── */
+.driver-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: #0f0f0f;
+  color: #f1f1f1;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────── */
+.driver-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(15,15,15,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(220,38,38,0.2);
+}
+.driver-header-left { display: flex; align-items: center; gap: 10px; }
+.driver-header-right { display: flex; align-items: center; gap: 10px; }
+
+.driver-logo { display: flex; align-items: center; gap: 6px; }
+.driver-logo-cross { color: #dc2626; font-size: 20px; font-weight: 900; }
+.driver-logo-text { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #fff; }
+
+.driver-header-title { font-size: 15px; font-weight: 700; color: #fff; }
+.driver-header-sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+
+.driver-back-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: #e5e7eb; text-decoration: none;
+  transition: background 0.2s;
+}
+.driver-back-btn:hover { background: rgba(255,255,255,0.12); }
+
+.driver-conn-indicator {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; border-radius: 20px;
+  padding: 4px 10px;
+}
+.driver-conn-indicator.online { background: rgba(34,197,94,0.15); color: #4ade80; }
+.driver-conn-indicator.offline { background: rgba(239,68,68,0.15); color: #f87171; }
+
+.driver-notif-btn {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(255,255,255,0.06); color: #e5e7eb; text-decoration: none;
+  transition: background 0.2s;
+}
+.driver-notif-btn:hover { background: rgba(255,255,255,0.12); }
+.driver-notif-badge {
+  position: absolute; top: 4px; right: 4px;
+  min-width: 16px; height: 16px; border-radius: 999px;
+  background: #dc2626; color: #fff; font-size: 9px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; padding: 0 3px;
+}
+
+/* ─── Main Content Area ─────────────────────────────────────────────── */
+.driver-main {
+  flex: 1;
+  padding: 16px;
+  padding-bottom: 80px; /* room for bottom nav */
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+/* ─── Welcome Bar ───────────────────────────────────────────────────── */
+.driver-welcome-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(220,38,38,0.12) 0%, rgba(220,38,38,0.04) 100%);
+  border: 1px solid rgba(220,38,38,0.2);
+  border-radius: 16px;
+  padding: 16px;
+}
+.driver-welcome-greeting { font-size: 12px; color: #9ca3af; margin-bottom: 2px; }
+.driver-welcome-name { font-size: 20px; font-weight: 800; color: #fff; }
+.driver-welcome-station { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+
+/* ─── Shift Badge ───────────────────────────────────────────────────── */
+.driver-shift-badge {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  flex-shrink: 0;
+}
+.driver-shift-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.driver-shift-dot.on-duty { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.6); }
+.driver-shift-dot.available { background: #60a5fa; box-shadow: 0 0 8px rgba(96,165,250,0.4); }
+.driver-shift-dot.off-duty { background: #6b7280; }
+.driver-shift-label {
+  font-size: 10px; font-weight: 700; border-radius: 8px; padding: 3px 8px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.driver-shift-label.on-duty { background: rgba(74,222,128,0.15); color: #4ade80; }
+.driver-shift-label.available { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.driver-shift-label.off-duty { background: rgba(107,114,128,0.2); color: #9ca3af; }
+
+/* ─── Ambulance Strip ───────────────────────────────────────────────── */
+.driver-amb-strip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 13px;
+}
+.driver-amb-code { font-weight: 700; color: #fff; }
+.driver-amb-sep { color: #4b5563; }
+.driver-amb-type { color: #9ca3af; }
+.driver-amb-status { margin-left: auto; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px; }
+.driver-amb-status.green { background: rgba(74,222,128,0.15); color: #4ade80; }
+.driver-amb-status.orange { background: rgba(251,146,60,0.15); color: #fb923c; }
+
+/* ─── Shift Controls ────────────────────────────────────────────────── */
+.driver-shift-controls { display: flex; gap: 10px; }
+.driver-shift-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  border: none; cursor: pointer; transition: all 0.2s; letter-spacing: 0.2px;
+}
+.driver-shift-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.driver-shift-btn.start { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
+.driver-shift-btn.start:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #166534); }
+.driver-shift-btn.end { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+.driver-shift-btn.end:hover:not(:disabled) { background: linear-gradient(135deg, #b91c1c, #991b1b); }
+
+/* ─── Cards ─────────────────────────────────────────────────────────── */
+.driver-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* ─── Active Mission Card ───────────────────────────────────────────── */
+.driver-active-mission-card {
+  background: linear-gradient(160deg, rgba(220,38,38,0.12) 0%, rgba(15,15,15,0.8) 100%);
+  border: 1px solid rgba(220,38,38,0.3);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.driver-mission-card-header { display: flex; align-items: flex-start; gap: 12px; }
+.driver-mission-card-icon { font-size: 24px; }
+.driver-mission-tracking { font-size: 13px; font-weight: 700; color: #dc2626; font-family: monospace; }
+.driver-mission-badges { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+
+.driver-mission-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.driver-mission-info-item { display: flex; align-items: flex-start; gap: 8px; }
+.driver-info-icon-sm { color: #9ca3af; margin-top: 2px; flex-shrink: 0; }
+.driver-info-label-sm { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+.driver-info-val-sm { font-size: 13px; font-weight: 600; color: #e5e7eb; margin-top: 2px; }
+
+.driver-quick-action-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 46px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  border: none; cursor: pointer; transition: all 0.2s; width: 100%;
+}
+.btn-orange { background: linear-gradient(135deg, #ea580c, #c2410c); color: #fff; }
+.btn-blue   { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+.btn-cyan   { background: linear-gradient(135deg, #0891b2, #0e7490); color: #fff; }
+.btn-purple { background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; }
+.btn-green  { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; }
+
+.driver-mission-detail-link {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: #9ca3af; font-size: 13px; text-decoration: none; padding: 8px;
+  border-radius: 8px; transition: color 0.2s;
+}
+.driver-mission-detail-link:hover { color: #e5e7eb; }
+
+/* ─── No Active Mission ─────────────────────────────────────────────── */
+.driver-no-mission-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 32px 16px; text-align: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 16px;
+}
+.driver-no-mission-icon { font-size: 32px; }
+.driver-no-mission-title { font-size: 15px; font-weight: 700; color: #e5e7eb; }
+.driver-no-mission-sub { font-size: 12px; color: #6b7280; max-width: 220px; }
+
+/* ─── Stats ─────────────────────────────────────────────────────────── */
+.driver-stats-section { display: flex; flex-direction: column; gap: 10px; }
+.driver-section-title { font-size: 13px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.8px; }
+.driver-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.driver-stat-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 14px;
+}
+.driver-stat-card.accent { border-color: rgba(220,38,38,0.25); background: rgba(220,38,38,0.06); }
+.driver-stat-val { font-size: 24px; font-weight: 800; color: #fff; }
+.driver-stat-label { font-size: 11px; color: #6b7280; margin-top: 3px; }
+.driver-stat-sub { font-size: 10px; color: #4b5563; margin-top: 2px; }
+
+/* ─── Connection Footer ─────────────────────────────────────────────── */
+.driver-conn-footer {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: #6b7280; padding: 6px 0;
+}
+.driver-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.driver-dot.green { background: #4ade80; }
+.driver-dot.red { background: #f87171; }
+
+/* ─── Logout Button ─────────────────────────────────────────────────── */
+.driver-logout-btn {
+  width: 100%; height: 44px; border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #9ca3af; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+}
+.driver-logout-btn:hover { background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.3); color: #f87171; }
+
+/* ─── Offline Banner ────────────────────────────────────────────────── */
+.driver-offline-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 16px; font-size: 12px; font-weight: 600;
+  background: rgba(251,146,60,0.15); color: #fb923c;
+  border-bottom: 1px solid rgba(251,146,60,0.3);
+}
+
+/* ─── Skeleton Loader ───────────────────────────────────────────────── */
+.driver-skeleton-line {
+  height: 14px; border-radius: 7px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  margin-bottom: 10px;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ─── Mission Status Badge ──────────────────────────────────────────── */
+.driver-status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+}
+.driver-priority-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+}
+.priority-critical { background: rgba(220,38,38,0.2); color: #f87171; }
+.priority-high     { background: rgba(251,146,60,0.2); color: #fb923c; }
+.priority-medium   { background: rgba(234,179,8,0.2);  color: #eab308; }
+.priority-low      { background: rgba(74,222,128,0.15); color: #4ade80; }
+.status-assigned        { background: rgba(251,146,60,0.15); color: #fb923c; }
+.status-dispatched      { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.status-on-scene        { background: rgba(168,85,247,0.15); color: #c084fc; }
+.status-transporting    { background: rgba(14,165,233,0.15); color: #38bdf8; }
+.status-arrived-hospital { background: rgba(34,197,94,0.15); color: #4ade80; }
+.status-completed       { background: rgba(74,222,128,0.15); color: #4ade80; }
+.status-cancelled       { background: rgba(107,114,128,0.15); color: #9ca3af; }
+
+/* ─── Spin animation ────────────────────────────────────────────────── */
+.driver-spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Bottom Navigation ─────────────────────────────────────────────── */
+.driver-bottom-nav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  display: flex; align-items: stretch;
+  background: rgba(15,15,15,0.95);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(220,38,38,0.2);
+  z-index: 50;
+}
+.driver-nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; padding: 10px 4px;
+  color: #6b7280; text-decoration: none; font-size: 10px; font-weight: 600;
+  transition: color 0.2s; letter-spacing: 0.3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.driver-nav-item.active { color: #dc2626; }
+.driver-nav-item:hover { color: #e5e7eb; }
+.driver-nav-item span { font-size: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DRIVER LOGIN PAGE  (dl-* prefix to avoid any collision)
+   ═══════════════════════════════════════════════════════════════════ */
+.dl-root {
+  min-height: 100dvh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: #0a0a0a;
+  padding: 24px 16px;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Animated glowing orbs */
+.dl-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.dl-bg-orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(80px); opacity: 0.25;
+  animation: orbFloat 8s ease-in-out infinite alternate;
+}
+.dl-bg-orb-1 { width: 300px; height: 300px; background: #dc2626; top: -60px; left: -80px; animation-delay: 0s; }
+.dl-bg-orb-2 { width: 200px; height: 200px; background: #7f1d1d; bottom: -40px; right: -60px; animation-delay: 3s; }
+.dl-bg-orb-3 { width: 150px; height: 150px; background: #991b1b; top: 40%; left: 60%; animation-delay: 5s; }
+@keyframes orbFloat {
+  0% { transform: translate(0,0) scale(1); }
+  100% { transform: translate(20px, 30px) scale(1.1); }
+}
+
+.dl-container {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 400px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+
+/* Brand section */
+.dl-brand {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center;
+}
+.dl-emblem {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(220,38,38,0.4), 0 0 80px rgba(220,38,38,0.15);
+  animation: pulseShadow 2.4s ease-in-out infinite;
+}
+@keyframes pulseShadow {
+  0%,100% { box-shadow: 0 0 40px rgba(220,38,38,0.4), 0 0 80px rgba(220,38,38,0.15); }
+  50% { box-shadow: 0 0 60px rgba(220,38,38,0.6), 0 0 120px rgba(220,38,38,0.25); }
+}
+.dl-cross { font-size: 32px; color: #fff; font-weight: 900; }
+
+.dl-brand-text {}
+.dl-title { font-size: 28px; font-weight: 900; color: #fff; letter-spacing: 3px; }
+.dl-subtitle { font-size: 12px; color: #6b7280; margin-top: 3px; letter-spacing: 0.5px; }
+
+.dl-role-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 20px;
+  background: rgba(220,38,38,0.15); color: #f87171;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+  border: 1px solid rgba(220,38,38,0.3);
+}
+
+/* Card */
+.dl-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 24px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+}
+.dl-card-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+}
+.dl-shield {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: rgba(220,38,38,0.12);
+  border: 1px solid rgba(220,38,38,0.25);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.dl-shield-icon { color: #dc2626; }
+.dl-card-title { font-size: 17px; font-weight: 800; color: #fff; }
+.dl-card-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+
+/* Error */
+.dl-error {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
+  background: rgba(220,38,38,0.1);
+  border: 1px solid rgba(220,38,38,0.3);
+  color: #f87171; font-size: 13px;
+}
+
+/* Form */
+.dl-form { display: flex; flex-direction: column; gap: 16px; }
+.dl-field { display: flex; flex-direction: column; gap: 6px; }
+.dl-label { font-size: 12px; font-weight: 600; color: #9ca3af; letter-spacing: 0.3px; }
+.dl-input {
+  width: 100%; height: 46px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: #fff; font-size: 14px; padding: 0 14px;
+  outline: none; transition: border-color 0.2s, background 0.2s;
+}
+.dl-input::placeholder { color: #4b5563; }
+.dl-input:focus { border-color: #dc2626; background: rgba(220,38,38,0.06); }
+.dl-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dl-input-wrap { position: relative; }
+.dl-input-wrap .dl-input { padding-right: 44px; }
+.dl-pw-toggle {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: #6b7280; cursor: pointer;
+  display: flex; align-items: center; transition: color 0.2s;
+}
+.dl-pw-toggle:hover { color: #9ca3af; }
+
+.dl-submit {
+  width: 100%; height: 48px; border-radius: 12px;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all 0.2s; box-shadow: 0 4px 20px rgba(220,38,38,0.3);
+  margin-top: 4px;
+}
+.dl-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c, #991b1b);
+  box-shadow: 0 6px 28px rgba(220,38,38,0.45);
+  transform: translateY(-1px);
+}
+.dl-submit:active:not(:disabled) { transform: translateY(0); }
+.dl-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.dl-spin { animation: spin 0.8s linear infinite; }
+
+/* Footer */
+.dl-footer {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; color: #4b5563; text-align: center;
+}
+.dl-footer strong { color: #6b7280; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DRIVER UI COMPONENT CLASSES (DriverUI.tsx)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Generic Badge Base (driver-badge) ─────────────────────────── */
+.driver-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Priority badge colour variants */
+.badge-critical { background: rgba(220,38,38,0.2);  color: #f87171; }
+.badge-high     { background: rgba(251,146,60,0.2);  color: #fb923c; }
+.badge-medium   { background: rgba(234,179,8,0.2);   color: #eab308; }
+.badge-low      { background: rgba(74,222,128,0.15); color: #4ade80; }
+
+/* Mission status badge colour variants */
+.badge-assigned     { background: rgba(251,146,60,0.15);  color: #fb923c; }
+.badge-dispatched   { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+.badge-on-scene     { background: rgba(168,85,247,0.15);  color: #c084fc; }
+.badge-transporting { background: rgba(14,165,233,0.15);  color: #38bdf8; }
+.badge-hospital     { background: rgba(34,197,94,0.15);   color: #4ade80; }
+.badge-completed    { background: rgba(74,222,128,0.15);  color: #4ade80; }
+.badge-cancelled    { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.badge-pending      { background: rgba(234,179,8,0.15);   color: #eab308; }
+
+/* ─── Shift Badge (shift-badge + modifiers) ─────────────────────── */
+.shift-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.shift-on-duty   { background: rgba(74,222,128,0.15);  color: #4ade80;
+                    border: 1px solid rgba(74,222,128,0.25); }
+.shift-available { background: rgba(96,165,250,0.15);  color: #60a5fa;
+                    border: 1px solid rgba(96,165,250,0.25); }
+.shift-off-duty  { background: rgba(107,114,128,0.15); color: #9ca3af;
+                    border: 1px solid rgba(107,114,128,0.25); }
+
+/* ─── Skeleton wrapper ──────────────────────────────────────────── */
+.driver-skeleton {
+  display: flex; flex-direction: column; gap: 0;
+}
+
+/* ─── stat-value alias (StatCard uses driver-stat-value) ────────── */
+.driver-stat-value { font-size: 24px; font-weight: 800; color: #fff; }
+
+/* ─── Offline Banner (OfflineBanner uses .offline-banner) ──────── */
+.offline-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 16px; font-size: 12px; font-weight: 600;
+  background: rgba(251,146,60,0.15); color: #fb923c;
+  border-bottom: 1px solid rgba(251,146,60,0.3);
+}
+
+/* ─── Info Row (InfoRow component) ─────────────────────────────── */
+.driver-info-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.driver-info-row:last-child { border-bottom: none; }
+.driver-info-icon { color: #9ca3af; margin-top: 2px; flex-shrink: 0; }
+.driver-info-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+.driver-info-value { font-size: 13px; font-weight: 600; color: #e5e7eb; margin-top: 2px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOTTOM NAV ADDITIONS (DriverBottomNav.tsx)
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-nav-icon-wrap {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+}
+.driver-nav-badge {
+  position: absolute; top: -5px; right: -7px;
+  min-width: 15px; height: 15px; border-radius: 999px;
+  background: #dc2626; color: #fff;
+  font-size: 9px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px; border: 1.5px solid #0f0f0f;
+}
+.driver-nav-label { font-size: 10px; font-weight: 600; }
+
