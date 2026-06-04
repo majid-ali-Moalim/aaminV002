@@ -4,6 +4,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useRouter } from 'next/navigation'
 import { authService } from '@/lib/api'
 import { Role } from '@/types'
+import {
+  getPostLoginPath,
+  persistAuthToken,
+  clearAuthTokenCookie,
+  syncRoleStores,
+} from '@/lib/authRedirect'
 
 interface User {
   id: string
@@ -38,26 +44,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('user')
 
     if (storedToken && storedUser) {
-      // Restore session immediately from cache — no API call needed
       try {
-        const parsedUser = JSON.parse(storedUser)
+        const parsedUser = JSON.parse(storedUser) as User
         setToken(storedToken)
         setUser(parsedUser)
+        persistAuthToken(storedToken)
+        setLoading(false)
+        refreshUserInBackground(storedToken, storedUser)
+        return
       } catch {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
       }
-      setLoading(false)
+    }
 
-      // Optionally refresh user profile in the background (non-blocking)
-      refreshUserInBackground(storedToken, storedUser)
-    } else if (storedToken) {
-      // Token exists but no cached user — fetch from backend
+    if (storedToken) {
       setToken(storedToken)
       fetchUser(storedToken)
-    } else {
-      setLoading(false)
+      return
     }
+
+    setLoading(false)
   }, [])
 
   const refreshUserInBackground = async (authToken: string, cachedUserJson: string) => {
@@ -103,10 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData)
       setToken(accessToken)
       localStorage.setItem('token', accessToken)
-      // Persist user so page refresh doesn't require a getMe round-trip
       localStorage.setItem('user', JSON.stringify(userData))
+      persistAuthToken(accessToken, response.expiresIn ?? 900)
 
-      // Keep Zustand auth store in sync for legacy guards
       try {
         const { useAuthStore } = await import('@/store/authStore')
         useAuthStore.setState({
@@ -119,45 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
       } catch (_) {}
 
-      // Redirect based on the role field returned directly by the unified auth endpoint
-      const role = userData.role as string
+      await syncRoleStores(accessToken, userData)
 
-      if (role === 'ADMIN') {
-        router.push('/admin/dashboard')
-      } else if (role === 'DISPATCHER') {
-        router.push('/dispatcher/dashboard')
-      } else if (role === 'DRIVER') {
-        // Sync the driver-specific Zustand store so the driver portal
-        // auth guard (which reads driverStore.isAuthenticated) passes.
-        try {
-          const { useDriverStore } = await import('@/lib/stores/driverStore')
-          useDriverStore.getState().setAuth(accessToken, userData.id)
-        } catch (e) {
-          console.warn('Could not sync driverStore:', e)
-        }
-        router.push('/driver')
-      } else if (role === 'NURSE') {
-        router.push('/nurse/dashboard')
-      } else if (role === 'MANAGER') {
-        router.push('/manager/dashboard')
-      } else if (role === 'HOSPITAL') {
-        router.push('/hospital/dashboard')
-      } else if (role === 'PATIENT') {
-        router.push('/patient/dashboard')
-      } else if (role === 'EMPLOYEE') {
-        // Legacy fallback: resolve by employeeRole relation
-        const roleName = (
-          userData.employee?.employeeRole?.name ??
-          userData.employee?.employeeType ??
-          ''
-        ).toUpperCase()
-        if (roleName === 'DISPATCHER') router.push('/dispatcher/dashboard')
-        else if (roleName === 'DRIVER') router.push('/driver')
-        else if (roleName === 'NURSE') router.push('/nurse/dashboard')
-        else router.push('/admin/dashboard')
-      } else {
-        router.push('/')
-      }
+      const redirectPath = getPostLoginPath(userData)
+      router.replace(redirectPath)
     } catch (error) {
       console.error('AuthContext Login Error:', error)
       throw error
@@ -169,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    clearAuthTokenCookie()
     router.push('/login')
   }
 

@@ -18,6 +18,12 @@ import { DispatchersModule } from './dispatchers/dispatchers.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { DriversAppModule } from './drivers-app/drivers-app.module';
 import { DispatchersAppModule } from './dispatchers-app/dispatchers-app.module';
+import { UsersModule } from './users/users.module';
+import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+
+import { AccessControlModule } from './access-control/access-control.module';
+import { MasterDataModule } from './master-data/master-data.module';
+import { HospitalCoordinationModule } from './hospital-coordination/hospital-coordination.module';
 
 @Module({
   imports: [
@@ -44,6 +50,11 @@ import { DispatchersAppModule } from './dispatchers-app/dispatchers-app.module';
     TrackingModule,
     DriversAppModule,
     DispatchersAppModule,
+    UsersModule,
+    ActivityLogsModule,
+    AccessControlModule,
+    MasterDataModule,
+    HospitalCoordinationModule,
   ],
   controllers: [],
   providers: [],

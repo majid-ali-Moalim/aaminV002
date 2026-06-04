@@ -1,87 +1,99 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Simple token validation (in production, use proper JWT verification)
 function isValidToken(token: string): boolean {
-  try {
-    // Basic validation - in production, implement proper JWT verification
-    if (!token || token.length < 10) return false
-    
-    // Check if token looks like JWT (has three parts separated by dots)
-    const parts = token.split('.')
-    if (parts.length !== 3) return false
-    
-    return true
-  } catch (error) {
-    return false
-  }
+  if (!token || token.length < 10) return false
+  return token.split('.').length === 3
 }
 
-// Public routes that don't require authentication
-const PUBLIC_ROUTES = [
+const PUBLIC_PATHS = new Set([
+  '/',
   '/login',
+  '/dispatcher/login',
+  '/driver/login',
   '/register',
   '/forgot-password',
   '/reset-password',
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/forgot-password',
-  '/api/auth/reset-password',
-  '/api/auth/refresh',
-  '/',
-  '/home',
+])
+
+const PUBLIC_PREFIXES = [
   '/about',
   '/contact',
+  '/track',
+  '/hire-ambulance',
+  '/ambulance-tracking',
   '/request-ambulance',
-  '/track-patient'
+  '/track-patient',
 ]
 
-// Role-based route protection
-const ROLE_ROUTES = {
-  ADMIN: ['/admin', '/admin/'],
-  DISPATCHER: ['/dispatcher', '/dispatcher/'],
-  DRIVER: ['/driver', '/driver/'],
-  NURSE: ['/nurse', '/nurse/'],
-  MANAGER: ['/manager', '/manager/'],
-  HOSPITAL: ['/hospital', '/hospital/'],
-  PATIENT: ['/patient', '/patient/']
+const ROLE_ROUTES: Record<string, string[]> = {
+  ADMIN: ['/admin'],
+  DISPATCHER: ['/dispatcher'],
+  DRIVER: ['/driver'],
+  NURSE: ['/nurse'],
+  MANAGER: ['/manager'],
+  HOSPITAL: ['/hospital'],
+  PATIENT: ['/patient'],
 }
 
-function verifyToken(token: string): any {
+const PORTAL_DASHBOARDS: Record<string, string> = {
+  ADMIN: '/admin/dashboard',
+  DISPATCHER: '/dispatcher/dashboard',
+  DRIVER: '/driver',
+  NURSE: '/nurse/dashboard',
+  MANAGER: '/manager/dashboard',
+  HOSPITAL: '/hospital/dashboard',
+  PATIENT: '/patient/dashboard',
+}
+
+type JwtPayload = {
+  sub: string
+  email?: string
+  role: string
+  employeeRole?: string | null
+  isActive?: boolean
+  exp?: number
+}
+
+function verifyToken(token: string): JwtPayload | null {
   try {
     if (!isValidToken(token)) return null
-
-    // Decode the JWT payload (middle segment) — no signature verification in middleware
-    // (signature is verified by the backend on every API call)
     const payloadBase64 = token.split('.')[1]
-    // atob works in the Next.js Edge runtime
     const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'))
-    const payload = JSON.parse(payloadJson)
-
-    // Check expiry
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      return null
-    }
-
-    return {
-      sub: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      isActive: payload.isActive !== false, // default true if missing
-    }
-  } catch (error) {
+    const payload = JSON.parse(payloadJson) as JwtPayload
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null
+    return payload
+  } catch {
     return null
   }
 }
 
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some(route => pathname.startsWith(route))
+function resolvePortalRole(payload: JwtPayload): string {
+  const role = payload.role ?? ''
+  const name = String(payload.employeeRole ?? '').toUpperCase()
+
+  if (role === 'ADMIN') return 'ADMIN'
+  if (role === 'PATIENT') return 'PATIENT'
+  if (role === 'DISPATCHER' || name.includes('DISPATCH')) return 'DISPATCHER'
+  if (role === 'DRIVER' || name.includes('DRIVER')) return 'DRIVER'
+  if (role === 'NURSE' || name.includes('NURSE') || name.includes('PARAMEDIC')) return 'NURSE'
+  if (role === 'MANAGER') return 'MANAGER'
+  if (role === 'HOSPITAL') return 'HOSPITAL'
+  return role
 }
 
-function getRequiredRole(pathname: string): string | null {
-  for (const [role, routes] of Object.entries(ROLE_ROUTES)) {
-    if (routes.some(route => pathname.startsWith(route))) {
-      return role
+function isPublicRoute(pathname: string): boolean {
+  if (PUBLIC_PATHS.has(pathname)) return true
+  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+function getRequiredPortalRole(pathname: string): string | null {
+  if (pathname.startsWith('/dispatcher/login') || pathname.startsWith('/driver/login')) {
+    return null
+  }
+  for (const [portal, prefixes] of Object.entries(ROLE_ROUTES)) {
+    if (prefixes.some((prefix) => pathname.startsWith(prefix))) {
+      return portal
     }
   }
   return null
@@ -90,81 +102,49 @@ function getRequiredRole(pathname: string): string | null {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public routes
   if (isPublicRoute(pathname)) {
     return NextResponse.next()
   }
 
-  // Get token from Authorization header or cookies
-  const token = request.headers.get('authorization')?.replace('Bearer ', '') ||
-               request.cookies.get('token')?.value
+  const rawCookie = request.cookies.get('token')?.value
+  const token =
+    request.headers.get('authorization')?.replace('Bearer ', '') ||
+    (rawCookie ? decodeURIComponent(rawCookie) : undefined)
 
-  // Redirect to login if no token
   if (!token) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+    return NextResponse.next()
   }
 
-  // Verify token
   const payload = verifyToken(token)
-  
   if (!payload) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    loginUrl.searchParams.set('error', 'invalid_token')
-    return NextResponse.redirect(loginUrl)
+    return NextResponse.next()
   }
 
-  // Check if user is active
-  if (!payload.isActive) {
+  if (payload.isActive === false) {
     const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
     loginUrl.searchParams.set('error', 'account_inactive')
     return NextResponse.redirect(loginUrl)
   }
 
-  // Check role-based access
-  const requiredRole = getRequiredRole(pathname)
-  if (requiredRole && payload.role !== requiredRole) {
-    // Redirect to appropriate dashboard based on user role
-    const roleRedirects: Record<string, string> = {
-      ADMIN: '/admin/dashboard',
-      DISPATCHER: '/dispatcher/dashboard',
-      DRIVER: '/driver/dashboard',
-      NURSE: '/nurse/dashboard',
-      MANAGER: '/manager/dashboard',
-      HOSPITAL: '/hospital/dashboard',
-      PATIENT: '/patient/dashboard'
-    }
+  const portalRole = resolvePortalRole(payload)
+  const requiredPortal = getRequiredPortalRole(pathname)
 
-    const userDashboard = roleRedirects[payload.role]
-    if (userDashboard) {
-      return NextResponse.redirect(new URL(userDashboard, request.url))
-    } else {
-      // Fallback to login if role is invalid
-      return NextResponse.redirect(new URL('/login', request.url))
+  if (requiredPortal && portalRole !== requiredPortal) {
+    const dashboard = PORTAL_DASHBOARDS[portalRole]
+    if (dashboard) {
+      return NextResponse.redirect(new URL(dashboard, request.url))
     }
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Add user info to headers for API routes
   const response = NextResponse.next()
   response.headers.set('x-user-id', payload.sub)
   response.headers.set('x-user-role', payload.role)
-  response.headers.set('x-user-email', payload.email)
-
+  response.headers.set('x-portal-role', portalRole)
+  if (payload.email) response.headers.set('x-user-email', payload.email)
   return response
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public).*)'],
 }

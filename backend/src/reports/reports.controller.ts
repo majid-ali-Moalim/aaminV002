@@ -1,5 +1,8 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ReportsService } from './reports.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 
 @Controller('reports')
 export class ReportsController {
@@ -52,6 +55,18 @@ export class ReportsController {
   @Get('realtime/metrics')
   getRealTimeMetrics() {
     return this.reportsService.getRealTimeMetrics();
+  }
+
+  // ─── Admin Analytics & Reports pages ───
+  @Get('admin/:type')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('report.view')
+  getAdminReport(
+    @Param('type') type: string,
+    @Query() query: Record<string, string | undefined>,
+    @Req() req: any,
+  ) {
+    return this.reportsService.getAdminReport(type, query, req.user?.id);
   }
 
   // ─── Legacy report endpoints ───

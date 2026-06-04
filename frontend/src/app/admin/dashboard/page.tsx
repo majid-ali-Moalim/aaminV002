@@ -46,7 +46,7 @@ export default function AdminDashboard() {
       ambulancesService.getAll(),
       employeesService.getAll(),
     ])
-    return {
+      return {
       stats: statsRes.stats,
       recentActivity: statsRes.recentActivity,
       requests: requestsRes,
@@ -179,8 +179,8 @@ export default function AdminDashboard() {
                 <link.icon className="w-5 h-5 text-red-600" />
               </div>
               <span className="text-sm font-bold text-slate-800">{link.label}</span>
-            </div>
-            <div className="flex items-center gap-2">
+                    </div>
+                    <div className="flex items-center gap-2">
               {link.count != null && (
                 <span className="text-lg font-black text-red-600">{link.count}</span>
               )}

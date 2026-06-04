@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma, NotificationType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -114,7 +114,7 @@ export class EmployeesService {
     medicalClearanceStatus?: string;
     workDays?: string;
     backupShift?: string;
-  }) {
+  }, createdById?: string) {
     console.log('--- EMPLOYEE CREATION ATTEMPT ---');
     console.log('Payload:', JSON.stringify(data, null, 2));
 
@@ -189,14 +189,23 @@ export class EmployeesService {
 
       console.log('SUCCESS: Employee created with ID:', result.id);
 
-      await this.notifications.create({
-        title: 'New Staff Registered',
-        message: `${result.firstName} ${result.lastName} joined as ${result.employeeRole?.name || 'Staff'}`,
-        type: 'STAFF',
-        priority: 'MEDIUM',
-        relatedModule: 'Employee',
-        relatedId: result.id,
-      });
+      try {
+        await this.notifications.dispatchEvent({
+          eventKey: 'STAFF_REGISTERED',
+          title: 'New Staff Registered',
+          message: `${result.firstName ?? ''} ${result.lastName ?? ''} joined as ${result.employeeRole?.name || 'Staff'}`.trim(),
+          type: 'STAFF',
+          category: 'ATTENDANCE',
+          priority: 'MEDIUM',
+          senderName: createdById ? 'Admin' : 'System',
+          entityType: 'Employee',
+          entityId: result.id,
+          redirectUrl: `/admin/employees/${result.id}`,
+          context: { createdById },
+        });
+      } catch (notifyErr) {
+        console.warn('Staff registration notification failed (employee was saved):', notifyErr);
+      }
 
       return result;
     } catch (error: any) {
@@ -253,7 +262,7 @@ export class EmployeesService {
     return payload;
   }
 
-  async update(id: string, data: Record<string, unknown>) {
+  async update(id: string, data: Record<string, unknown>, createdById?: string) {
     const existing = await this.prisma.employee.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Employee not found');
 
@@ -287,14 +296,24 @@ export class EmployeesService {
 
     if (statusChanged || shiftChanged) {
       try {
-        await this.notifications.create({
-          title: 'Staff Status Update',
-          message: `${result.firstName} ${result.lastName} is now ${result.status} (${result.shiftStatus})`,
-          type: NotificationType.STAFF,
-          priority: 'LOW',
-          relatedModule: 'Employee',
-          relatedId: result.id,
-          actionUrl: `/admin/employees?id=${result.id}`,
+        const eventKey =
+          result.status === 'SUSPENDED'
+            ? 'STAFF_SUSPENDED'
+            : existing.status === 'SUSPENDED' && result.status === 'ACTIVE'
+              ? 'STAFF_REACTIVATED'
+              : 'STAFF_UPDATED';
+
+        await this.notifications.dispatchEvent({
+          eventKey,
+          title: eventKey === 'STAFF_SUSPENDED' ? 'Employee Suspended' : 'Staff Updated',
+          message: `${result.firstName ?? ''} ${result.lastName ?? ''} — status: ${result.status}`.trim(),
+          type: 'STAFF',
+          category: 'ATTENDANCE',
+          priority: eventKey === 'STAFF_SUSPENDED' ? 'HIGH' : 'LOW',
+          entityType: 'Employee',
+          entityId: result.id,
+          redirectUrl: `/admin/employees/${result.id}`,
+          context: { createdById },
         });
       } catch (err) {
         console.warn('Staff status notification skipped:', err);

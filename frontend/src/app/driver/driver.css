@@ -7,17 +7,182 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ─── Root shell ────────────────────────────────────────────────────── */
+.driver-shell {
+  display: flex;
+  min-height: 100dvh;
+  min-height: 100svh;
+  background: #0a0a0a;
+}
+
+.driver-viewport {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
 .driver-app {
   display: flex;
   flex-direction: column;
+  width: 100%;
   min-height: 100dvh;
+  min-height: 100svh;
   background: #0f0f0f;
   color: #f1f1f1;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
-  max-width: 480px;
-  margin: 0 auto;
   position: relative;
+}
+
+/* ─── Desktop sidebar (hidden on mobile) ─────────────────────────── */
+.driver-sidebar {
+  display: none;
+  flex-direction: column;
+  width: 260px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #0b1220 0%, #0a101c 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  height: 100svh;
+  overflow-y: auto;
+}
+
+.driver-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.driver-sidebar-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.driver-sidebar-logo-icon { color: #fff; }
+
+.driver-sidebar-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.driver-sidebar-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+}
+
+.driver-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.driver-sidebar-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.driver-sidebar-user-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-sidebar-user-role {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.driver-sidebar-nav {
+  flex: 1;
+  padding: 8px 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.driver-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+
+.driver-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.driver-sidebar-link.active {
+  background: #dc2626;
+  color: #fff;
+}
+
+.driver-sidebar-link-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.driver-sidebar-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: #dc2626;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.driver-sidebar-link.active .driver-sidebar-badge {
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
 }
 
 /* ─── Header ────────────────────────────────────────────────────────── */
@@ -59,6 +224,7 @@
 }
 .driver-conn-indicator.online { background: rgba(34,197,94,0.15); color: #4ade80; }
 .driver-conn-indicator.offline { background: rgba(239,68,68,0.15); color: #f87171; }
+.driver-conn-indicator span.conn-label { display: none; }
 
 .driver-notif-btn {
   position: relative; display: flex; align-items: center; justify-content: center;
@@ -538,4 +704,908 @@
   padding: 0 3px; border: 1.5px solid #0f0f0f;
 }
 .driver-nav-label { font-size: 10px; font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MISSIONS PAGE
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.driver-tab {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.driver-tab.active {
+  background: #dc2626;
+  color: #fff;
+}
+
+.driver-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.driver-mission-list-card {
+  display: block;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.driver-mission-list-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.driver-mission-list-card.active-glow {
+  border-color: rgba(220, 38, 38, 0.4);
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.12);
+}
+
+.driver-mlc-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.driver-mlc-code {
+  font-size: 13px;
+  font-weight: 800;
+  color: #dc2626;
+  font-family: monospace;
+}
+
+.driver-mlc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.driver-mlc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+
+.driver-mlc-row span { line-height: 1.4; }
+
+.driver-mlc-type {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fb923c;
+}
+
+.driver-mlc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.driver-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.driver-empty-icon { font-size: 32px; }
+
+.driver-empty-state p {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+.driver-empty-state span {
+  font-size: 12px;
+  color: #6b7280;
+  max-width: 260px;
+}
+
+.driver-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.driver-page-btn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.driver-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.driver-page-info {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIDEBAR — collapsible sections & sub-nav
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-sidebar-link--top { margin-bottom: 2px; }
+
+.driver-sidebar-section { margin-bottom: 4px; }
+
+.driver-sidebar-section-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-align: left;
+}
+
+.driver-sidebar-section-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.driver-sidebar-section-btn.active {
+  color: #fff;
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.driver-sidebar-section-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.driver-sidebar-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 6px 12px;
+  margin-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.driver-sidebar-sublink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.driver-sidebar-sublink:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+}
+
+.driver-sidebar-sublink.active {
+  background: rgba(220, 38, 38, 0.18);
+  color: #fca5a5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODULE SHELL — tabs & panels
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-module-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.driver-module-desc {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.driver-module-tabs-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.driver-module-tabs {
+  display: flex;
+  gap: 6px;
+  min-width: min-content;
+}
+
+.driver-module-tab {
+  flex-shrink: 0;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.driver-module-tab:hover {
+  color: #e5e7eb;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.driver-module-tab.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.driver-module-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.driver-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.driver-panel-head {
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #9ca3af;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.driver-panel-body { padding: 16px; }
+
+.driver-panel-empty {
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+  padding: 24px 12px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DASHBOARD — status, quick actions
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-status-card { display: flex; flex-direction: column; gap: 12px; }
+
+.driver-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.driver-status-pill {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #6b7280;
+}
+
+.driver-status-pill.active {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+}
+
+.driver-status-summary {
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.45;
+}
+
+.driver-stats-grid--4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 640px) {
+  .driver-stats-grid--4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+.driver-quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .driver-quick-actions-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.driver-action-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.driver-action-tile:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #fff;
+}
+
+.driver-shift-btn.break {
+  flex: 0 1 auto;
+  min-width: 120px;
+  background: rgba(251, 146, 60, 0.15);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  color: #fb923c;
+  text-decoration: none;
+}
+
+.driver-shift-btn.break:hover {
+  background: rgba(251, 146, 60, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FORMS, BUTTONS, WORKFLOW
+   ═══════════════════════════════════════════════════════════════════ */
+.driver-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.driver-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.driver-form-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.driver-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.driver-input:focus { border-color: rgba(220, 38, 38, 0.5); }
+
+.driver-textarea {
+  resize: vertical;
+  min-height: 88px;
+  font-family: inherit;
+}
+
+.driver-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.driver-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.driver-btn-sm.primary {
+  background: #dc2626;
+  color: #fff;
+}
+
+.driver-btn-sm.primary:hover { background: #b91c1c; }
+
+.driver-btn-sm.ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+}
+
+.driver-btn-sm.ghost:hover { color: #e5e7eb; }
+
+.driver-btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.driver-dl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.driver-dl-grid dt {
+  font-size: 10px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.driver-dl-grid dd {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-top: 2px;
+}
+
+.driver-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.driver-assigned-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.driver-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.driver-filter-row select,
+.driver-filter-row input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.driver-history-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.driver-quick-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.driver-quick-link-btn {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+}
+
+.driver-quick-link-btn.secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+.driver-note-text {
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.driver-warning-text {
+  font-size: 12px;
+  color: #fb923c;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.2);
+}
+
+/* Mission workflow stepper */
+.driver-workflow-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.driver-workflow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.driver-workflow-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+.driver-workflow-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 0;
+  position: relative;
+}
+
+.driver-workflow-steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 36px;
+  bottom: -4px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.driver-workflow-steps li.done::after {
+  background: rgba(74, 222, 128, 0.35);
+}
+
+.driver-workflow-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  color: #6b7280;
+}
+
+.driver-workflow-steps li.done .driver-workflow-dot {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.driver-workflow-steps li.current .driver-workflow-dot {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: #dc2626;
+  color: #fca5a5;
+}
+
+.driver-workflow-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+.driver-workflow-steps li.done .driver-workflow-label { color: #4ade80; }
+
+.driver-workflow-time {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE — all devices
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Small phones — tighter spacing */
+@media (max-width: 359px) {
+  .driver-header { padding: 10px 12px; }
+  .driver-header-title { font-size: 14px; }
+  .driver-main { padding: 12px; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .driver-welcome-name { font-size: 17px; }
+  .driver-nav-label { font-size: 9px; }
+  .driver-nav-item { padding: 8px 2px; gap: 2px; }
+  .driver-mission-info-grid { grid-template-columns: 1fr; }
+  .driver-stats-grid { grid-template-columns: 1fr; }
+  .driver-amb-strip { flex-wrap: wrap; font-size: 12px; }
+  .driver-amb-status { margin-left: 0; width: 100%; text-align: center; margin-top: 4px; }
+}
+
+/* Phones — default mobile-first */
+@media (max-width: 639px) {
+  .driver-main {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .driver-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .driver-header-sub { display: none; }
+}
+
+/* Small tablets & large phones */
+@media (min-width: 480px) {
+  .driver-main { padding: 18px 20px; }
+  .driver-welcome-name { font-size: 22px; }
+  .driver-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 640px) {
+  .driver-viewport {
+    padding: 0 16px;
+  }
+
+  .driver-app {
+    max-width: 640px;
+    border-left: 1px solid rgba(255, 255, 255, 0.04);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .driver-bottom-nav {
+    max-width: 640px;
+  }
+
+  .driver-conn-indicator span.conn-label { display: inline; }
+  .driver-header-sub { display: block; }
+
+  .driver-mission-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .driver-tab-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* Tablets */
+@media (min-width: 768px) {
+  .driver-viewport { padding: 0 24px; }
+
+  .driver-app { max-width: 768px; }
+  .driver-bottom-nav { max-width: 768px; }
+
+  .driver-main { padding: 24px; gap: 18px; }
+
+  .driver-welcome-bar { padding: 20px 24px; }
+  .driver-welcome-name { font-size: 24px; }
+
+  .driver-stats-grid { grid-template-columns: repeat(4, 1fr); }
+
+  .driver-mission-info-grid { grid-template-columns: repeat(3, 1fr); }
+
+  .driver-tab-content {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .driver-shift-controls {
+    max-width: 480px;
+  }
+
+  .driver-main--split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .driver-main--comms .driver-comms-chat {
+    min-height: 420px;
+  }
+
+  /* Login */
+  .dl-container { max-width: 440px; }
+  .dl-card { padding: 28px; }
+}
+
+/* Desktop — sidebar + full content width */
+@media (min-width: 1024px) {
+  .driver-sidebar { display: flex; }
+
+  .driver-viewport {
+    padding: 0;
+    justify-content: stretch;
+  }
+
+  .driver-app {
+    max-width: none;
+    border: none;
+  }
+
+  .driver-bottom-nav { display: none; }
+
+  .driver-main {
+    padding: 28px 32px 32px;
+    padding-bottom: 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .driver-header {
+    padding: 16px 32px;
+  }
+
+  /* Dashboard 2-column layout */
+  .driver-main--dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .driver-main--dashboard > * {
+    min-width: 0;
+  }
+
+  .driver-main--dashboard .driver-welcome-bar {
+    grid-column: 1 / -1;
+  }
+
+  .driver-main--dashboard .driver-conn-footer {
+    grid-column: 1 / -1;
+  }
+
+  .driver-missions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Two-column page layouts (ambulance, profile, etc.) */
+  .driver-main--split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .driver-main--comms {
+    max-width: 900px;
+  }
+}
+
+/* Large desktop */
+@media (min-width: 1280px) {
+  .driver-main {
+    max-width: 1280px;
+    padding: 32px 40px 40px;
+  }
+
+  .driver-sidebar { width: 280px; }
+
+  .driver-main--dashboard {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+
+  .driver-tab-content {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Ultra-wide — cap content readability */
+@media (min-width: 1536px) {
+  .driver-main { max-width: 1400px; }
+}
+
+/* Landscape phones — reduce bottom nav height */
+@media (max-height: 500px) and (orientation: landscape) {
+  .driver-bottom-nav { display: none; }
+  .driver-main { padding-bottom: 16px; }
+}
+
+/* Touch targets — minimum 44px on interactive elements */
+@media (pointer: coarse) {
+  .driver-shift-btn,
+  .driver-quick-action-btn,
+  .driver-logout-btn,
+  .driver-tab,
+  .driver-nav-item {
+    min-height: 44px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .driver-spin,
+  .driver-skeleton-line,
+  .dl-bg-orb,
+  .dl-emblem {
+    animation: none !important;
+  }
+}
 

@@ -93,4 +93,25 @@
   .status-cancelled {
     @apply bg-red-100 text-red-800;
   }
+
+  /* EMS / 911 Command Center — Admin shell */
+  .admin-command-center {
+    @apply bg-ems-bg text-ems-text-primary;
+  }
+
+  .ems-panel {
+    @apply bg-ems-panel border border-ems-border rounded-2xl;
+  }
+
+  .ems-nav-active {
+    @apply bg-ems-primary text-white font-semibold;
+  }
+
+  .ems-nav-item {
+    @apply text-ems-text-secondary hover:bg-white/[0.04] hover:text-white transition-all duration-200;
+  }
+
+  .ems-kpi-card {
+    @apply bg-ems-panel border border-ems-border rounded-2xl p-4 hover:border-ems-primary/30 hover:-translate-y-0.5 transition-all duration-300;
+  }
 }

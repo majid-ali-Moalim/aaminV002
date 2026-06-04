@@ -1,15 +1,15 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ClipboardList, Bell, User, Ambulance } from 'lucide-react'
+import { LayoutGrid, Siren, MessageSquare, Bell, User } from 'lucide-react'
 import { useDriverStore } from '@/lib/stores/driverStore'
 
 const navItems = [
-  { href: '/driver', icon: Home, label: 'Dashboard' },
-  { href: '/driver/missions', icon: ClipboardList, label: 'Missions' },
-  { href: '/driver/ambulance', icon: Ambulance, label: 'Ambulance' },
-  { href: '/driver/notifications', icon: Bell, label: 'Alerts' },
-  { href: '/driver/profile', icon: User, label: 'Profile' },
+  { href: '/driver', icon: LayoutGrid, label: 'Home', match: (p: string) => p === '/driver' || p === '/driver/dashboard' },
+  { href: '/driver/missions/active', icon: Siren, label: 'Missions', match: (p: string) => p.startsWith('/driver/missions') },
+  { href: '/driver/communications', icon: MessageSquare, label: 'Chat', match: (p: string) => p.startsWith('/driver/communications') },
+  { href: '/driver/notifications', icon: Bell, label: 'Alerts', match: (p: string) => p.startsWith('/driver/notifications'), badge: true },
+  { href: '/driver/profile', icon: User, label: 'Profile', match: (p: string) => p.startsWith('/driver/profile') },
 ]
 
 export function DriverBottomNav() {
@@ -17,19 +17,17 @@ export function DriverBottomNav() {
   const { unreadCount } = useDriverStore()
 
   return (
-    <nav className="driver-bottom-nav">
-      {navItems.map(({ href, icon: Icon, label }) => {
-        const isActive = pathname === href || (href !== '/driver' && pathname.startsWith(href))
-        const isBell = label === 'Alerts'
+    <nav className="driver-bottom-nav" aria-label="Mobile navigation">
+      {navItems.map(({ href, icon: Icon, label, match, badge }) => {
+        const isActive = match(pathname)
+        const showBadge = badge && unreadCount > 0
 
         return (
           <Link key={href} href={href} className={`driver-nav-item${isActive ? ' active' : ''}`}>
             <div className="driver-nav-icon-wrap">
               <Icon size={22} />
-              {isBell && unreadCount > 0 && (
-                <span className="driver-nav-badge">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
+              {showBadge && (
+                <span className="driver-nav-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
               )}
             </div>
             <span className="driver-nav-label">{label}</span>

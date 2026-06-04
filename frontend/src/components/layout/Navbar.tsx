@@ -113,6 +113,11 @@ const Navbar = () => {
 
   }
 
+  const portalPrefixes = ['/admin', '/dispatcher', '/driver', '/nurse', '/manager', '/hospital', '/patient']
+  if (portalPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return null
+  }
+
 
 
   return (

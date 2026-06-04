@@ -176,7 +176,12 @@ export const ambulancesService = {
   assignDriver: async (id: string, driverEmployeeId: string): Promise<Ambulance> => {
     const api = new ApiService()
     return await api.patch<Ambulance>(`/api/ambulances/${id}/assign-driver`, { driverEmployeeId })
-  }
+  },
+
+  assignNurse: async (id: string, nurseEmployeeId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/ambulances/${id}/assign-nurse`, { nurseEmployeeId })
+  },
 }
 
 // Employees service
@@ -445,6 +450,18 @@ export const reportsService = {
   getSystemHealth: async () => {
     const api = new ApiService()
     return await api.get('/api/reports/system/health')
+  },
+
+  getAdminReport: async (type: string, filters?: Record<string, string | undefined>) => {
+    const api = new ApiService()
+    const params = new URLSearchParams()
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value?.trim()) params.set(key, value.trim())
+      })
+    }
+    const query = params.toString()
+    return await api.get(`/api/reports/admin/${type}${query ? `?${query}` : ''}`)
   }
 }
 
@@ -698,7 +715,11 @@ export const nursesService = {
 
 // Notifications service
 export const notificationsService = {
-  getAll: async (filters?: any) => {
+  getInbox: async (filters?: Record<string, string | number | boolean | undefined>) => {
+    const api = new ApiService()
+    return await api.get('/api/notifications/inbox', { params: filters })
+  },
+  getAll: async (filters?: Record<string, string | number | boolean | undefined>) => {
     const api = new ApiService()
     return await api.get('/api/notifications', { params: filters })
   },
@@ -714,9 +735,17 @@ export const notificationsService = {
     const api = new ApiService()
     return await api.patch(`/api/notifications/${id}/read`)
   },
-  markAllRead: async (userId?: string) => {
+  markUnread: async (id: string) => {
     const api = new ApiService()
-    return await api.post('/api/notifications/mark-all-read', { userId })
+    return await api.patch(`/api/notifications/${id}/unread`)
+  },
+  markAllRead: async () => {
+    const api = new ApiService()
+    return await api.post('/api/notifications/mark-all-read')
+  },
+  archive: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/notifications/${id}/archive`)
   },
   resolve: async (id: string) => {
     const api = new ApiService()
@@ -725,7 +754,135 @@ export const notificationsService = {
   remove: async (id: string) => {
     const api = new ApiService()
     return await api.delete(`/api/notifications/${id}`)
-  }
+  },
+  getPreferences: async () => {
+    const api = new ApiService()
+    return await api.get('/api/notifications/preferences')
+  },
+  updatePreferences: async (preferences: { category: string; channel: string; enabled: boolean }[]) => {
+    const api = new ApiService()
+    return await api.patch('/api/notifications/preferences', { preferences })
+  },
+  getAlerts: async (filters?: { status?: string; priority?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/notifications/alerts', { params: filters })
+  },
+  createAlert: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post('/api/notifications/alerts', data)
+  },
+  resolveAlert: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/notifications/alerts/${id}/resolve`)
+  },
+  getDeliveryLogs: async (notificationId?: string) => {
+    const api = new ApiService()
+    return await api.get('/api/notifications/delivery-logs', {
+      params: notificationId ? { notificationId } : undefined,
+    })
+  },
+  broadcast: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post('/api/notifications/broadcast', data)
+  },
+}
+
+export const mdmService = {
+  list: async (entity: string, params?: Record<string, string | number | boolean>) => {
+    const api = new ApiService()
+    return await api.get(`/api/master-data/${entity}`, { params })
+  },
+  listAll: async (entity: string, params?: Record<string, string>) => {
+    const api = new ApiService()
+    return await api.get(`/api/master-data/${entity}/all`, { params })
+  },
+  getOne: async (entity: string, id: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/master-data/${entity}/${id}`)
+  },
+  create: async (entity: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post(`/api/master-data/${entity}`, data)
+  },
+  update: async (entity: string, id: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/master-data/${entity}/${id}`, data)
+  },
+  activate: async (entity: string, id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/master-data/${entity}/${id}/activate`)
+  },
+  deactivate: async (entity: string, id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/master-data/${entity}/${id}/deactivate`)
+  },
+  remove: async (entity: string, id: string) => {
+    const api = new ApiService()
+    return await api.delete(`/api/master-data/${entity}/${id}`)
+  },
+  getAuditLogs: async (entity: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/master-data/${entity}/audit/logs`)
+  },
+  getSettingsSection: async (section: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/master-data/settings/section/${section}`)
+  },
+  updateSettingsSection: async (
+    section: string,
+    settings: { key: string; value: unknown; description?: string }[],
+  ) => {
+    const api = new ApiService()
+    return await api.patch(`/api/master-data/settings/section/${section}`, { settings })
+  },
+}
+
+// Access control service
+export const accessControlService = {
+  getCatalog: async () => {
+    const api = new ApiService()
+    return await api.get('/api/access-control/catalog')
+  },
+  getUserPermissions: async (userId: string) => {
+    const api = new ApiService()
+    return await api.get<{
+      userId: string
+      role: string
+      employeeRole: string | null
+      staffProfile: string | null
+      canAssignPermissions: boolean
+      suggestedPermissions: string[]
+      grantedPermissions: Array<{
+        permissionKey: string
+        grantedAt: string
+        expiresAt: string | null
+        isUnlimited: boolean
+        isExpired: boolean
+      }>
+      activePermissionKeys?: string[]
+    }>(`/api/access-control/users/${userId}/permissions`)
+  },
+  setUserPermissions: async (
+    userId: string,
+    payload: { permissions: string[]; expiresAt?: string | null },
+  ) => {
+    const api = new ApiService()
+    return await api.put(`/api/access-control/users/${userId}/permissions`, payload)
+  },
+}
+
+// Activity logs service
+export const activityLogsService = {
+  getAll: async (params?: { limit?: number; entityType?: string; userId?: string; since?: string }) => {
+    const api = new ApiService()
+    const search = new URLSearchParams()
+    if (params?.limit) search.append('limit', String(params.limit))
+    if (params?.entityType) search.append('entityType', params.entityType)
+    if (params?.userId) search.append('userId', params.userId)
+    if (params?.since) search.append('since', params.since)
+    const qs = search.toString() ? `?${search.toString()}` : ''
+    return await api.get<any[]>(`/api/activity-logs${qs}`)
+  },
 }
 
 // Upload service
@@ -734,6 +891,62 @@ export const uploadService = {
     const api = new ApiService()
     return await api.upload('/api/uploads', file)
   }
+}
+
+// Hospital coordination service
+export const hospitalCoordinationService = {
+  getOverview: async () => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-coordination/overview')
+  },
+  listHospitals: async (params?: Record<string, string | boolean | undefined>) => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-coordination/hospitals', { params })
+  },
+  updateAvailability: async (id: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/hospitals/${id}/availability`, data)
+  },
+  activateHospital: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/hospitals/${id}/activate`)
+  },
+  deactivateHospital: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/hospitals/${id}/deactivate`)
+  },
+  listCases: async (params?: Record<string, string | undefined>) => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-coordination/cases', { params })
+  },
+  acceptCase: async (id: string, receivingStaffName?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/accept`, { receivingStaffName })
+  },
+  rejectCase: async (id: string, reason: string, notes?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/reject`, { reason, notes })
+  },
+  moveToHandover: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/handover-queue`)
+  },
+  startHandover: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/handover/start`)
+  },
+  completeHandover: async (id: string, receivingStaffName?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/handover/complete`, { receivingStaffName })
+  },
+  updateCaseStatus: async (id: string, status: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-coordination/cases/${id}/status`, { status })
+  },
+  getAnalytics: async (params?: Record<string, string | undefined>) => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-coordination/analytics', { params })
+  },
 }
 
 // Hospitals service
@@ -745,6 +958,10 @@ export const hospitalsService = {
     if (filters?.districtId) params.append('districtId', filters.districtId)
     const queryString = params.toString() ? `?${params.toString()}` : ''
     return await api.get<any[]>(`/api/hospitals${queryString}`)
+  },
+  createHospital: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post<any>('/api/hospitals/create', data)
   },
   create: async (data: any) => {
     const api = new ApiService()

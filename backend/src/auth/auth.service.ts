@@ -1,6 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessControlService } from '../access-control/access-control.service';
+import { ALL_PERMISSION_KEYS } from '../access-control/permission-catalog';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
@@ -11,6 +13,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private accessControlService: AccessControlService,
   ) {}
 
   private log(message: string) {
@@ -28,17 +31,21 @@ export class AuthService {
       return null;
     }
 
-    // Hardcoded Admin Fallback
+    // Hardcoded Admin Fallback — must resolve a real DB user id for FK-backed features (audit logs, reports, etc.)
     if (username === 'aamin@admin' && password === '123321@admin') {
-      this.log(`[AuthService] Hardcoded admin login successful`);
-      return {
-        id: 'hardcoded-admin-uuid',
-        username: 'aamin@admin',
-        email: 'aamin@admin',
-        role: Role.ADMIN,
-        employee: null,
-        patient: null
-      };
+      const adminUser = await this.prisma.user.findFirst({
+        where: { OR: [{ username: 'aamin@admin' }, { email: 'aamin@admin@aamin.so' }] },
+        include: {
+          employee: { include: { employeeRole: true } },
+          patient: true,
+        },
+      });
+      if (adminUser) {
+        this.log(`[AuthService] Hardcoded admin login successful (db user ${adminUser.id})`);
+        const { passwordHash, ...result } = adminUser;
+        return result;
+      }
+      this.log(`[AuthService] Hardcoded admin credentials matched but no admin user exists in DB`);
     }
 
     // Search by username OR email
@@ -96,6 +103,15 @@ export class AuthService {
 
     const employeeRoleName = user.employee?.employeeRole?.name ?? null;
 
+    const permissions =
+      user.role === Role.ADMIN
+        ? [...ALL_PERMISSION_KEYS]
+        : await this.accessControlService.getPermissionsForAuth(
+            user.id,
+            user.role,
+            employeeRoleName,
+          );
+
     const payload = {
       username: user.username,
       sub: user.id,
@@ -105,6 +121,7 @@ export class AuthService {
       employeeRole: employeeRoleName,
       employeeStatus: user.employee?.status ?? null,
       employeeId: user.employee?.id ?? null,
+      permissions,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -122,6 +139,7 @@ export class AuthService {
         lastName: user.employee?.lastName || user.patient?.lastName || '',
         role: user.role,
         employeeRole: employeeRoleName,
+        permissions,
         isActive: true,
         employee: user.employee
           ? {

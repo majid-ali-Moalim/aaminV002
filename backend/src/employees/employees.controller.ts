@@ -15,6 +15,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
 @ApiTags('employees')
 @Controller('employees')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -25,8 +27,8 @@ export class EmployeesController {
   @Post()
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Create a new employee' })
-  create(@Body() createEmployeeDto: any) {
-    return this.employeesService.create(createEmployeeDto);
+  create(@Body() createEmployeeDto: any, @CurrentUser() user: any) {
+    return this.employeesService.create(createEmployeeDto, user?.id);
   }
 
   @Get()
@@ -49,8 +51,8 @@ export class EmployeesController {
   @Patch(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Update employee' })
-  update(@Param('id') id: string, @Body() updateEmployeeDto: any) {
-    return this.employeesService.update(id, updateEmployeeDto);
+  update(@Param('id') id: string, @Body() updateEmployeeDto: any, @CurrentUser() user: any) {
+    return this.employeesService.update(id, updateEmployeeDto, user?.id);
   }
 
   @Delete(':id')

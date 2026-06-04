@@ -232,6 +232,33 @@ export class AmbulancesService {
     return [employee, result];
   }
 
+  async assignNurse(id: string, nurseEmployeeId: string) {
+    const existing = await this.prisma.ambulance.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Ambulance not found');
+
+    const employee = await this.prisma.employee.update({
+      where: { id: nurseEmployeeId },
+      data: { assignedAmbulanceId: id },
+      include: {
+        user: true,
+        assignedAmbulance: true,
+        employeeRole: true,
+      },
+    });
+
+    await this.notifications.create({
+      title: 'Nurse Assigned to Ambulance',
+      message: `Nurse ${employee.user?.username || employee.firstName} assigned to Ambulance ${existing.ambulanceNumber}`,
+      type: 'AMBULANCE' as any,
+      priority: 'MEDIUM',
+      relatedModule: 'Ambulance',
+      relatedId: existing.id,
+      actionUrl: `/admin/ambulances?id=${existing.id}`,
+    });
+
+    return employee;
+  }
+
   delete(id: string) {
     return this.prisma.ambulance.delete({
       where: { id },

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { 
   Search, 
@@ -12,9 +13,10 @@ import {
   Clock, 
   AlertTriangle,
   RefreshCw,
-  ChevronRight,
   ArrowRight,
-  MapPin
+  MapPin,
+  Globe,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
@@ -104,6 +106,15 @@ export default function EmergencyRequestsPage() {
              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
              Refresh
            </Button>
+           <Link href="/ambulance-tracking" target="_blank" rel="noopener noreferrer">
+             <Button
+               variant="outline"
+               className="h-11 px-5 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-sm rounded-xl flex items-center gap-2"
+             >
+               <Globe className="w-4 h-4 text-red-600" />
+               Public Tracking
+             </Button>
+           </Link>
            <Button
             className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95 flex items-center gap-2"
             onClick={() => router.push('/admin/emergency-requests/new')}
@@ -328,23 +339,4 @@ export default function EmergencyRequestsPage() {
       )}
     </div>
   )
-}
-
-function Loader2(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
 }

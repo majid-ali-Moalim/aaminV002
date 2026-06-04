@@ -3,7 +3,7 @@
 import { useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { isDispatcherUser, isDispatcherActive } from '@/lib/hooks/useDispatcherAccess'
+import { getPostLoginPath, isDispatcherUser, isDispatcherActive } from '@/lib/authRedirect'
 
 interface DispatcherGuardProps {
   children: ReactNode
@@ -25,18 +25,7 @@ export function DispatcherGuard({ children }: DispatcherGuardProps) {
     }
 
     if (!isDispatcherUser(user)) {
-      const role = user.role as string
-      if (role === 'ADMIN') router.replace('/admin/dashboard')
-      else if (role === 'EMPLOYEE') {
-        const roleName = (
-          user.employee?.employeeRole?.name ?? (user as any).employeeRole ?? ''
-        ).toUpperCase()
-        if (roleName.includes('DRIVER')) router.replace('/driver')
-        else if (roleName.includes('NURSE')) router.replace('/nurse/dashboard')
-        else router.replace('/login')
-      } else {
-        router.replace('/login')
-      }
+      router.replace(getPostLoginPath(user))
       return
     }
 

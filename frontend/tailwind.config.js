@@ -59,6 +59,20 @@ module.exports = {
         info: {
           DEFAULT: "hsl(var(--info))",
         },
+        ems: {
+          primary: '#EF2D2D',
+          bg: '#081120',
+          sidebar: '#0B1220',
+          panel: '#111827',
+          border: '#1E293B',
+          'text-primary': '#FFFFFF',
+          'text-secondary': '#94A3B8',
+          'text-muted': '#64748B',
+          success: '#22C55E',
+          warning: '#F59E0B',
+          critical: '#EF4444',
+          info: '#3B82F6',
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

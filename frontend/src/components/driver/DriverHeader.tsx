@@ -37,7 +37,7 @@ export function DriverHeader({ title, showBack, backHref = '/driver' }: DriverHe
       <div className="driver-header-right">
         <div className={`driver-conn-indicator ${isSocketConnected ? 'online' : 'offline'}`}>
           {isSocketConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
-          <span>{isSocketConnected ? 'Live' : 'Offline'}</span>
+          <span className="conn-label">{isSocketConnected ? 'Live' : 'Offline'}</span>
         </div>
         <Link href="/driver/notifications" className="driver-notif-btn">
           <Bell size={20} />

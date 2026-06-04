@@ -1,26 +1,21 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
+import { isDriverUser, getPostLoginPath } from '@/lib/authRedirect'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import { useDriverSocket } from '@/lib/useDriverSocket'
 import { driverProfileApi, driverDashboardApi, driverMissionsApi, driverShiftApi, driverNotificationsApi } from '@/lib/driverApi'
-import { DriverHeader } from '@/components/driver/DriverHeader'
-import { DriverBottomNav } from '@/components/driver/DriverBottomNav'
-import { MissionStatusBadge, PriorityBadge, ShiftBadge, StatCard, OfflineBanner, DriverSkeleton } from '@/components/driver/DriverUI'
+import { DriverPageLayout } from '@/components/driver/DriverPageLayout'
+import { DriverDashboardOverview } from '@/components/driver/DriverDashboardOverview'
 import toast from 'react-hot-toast'
-import {
-  MapPin, Clock, User, Ambulance, ArrowRight,
-  PlayCircle, StopCircle, AlertTriangle, CheckCircle, Loader2
-} from 'lucide-react'
 
 export default function DriverDashboard() {
   const router = useRouter()
-  const { user, token, loading: authLoading, logout } = useAuth()
+  const { user, token, loading: authLoading } = useAuth()
   const isAuthenticated = !!user && !!token
-  const { profile, activeMission, stats, unreadCount,
-    setProfile, setActiveMission, setStats, setUnreadCount, offlineQueue } = useDriverStore()
+  const { profile, activeMission, stats,
+    setProfile, setActiveMission, setStats, setUnreadCount } = useDriverStore()
   const { connected, emitMissionStatus } = useDriverSocket()
 
   const [loadingProfile, setLoadingProfile] = useState(true)
@@ -29,8 +24,15 @@ export default function DriverDashboard() {
 
   // Auth guard
   useEffect(() => {
-    if (!authLoading && (!isAuthenticated || !token)) router.push('/login')
-  }, [isAuthenticated, token, router, authLoading])
+    if (authLoading) return
+    if (!isAuthenticated || !token) {
+      router.replace('/driver/login')
+      return
+    }
+    if (user && !isDriverUser(user) && user.role !== 'ADMIN') {
+      router.replace(getPostLoginPath(user))
+    }
+  }, [isAuthenticated, token, router, authLoading, user])
 
   // Load data
   const loadData = useCallback(async () => {
@@ -80,13 +82,8 @@ export default function DriverDashboard() {
     } finally { setLoadingShift(false) }
   }
 
-  const handleLogout = () => {
-    logout()
-  }
-
   if (!isAuthenticated) return null
 
-  const fullName = profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : 'Driver'
   const currentShift = shiftStatus || profile?.shiftStatus || 'AVAILABLE'
 
   const NEXT_ACTIONS: Record<string, { label: string; status: string; cls: string }> = {
@@ -112,155 +109,20 @@ export default function DriverDashboard() {
   }
 
   return (
-    <div className="driver-app">
-      <DriverHeader title="Dashboard" />
-      <OfflineBanner queueCount={offlineQueue.length} />
-
-      <main className="driver-main">
-        {/* Welcome + Shift Bar */}
-        <div className="driver-welcome-bar">
-          <div>
-            <p className="driver-welcome-greeting">Good {getTimeOfDay()},</p>
-            <h2 className="driver-welcome-name">{fullName}</h2>
-            {profile?.station && (
-              <p className="driver-welcome-station">📍 {profile.station.name}</p>
-            )}
-          </div>
-          <ShiftBadge status={currentShift} />
-        </div>
-
-        {/* Ambulance Info Strip */}
-        {profile?.assignedAmbulance && (
-          <div className="driver-amb-strip">
-            <Ambulance size={18} className="text-red-600" />
-            <span className="driver-amb-code">{profile.assignedAmbulance.ambulanceNumber}</span>
-            <span className="driver-amb-sep">·</span>
-            <span className="driver-amb-type">{profile.assignedAmbulance.vehicleType || 'Ambulance'}</span>
-            <span className={`driver-amb-status ${profile.assignedAmbulance.status === 'AVAILABLE' ? 'green' : 'orange'}`}>
-              {profile.assignedAmbulance.status}
-            </span>
-          </div>
-        )}
-
-        {/* Shift Control */}
-        <div className="driver-shift-controls">
-          {currentShift === 'ON_DUTY' ? (
-            <button className="driver-shift-btn end" onClick={handleEndShift} disabled={loadingShift}>
-              {loadingShift ? <Loader2 size={16} className="driver-spin" /> : <StopCircle size={16} />}
-              End Shift
-            </button>
-          ) : (
-            <button className="driver-shift-btn start" onClick={handleStartShift} disabled={loadingShift}>
-              {loadingShift ? <Loader2 size={16} className="driver-spin" /> : <PlayCircle size={16} />}
-              Start Shift
-            </button>
-          )}
-        </div>
-
-        {/* Active Mission Card */}
-        {loadingProfile ? (
-          <div className="driver-card"><DriverSkeleton lines={4} /></div>
-        ) : activeMission ? (
-          <div className="driver-active-mission-card">
-            <div className="driver-mission-card-header">
-              <div className="driver-mission-card-icon">🚨</div>
-              <div>
-                <p className="driver-mission-tracking">{activeMission.trackingCode}</p>
-                <div className="driver-mission-badges">
-                  <MissionStatusBadge status={activeMission.status} />
-                  <PriorityBadge priority={activeMission.priority} />
-                </div>
-              </div>
-            </div>
-
-            <div className="driver-mission-info-grid">
-              <div className="driver-mission-info-item">
-                <User size={14} className="driver-info-icon-sm" />
-                <div>
-                  <p className="driver-info-label-sm">Patient</p>
-                  <p className="driver-info-val-sm">{activeMission.patient?.fullName || 'Unknown'}</p>
-                </div>
-              </div>
-              <div className="driver-mission-info-item">
-                <MapPin size={14} className="driver-info-icon-sm" />
-                <div>
-                  <p className="driver-info-label-sm">Pickup</p>
-                  <p className="driver-info-val-sm">{activeMission.pickupLocation}</p>
-                </div>
-              </div>
-              {activeMission.pickupLandmark && (
-                <div className="driver-mission-info-item">
-                  <MapPin size={14} className="driver-info-icon-sm text-orange-500" />
-                  <div>
-                    <p className="driver-info-label-sm">Landmark</p>
-                    <p className="driver-info-val-sm">{activeMission.pickupLandmark}</p>
-                  </div>
-                </div>
-              )}
-              {activeMission.incidentCategory && (
-                <div className="driver-mission-info-item">
-                  <AlertTriangle size={14} className="driver-info-icon-sm text-red-500" />
-                  <div>
-                    <p className="driver-info-label-sm">Emergency Type</p>
-                    <p className="driver-info-val-sm">{activeMission.incidentCategory.name}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Action Button */}
-            {nextAction && (
-              <button className={`driver-quick-action-btn ${nextAction.cls}`} onClick={handleQuickAction}>
-                <CheckCircle size={18} />
-                {nextAction.label}
-              </button>
-            )}
-
-            <Link href={`/driver/missions/${activeMission.id}`} className="driver-mission-detail-link">
-              View Full Details <ArrowRight size={16} />
-            </Link>
-          </div>
-        ) : (
-          <div className="driver-no-mission-card">
-            <div className="driver-no-mission-icon">🟢</div>
-            <p className="driver-no-mission-title">No Active Mission</p>
-            <p className="driver-no-mission-sub">You will be notified when assigned to an emergency</p>
-          </div>
-        )}
-
-        {/* Stats Grid */}
-        {stats && (
-          <div className="driver-stats-section">
-            <h3 className="driver-section-title">My Performance</h3>
-            <div className="driver-stats-grid">
-              <StatCard label="Total Missions" value={stats.totalMissions} accent />
-              <StatCard label="Completed" value={stats.completedMissions} />
-              <StatCard label="Success Rate" value={`${stats.completionRate}%`} accent />
-              <StatCard label="Avg Response" value={`${stats.avgResponseMinutes}m`} sub="minutes" />
-            </div>
-          </div>
-        )}
-
-        {/* Socket status */}
-        <div className="driver-conn-footer">
-          <span className={`driver-dot ${connected ? 'green' : 'red'}`} />
-          <span>{connected ? 'Real-time connected' : 'Reconnecting…'}</span>
-        </div>
-
-        {/* Logout */}
-        <button className="driver-logout-btn" onClick={handleLogout}>
-          Sign Out
-        </button>
-      </main>
-
-      <DriverBottomNav />
-    </div>
+    <DriverPageLayout title="Dashboard Overview" mainClassName="driver-main--dashboard">
+      <DriverDashboardOverview
+          profile={profile}
+          activeMission={activeMission}
+          stats={stats}
+          loadingProfile={loadingProfile}
+          loadingShift={loadingShift}
+          currentShift={currentShift}
+          connected={connected}
+          onStartShift={handleStartShift}
+          onEndShift={handleEndShift}
+          onQuickAction={handleQuickAction}
+          nextAction={nextAction}
+      />
+    </DriverPageLayout>
   )
-}
-
-function getTimeOfDay() {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { isDispatcherUser, isDispatcherActive } from '@/lib/hooks/useDispatcherAccess'
+import { getPostLoginPath, isDispatcherUser, isDispatcherActive } from '@/lib/authRedirect'
 import toast from 'react-hot-toast'
 import { AlertCircle, Eye, EyeOff, Loader2, Shield, Radio, Phone } from 'lucide-react'
 

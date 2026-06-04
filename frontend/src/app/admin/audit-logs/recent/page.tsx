@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { History, Clock, User, Activity, Truck, AlertTriangle, CheckCircle, XCircle, Search, Filter, Download } from 'lucide-react'
-import { emergencyRequestsService, ambulancesService, employeesService, reportsService } from '@/lib/api'
+import { emergencyRequestsService, activityLogsService } from '@/lib/api'
 
 export default function RecentActivityPage() {
   const [loading, setLoading] = useState(true)
@@ -19,94 +19,49 @@ export default function RecentActivityPage() {
 
   const fetchRecentActivity = async () => {
     try {
-      const [requests, ambulances, employees, dashboardStats] = await Promise.all([
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      const [logs, requests] = await Promise.all([
+        activityLogsService.getAll({ limit: 100, since }),
         emergencyRequestsService.getAll(),
-        ambulancesService.getAll(),
-        employeesService.getAll(),
-        reportsService.getDashboardStats()
       ])
 
-      const recentActivities = [
-        // Emergency request activities
-        ...requests.slice(0, 10).map((request: any) => ({
-          id: `request-${request.id}`,
-          type: 'emergency',
-          action: request.status === 'COMPLETED' ? 'Mission Completed' :
-                  request.status === 'ACTIVE' ? 'Mission Started' :
-                  request.status === 'ASSIGNED' ? 'Ambulance Assigned' : 'Request Created',
-          details: `${request.patientName || 'Unknown'} - ${request.pickupLocation}`,
-          user: request.assignedDriver || 'System',
-          timestamp: request.createdAt,
-          status: request.status === 'COMPLETED' ? 'success' : 'active',
-          priority: request.priority,
-          entity: 'Emergency Request',
-          entityId: request.id
-        })),
-
-        // Ambulance activities
-        ...ambulances.slice(0, 8).map((ambulance: any) => ({
-          id: `ambulance-${ambulance.id}`,
-          type: 'ambulance',
-          action: ambulance.status === 'AVAILABLE' ? 'Available' :
-                  ambulance.status === 'ON_MISSION' ? 'On Mission' :
-                  ambulance.status === 'MAINTENANCE' ? 'Maintenance' : 'Unavailable',
-          details: `${ambulance.ambulanceNumber} - ${ambulance.station?.name || 'No Station'}`,
-          user: 'System',
-          timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-          status: ambulance.status === 'AVAILABLE' ? 'success' : 'warning',
-          entity: 'Ambulance',
-          entityId: ambulance.id
-        })),
-
-        // Staff activities
-        ...employees.slice(0, 6).map((employee: any) => ({
-          id: `staff-${employee.id}`,
-          type: 'staff',
-          action: employee.shiftStatus === 'ACTIVE' ? 'Shift Started' :
-                  employee.shiftStatus === 'OFF_DUTY' ? 'Shift Ended' : 'Status Updated',
-          details: `${employee.firstName} ${employee.lastName} - ${employee.department || 'No Department'}`,
-          user: employee.firstName,
-          timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-          status: employee.shiftStatus === 'ACTIVE' ? 'success' : 'info',
-          entity: 'Staff',
-          entityId: employee.id
-        })),
-
-        // System activities (mock data for demonstration)
-        {
-          id: 'system-1',
-          type: 'system',
-          action: 'Database Backup',
-          details: 'Automated backup completed successfully',
-          user: 'System',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          status: 'success',
-          entity: 'System',
-          entityId: 'system'
-        },
-        {
-          id: 'system-2',
-          type: 'system',
-          action: 'Performance Alert',
-          details: 'Response time monitoring threshold exceeded',
-          user: 'System',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          status: 'warning',
-          entity: 'System',
-          entityId: 'system'
-        },
-        {
-          id: 'system-3',
-          type: 'system',
-          action: 'User Login',
-          details: 'Admin user logged in successfully',
-          user: 'Admin',
-          timestamp: new Date(Date.now() - 1800000).toISOString(),
+      const logActivities = (Array.isArray(logs) ? logs : []).map((log: any) => {
+        const emp = log.user?.employee
+        const actor = emp?.firstName || emp?.lastName
+          ? [emp.firstName, emp.lastName].filter(Boolean).join(' ')
+          : log.user?.username ?? 'System'
+        return {
+          id: `log-${log.id}`,
+          type: log.entityType === 'EmergencyRequest' ? 'emergency' : 'system',
+          action: log.action,
+          details: log.entityType
+            ? `${log.entityType}${log.entityId ? ` · ${log.entityId.slice(0, 8)}…` : ''}`
+            : 'System event',
+          user: actor,
+          timestamp: log.createdAt,
           status: 'info',
-          entity: 'Authentication',
-          entityId: 'auth'
+          entity: log.entityType ?? 'ActivityLog',
+          entityId: log.entityId ?? log.id,
         }
-      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      })
+
+      const requestActivities = (Array.isArray(requests) ? requests : []).slice(0, 20).map((request: any) => ({
+        id: `request-${request.id}`,
+        type: 'emergency',
+        action: request.status === 'COMPLETED' ? 'Mission Completed' :
+                request.status === 'ACTIVE' ? 'Mission Started' :
+                request.status === 'ASSIGNED' ? 'Ambulance Assigned' : 'Request Created',
+        details: `${request.patientName || 'Unknown'} - ${request.pickupLocation}`,
+        user: request.assignedDriver || 'System',
+        timestamp: request.updatedAt || request.createdAt,
+        status: request.status === 'COMPLETED' ? 'success' : 'active',
+        priority: request.priority,
+        entity: 'Emergency Request',
+        entityId: request.id,
+      }))
+
+      const recentActivities = [...logActivities, ...requestActivities]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
       setActivities(recentActivities)
     } catch (error) {

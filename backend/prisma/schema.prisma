@@ -13,6 +13,9 @@ model Region {
   code        String?            @unique
   description String?
   isActive    Boolean            @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   ambulances  Ambulance[]
@@ -29,9 +32,13 @@ model Region {
 model District {
   id          String             @id @default(cuid())
   name        String
+  code        String?
   regionId    String
   description String?
   isActive    Boolean            @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   ambulances  Ambulance[]
@@ -128,16 +135,155 @@ model EquipmentLevel {
 }
 
 model IncidentCategory {
-  id          String             @id @default(cuid())
-  name        String             @unique
-  description String?
-  isActive    Boolean            @default(true)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  requests    EmergencyRequest[]
+  id             String          @id @default(cuid())
+  code           String?         @unique
+  name           String          @unique
+  description    String?
+  isActive       Boolean         @default(true)
+  createdById    String?
+  updatedById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  requests       EmergencyRequest[]
+  emergencyTypes EmergencyType[]
 
   @@index([name])
+  @@index([deletedAt])
   @@map("incident_categories")
+}
+
+model EmergencyType {
+  id                 String            @id @default(cuid())
+  code               String            @unique
+  name               String            @unique
+  incidentCategoryId String?
+  description        String?
+  isActive           Boolean           @default(true)
+  createdById        String?
+  updatedById        String?
+  deletedAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  incidentCategory   IncidentCategory? @relation(fields: [incidentCategoryId], references: [id], onDelete: SetNull)
+
+  @@index([incidentCategoryId])
+  @@index([deletedAt])
+  @@map("emergency_types")
+}
+
+model PriorityLevel {
+  id                 String    @id @default(cuid())
+  code               String    @unique
+  name               String    @unique
+  color              String    @default("#EF4444")
+  responseTargetMins Int?
+  description        String?
+  isActive           Boolean   @default(true)
+  createdById        String?
+  updatedById        String?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("priority_levels")
+}
+
+model AmbulanceType {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("ambulance_types")
+}
+
+model AmbulanceStatusConfig {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("ambulance_statuses")
+}
+
+model HospitalType {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("hospital_types")
+}
+
+model MissionStatusConfig {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([sortOrder])
+  @@index([deletedAt])
+  @@map("mission_statuses")
+}
+
+model CancellationReason {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("cancellation_reasons")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  section     String   @default("general")
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([section])
+  @@map("system_settings")
 }
 
 model User {
@@ -151,9 +297,27 @@ model User {
   activityLogs  ActivityLog[]
   employee      Employee?
   notifications Notification[]
+  notificationPreferences NotificationPreference[]
+  createdNotifications Notification[] @relation("NotificationCreatedBy")
   patient       Patient?
+  userPermissions UserPermission[]
 
   @@map("users")
+}
+
+model UserPermission {
+  id            String    @id @default(cuid())
+  userId        String
+  permissionKey String
+  grantedAt     DateTime  @default(now())
+  grantedById   String?
+  expiresAt     DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_permissions")
 }
 
 model Employee {
@@ -264,27 +428,34 @@ model Patient {
 }
 
 model Ambulance {
-  id                String             @id @default(cuid())
-  ambulanceNumber   String             @unique
-  plateNumber       String             @unique
-  status            AmbulanceStatus    @default(AVAILABLE)
-  location          String?
-  vehicleBrand      String?
-  vehicleModel      String?
-  vehicleType       String?
-  regionId          String?
-  districtId        String?
-  stationId         String?
-  equipmentLevelId  String?
-  crewCount         Int                @default(0)
-  isActive          Boolean            @default(true)
-  fuelLevel         Int?               @default(100)
-  mileage           Int?               @default(0)
-  lastMaintenance   DateTime?
-  nextMaintenance   DateTime?
-  notes             String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                      String             @id @default(cuid())
+  ambulanceNumber         String             @unique
+  plateNumber             String             @unique
+  fleetNumber             String?            @unique
+  status                  AmbulanceStatus    @default(AVAILABLE)
+  location                String?
+  vehicleBrand            String?
+  vehicleModel            String?
+  vehicleType             String?
+  vehicleYear             Int?
+  regionId                String?
+  districtId              String?
+  stationId               String?
+  equipmentLevelId        String?
+  crewCount               Int                @default(0)
+  readinessScore          Int?               @default(100)
+  oxygenAvailable         Boolean            @default(false)
+  defibrillatorAvailable  Boolean            @default(false)
+  registrationExpiry      DateTime?
+  registrationDocumentUrl String?
+  isActive                Boolean            @default(true)
+  fuelLevel               Int?               @default(100)
+  mileage                 Int?               @default(0)
+  lastMaintenance         DateTime?
+  nextMaintenance         DateTime?
+  notes                   String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
   district          District?          @relation(fields: [districtId], references: [id])
   equipmentLevel    EquipmentLevel?    @relation(fields: [equipmentLevelId], references: [id])
   region            Region?            @relation(fields: [regionId], references: [id])
@@ -354,6 +525,7 @@ model EmergencyRequest {
   region               Region?                @relation(fields: [regionId], references: [id])
   statusLogs           EmergencyStatusLog[]
   referrals            Referral?
+  coordinationCases    HospitalCoordinationCase[]
   patientCareRecords   PatientCareRecord[]
   incidentReport       IncidentReport?
 
@@ -404,49 +576,244 @@ model Referral {
 }
 
 model Hospital {
-  id              String             @id @default(cuid())
-  name            String             @unique
-  regionId        String?
-  districtId      String?
-  beds            Int                @default(0)
-  erReady         Boolean            @default(true)
-  status          String             @default("Available")
-  color           String             @default("green")
-  isActive        Boolean            @default(true)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  
-  region          Region?            @relation(fields: [regionId], references: [id])
-  district        District?          @relation(fields: [districtId], references: [id])
-  requests        EmergencyRequest[]
-  referrals       Referral[]
+  id                     String                      @id @default(cuid())
+  hospitalCode           String?                     @unique
+  name                   String                      @unique
+  hospitalType           String?
+  ownershipType          String?
+  regionId               String?
+  districtId             String?
+  address                String?
+  contactPersonName      String?
+  contactPersonRole      String?
+  primaryPhone           String?                     @unique
+  secondaryPhone         String?
+  emergencyHotline       String?
+  contactNumber          String?
+  emergencyContact       String?
+  email                  String?
+  acceptEmergencyCases   Boolean                     @default(false)
+  medicalCapabilities    Json                        @default("[]")
+  beds                   Int                         @default(0)
+  icuTotalBeds           Int                         @default(0)
+  emergencyBeds          Int                         @default(0)
+  occupiedBeds           Int                         @default(0)
+  icuOccupiedBeds        Int                         @default(0)
+  erReady                Boolean                     @default(false)
+  emergencyUnitStatus    String                      @default("Operational")
+  availabilityStatus     String                      @default("Available")
+  operationalStatus      String                      @default("Active")
+  status                 String                      @default("Available")
+  color                  String                      @default("green")
+  isActive               Boolean                     @default(true)
+  lastAvailabilityUpdate DateTime?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  region                 Region?                     @relation(fields: [regionId], references: [id])
+  district               District?                   @relation(fields: [districtId], references: [id])
+  requests               EmergencyRequest[]
+  referrals              Referral[]
+  coordinationCases      HospitalCoordinationCase[]
 
   @@index([regionId])
   @@index([districtId])
   @@index([status])
+  @@index([availabilityStatus])
+  @@index([isActive])
   @@map("hospitals")
 }
 
+enum HospitalCaseStage {
+  INCOMING
+  HANDOVER
+  ACCEPTED
+  REFUSED
+}
+
+enum HospitalCaseStatus {
+  PENDING_REVIEW
+  ACCEPTED
+  REJECTED
+  AWAITING_ARRIVAL
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  UNDER_TREATMENT
+  ADMITTED
+  DISCHARGED
+}
+
+enum HospitalRefusalReason {
+  NO_BEDS
+  ICU_FULL
+  ER_FULL
+  EQUIPMENT_LIMIT
+  STAFF_SHORTAGE
+  HOSPITAL_CLOSED
+  OTHER
+}
+
+model HospitalCoordinationCase {
+  id                   String                 @id @default(cuid())
+  caseNumber           String                 @unique
+  emergencyRequestId   String
+  hospitalId           String
+  stage                HospitalCaseStage      @default(INCOMING)
+  status               HospitalCaseStatus     @default(PENDING_REVIEW)
+  priority             Priority               @default(MEDIUM)
+  eta                  DateTime?
+  arrivalTime          DateTime?
+  handoverStartAt      DateTime?
+  handoverCompletedAt  DateTime?
+  queueNumber          Int?
+  refusalReason        HospitalRefusalReason?
+  refusalNotes         String?
+  receivingStaffName   String?
+  recordedById         String?
+  notes                String?
+  deletedAt            DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  emergencyRequest     EmergencyRequest       @relation(fields: [emergencyRequestId], references: [id], onDelete: Cascade)
+  hospital             Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@index([hospitalId])
+  @@index([emergencyRequestId])
+  @@index([stage])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("hospital_coordination_cases")
+}
+
 model Notification {
-  id            String               @id @default(cuid())
+  id            String                 @id @default(cuid())
   title         String
   message       String
-  type          NotificationType     @default(SYSTEM)
-  priority      NotificationPriority @default(MEDIUM)
-  status        NotificationStatus   @default(UNREAD)
-  userId        String?              // If null, it's for all admins/system-wide
-  targetRole    Role?                // To broadcast to specific roles (ADMIN, EMPLOYEE, etc)
-  actionUrl     String?              // To help frontend navigate to the related record
-  relatedModule String?              // e.g., "EmergencyRequest", "Ambulance"
-  relatedId     String?              // The ID of the related entity
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  user          User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          NotificationType       @default(SYSTEM)
+  category      NotificationCategory   @default(SYSTEM)
+  priority      NotificationPriority   @default(MEDIUM)
+  status        NotificationStatus     @default(UNREAD)
+  userId        String?
+  targetRole    Role?
+  createdById   String?
+  senderName    String?
+  eventKey      String?
+  actionUrl     String?
+  entityType    String?
+  entityId      String?
+  relatedModule String?
+  relatedId     String?
+  readAt        DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  user          User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy     User?                  @relation("NotificationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveryLogs  NotificationDeliveryLog[]
 
   @@index([userId])
+  @@index([createdById])
   @@index([status])
   @@index([type])
+  @@index([category])
+  @@index([priority])
+  @@index([entityType, entityId])
+  @@index([deletedAt])
   @@map("notifications")
+}
+
+enum NotificationCategory {
+  MISSION
+  COMMUNICATION
+  ATTENDANCE
+  HOSPITAL
+  INCIDENT
+  SYSTEM
+  BROADCAST
+}
+
+model NotificationPreference {
+  id        String               @id @default(cuid())
+  userId    String
+  category  NotificationCategory
+  channel   String               @default("IN_APP")
+  enabled   Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, channel])
+  @@index([userId])
+  @@map("notification_settings")
+}
+
+model NotificationTemplate {
+  id        String               @id @default(cuid())
+  eventKey  String               @unique
+  title     String
+  message   String
+  category  NotificationCategory @default(SYSTEM)
+  priority  NotificationPriority @default(MEDIUM)
+  isActive  Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@map("notification_templates")
+}
+
+model BroadcastMessage {
+  id          String               @id @default(cuid())
+  title       String
+  message     String
+  priority    NotificationPriority @default(MEDIUM)
+  createdById String?
+  targetScope String               @default("ALL_FIELD")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([createdAt])
+  @@map("broadcast_messages")
+}
+
+model NotificationDeliveryLog {
+  id             String       @id @default(cuid())
+  notificationId String
+  recipientId    String?
+  channel        String       @default("IN_APP")
+  status         String       @default("SENT")
+  sentAt         DateTime     @default(now())
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@index([recipientId])
+  @@index([status])
+  @@map("notification_delivery_logs")
+}
+
+model Alert {
+  id           String               @id @default(cuid())
+  title        String
+  message      String
+  alertType    String
+  priority     NotificationPriority @default(MEDIUM)
+  status       String               @default("ACTIVE")
+  assignedToId String?
+  relatedModule String?
+  relatedId    String?
+  actionUrl    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  resolvedAt   DateTime?
+  deletedAt    DateTime?
+
+  @@index([status])
+  @@index([priority])
+  @@index([deletedAt])
+  @@map("alerts")
 }
 
 enum NotificationType {

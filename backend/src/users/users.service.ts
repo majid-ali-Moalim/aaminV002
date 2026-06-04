@@ -34,9 +34,15 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
-        employee: true,
+        employee: {
+          include: {
+            employeeRole: true,
+            department: { select: { id: true, name: true } },
+          },
+        },
         patient: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -50,7 +56,12 @@ export class UsersService {
         role: true,
         createdAt: true,
         updatedAt: true,
-        employee: true,
+        employee: {
+          include: {
+            employeeRole: true,
+            department: { select: { id: true, name: true } },
+          },
+        },
         patient: true,
       },
     });

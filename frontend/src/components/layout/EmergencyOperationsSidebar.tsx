@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
 import {
   Siren,
   ChevronDown,
@@ -17,17 +17,29 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  ScrollText,
-  MapPin,
-  Globe,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+
+const SIDEBAR = {
+  bg: '#0B1220',
+  panel: '#111827',
+  primary: '#EF2D2D',
+  text: '#FFFFFF',
+  secondary: '#94A3B8',
+  muted: '#64748B',
+  border: 'rgba(255,255,255,0.06)',
+  success: '#22C55E',
+  warning: '#F59E0B',
+  critical: '#EF4444',
+  info: '#3B82F6',
+} as const
 
 type MenuItem = {
   href: string
   label: string
   icon: LucideIcon
   exact?: boolean
+  accent?: keyof Pick<typeof SIDEBAR, 'success' | 'warning' | 'critical' | 'info'>
 }
 
 type MenuSection = {
@@ -42,14 +54,16 @@ const emergencySections: MenuSection[] = [
     items: [
       { href: '/admin/emergency-requests', label: 'All Emergency Cases', icon: ClipboardList, exact: true },
       { href: '/admin/emergency-requests/new', label: 'New Emergency Case', icon: PlusCircle },
-      { href: '/admin/emergency-requests/pending', label: 'Pending Cases', icon: Clock },
-      { href: '/admin/emergency-requests/triage', label: 'Triage Queue', icon: AlertTriangle },
+      { href: '/admin/emergency-requests/critical', label: 'Critical Cases', icon: AlertCircle, accent: 'critical' },
+      { href: '/admin/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle, accent: 'warning' },
+      { href: '/admin/emergency-requests/pending', label: 'Pending Cases', icon: Clock, accent: 'warning' },
+      { href: '/admin/emergency-requests/triage', label: 'Triage Queue', icon: AlertTriangle, accent: 'warning' },
     ],
   },
   {
     title: 'Dispatch & Missions',
     items: [
-      { href: '/admin/dashboard/live', label: 'Dispatch Board', icon: LayoutGrid },
+      { href: '/admin/dashboard/live', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info' },
       { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
     ],
   },
@@ -57,27 +71,17 @@ const emergencySections: MenuSection[] = [
     title: '',
     workflow: true,
     items: [
-      { href: '/admin/emergency-requests/en-route', label: 'En Route to Scene', icon: Truck },
-      { href: '/admin/emergency-requests/transporting', label: 'Transporting to Hospital', icon: Truck },
+      { href: '/admin/emergency-requests/en-route', label: 'En Route to Scene', icon: Truck, accent: 'info' },
+      { href: '/admin/emergency-requests/transporting', label: 'Transporting to Hospital', icon: Truck, accent: 'info' },
       { href: '/admin/emergency-requests/at-hospital', label: 'Arrived at Hospital', icon: Building2 },
       { href: '/admin/emergency-requests/handover', label: 'Patient Handover', icon: HeartHandshake },
-      { href: '/admin/emergency-requests/completed', label: 'Mission Completed', icon: CheckCircle2 },
+      { href: '/admin/emergency-requests/completed', label: 'Mission Completed', icon: CheckCircle2, accent: 'success' },
     ],
   },
   {
     title: 'Case Priority',
     items: [
-      { href: '/admin/emergency-requests/critical', label: 'Critical Cases', icon: AlertCircle },
-      { href: '/admin/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle },
       { href: '/admin/emergency-requests/cancelled', label: 'Cancelled / Failed', icon: XCircle },
-    ],
-  },
-  {
-    title: 'Monitoring & Tracking',
-    items: [
-      { href: '/admin/emergency-requests/timeline', label: 'Mission Timeline & Logs', icon: ScrollText },
-      { href: '/admin/emergency-requests/live-tracking', label: 'Live Unit Tracking', icon: MapPin },
-      { href: '/admin/emergency-requests/public-tracking', label: 'Public Tracking', icon: Globe },
     ],
   },
 ]
@@ -115,28 +119,22 @@ export default function EmergencyOperationsSidebar({ isOpen, setOpen }: Emergenc
   const isSectionActive = isEmergencyOperationsPath(pathname)
 
   const renderItem = (item: MenuItem, opts?: { workflow?: boolean }) => {
-    const active = isItemActive(pathname, item)
-    const Icon = item.icon
+    const accentColor = item.accent ? SIDEBAR[item.accent] : SIDEBAR.muted
 
     return (
-      <Link
+      <SidebarMenuLink
         key={item.href + item.label}
         href={item.href}
-        className={`flex items-center gap-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 ${
+        label={item.label}
+        icon={item.icon}
+        exact={item.exact}
+        sidebar={SIDEBAR}
+        accentColor={accentColor}
+        className={`flex items-center gap-2.5 py-2 rounded-lg text-[13px] font-medium ${
           opts?.workflow ? 'pl-2 pr-2' : 'px-2.5'
-        } ${
-          active
-            ? 'bg-red-600 text-white font-semibold shadow-sm shadow-red-100'
-            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
         }`}
-      >
-        <Icon
-          className={`shrink-0 ${opts?.workflow ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${
-            active ? 'text-white' : 'text-slate-400'
-          }`}
-        />
-        <span className="truncate leading-tight">{item.label}</span>
-      </Link>
+        iconClassName={`shrink-0 ${opts?.workflow ? 'w-3.5 h-3.5' : 'w-4 h-4'}`}
+      />
     )
   }
 
@@ -145,38 +143,69 @@ export default function EmergencyOperationsSidebar({ isOpen, setOpen }: Emergenc
       <button
         type="button"
         onClick={() => setOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-semibold rounded-lg transition-all duration-200 ${
+        className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-semibold rounded-lg"
+        style={
           isSectionActive
-            ? 'bg-red-600 text-white shadow-md shadow-red-200'
-            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-        }`}
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }
+            : { color: SIDEBAR.secondary }
+        }
+        onMouseEnter={(e) => {
+          if (!isSectionActive) {
+            e.currentTarget.style.backgroundColor = SIDEBAR.panel
+            e.currentTarget.style.color = SIDEBAR.text
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isSectionActive) {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = SIDEBAR.secondary
+          }
+        }}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <Siren className={`w-4 h-4 shrink-0 ${isSectionActive ? 'text-white' : 'text-slate-400'}`} />
+          <Siren
+            className="w-4 h-4 shrink-0"
+            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
           <span className="truncate">Emergency Operations</span>
         </div>
         {isOpen ? (
-          <ChevronDown className={`w-4 h-4 shrink-0 ${isSectionActive ? 'text-white' : 'text-slate-400'}`} />
+          <ChevronDown
+            className="w-4 h-4 shrink-0"
+            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
         ) : (
-          <ChevronRight className={`w-4 h-4 shrink-0 ${isSectionActive ? 'text-white' : 'text-slate-400'}`} />
+          <ChevronRight
+            className="w-4 h-4 shrink-0"
+            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
         )}
       </button>
 
       {isOpen && (
-        <div className="mt-0.5 ml-2 pl-3 border-l border-slate-200 py-2 space-y-4">
+        <div
+          className="mt-0.5 ml-2 pl-3 py-2 space-y-4 rounded-lg"
+          style={{ borderLeft: `1px solid ${SIDEBAR.border}` }}
+        >
           {emergencySections.map((section, idx) => (
             <div key={`${section.title}-${idx}`}>
               {section.title && (
                 <div className="flex items-center gap-2 px-1 mb-2">
-                  <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400 whitespace-nowrap">
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-[0.18em] whitespace-nowrap"
+                    style={{ color: SIDEBAR.muted }}
+                  >
                     {section.title}
                   </span>
-                  <div className="flex-1 h-px bg-slate-200" />
+                  <div className="flex-1 h-px" style={{ backgroundColor: SIDEBAR.border }} />
                 </div>
               )}
 
               {section.workflow ? (
-                <div className="ml-1 pl-3 border-l border-dashed border-slate-300 space-y-0.5">
+                <div
+                  className="ml-1 pl-3 space-y-0.5"
+                  style={{ borderLeft: `1px dashed rgba(255,255,255,0.12)` }}
+                >
                   {section.items.map((item) => renderItem(item, { workflow: true }))}
                 </div>
               ) : (

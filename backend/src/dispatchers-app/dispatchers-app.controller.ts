@@ -39,6 +39,12 @@ export class DispatchersAppController {
     return this.service.getDashboardStats(req.user.sub);
   }
 
+  @Get('dashboard/overview')
+  @ApiOperation({ summary: 'Full dashboard overview with KPIs, lists, and activity feed' })
+  getDashboardOverview(@Request() req) {
+    return this.service.getDashboardOverview(req.user.sub);
+  }
+
   @Get('shift')
   getShift(@Request() req) {
     return this.service.getShiftStatus(req.user.sub);
@@ -84,5 +90,30 @@ export class DispatchersAppController {
   @Get('staff')
   getStaff() {
     return this.service.getStaffOverview();
+  }
+
+  @Get('emergencies')
+  getEmergencies(@Query('view') view = 'all-cases') {
+    return this.service.getEmergenciesByView(view);
+  }
+
+  @Get('ambulances')
+  getAmbulances(@Query('view') view = 'all') {
+    return this.service.getAmbulancesByView(view);
+  }
+
+  @Get('crew')
+  getCrew(@Query('view') view = 'drivers') {
+    return this.service.getCrewByView(view);
+  }
+
+  @Get('hospitals')
+  getHospitals(@Query('view') view = 'directory') {
+    return this.service.getHospitalsByView(view);
+  }
+
+  @Get('alerts/feed')
+  getAlerts(@Query('view') view = 'critical') {
+    return this.service.getAlertsByView(view);
   }
 }

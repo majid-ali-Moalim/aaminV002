@@ -1,257 +1,366 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  Siren, 
-  Truck, 
-  MapPin, 
-  Clock, 
+import {
+  Siren,
+  Truck,
+  MapPin,
   RefreshCw,
   Search,
-  ArrowRight,
-  Shield,
   Activity,
   Building2,
-  Navigation,
-  CheckCircle2,
-  Navigation2
+  Navigation2,
+  User,
+  ExternalLink,
+  ChevronDown,
+  Filter,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
-import { formatDistanceToNow } from 'date-fns'
-
-// Shared Components
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
-import StatusUpdateModal from '@/components/features/emergency/StatusUpdateModal'
+import {
+  ACTIVE_MISSION_STATUSES,
+  MISSION_PHASE_FILTERS,
+  matchesMissionPhaseFilter,
+  type MissionPhaseFilter,
+} from '@/components/features/emergency/missionStatusOptions'
+
+const PROGRESS_STEPS = [
+  { ids: ['ASSIGNED'], icon: Siren, label: 'Assigned' },
+  { ids: ['DISPATCHED', 'EN_ROUTE'], icon: Navigation2, label: 'En route' },
+  { ids: ['ARRIVED_SCENE', 'PATIENT_STABILIZED'], icon: MapPin, label: 'On scene' },
+  { ids: ['TRANSPORTING'], icon: Truck, label: 'Transit' },
+  { ids: ['ARRIVED_HOSPITAL'], icon: Building2, label: 'Hospital' },
+]
+
+function statusStepIndex(status: string) {
+  for (let i = 0; i < PROGRESS_STEPS.length; i++) {
+    if (PROGRESS_STEPS[i].ids.includes(status)) return i
+  }
+  return -1
+}
+
+function getProgress(status: string) {
+  const idx = statusStepIndex(status)
+  if (idx < 0) return 10
+  return ((idx + 1) / PROGRESS_STEPS.length) * 100
+}
 
 export default function ActiveMissionsPage() {
   const router = useRouter()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [phaseFilter, setPhaseFilter] = useState<MissionPhaseFilter>('ALL')
 
-  // Modal states
-  const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
-
-  const activeStatuses = ['ON_THE_WAY', 'ARRIVED', 'PICKED_UP', 'TRANSPORTING', 'AT_HOSPITAL']
-
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async (showLoader = false) => {
     try {
-      if (requests.length === 0) setIsLoading(true)
+      if (showLoader) setIsLoading(true)
       const data = await emergencyRequestsService.getAll()
-      setRequests(data.filter(r => activeStatuses.includes(r.status)))
+      setRequests(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Failed to fetch active missions:', err)
     } finally {
       setIsLoading(false)
     }
-  }
-
-  useEffect(() => {
-    fetchRequests()
-    const interval = setInterval(fetchRequests, 8000)
-    return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    fetchRequests(true)
+    const interval = setInterval(() => fetchRequests(false), 8000)
+    return () => clearInterval(interval)
+  }, [fetchRequests])
+
+  const phaseCounts = useMemo(() => {
+    const counts: Record<MissionPhaseFilter, number> = {
+      ALL: 0,
+      EN_ROUTE: 0,
+      TRANSPORTING: 0,
+      ARRIVED_HOSPITAL: 0,
+      PATIENT_STABILIZED: 0,
+      COMPLETED: 0,
+    }
+    for (const request of requests) {
+      for (const filter of MISSION_PHASE_FILTERS) {
+        if (matchesMissionPhaseFilter(request.status, filter.value)) {
+          counts[filter.value]++
+        }
+      }
+    }
+    return counts
+  }, [requests])
+
+  const filteredRequests = requests
+    .filter((request) => matchesMissionPhaseFilter(request.status, phaseFilter))
+    .filter((request) => {
+      const searchTarget =
+        `${request.trackingCode} ${request.patient?.fullName || ''} ${request.pickupLocation} ${request.ambulance?.ambulanceNumber || ''}`.toLowerCase()
+      return searchTerm === '' || searchTarget.includes(searchTerm.toLowerCase())
+    })
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+
   const stats = {
-    total: requests.length,
-    active: requests.length,
+    total: filteredRequests.length,
+    active: filteredRequests.filter((r) => ACTIVE_MISSION_STATUSES.includes(r.status)).length,
     pending: 0,
-    critical: requests.filter(r => r.priority === 'CRITICAL').length,
+    critical: filteredRequests.filter((r) => r.priority === 'CRITICAL').length,
   }
 
-  const filteredRequests = requests.filter(request => {
-    const searchTarget = `${request.trackingCode} ${request.patient?.fullName || ''} ${request.pickupLocation} ${request.ambulance?.ambulanceNumber || ''}`.toLowerCase()
-    return searchTerm === '' || searchTarget.includes(searchTerm.toLowerCase())
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-  const openUpdateModal = (request: EmergencyRequest) => {
-    setSelectedRequest(request)
-    setIsUpdateModalOpen(true)
-  }
-
-  const getProgress = (status: string) => {
-    const stages = ['ON_THE_WAY', 'ARRIVED', 'PICKED_UP', 'TRANSPORTING', 'AT_HOSPITAL']
-    const index = stages.indexOf(status)
-    return ((index + 1) / stages.length) * 100
-  }
+  const activeFilterLabel =
+    MISSION_PHASE_FILTERS.find((f) => f.value === phaseFilter)?.label ?? 'All Active'
 
   return (
-    <div className="bg-[#0F172A] min-h-screen font-sans">
-      <header className="bg-[#1E293B] text-white px-8 py-5 flex items-center justify-between shadow-2xl sticky top-0 z-50 border-b-2 border-indigo-500">
-        <div className="flex items-center gap-4">
-          <div className="bg-indigo-600 p-2 border border-indigo-400">
-            <Siren className="w-8 h-8 text-white animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black uppercase tracking-tight italic">Active Missions</h1>
-            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em] leading-none">Real-Time Deployment Grid</p>
-          </div>
+    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-8 text-white shadow-xl">
+        <div className="absolute top-0 right-0 p-8 opacity-10">
+          <Siren className="w-32 h-32" />
         </div>
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            onClick={fetchRequests}
-            className="bg-transparent border-gray-700 text-white hover:bg-gray-800 rounded-none h-12 uppercase font-black text-xs"
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">
+              Emergency Operations
+            </p>
+            <h1 className="text-3xl font-black tracking-tight">Active Missions</h1>
+            <p className="text-red-100/80 mt-2 max-w-2xl">
+              Live deployment grid — filter by mission phase. Status updates are handled by drivers.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => fetchRequests(true)}
+            className="rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 shrink-0"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            SYNCH GRID
+            Refresh grid
           </Button>
         </div>
-      </header>
+      </div>
 
-      <main className="p-8 max-w-[1600px] mx-auto space-y-8 text-white">
-        <EmergencyStatsBar stats={stats} />
+      <EmergencyStatsBar stats={stats} />
 
-        <div className="bg-[#1E293B] p-4 shadow-lg flex gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="SEARCH LIVE MISSIONS..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 h-12 bg-[#0F172A] border border-gray-700 text-white font-black text-sm uppercase tracking-wider focus:outline-none focus:border-indigo-500 rounded-none placeholder:text-gray-700 transition-colors"
-            />
-          </div>
+      {/* Phase filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {MISSION_PHASE_FILTERS.map((filter) => {
+          const Icon = filter.icon
+          const isActive = phaseFilter === filter.value
+          const count = phaseCounts[filter.value]
+
+          return (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setPhaseFilter(filter.value)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                isActive
+                  ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-200'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-red-200 hover:text-red-600'
+              }`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span>{filter.label}</span>
+              <span
+                className={`min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Search + dropdown filter */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by code, patient, location, unit…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300"
+          />
         </div>
+        <div className="relative sm:w-72 shrink-0">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <select
+            value={phaseFilter}
+            onChange={(e) => setPhaseFilter(e.target.value as MissionPhaseFilter)}
+            className="w-full appearance-none pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300"
+          >
+            {MISSION_PHASE_FILTERS.map((filter) => (
+              <option key={filter.value} value={filter.value}>
+                {filter.label} ({phaseCounts[filter.value]})
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          {isLoading && requests.length === 0 ? (
-            <div className="py-20 text-center">
-              <RefreshCw className="w-10 h-10 animate-spin mx-auto text-indigo-500 mb-4" />
-              <p className="text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Interpreting Satellite Data...</p>
-            </div>
-          ) : filteredRequests.length === 0 ? (
-            <div className="py-20 text-center bg-[#1E293B]/50 border-2 border-dashed border-gray-700">
-              <p className="text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Sector Clear: No active missions</p>
-            </div>
-          ) : filteredRequests.map((request) => (
-            <div key={request.id} className="bg-[#1E293B]/80 border-2 border-gray-700 shadow-xl overflow-hidden group hover:border-indigo-500 transition-all duration-300">
-              <div className="flex flex-col md:flex-row">
-                {/* Side Tag */}
-                <div className="w-2 bg-indigo-500" />
-                
-                {/* Identity & Status */}
-                <div className="p-6 md:w-80 border-r border-gray-700 bg-[#0F172A]/40">
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-start">
+      {/* Mission rows */}
+      <div className="grid grid-cols-1 gap-5">
+        {isLoading && requests.length === 0 ? (
+          <div className="py-20 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
+            <RefreshCw className="w-10 h-10 animate-spin mx-auto text-red-500 mb-4" />
+            <p className="text-sm font-semibold text-slate-500">Loading active missions…</p>
+          </div>
+        ) : filteredRequests.length === 0 ? (
+          <div className="py-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
+            <Activity className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="font-semibold text-slate-700">No missions in this view</p>
+            <p className="text-sm text-slate-500 mt-1">
+              No cases match &quot;{activeFilterLabel}&quot;
+              {searchTerm ? ` for "${searchTerm}"` : ''}
+            </p>
+          </div>
+        ) : (
+          filteredRequests.map((request) => {
+            const currentStep = statusStepIndex(request.status)
+            const elapsedMin = Math.floor(
+              (Date.now() - new Date(request.createdAt).getTime()) / 60000,
+            )
+
+            return (
+              <div
+                key={request.id}
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-red-100 transition-all duration-300"
+              >
+                <div className="flex flex-col lg:flex-row">
+                  {/* Identity column */}
+                  <div className="lg:w-72 p-5 border-b lg:border-b-0 lg:border-r border-slate-100 bg-slate-50/50 shrink-0">
+                    <div className="flex justify-between items-start mb-3">
                       <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">Incident Log</p>
-                        <p className="text-xl font-black text-white mt-1">{request.trackingCode}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Tracking code
+                        </p>
+                        <p className="text-xl font-black text-red-600">{request.trackingCode}</p>
                       </div>
                       <PriorityBadge priority={request.priority} size="sm" />
                     </div>
                     <StatusBadge status={request.status} />
-                    <div className="pt-4 border-t border-gray-800">
-                       <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Active Duration</p>
-                       <p className="text-lg font-black text-blue-400 font-mono">
-                          {Math.floor((Date.now() - new Date(request.createdAt).getTime()) / 60000)}m 
-                          <span className="text-[10px] ml-1">ELAPSED</span>
-                       </p>
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Mission duration
+                      </p>
+                      <p className="text-lg font-black text-slate-800">
+                        {elapsedMin}
+                        <span className="text-sm font-semibold text-slate-500 ml-1">min</span>
+                      </p>
                     </div>
+                    {request.patient?.fullName && (
+                      <p className="text-xs text-slate-600 mt-2 flex items-center gap-1 truncate">
+                        <User className="w-3 h-3 shrink-0" />
+                        {request.patient.fullName}
+                      </p>
+                    )}
                   </div>
-                </div>
 
-                {/* Progress & Intel */}
-                <div className="flex-1 p-6 space-y-10">
-                  {/* Progress Matrix */}
-                  <div className="relative px-4">
-                    <div className="h-2 bg-gray-800 w-full absolute top-1/2 -translate-y-1/2 left-0" />
-                    <div 
-                      className="h-2 bg-indigo-500 absolute top-1/2 -translate-y-1/2 left-0 transition-all duration-1000 origin-left shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
-                      style={{ width: `${getProgress(request.status)}%` }}
-                    />
-                    <div className="relative z-10 flex justify-between">
-                       {[
-                         { id: 'ON_THE_WAY', icon: Navigation2, label: 'Way' },
-                         { id: 'ARRIVED', icon: MapPin, label: 'Scene' },
-                         { id: 'PICKED_UP', icon: Activity, label: 'Patient' },
-                         { id: 'TRANSPORTING', icon: Truck, label: 'Transit' },
-                         { id: 'AT_HOSPITAL', icon: Building2, label: 'Hospital' }
-                       ].map((step) => {
-                         const Icon = step.icon;
-                         const isPassed = activeStatuses.indexOf(request.status) >= activeStatuses.indexOf(step.id);
-                         const isCurrent = request.status === step.id;
-                         
-                         return (
-                           <div key={step.id} className="flex flex-col items-center">
-                              <div className={`w-10 h-10 border-2 flex items-center justify-center transition-all ${
-                                isCurrent ? 'bg-indigo-600 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-110' : 
-                                isPassed ? 'bg-[#1E293B] border-indigo-600 text-indigo-400' : 
-                                'bg-[#0F172A] border-gray-800 text-gray-700'
-                              }`}>
-                                <Icon className="w-5 h-5" />
+                  {/* Progress & details */}
+                  <div className="flex-1 p-5 space-y-6 min-w-0">
+                    <div className="relative px-2 pt-2">
+                      <div className="h-1.5 bg-slate-100 rounded-full w-full absolute top-6 left-0" />
+                      <div
+                        className="h-1.5 bg-gradient-to-r from-red-500 to-red-600 rounded-full absolute top-6 left-0 transition-all duration-700"
+                        style={{ width: `${getProgress(request.status)}%` }}
+                      />
+                      <div className="relative z-10 flex justify-between">
+                        {PROGRESS_STEPS.map((step, stepIdx) => {
+                          const Icon = step.icon
+                          const isPassed = currentStep >= stepIdx
+                          const isCurrent = currentStep === stepIdx
+
+                          return (
+                            <div key={step.label} className="flex flex-col items-center">
+                              <div
+                                className={`w-9 h-9 rounded-xl flex items-center justify-center border-2 transition-all ${
+                                  isCurrent
+                                    ? 'bg-red-600 border-red-500 text-white shadow-md shadow-red-200 scale-110'
+                                    : isPassed
+                                      ? 'bg-red-50 border-red-200 text-red-600'
+                                      : 'bg-white border-slate-200 text-slate-300'
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
                               </div>
-                              <span className={`text-[9px] font-black uppercase tracking-widest mt-2 ${
-                                isCurrent ? 'text-white' : isPassed ? 'text-indigo-400' : 'text-gray-700'
-                              }`}>
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wide mt-2 text-center max-w-[52px] leading-tight ${
+                                  isCurrent
+                                    ? 'text-red-600'
+                                    : isPassed
+                                      ? 'text-slate-600'
+                                      : 'text-slate-400'
+                                }`}
+                              >
                                 {step.label}
                               </span>
-                           </div>
-                         );
-                       })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Pickup
+                        </p>
+                        <p className="text-xs font-semibold text-slate-700 mt-1 line-clamp-2">
+                          {request.pickupLocation}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Destination
+                        </p>
+                        <p className="text-xs font-semibold text-slate-700 mt-1 line-clamp-2">
+                          {request.destination || 'TBD'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Unit
+                        </p>
+                        <p className="text-xs font-bold text-red-600 mt-1">
+                          {request.ambulance?.ambulanceNumber || 'Unassigned'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Driver
+                        </p>
+                        <p className="text-xs font-semibold text-slate-700 mt-1">
+                          {request.driver
+                            ? `${request.driver.firstName} ${request.driver.lastName}`
+                            : '—'}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Incident Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Incident Location</p>
-                      <p className="text-xs font-bold text-gray-300 mt-1 uppercase truncate">{request.pickupLocation}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Medical Control</p>
-                      <p className="text-xs font-bold text-gray-300 mt-1 uppercase truncate">{request.destination || 'ALLOCATING...'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Unit In-Charge</p>
-                      <p className="text-xs font-bold text-indigo-400 mt-1 uppercase">{request.ambulance?.ambulanceNumber || 'V-TBD'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Operator</p>
-                      <p className="text-xs font-bold font-mono text-gray-400 mt-1 uppercase">{request.driver?.firstName || 'O-TBD'}</p>
-                    </div>
+                  {/* Actions — view only */}
+                  <div className="p-5 lg:w-40 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push(`/admin/emergency-requests/${request.id}`)}
+                      className="w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open case
+                    </Button>
                   </div>
-                </div>
-
-                {/* Primary Actions */}
-                <div className="p-6 md:w-48 border-l border-gray-700 bg-gray-900/40 flex items-center justify-center">
-                  <Button 
-                    onClick={() => openUpdateModal(request)}
-                    className="w-full h-16 bg-transparent hover:bg-white hover:text-[#0F172A] text-white font-black uppercase tracking-[0.2em] text-xs rounded-none border-2 border-white transition-all flex flex-col items-center justify-center gap-1 group shadow-[inset_0_-4px_0_rgba(255,255,255,0.1)]"
-                  >
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    <span>UPDATE</span>
-                  </Button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </main>
-
-      {isUpdateModalOpen && selectedRequest && (
-        <StatusUpdateModal 
-          request={selectedRequest} 
-          onClose={() => setIsUpdateModalOpen(false)} 
-          onSuccess={fetchRequests} 
-        />
-      )}
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
-      `}</style>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }

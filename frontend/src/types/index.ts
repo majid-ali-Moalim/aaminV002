@@ -206,12 +206,14 @@ export interface Ambulance {
   id: string;
   ambulanceNumber: string;
   plateNumber: string;
+  fleetNumber?: string | null;
   status: AmbulanceStatus;
   location?: string | null;
   
   vehicleBrand?: string | null;
   vehicleModel?: string | null;
   vehicleType?: string | null;
+  vehicleYear?: number | null;
 
   regionId?: string | null;
   districtId?: string | null;
@@ -219,6 +221,11 @@ export interface Ambulance {
   equipmentLevelId?: string | null;
 
   crewCount: number;
+  readinessScore?: number | null;
+  oxygenAvailable?: boolean;
+  defibrillatorAvailable?: boolean;
+  registrationExpiry?: string | null;
+  registrationDocumentUrl?: string | null;
   isActive: boolean;
   
   fuelLevel?: number | null;

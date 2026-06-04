@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
+import { getPostLoginPath } from '@/lib/authRedirect'
 import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -11,7 +13,14 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { login } = useAuth()
+  const { login, user, token, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!loading && user && token) {
+      router.replace(getPostLoginPath(user))
+    }
+  }, [loading, user, token, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

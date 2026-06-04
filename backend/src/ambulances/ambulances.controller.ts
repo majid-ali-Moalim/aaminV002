@@ -83,6 +83,16 @@ export class AmbulancesController {
     return this.ambulancesService.assignDriver(id, body.driverEmployeeId);
   }
 
+  @Patch(':id/assign-nurse')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Assign nurse to ambulance' })
+  assignNurse(@Param('id') id: string, @Body() body: { nurseEmployeeId: string }) {
+    if (!body.nurseEmployeeId) {
+      throw new BadRequestException('nurseEmployeeId is required');
+    }
+    return this.ambulancesService.assignNurse(id, body.nurseEmployeeId);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete ambulance' })

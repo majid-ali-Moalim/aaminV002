@@ -2,24 +2,33 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
 import { useDriverStore } from '@/lib/stores/driverStore'
-import { driverAuthApi, driverProfileApi } from '@/lib/driverApi'
+import { driverProfileApi } from '@/lib/driverApi'
+import {
+  clearAuthTokenCookie,
+  isDriverUser,
+  syncRoleStores,
+} from '@/lib/authRedirect'
 import toast from 'react-hot-toast'
-import { AlertCircle, Eye, EyeOff, Loader2, Shield, Ambulance, Phone } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, Loader2, Shield, Truck, Phone } from 'lucide-react'
 
 export default function DriverLoginPage() {
   const router = useRouter()
-  const { setAuth, setProfile, isAuthenticated } = useDriverStore()
+  const { login, user, token, loading: authLoading } = useAuth()
+  const { setProfile } = useDriverStore()
 
   const [form, setForm] = useState({ username: '', password: '' })
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Already logged in → go straight to dashboard
   useEffect(() => {
-    if (isAuthenticated) router.replace('/driver')
-  }, [isAuthenticated, router])
+    if (authLoading) return
+    if (token && user && isDriverUser(user)) {
+      router.replace('/driver')
+    }
+  }, [authLoading, token, user, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
@@ -34,27 +43,33 @@ export default function DriverLoginPage() {
     setError('')
 
     try {
-      const data = await driverAuthApi.login(form.username.trim(), form.password)
+      await login(form.username.trim(), form.password)
 
-      // Verify role — only EMPLOYEE accounts can access the driver portal
-      if (data.user?.role !== 'EMPLOYEE') {
+      const stored = localStorage.getItem('user')
+      const loggedIn = stored ? JSON.parse(stored) : null
+      const accessToken = localStorage.getItem('token')
+
+      if (!isDriverUser(loggedIn)) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        clearAuthTokenCookie()
         setError('Access denied. Driver accounts only.')
         setLoading(false)
         return
       }
 
-      // Persist auth in driverStore (Zustand persist writes to localStorage)
-      setAuth(data.access_token, data.user.id)
+      if (accessToken && loggedIn?.id) {
+        await syncRoleStores(accessToken, loggedIn)
+      }
 
-      // Fetch driver profile (token is now stored — driverApi picks it up)
       try {
         const profile = await driverProfileApi.get()
         setProfile(profile)
       } catch (_) {
-        // Non-fatal — dashboard will retry
+        /* dashboard will retry */
       }
 
-      toast.success('Welcome back! Drive safe. 🚑', { duration: 3000 })
+      toast.success('Welcome back! Drive safe.', { duration: 3000 })
       router.replace('/driver')
     } catch (err: any) {
       const msg =
@@ -69,7 +84,6 @@ export default function DriverLoginPage() {
 
   return (
     <div className="dl-root">
-      {/* Animated background */}
       <div className="dl-bg">
         <div className="dl-bg-orb dl-bg-orb-1" />
         <div className="dl-bg-orb dl-bg-orb-2" />
@@ -77,7 +91,6 @@ export default function DriverLoginPage() {
       </div>
 
       <div className="dl-container">
-        {/* Brand */}
         <div className="dl-brand">
           <div className="dl-emblem">
             <span className="dl-cross">✚</span>
@@ -87,12 +100,11 @@ export default function DriverLoginPage() {
             <p className="dl-subtitle">Emergency Ambulance Dispatch System</p>
           </div>
           <div className="dl-role-chip">
-            <Ambulance size={14} />
+            <Truck size={14} />
             <span>Driver Portal</span>
           </div>
         </div>
 
-        {/* Card */}
         <div className="dl-card">
           <div className="dl-card-header">
             <div className="dl-shield">
@@ -104,7 +116,6 @@ export default function DriverLoginPage() {
             </div>
           </div>
 
-          {/* Error */}
           {error && (
             <div className="dl-error" role="alert">
               <AlertCircle size={15} />
@@ -113,7 +124,6 @@ export default function DriverLoginPage() {
           )}
 
           <form onSubmit={handleSubmit} noValidate className="dl-form">
-            {/* Username */}
             <div className="dl-field">
               <label className="dl-label" htmlFor="driver-username">
                 Employee ID / Phone / Email
@@ -132,7 +142,6 @@ export default function DriverLoginPage() {
               />
             </div>
 
-            {/* Password */}
             <div className="dl-field">
               <label className="dl-label" htmlFor="driver-password">
                 Password
@@ -161,7 +170,6 @@ export default function DriverLoginPage() {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               id="driver-login-btn"
@@ -180,7 +188,6 @@ export default function DriverLoginPage() {
           </form>
         </div>
 
-        {/* Footer */}
         <div className="dl-footer">
           <Phone size={13} />
           <span>Emergency dispatch line: <strong>+252 XX XXXXXXX</strong></span>

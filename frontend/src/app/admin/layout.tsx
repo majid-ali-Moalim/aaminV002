@@ -3,10 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { Role } from '@/types'
+import { getPostLoginPath, isAdminUser } from '@/lib/authRedirect'
 import AdminSidebar from '@/components/layout/AdminSidebar'
 import AdminTopBar from '@/components/layout/AdminTopBar'
 import LiveToastContainer from '@/components/notifications/LiveToastContainer'
+import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
 
 export default function AdminLayout({
   children,
@@ -24,13 +25,13 @@ export default function AdminLayout({
     if (!loading) {
       if (!user) {
         router.push('/login')
-      } else if (user.role !== Role.ADMIN) {
-        router.push('/unauthorized')
+      } else if (!isAdminUser(user)) {
+        router.replace(getPostLoginPath(user))
       }
     }
   }, [user, loading, router])
 
-  if (loading) {
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -41,7 +42,7 @@ export default function AdminLayout({
     )
   }
 
-  if (!user || user.role !== Role.ADMIN) {
+  if (!user || !isAdminUser(user)) {
     return null
   }
 
@@ -56,15 +57,16 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <LiveToastContainer />
-      <AdminSidebar />
-      <div className="ml-64">
-        <AdminTopBar />
-        <main className="p-6">
-          {children}
-        </main>
+    <OptimisticNavProvider>
+      <div className="min-h-screen bg-gray-50">
+        <LiveToastContainer />
+        <NavigationProgressBar />
+        <AdminSidebar />
+        <div className="ml-64">
+          <AdminTopBar />
+          <main className="p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </OptimisticNavProvider>
   )
 }

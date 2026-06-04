@@ -55,6 +55,10 @@ export const dispatcherDashboardApi = {
     const res = await createDispatcherApi().get('/dispatcher-app/dashboard')
     return res.data
   },
+  getOverview: async () => {
+    const res = await createDispatcherApi().get('/dispatcher-app/dashboard/overview')
+    return res.data
+  },
   getShift: async () => {
     const res = await createDispatcherApi().get('/dispatcher-app/shift')
     return res.data
@@ -89,6 +93,26 @@ export const dispatcherDashboardApi = {
   },
   getStaff: async () => {
     const res = await createDispatcherApi().get('/dispatcher-app/staff')
+    return res.data
+  },
+  getEmergencies: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/emergencies', { params: { view } })
+    return res.data
+  },
+  getAmbulances: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/ambulances', { params: { view } })
+    return res.data
+  },
+  getCrew: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/crew', { params: { view } })
+    return res.data
+  },
+  getHospitals: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/hospitals', { params: { view } })
+    return res.data
+  },
+  getAlertsFeed: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/alerts/feed', { params: { view } })
     return res.data
   },
 }

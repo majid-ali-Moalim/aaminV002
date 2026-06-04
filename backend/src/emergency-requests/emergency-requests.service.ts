@@ -19,6 +19,15 @@ export class EmergencyRequestsService {
     private auditLog: AuditLogService
   ) {}
 
+  private async teamUserIds(requestId: string): Promise<string[]> {
+    const req = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      include: { driver: true, nurse: true },
+    });
+    if (!req) return [];
+    return [req.driver?.userId, req.nurse?.userId].filter(Boolean) as string[];
+  }
+
   async create(data: any) {
     try {
       // Robust Recursion: Sanitize only non-null objects
@@ -164,39 +173,24 @@ export class EmergencyRequestsService {
         include: { patient: true, driver: true, nurse: true }
       });
 
-      await this.notifications.create({
-        title: 'New Emergency Request',
-        message: `Request ${request.trackingCode} created for patient ${request.patient.fullName} at ${request.pickupLocation}`,
+      const assignedAtCreate = [request.driver?.userId, request.nurse?.userId].filter(Boolean) as string[];
+
+      await this.notifications.dispatchEvent({
+        eventKey: 'EMERGENCY_CREATED',
+        title: 'New Emergency Case',
+        message: `Case ${request.trackingCode} created for ${request.patient.fullName} at ${request.pickupLocation}`,
         type: 'EMERGENCY',
+        category: 'MISSION',
         priority: request.priority as any,
-        relatedModule: 'EmergencyRequest',
-        relatedId: request.id,
-        actionUrl: `/admin/emergency-requests?id=${request.id}`
+        entityType: 'EmergencyRequest',
+        entityId: request.id,
+        redirectUrl: `/admin/emergency-requests/active?id=${request.id}`,
+        context: {
+          createdById: data.createdByUserId ?? data.dispatcherUserId,
+          assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
+          includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
+        },
       });
-
-      if (request.driver?.userId) {
-        await this.notifications.create({
-          title: 'New Emergency Assignment',
-          message: `You have been assigned as Driver to request ${request.trackingCode}. Please prepare for dispatch.`,
-          type: 'EMERGENCY',
-          priority: request.priority as any,
-          userId: request.driver.userId,
-          relatedModule: 'EmergencyRequest',
-          relatedId: request.id,
-        });
-      }
-
-      if (request.nurse?.userId) {
-        await this.notifications.create({
-          title: 'New Emergency Assignment',
-          message: `You have been assigned as Nurse to request ${request.trackingCode}. Please prepare for clinical support.`,
-          type: 'EMERGENCY',
-          priority: request.priority as any,
-          userId: request.nurse.userId,
-          relatedModule: 'EmergencyRequest',
-          relatedId: request.id,
-        });
-      }
 
       return request;
     } catch (error: any) {
@@ -412,39 +406,24 @@ export class EmergencyRequestsService {
       },
     });
 
-    await this.notifications.create({
-      title: 'Emergency Team Assigned',
-      message: `Ambulance ${result.ambulance?.ambulanceNumber} and team assigned to ${result.trackingCode}`,
+    const assignedIds = [result.driver?.userId, result.nurse?.userId].filter(Boolean) as string[];
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_ASSIGNED',
+      title: 'Mission Assigned',
+      message: `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}`,
       type: 'EMERGENCY',
+      category: 'MISSION',
       priority: result.priority as any,
-      relatedModule: 'EmergencyRequest',
-      relatedId: result.id,
-      actionUrl: `/admin/emergency-requests?id=${result.id}`,
+      entityType: 'EmergencyRequest',
+      entityId: result.id,
+      redirectUrl: `/admin/emergency-requests/active?id=${result.id}`,
+      context: {
+        createdById: (data as any).createdByUserId,
+        assignedUserIds: assignedIds,
+        includeEmployeeRoles: ['Driver', 'Nurse'],
+      },
     });
-
-    if (result.driver?.userId) {
-      await this.notifications.create({
-        title: 'New Emergency Assignment',
-        message: `You have been assigned as Driver to request ${result.trackingCode}. Please prepare for dispatch.`,
-        type: 'EMERGENCY',
-        priority: result.priority as any,
-        userId: result.driver.userId,
-        relatedModule: 'EmergencyRequest',
-        relatedId: result.id,
-      });
-    }
-
-    if (result.nurse?.userId) {
-      await this.notifications.create({
-        title: 'New Emergency Assignment',
-        message: `You have been assigned as Nurse to request ${result.trackingCode}. Please prepare for clinical support.`,
-        type: 'EMERGENCY',
-        priority: result.priority as any,
-        userId: result.nurse.userId,
-        relatedModule: 'EmergencyRequest',
-        relatedId: result.id,
-      });
-    }
 
     // Emit real-time tracking update
     const trackingData = await this.trackingService.findByCodeOrPhone(result.trackingCode);
@@ -498,25 +477,36 @@ export class EmergencyRequestsService {
       }
     });
 
-    await this.notifications.create({
-      title: 'Emergency Status Update',
-      message: `Request ${existing.trackingCode} status changed to ${status}`,
-      type: 'EMERGENCY',
-      priority: existing.priority as any,
-      relatedModule: 'EmergencyRequest',
-      relatedId: existing.id,
-      actionUrl: `/admin/emergency-requests?id=${existing.id}`
-    });
+    const assignedIds = await this.teamUserIds(existing.id);
+    const actorUserId = employeeId
+      ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
+      : undefined;
 
     if (status === 'COMPLETED') {
-      await this.notifications.broadcast({
-        title: 'Emergency Completed',
-        message: `Emergency response ${existing.trackingCode} is successfully completed.`,
+      await this.notifications.dispatchEvent({
+        eventKey: 'MISSION_COMPLETED',
+        title: 'Mission Completed',
+        message: `Case ${existing.trackingCode} has been completed successfully.`,
         type: 'EMERGENCY',
-        priority: 'MEDIUM',
-        targetRole: 'ADMIN',
-        relatedModule: 'EmergencyRequest',
-        relatedId: existing.id,
+        category: 'MISSION',
+        priority: existing.priority as any,
+        entityType: 'EmergencyRequest',
+        entityId: existing.id,
+        redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+        context: { createdById: actorUserId },
+      });
+    } else {
+      await this.notifications.dispatchEvent({
+        eventKey: 'MISSION_UPDATED',
+        title: 'Mission Updated',
+        message: `Case ${existing.trackingCode} status changed to ${status}`,
+        type: 'EMERGENCY',
+        category: 'MISSION',
+        priority: existing.priority as any,
+        entityType: 'EmergencyRequest',
+        entityId: existing.id,
+        redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+        context: { createdById: actorUserId, assignedUserIds: assignedIds },
       });
     }
 
@@ -560,14 +550,22 @@ export class EmergencyRequestsService {
       }
     });
 
-    await this.notifications.create({
-      title: 'Emergency Cancelled',
-      message: `Request ${existing.trackingCode} was cancelled. Reason: ${reason}`,
+    const assignedIds = await this.teamUserIds(existing.id);
+    const actorUserId = employeeId
+      ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
+      : undefined;
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_CANCELLED',
+      title: 'Mission Cancelled',
+      message: `Case ${existing.trackingCode} was cancelled. Reason: ${reason}`,
       type: 'EMERGENCY',
+      category: 'MISSION',
       priority: existing.priority as any,
-      relatedModule: 'EmergencyRequest',
-      relatedId: existing.id,
-      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+      context: { createdById: actorUserId, assignedUserIds: assignedIds },
     });
 
     // Emit real-time tracking update
@@ -609,14 +607,22 @@ export class EmergencyRequestsService {
       }
     });
 
-    await this.notifications.create({
-      title: 'Emergency Failed',
-      message: `Request ${existing.trackingCode} failed. Reason: ${reason}`,
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_CANCELLED',
+      title: 'Mission Failed',
+      message: `Case ${existing.trackingCode} failed. Reason: ${reason}`,
       type: 'EMERGENCY',
+      category: 'MISSION',
       priority: 'CRITICAL',
-      relatedModule: 'EmergencyRequest',
-      relatedId: existing.id,
-      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+      context: {
+        createdById: employeeId
+          ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
+          : undefined,
+        assignedUserIds: await this.teamUserIds(existing.id),
+      },
     });
 
     return updated;
@@ -645,14 +651,21 @@ export class EmergencyRequestsService {
       }
     });
 
-    await this.notifications.create({
-      title: 'Emergency ESCALATED',
-      message: `Request ${existing.trackingCode} was escalated to CRITICAL priority.`,
+    await this.notifications.dispatchEvent({
+      eventKey: 'EMERGENCY_ESCALATED',
+      title: 'Emergency Escalated',
+      message: `Case ${existing.trackingCode} escalated to CRITICAL priority.`,
       type: 'EMERGENCY',
+      category: 'MISSION',
       priority: 'CRITICAL',
-      relatedModule: 'EmergencyRequest',
-      relatedId: existing.id,
-      actionUrl: `/admin/emergency-requests?id=${existing.id}`
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+      context: {
+        createdById: employeeId
+          ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
+          : undefined,
+      },
     });
 
     return updated;

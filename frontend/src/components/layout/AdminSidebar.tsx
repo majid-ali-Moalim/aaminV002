@@ -1,9 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import SidebarNavLink from '@/components/navigation/SidebarNavLink'
+import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
+import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/components/layout/AmbulanceManagementSidebar'
+import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
+import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
+import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
+import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
 import {
   LayoutDashboard,
   Users,
@@ -52,14 +59,29 @@ import {
   ListTodo,
   LifeBuoy,
   Key,
-  Terminal
+  Terminal,
 } from 'lucide-react'
 
-// ─── Section Divider Component ───
+// EMS command center sidebar palette (sidebar only)
+const SIDEBAR = {
+  bg: '#0B1220',
+  panel: '#111827',
+  primary: '#EF2D2D',
+  text: '#FFFFFF',
+  secondary: '#94A3B8',
+  muted: '#64748B',
+  border: 'rgba(255,255,255,0.06)',
+} as const
+
 function SectionLabel({ label }: { label: string }) {
   return (
     <div className="pt-5 pb-1.5 px-3">
-      <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{label}</span>
+      <span
+        className="text-[10px] font-bold uppercase tracking-[0.15em]"
+        style={{ color: SIDEBAR.muted }}
+      >
+        {label}
+      </span>
     </div>
   )
 }
@@ -71,26 +93,18 @@ const dashboardSubMenu = [
   { href: '/admin/dashboard', label: 'Overview', icon: LayoutGrid, exact: true },
   { href: '/admin/dashboard/live', label: 'Live Operations', icon: Monitor },
   { href: '/admin/dashboard/kpi', label: 'KPI Summary', icon: PieChart },
-  { href: '/admin/notifications/urgent', label: 'Alerts & Notifications', icon: AlertCircle },
+  { href: '/admin/notifications?tab=critical', label: 'Alerts & Notifications', icon: AlertCircle },
   { href: '/admin/audit-logs/recent', label: 'Recent Activity', icon: History },
 ]
 
 // 2. Emergency Operations — rendered via EmergencyOperationsSidebar component
 
-// 3. Patients & Case Records
-const patientsSubMenu = [
-  { href: '/admin/patients', label: 'All Patients', icon: Users, exact: true },
-  { href: '/admin/patients/new', label: 'New Patient Record', icon: UserPlus },
-  { href: '/admin/emergency-requests/records', label: 'Emergency Case Records', icon: FileText },
-  { href: '/admin/nurses/notes', label: 'Medical Notes', icon: LifeBuoy },
-  { href: '/admin/patients/history', label: 'Case History', icon: History },
-  { href: '/admin/patients/contacts', label: 'Relative / Contact Details', icon: Users },
-]
+// 3. Patients & Case Records — rendered via PatientsCaseRecordsSidebar component
 
 // 4. Dispatch Resources
 const dispatchResourcesSubMenu = [
   { href: '/admin/ambulances/availability', label: 'Ambulance Availability', icon: Truck },
-  { href: '/admin/ambulances/assignments', label: 'Ambulance Assignment', icon: Shuffle },
+  { href: '/admin/ambulances/assignment-history', label: 'Ambulance Assignment', icon: Shuffle },
   { href: '/admin/drivers/availability', label: 'Driver Availability', icon: Users },
   { href: '/admin/nurses/availability', label: 'Nurse Availability', icon: Stethoscope },
   { href: '/admin/dispatch-management/readiness', label: 'Readiness Status', icon: Activity },
@@ -116,48 +130,21 @@ const dispatchCenterOperationsSubMenu = [
   { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
 ]
 
-// 5. Drivers
-const driversSubMenu = [
-  { href: '/admin/drivers', label: 'All Drivers', icon: Users, exact: true },
-  { href: '/admin/drivers/missions', label: 'Assigned Missions', icon: ClipboardList },
-  { href: '/admin/drivers/shifts', label: 'Shift & Availability', icon: Calendar },
-  { href: '/admin/drivers/updates', label: 'Status Updates', icon: Radio },
-  { href: '/admin/drivers/duty-logs', label: 'Duty Logs', icon: FileText },
-  { href: '/admin/drivers/performance', label: 'Performance Reports', icon: BarChart2 },
-  { href: '/admin/drivers/incidents', label: 'Incident Reports', icon: AlertCircle },
-]
+// 5. Driver Management — rendered via DriverManagementSidebar component
 
-// 6. Nurses & Paramedics
-const nursesSubMenu = [
-  { href: '/admin/nurses', label: 'All Nurses', icon: Users, exact: true },
-  { href: '/admin/nurses/missions', label: 'Assigned Missions', icon: ClipboardList },
-  { href: '/admin/nurses/shifts', label: 'Shift & Availability', icon: Calendar },
-  { href: '/admin/nurses/treatment-logs', label: 'Treatment Logs', icon: LifeBuoy },
-  { href: '/admin/nurses/clinical-notes', label: 'Clinical Notes', icon: FileText },
-  { href: '/admin/nurses/handover', label: 'Handover Records', icon: Shuffle },
-  { href: '/admin/nurses/performance', label: 'Performance Reports', icon: BarChart2 },
-]
+// 6. Nurse Management — rendered via NurseManagementSidebar component
 
-// 7. Ambulances
-const ambulancesSubMenu = [
-  { href: '/admin/ambulances', label: 'All Ambulances', icon: Truck, exact: true },
-  { href: '/admin/ambulances/add', label: 'Add Ambulance', icon: UserPlus },
-  { href: '/admin/ambulances/status', label: 'Current Status', icon: Activity },
-  { href: '/admin/ambulances/crew', label: 'Assign Crew', icon: Shuffle },
-  { href: '/admin/ambulances/readiness', label: 'Readiness Status', icon: ShieldCheck },
-  { href: '/admin/ambulances/station-assignment', label: 'Area / Station Assignment', icon: Warehouse },
-  { href: '/admin/ambulances/history', label: 'Service History', icon: History },
-]
+// 7. Ambulance Management — rendered via AmbulanceManagementSidebar component
 
 // 8. Hospital Coordination
 const hospitalCoordinationSubMenu = [
   { href: '/admin/hospitals', label: 'All Hospitals', icon: Building2, exact: true },
+  { href: '/admin/hospitals/create', label: 'Create Hospital', icon: PlusCircle },
   { href: '/admin/hospitals/availability', label: 'Hospital Availability', icon: Activity },
   { href: '/admin/hospitals/incoming', label: 'Incoming Cases', icon: ListTodo },
   { href: '/admin/hospitals/handover', label: 'Handover Queue', icon: Clock },
   { href: '/admin/hospitals/accepted', label: 'Accepted Cases', icon: ShieldCheck },
   { href: '/admin/hospitals/refused', label: 'Refused / Full Cases', icon: XCircle },
-  { href: '/admin/hospitals/referrals', label: 'Referral History', icon: History },
   { href: '/admin/hospitals/analytics', label: 'Hospital Performance Analytics', icon: BarChart2 },
 ]
 
@@ -166,7 +153,6 @@ const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
   { href: '/admin/drivers', label: 'Drivers', icon: Truck },
   { href: '/admin/nurses', label: 'Nurses / Paramedics', icon: Stethoscope },
-  { href: '/admin/permissions', label: 'Roles & Permissions', icon: Lock },
   { href: '/admin/system-setup?tab=departments', label: 'Departments', icon: Building2 },
   { href: '/admin/employees/attendance', label: 'Attendance & Duty Logs', icon: Clock },
   { href: '/admin/reports/performance', label: 'Staff Performance', icon: BarChart2 },
@@ -183,47 +169,33 @@ const analyticsSubMenu = [
   { href: '/admin/reports/export', label: 'Export PDF / Excel', icon: FileText },
 ]
 
-// 11. Notifications & Alerts
-const notificationsSubMenu = [
-  { href: '/admin/notifications', label: 'All Notifications', icon: Bell, exact: true },
-  { href: '/admin/notifications/critical', label: 'Critical Alerts', icon: AlertCircle },
-  { href: '/admin/notifications/assignments', label: 'Assignment Alerts', icon: Shuffle },
-  { href: '/admin/notifications/delays', label: 'Delay Alerts', icon: Clock },
-  { href: '/admin/notifications/hospitals', label: 'Hospital Alerts', icon: Building2 },
-  { href: '/admin/notifications/maintenance', label: 'Maintenance Alerts', icon: Settings },
-  { href: '/admin/notifications/staff', label: 'Staff Alerts', icon: Users },
+// Notifications — single centralized menu entry
+
+// Master Data Management
+const masterDataSubMenu = [
+  { href: '/admin/master-data/locations', label: 'Locations', icon: MapPin },
+  { href: '/admin/master-data/emergency', label: 'Emergency Configuration', icon: AlertTriangle },
+  { href: '/admin/master-data/ambulance', label: 'Ambulance Configuration', icon: Truck },
+  { href: '/admin/master-data/hospital', label: 'Hospital Configuration', icon: Building2 },
+  { href: '/admin/master-data/mission', label: 'Mission Configuration', icon: ClipboardList },
+  { href: '/admin/master-data/settings', label: 'System Settings', icon: Settings },
 ]
 
-// 12. System Setup
-const systemSetupSubMenu = [
-  { href: '/admin/system-setup/regions', label: 'Regions', icon: MapPin },
-  { href: '/admin/system-setup/districts', label: 'Districts', icon: MapIcon },
-  { href: '/admin/system-setup/stations', label: 'Stations', icon: Warehouse },
-  { href: '/admin/system-setup/categories', label: 'Incident Categories', icon: AlertTriangle },
-  { href: '/admin/system-setup/ambulance-types', label: 'Ambulance Types', icon: Truck },
-  { href: '/admin/system-setup/equipment', label: 'Equipment Levels', icon: Stethoscope },
-  { href: '/admin/system-setup/hospital-types', label: 'Hospital Types', icon: Building2 },
-  { href: '/admin/system-setup/departments', label: 'Departments', icon: Building2 },
-  { href: '/admin/system-setup/settings', label: 'System Settings', icon: Settings },
-  { href: '/admin/system-setup/security', label: 'Security Settings', icon: Key },
-]
-
-// 13. Audit Logs
-const auditLogsSubMenu = [
-  { href: '/admin/audit-logs/actions', label: 'User Action Logs', icon: Terminal },
-  { href: '/admin/audit-logs/dispatch', label: 'Dispatch Change Logs', icon: Shuffle },
-  { href: '/admin/audit-logs/status', label: 'Status Update Logs', icon: Radio },
-  { href: '/admin/audit-logs/handover', label: 'Hospital Handover Logs', icon: Clock },
-  { href: '/admin/audit-logs/system', label: 'System Logs', icon: Database },
-]
+// 13. Permissions & Access Control — rendered via PermissionsAccessControlSidebar component
 
 export default function AdminSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { isActive: isNavActive } = useOptimisticNav()
+
+  useEffect(() => {
+    hospitalCoordinationSubMenu.forEach((item) => router.prefetch(item.href))
+  }, [router])
 
   // ─── Active state checks ───
   const isDashboardActive = pathname.startsWith('/admin/dashboard')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
-  const isPatientsActive = pathname.startsWith('/admin/patients')
+  const isPatientsActive = isPatientsCaseRecordsPath(pathname)
   const isDispatchResourcesActive = pathname.startsWith('/admin/ambulances/availability') || pathname.startsWith('/admin/drivers/availability')
   const isDispatchCenterOperationsActive =
     pathname.startsWith('/admin/dispatch-management') ||
@@ -231,19 +203,18 @@ export default function AdminSidebar() {
     pathname === '/admin/emergency-requests/pending' ||
     pathname === '/admin/emergency-requests/active'
   const isDispatcherManagementActive = pathname.startsWith('/admin/dispatchers')
-  const isDriversActive = pathname.startsWith('/admin/drivers') && !isDispatchResourcesActive
-  const isNursesActive = pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive
-  const isAmbulancesActive = pathname.startsWith('/admin/ambulances') && !isDispatchResourcesActive
+  const isDriversActive = isDriverManagementPath(pathname)
+  const isNursesActive = isNurseManagementPath(pathname)
+  const isAmbulancesActive = isAmbulanceManagementPath(pathname)
   const isHospitalCoordinationActive = pathname.startsWith('/admin/hospitals')
   const isWorkforceActive =
     pathname.startsWith('/admin/employees') ||
-    pathname.startsWith('/admin/permissions') ||
     (pathname.startsWith('/admin/drivers') && !isDispatchResourcesActive) ||
     (pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive)
+  const isAccessControlActive = isAccessControlPath(pathname)
   const isAnalyticsActive = pathname.startsWith('/admin/reports')
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
-  const isSystemSetupActive = pathname.startsWith('/admin/system-setup')
-  const isAuditActive = pathname.startsWith('/admin/audit-logs')
+  const isMasterDataActive = pathname.startsWith('/admin/master-data')
 
   // ─── Toggle states ───
   const [dashboardOpen, setDashboardOpen] = useState(isDashboardActive)
@@ -258,22 +229,35 @@ export default function AdminSidebar() {
   const [hospitalCoordinationOpen, setHospitalCoordinationOpen] = useState(isHospitalCoordinationActive)
   const [workforceOpen, setWorkforceOpen] = useState(isWorkforceActive)
   const [analyticsOpen, setAnalyticsOpen] = useState(isAnalyticsActive)
-  const [notificationsOpen, setNotificationsOpen] = useState(isNotificationsActive)
-  const [systemSetupOpen, setSystemSetupOpen] = useState(isSystemSetupActive)
-  const [auditOpen, setAuditOpen] = useState(isAuditActive)
+  const [masterDataOpen, setMasterDataOpen] = useState(isMasterDataActive)
+  const [accessControlOpen, setAccessControlOpen] = useState(isAccessControlActive)
 
   const renderLink = (href: string, label: string, Icon: any, isActive: boolean) => (
-    <Link
+    <SidebarNavLink
+      navKey={`${label}-${href}`}
       href={href}
-      className={`flex items-center px-2.5 py-2 text-[13px] font-medium rounded-lg transition-all duration-200 ${
-        isActive
-          ? 'bg-red-600 text-white shadow-md shadow-red-200 font-semibold'
-          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-      }`}
+      className="flex items-center px-2.5 py-2 text-[13px] font-medium rounded-lg"
+      activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }}
+      inactiveStyle={{ color: SIDEBAR.secondary }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = SIDEBAR.panel
+          e.currentTarget.style.color = SIDEBAR.text
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.backgroundColor = 'transparent'
+          e.currentTarget.style.color = SIDEBAR.secondary
+        }
+      }}
     >
-      <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+      <Icon
+        className="w-4 h-4 mr-2.5 shrink-0"
+        style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+      />
       <span className="truncate">{label}</span>
-    </Link>
+    </SidebarNavLink>
   )
 
   const renderCollapsible = (
@@ -289,47 +273,88 @@ export default function AdminSidebar() {
       <button
         type="button"
         onClick={() => setOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-medium rounded-lg transition-all duration-200 ${
+        className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-medium rounded-lg"
+        style={
           isActive
-            ? 'bg-red-600 text-white shadow-md shadow-red-200 font-semibold'
-            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-        }`}
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }
+            : { color: SIDEBAR.secondary }
+        }
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = SIDEBAR.panel
+            e.currentTarget.style.color = SIDEBAR.text
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = SIDEBAR.secondary
+          }
+        }}
       >
         <div className="flex items-center min-w-0">
-          <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <Icon
+            className="w-4 h-4 mr-2.5 shrink-0"
+            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
           <span className="truncate">{label}</span>
         </div>
         {isOpen ? (
-          <ChevronDown className={`w-3.5 h-3.5 shrink-0 ml-1 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <ChevronDown
+            className="w-3.5 h-3.5 shrink-0 ml-1"
+            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
         ) : (
-          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ml-1 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <ChevronRight
+            className="w-3.5 h-3.5 shrink-0 ml-1"
+            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+          />
         )}
       </button>
       {isOpen && (
-        <div className="mt-0.5 ml-2 pl-3 border-l border-slate-200 space-y-px">
+        <div
+          className="mt-0.5 ml-2 pl-3 space-y-px"
+          style={{ borderLeft: `1px solid ${SIDEBAR.border}` }}
+        >
           {subItems.map((sub) => {
             const SubIcon = sub.icon
+            const navKey = `${sub.label}-${sub.href}`
             let active = false
             if (opts?.queryBased && sub.href.includes('?')) {
               active = typeof window !== 'undefined' && window.location.search.includes(sub.href.split('?')[1])
             } else if ((sub as any).exact) {
-              active = pathname === sub.href
+              active = isNavActive(navKey, sub.href, true)
             } else {
-              active = pathname.startsWith(sub.href)
+              active = isNavActive(navKey, sub.href)
             }
             return (
-              <Link
-                key={sub.label + sub.href}
+              <SidebarNavLink
+                key={navKey}
+                navKey={navKey}
                 href={sub.href}
-                className={`flex items-center px-2.5 py-1.5 text-xs rounded-md transition-all duration-200 ${
-                  active
-                    ? 'bg-red-600 text-white font-semibold shadow-sm shadow-red-100'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
-                }`}
+                exact={(sub as any).exact}
+                className="flex items-center px-2.5 py-1.5 text-xs rounded-md"
+                activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text, fontWeight: 600 }}
+                inactiveStyle={{ color: SIDEBAR.secondary }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.backgroundColor = SIDEBAR.panel
+                    e.currentTarget.style.color = SIDEBAR.text
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                    e.currentTarget.style.color = SIDEBAR.secondary
+                  }
+                }}
               >
-                <SubIcon className={`w-3.5 h-3.5 mr-2 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
+                <SubIcon
+                  className="w-3.5 h-3.5 mr-2 shrink-0"
+                  style={{ color: active ? SIDEBAR.text : SIDEBAR.muted }}
+                />
                 <span className="truncate">{sub.label}</span>
-              </Link>
+              </SidebarNavLink>
             )
           })}
         </div>
@@ -338,15 +363,27 @@ export default function AdminSidebar() {
   )
 
   return (
-    <div className="w-64 bg-white text-slate-700 h-screen fixed left-0 top-0 flex flex-col border-r border-slate-200 shadow-sm z-30">
+    <div
+      className="w-64 h-screen fixed left-0 top-0 flex flex-col z-30"
+      style={{
+        background: `linear-gradient(180deg, ${SIDEBAR.bg} 0%, #0a101c 100%)`,
+        borderRight: `1px solid ${SIDEBAR.border}`,
+      }}
+    >
       {/* Logo */}
-      <div className="p-4 border-b border-slate-100 shrink-0">
-        <h1 className="text-base font-black tracking-tight text-slate-900 flex items-center">
-          <div className="bg-red-600 p-1.5 rounded-lg mr-2.5 shadow-md shadow-red-200">
+      <div className="p-4 shrink-0" style={{ borderBottom: `1px solid ${SIDEBAR.border}` }}>
+        <h1 className="text-base font-black tracking-tight flex items-center" style={{ color: SIDEBAR.text }}>
+          <div
+            className="p-1.5 rounded-lg mr-2.5"
+            style={{ backgroundColor: SIDEBAR.primary }}
+          >
             <Activity className="w-4 h-4 text-white" />
           </div>
           <span>
-            Aamin <span className="text-slate-400 font-light text-xs">Ambulance</span>
+            Aamin{' '}
+            <span className="font-light text-xs" style={{ color: SIDEBAR.muted }}>
+              Ambulance
+            </span>
           </span>
         </h1>
       </div>
@@ -366,7 +403,12 @@ export default function AdminSidebar() {
             setOpen={setEmergencyOperationsOpen}
           />
         </div>
-        {renderCollapsible('Patients & Case Records', HeartPulse, isPatientsActive, patientsOpen, setPatientsOpen, patientsSubMenu)}
+        <div className="px-0.5">
+          <PatientsCaseRecordsSidebar
+            isOpen={patientsOpen}
+            setOpen={setPatientsOpen}
+          />
+        </div>
         {renderCollapsible('Dispatch Resources', Warehouse, isDispatchResourcesActive, dispatchResourcesOpen, setDispatchResourcesOpen, dispatchResourcesSubMenu)}
 
         {/* ══════ Dispatch Center ══════ */}
@@ -376,9 +418,24 @@ export default function AdminSidebar() {
 
         {/* ══════ Field Operations ══════ */}
         <SectionLabel label="Field Operations" />
-        {renderCollapsible('Drivers', Users, isDriversActive, driversOpen, setDriversOpen, driversSubMenu)}
-        {renderCollapsible('Nurses & Paramedics', Stethoscope, isNursesActive, nursesOpen, setNursesOpen, nursesSubMenu)}
-        {renderCollapsible('Ambulances', Truck, isAmbulancesActive, ambulancesOpen, setAmbulancesOpen, ambulancesSubMenu)}
+        <div className="px-0.5">
+          <DriverManagementSidebar
+            isOpen={driversOpen}
+            setOpen={setDriversOpen}
+          />
+        </div>
+        <div className="px-0.5">
+          <NurseManagementSidebar
+            isOpen={nursesOpen}
+            setOpen={setNursesOpen}
+          />
+        </div>
+        <div className="px-0.5">
+          <AmbulanceManagementSidebar
+            isOpen={ambulancesOpen}
+            setOpen={setAmbulancesOpen}
+          />
+        </div>
 
         {/* ══════ Hospital Coordination ══════ */}
         <SectionLabel label="Hospital Coordination" />
@@ -388,17 +445,37 @@ export default function AdminSidebar() {
         <SectionLabel label="Organization & Control" />
         {renderCollapsible('Workforce & Organization', UserCog, isWorkforceActive, workforceOpen, setWorkforceOpen, workforceSubMenu)}
         {renderCollapsible('Analytics & Reports', BarChart2, isAnalyticsActive, analyticsOpen, setAnalyticsOpen, analyticsSubMenu)}
-        {renderCollapsible('Notifications & Alerts', Bell, isNotificationsActive, notificationsOpen, setNotificationsOpen, notificationsSubMenu)}
-        {renderCollapsible('System Setup', Database, isSystemSetupActive, systemSetupOpen, setSystemSetupOpen, systemSetupSubMenu)}
-        {renderCollapsible('Audit Logs', ScrollText, isAuditActive, auditOpen, setAuditOpen, auditLogsSubMenu)}
+        {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
+        {renderCollapsible('Master Data Management', Database, isMasterDataActive, masterDataOpen, setMasterDataOpen, masterDataSubMenu)}
+        <div className="px-0.5">
+          <PermissionsAccessControlSidebar
+            isOpen={accessControlOpen}
+            setOpen={setAccessControlOpen}
+          />
+        </div>
 
       </nav>
       
       {/* Bottom Logout */}
-      <div className="p-2.5 border-t border-slate-100 bg-slate-50/50 shrink-0">
+      <div
+        className="p-2.5 shrink-0"
+        style={{
+          borderTop: `1px solid ${SIDEBAR.border}`,
+          backgroundColor: 'rgba(17,24,39,0.5)',
+        }}
+      >
         <Link
           href="/logout"
-          className="flex items-center px-2.5 py-2 text-[12px] font-medium text-slate-500 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 group"
+          className="flex items-center px-2.5 py-2 text-[12px] font-medium rounded-lg transition-all duration-200 group"
+          style={{ color: SIDEBAR.muted }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = SIDEBAR.primary
+            e.currentTarget.style.color = SIDEBAR.text
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = SIDEBAR.muted
+          }}
         >
           <LogOut className="w-3.5 h-3.5 mr-2.5 transition-transform group-hover:-translate-x-1" />
           Logout

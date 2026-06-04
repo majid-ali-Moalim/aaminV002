@@ -2,7 +2,12 @@
 
 import { useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, UserRole } from '@/store/authStore'
+import { useAuth } from '@/context/AuthContext'
+import {
+  getPostLoginPath,
+  isNurseUser,
+  isAdminUser,
+} from '@/lib/authRedirect'
 
 interface NurseGuardProps {
   children: ReactNode
@@ -10,63 +15,41 @@ interface NurseGuardProps {
 
 export function NurseGuard({ children }: NurseGuardProps) {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, token, loading } = useAuth()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // If not authenticated, redirect to login
-      if (!isAuthenticated || !user) {
-        router.push('/login')
-        return
-      }
+    if (loading) return
 
-      // If not nurse role, redirect to appropriate dashboard
-      if (user.role !== 'NURSE') {
-        const roleRedirects: Record<UserRole, string> = {
-          ADMIN: '/admin/dashboard',
-          DISPATCHER: '/dispatcher/dashboard',
-          DRIVER: '/driver/dashboard',
-          NURSE: '/nurse/dashboard',
-          MANAGER: '/manager/dashboard',
-          HOSPITAL: '/hospital/dashboard',
-          PATIENT: '/patient/dashboard'
-        }
-        
-        const redirectPath = roleRedirects[user.role]
-        if (redirectPath) {
-          router.push(redirectPath)
-        }
-        return
-      }
-
-      // Check if user is active
-      if (!user.isActive) {
-        router.push('/login?error=account_inactive')
-        return
-      }
+    if (!token || !user) {
+      router.replace('/login')
+      return
     }
 
-    checkAuth()
-  }, [user, isAuthenticated, router])
+    if (!isNurseUser(user) && !isAdminUser(user)) {
+      router.replace(getPostLoginPath(user))
+      return
+    }
 
-  // Show loading state while checking auth
-  if (!isAuthenticated || !user) {
+    if ((user as { isActive?: boolean }).isActive === false) {
+      router.replace('/login?error=account_inactive')
+    }
+  }, [user, token, loading, router])
+
+  if (loading || !token || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" />
       </div>
     )
   }
 
-  // Only render children if user is nurse
-  if (user.role === 'NURSE' && user.isActive) {
+  if ((isNurseUser(user) || isAdminUser(user)) && (user as { isActive?: boolean }).isActive !== false) {
     return <>{children}</>
   }
 
-  // Fallback loading state
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" />
     </div>
   )
 }
