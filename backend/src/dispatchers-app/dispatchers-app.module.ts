@@ -4,10 +4,12 @@ import { DispatchersAppController } from './dispatchers-app.controller';
 import { DispatchersAppService } from './dispatchers-app.service';
 import { DispatcherAuthGuard } from './dispatchers-app.guard';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AccessControlModule } from '../access-control/access-control.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AccessControlModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
     }),

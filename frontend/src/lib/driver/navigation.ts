@@ -129,14 +129,15 @@ export const DRIVER_MODULES: DriverNavModule[] = [
 ]
 
 export const MISSION_WORKFLOW_STEPS = [
-  { key: 'PENDING', label: 'Pending' },
-  { key: 'ASSIGNED', label: 'Accepted' },
-  { key: 'DISPATCHED', label: 'En Route to Pickup' },
-  { key: 'ON_SCENE', label: 'Arrived at Pickup' },
-  { key: 'PATIENT_ONBOARD', label: 'Patient Onboard' },
-  { key: 'TRANSPORTING', label: 'Transporting' },
+  { key: 'ASSIGNED', label: 'Assigned' },
+  { key: 'ACCEPTED', label: 'Accepted' },
+  { key: 'DISPATCHED', label: 'En Route to Scene' },
+  { key: 'ARRIVED_SCENE', label: 'Arrived at Scene' },
+  { key: 'PATIENT_ASSESSMENT', label: 'Patient Assessment' },
+  { key: 'PATIENT_LOADED', label: 'Patient Loaded' },
+  { key: 'TRANSPORTING', label: 'En Route to Hospital' },
   { key: 'ARRIVED_HOSPITAL', label: 'Arrived at Hospital' },
-  { key: 'HANDOVER', label: 'Patient Handed Over' },
+  { key: 'PATIENT_HANDOVER', label: 'Patient Handover' },
   { key: 'COMPLETED', label: 'Mission Completed' },
 ] as const
 

@@ -1,7 +1,16 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios'
+import axios, { AxiosInstance, AxiosResponse, isAxiosError } from 'axios'
 import { AmbulanceStatus, Role, EmergencyRequestStatus, Priority, ReferralStatus, Ambulance, Employee } from '@/types'
 
-const API_BASE_URL = 'http://localhost:3001'
+/** Prefer env; fallback to 127.0.0.1 (avoids Windows localhost / IPv6 issues). */
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://127.0.0.1:3001'
+).replace(/\/$/, '')
+
+export function isApiNetworkError(error: unknown): boolean {
+  return isAxiosError(error) && !error.response
+}
 
 class ApiService {
   private api: AxiosInstance
@@ -9,6 +18,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
+      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -32,6 +42,10 @@ class ApiService {
     this.api.interceptors.response.use(
       (response) => response,
       (error) => {
+        if (isApiNetworkError(error)) {
+          error.message =
+            'Cannot reach the API server. Make sure the backend is running (npm run start:dev in backend on port 3001).'
+        }
         if (error.response?.status === 401) {
           localStorage.removeItem('token')
           if (typeof window !== 'undefined') {
@@ -92,9 +106,14 @@ export const authService = {
     return await api.post('/api/auth/login', { email, password })
   },
 
-  getMe: async (token: string) => {
+  getMe: async (token?: string) => {
     const api = new ApiService()
     return await api.get('/api/auth/me')
+  },
+
+  updateMe: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch('/api/auth/me', data)
   },
 
   forgotPassword: async (email: string) => {
@@ -843,6 +862,22 @@ export const accessControlService = {
     const api = new ApiService()
     return await api.get('/api/access-control/catalog')
   },
+  getMyPermissions: async () => {
+    const api = new ApiService()
+    return await api.get<{
+      activePermissionKeys?: string[]
+      baselinePermissions?: string[]
+      activeGrantedKeys?: string[]
+      grantablePermissionKeys?: string[]
+      grantedPermissions: Array<{
+        permissionKey: string
+        grantedAt: string
+        expiresAt: string | null
+        isUnlimited: boolean
+        isExpired: boolean
+      }>
+    }>('/api/access-control/me/permissions')
+  },
   getUserPermissions: async (userId: string) => {
     const api = new ApiService()
     return await api.get<{
@@ -851,6 +886,7 @@ export const accessControlService = {
       employeeRole: string | null
       staffProfile: string | null
       canAssignPermissions: boolean
+      baselinePermissions?: string[]
       suggestedPermissions: string[]
       grantedPermissions: Array<{
         permissionKey: string
@@ -860,6 +896,8 @@ export const accessControlService = {
         isExpired: boolean
       }>
       activePermissionKeys?: string[]
+      activeGrantedKeys?: string[]
+      grantablePermissionKeys?: string[]
     }>(`/api/access-control/users/${userId}/permissions`)
   },
   setUserPermissions: async (
@@ -890,7 +928,70 @@ export const uploadService = {
   uploadFile: async (file: File) => {
     const api = new ApiService()
     return await api.upload('/api/uploads', file)
-  }
+  },
+}
+
+export const employeeAttendanceService = {
+  getOverview: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/overview')
+  },
+  getRecords: async (params?: Record<string, string | undefined>) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/records', { params })
+  },
+  getToday: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/today')
+  },
+  getByDay: async (date: string) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/day', { params: { date } })
+  },
+  getShifts: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/shifts')
+  },
+  getApprovals: async (status?: string) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/approvals', { params: { status } })
+  },
+  reviewApproval: async (id: string, action: 'approve' | 'reject', reviewerComment?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/approvals/${id}`, { action, reviewerComment })
+  },
+  getLeave: async (status?: string) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/leave', { params: { status } })
+  },
+  reviewLeave: async (id: string, action: 'approve' | 'reject', reviewerComment?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/leave/${id}`, { action, reviewerComment })
+  },
+  getOvertime: async (status?: string) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/overtime', { params: { status } })
+  },
+  reviewOvertime: async (id: string, action: 'approve' | 'reject') => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/overtime/${id}`, { action })
+  },
+  getAnalytics: async (params?: { startDate?: string; endDate?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/analytics', { params })
+  },
+  getRoleMonitoring: async (roleKey: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/employee-attendance/roles/${roleKey}`)
+  },
+  updateRecord: async (id: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/records/${id}`, data)
+  },
+  exportReport: async (body: { type: string; startDate?: string; endDate?: string }) => {
+    const api = new ApiService()
+    return await api.post('/api/employee-attendance/export', body)
+  },
 }
 
 // Hospital coordination service

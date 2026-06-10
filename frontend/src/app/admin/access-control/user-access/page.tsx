@@ -30,7 +30,6 @@ import {
   ASSIGNABLE_PERMISSION_CATALOG,
   ALL_PERMISSIONS,
   getStaffProfileLabel,
-  getSuggestedPermissionsForUser,
   resolveStaffProfile,
 } from '@/lib/accessControlCatalog'
 import { addDays, addHours, format, formatDistanceToNow } from 'date-fns'
@@ -62,7 +61,7 @@ type PermissionGrant = {
 }
 
 type DurationPreset = '1h' | '24h' | '7d' | '30d' | 'custom'
-type PermFilter = 'all' | 'suggested' | 'selected'
+type PermFilter = 'all' | 'available' | 'selected'
 
 const DURATION_PRESETS: { id: DurationPreset; label: string }[] = [
   { id: '1h', label: '1 hour' },
@@ -108,8 +107,9 @@ export default function UserAccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const [suggestedKeys, setSuggestedKeys] = useState<Set<string>>(new Set())
+  const [baselineKeys, setBaselineKeys] = useState<Set<string>>(new Set())
+  const [additionalKeys, setAdditionalKeys] = useState<Set<string>>(new Set())
+  const [grantableKeys, setGrantableKeys] = useState<string[]>([])
   const [savedGrants, setSavedGrants] = useState<PermissionGrant[]>([])
   const [permLoading, setPermLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -166,13 +166,18 @@ export default function UserAccessPage() {
     try {
       setPermLoading(true)
       const data = await accessControlService.getUserPermissions(userId)
-      const active = data.grantedPermissions.filter((g) => !g.isExpired)
-      setSelectedKeys(new Set(active.map((g) => g.permissionKey)))
+      const baseline = data.baselinePermissions ?? data.suggestedPermissions ?? []
+      const activeGranted =
+        data.activeGrantedKeys ??
+        data.grantedPermissions.filter((g) => !g.isExpired).map((g) => g.permissionKey)
+      setBaselineKeys(new Set(baseline))
+      setAdditionalKeys(new Set(activeGranted))
+      setGrantableKeys(data.grantablePermissionKeys ?? [])
       setSavedGrants(data.grantedPermissions)
-      setSuggestedKeys(new Set(data.suggestedPermissions))
       setDirty(false)
       setConfirmOpen(false)
 
+      const active = data.grantedPermissions.filter((g) => !g.isExpired)
       const hasLimited = active.some((g) => g.expiresAt)
       if (hasLimited && active[0]?.expiresAt) {
         setAccessMode('limited')
@@ -202,17 +207,18 @@ export default function UserAccessPage() {
     [accessMode, durationPreset, customExpiry],
   )
 
-  const selectedKeyList = useMemo(() => [...selectedKeys], [selectedKeys])
+  const additionalKeyList = useMemo(() => [...additionalKeys], [additionalKeys])
 
   const sensitiveSelectedCount = useMemo(
-    () => selectedKeyList.filter((k) => ALL_PERMISSIONS.find((p) => p.key === k)?.sensitive).length,
-    [selectedKeyList],
+    () => additionalKeyList.filter((k) => ALL_PERMISSIONS.find((p) => p.key === k)?.sensitive).length,
+    [additionalKeyList],
   )
 
   const activeSavedCount = savedGrants.filter((g) => !g.isExpired).length
 
-  const togglePermission = (key: string) => {
-    setSelectedKeys((prev) => {
+  const toggleAdditionalPermission = (key: string) => {
+    if (baselineKeys.has(key)) return
+    setAdditionalKeys((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -221,15 +227,10 @@ export default function UserAccessPage() {
     setDirty(true)
   }
 
-  const applySuggested = () => {
-    if (!selected) return
-    const suggested = getSuggestedPermissionsForUser(
-      selected.role,
-      selected.employee?.employeeRole?.name,
-    )
-    setSelectedKeys(new Set(suggested))
+  const clearAdditional = () => {
+    setAdditionalKeys(new Set())
     setDirty(true)
-    toast.success(`Applied suggested permissions for ${getStaffProfileLabel(profile)}`)
+    toast.success('Cleared additional permissions — save to apply')
   }
 
   const openConfirm = () => {
@@ -239,10 +240,6 @@ export default function UserAccessPage() {
         return
       }
     }
-    if (selectedKeys.size === 0) {
-      toast.error('Select at least one permission to grant')
-      return
-    }
     setConfirmOpen(true)
   }
 
@@ -251,7 +248,7 @@ export default function UserAccessPage() {
     try {
       setSaving(true)
       await accessControlService.setUserPermissions(selected.id, {
-        permissions: selectedKeyList,
+        permissions: additionalKeyList,
         expiresAt: accessMode === 'unlimited' ? null : expiresAt?.toISOString() ?? null,
       })
       setDirty(false)
@@ -280,6 +277,7 @@ export default function UserAccessPage() {
     return ASSIGNABLE_PERMISSION_CATALOG.map((cat) => ({
       ...cat,
       permissions: cat.permissions.filter((p) => {
+        if (baselineKeys.has(p.key)) return false
         const matchesSearch =
           !q ||
           p.label.toLowerCase().includes(q) ||
@@ -287,12 +285,27 @@ export default function UserAccessPage() {
           p.description.toLowerCase().includes(q)
         const matchesFilter =
           permFilter === 'all' ||
-          (permFilter === 'suggested' && suggestedKeys.has(p.key)) ||
-          (permFilter === 'selected' && selectedKeys.has(p.key))
+          (permFilter === 'available' && grantableKeys.includes(p.key)) ||
+          (permFilter === 'selected' && additionalKeys.has(p.key))
         return matchesSearch && matchesFilter
       }),
     })).filter((cat) => cat.permissions.length > 0)
-  }, [permSearch, permFilter, suggestedKeys, selectedKeys])
+  }, [permSearch, permFilter, baselineKeys, grantableKeys, additionalKeys])
+
+  const baselineCatalog = useMemo(() => {
+    const q = permSearch.toLowerCase()
+    return ASSIGNABLE_PERMISSION_CATALOG.map((cat) => ({
+      ...cat,
+      permissions: cat.permissions.filter(
+        (p) =>
+          baselineKeys.has(p.key) &&
+          (!q ||
+            p.label.toLowerCase().includes(q) ||
+            p.key.toLowerCase().includes(q) ||
+            p.description.toLowerCase().includes(q)),
+      ),
+    })).filter((cat) => cat.permissions.length > 0)
+  }, [permSearch, baselineKeys])
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6 pb-12">
@@ -377,8 +390,8 @@ export default function UserAccessPage() {
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
-                  <StatCard icon={KeyRound} label="Selected" value={String(selectedKeys.size)} accent="text-red-600" />
-                  <StatCard icon={Sparkles} label="Suggested" value={String(suggestedKeys.size)} accent="text-emerald-600" />
+                  <StatCard icon={Sparkles} label="Built-in" value={String(baselineKeys.size)} accent="text-emerald-600" />
+                  <StatCard icon={KeyRound} label="Additional" value={String(additionalKeys.size)} accent="text-red-600" />
                   <StatCard icon={Shield} label="Active grants" value={String(activeSavedCount)} accent="text-blue-600" />
                   <StatCard
                     icon={AlertTriangle}
@@ -467,7 +480,7 @@ export default function UserAccessPage() {
                     <div>
                       <h3 className="font-black text-slate-900">Permissions & Privileges</h3>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Select actions for {getStaffProfileLabel(profile)} — suggested items are highlighted.
+                        Built-in {getStaffProfileLabel(profile)} access is always on. Grant only what they do not already have.
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -475,19 +488,18 @@ export default function UserAccessPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-xl border-red-200 text-red-700 hover:bg-red-50"
-                        onClick={applySuggested}
-                        disabled={permLoading || isAdminUser}
+                        className="rounded-xl border-slate-200"
+                        onClick={clearAdditional}
+                        disabled={permLoading || isAdminUser || additionalKeys.size === 0}
                       >
-                        <Sparkles className="w-4 h-4 mr-1.5" />
-                        Apply suggested
+                        Clear additional
                       </Button>
                       <Button
                         type="button"
                         size="sm"
                         className="rounded-xl bg-red-600 hover:bg-red-700"
                         onClick={openConfirm}
-                        disabled={permLoading || !dirty || isAdminUser || selectedKeys.size === 0}
+                        disabled={permLoading || !dirty || isAdminUser}
                       >
                         <Save className="w-4 h-4 mr-1.5" />
                         Review & grant
@@ -507,7 +519,7 @@ export default function UserAccessPage() {
                       />
                     </div>
                     <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
-                      {(['all', 'suggested', 'selected'] as PermFilter[]).map((f) => (
+                      {(['all', 'available', 'selected'] as PermFilter[]).map((f) => (
                         <button
                           key={f}
                           type="button"
@@ -518,7 +530,7 @@ export default function UserAccessPage() {
                           )}
                         >
                           {f === 'all' && <Filter className="w-3 h-3" />}
-                          {f}
+                          {f === 'available' ? 'can grant' : f}
                         </button>
                       ))}
                     </div>
@@ -537,14 +549,56 @@ export default function UserAccessPage() {
                     Loading permissions…
                   </div>
                 ) : (
-                  <div className="p-4 space-y-2 max-h-[480px] overflow-y-auto">
-                    {visibleCatalog.length === 0 ? (
-                      <p className="text-center text-sm text-slate-400 py-8">No permissions match your filter.</p>
-                    ) : (
-                      visibleCatalog.map((cat) => {
+                  <div className="p-4 space-y-4 max-h-[560px] overflow-y-auto">
+                    {/* Built-in section */}
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-2 flex items-center gap-1.5 px-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Built-in role access ({baselineKeys.size}) — always active
+                      </p>
+                      {baselineCatalog.length === 0 ? (
+                        <p className="text-sm text-slate-400 px-1">No built-in permissions for this profile.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {baselineCatalog.map((cat) => (
+                            <div key={cat.id} className="rounded-xl border border-emerald-100 bg-emerald-50/40 overflow-hidden">
+                              <div className="px-4 py-2 text-xs font-bold text-emerald-900">{cat.category}</div>
+                              <div className="divide-y divide-emerald-100/80">
+                                {cat.permissions.map((perm) => (
+                                  <div key={perm.key} className="flex items-center gap-3 px-4 py-2.5 opacity-90">
+                                    <input type="checkbox" checked disabled className="w-4 h-4 rounded text-emerald-600" />
+                                    <div>
+                                      <span className="text-sm font-semibold text-slate-800">{perm.label}</span>
+                                      <span className="ml-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                        Built-in
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Additional grant section */}
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-red-700 mb-2 flex items-center gap-1.5 px-1">
+                        <KeyRound className="w-3.5 h-3.5" />
+                        Grant additional access — not already included ({grantableKeys.length} available)
+                      </p>
+                      {visibleCatalog.length === 0 ? (
+                        <p className="text-center text-sm text-slate-400 py-8">
+                          {grantableKeys.length === 0 && additionalKeys.size === 0
+                            ? 'This user has all assignable extras, or none match your filter.'
+                            : 'No permissions match your filter.'}
+                        </p>
+                      ) : (
+                        visibleCatalog.map((cat) => {
                         const Icon = cat.icon
                         const expanded = expandedCats.has(cat.id)
-                        const catSelected = cat.permissions.filter((p) => selectedKeys.has(p.key)).length
+                        const catSelected = cat.permissions.filter((p) => additionalKeys.has(p.key)).length
                         return (
                           <div key={cat.id} className="rounded-xl border border-slate-100 overflow-hidden">
                             <button
@@ -562,32 +616,30 @@ export default function UserAccessPage() {
                             {expanded && (
                               <div className="divide-y divide-slate-50">
                                 {cat.permissions.map((perm) => {
-                                  const checked = selectedKeys.has(perm.key)
-                                  const isSuggested = suggestedKeys.has(perm.key)
+                                  const checked = additionalKeys.has(perm.key)
                                   const saved = savedGrants.find((g) => g.permissionKey === perm.key && !g.isExpired)
+                                  const isAvailable = grantableKeys.includes(perm.key) || checked
                                   return (
                                     <label
                                       key={perm.key}
                                       className={cn(
                                         'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
                                         checked ? 'bg-red-50/40' : 'hover:bg-slate-50',
+                                        !isAvailable && 'opacity-50 cursor-not-allowed',
                                       )}
                                     >
                                       <div className="pt-0.5">
                                         <input
                                           type="checkbox"
                                           checked={checked}
-                                          onChange={() => togglePermission(perm.key)}
-                                          disabled={isAdminUser}
+                                          onChange={() => toggleAdditionalPermission(perm.key)}
+                                          disabled={isAdminUser || !isAvailable}
                                           className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 disabled:opacity-50"
                                         />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <span className="text-sm font-semibold text-slate-800">{perm.label}</span>
-                                          {isSuggested && (
-                                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Suggested</span>
-                                          )}
                                           {perm.sensitive && (
                                             <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-flex items-center gap-0.5">
                                               <AlertTriangle className="w-3 h-3" /> Sensitive
@@ -610,12 +662,15 @@ export default function UserAccessPage() {
                           </div>
                         )
                       })
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span>{selectedKeys.size} permission(s) selected</span>
+                  <span>
+                    {baselineKeys.size} built-in · {additionalKeys.size} additional selected
+                  </span>
                   <span className="flex items-center gap-1">
                     {accessMode === 'unlimited' ? (
                       <><InfinityIcon className="w-3.5 h-3.5" /> Unlimited duration</>
@@ -647,7 +702,7 @@ export default function UserAccessPage() {
           confirming={saving}
           userName={displayName(selected)}
           userEmail={selected.email}
-          permissionKeys={selectedKeyList}
+          permissionKeys={additionalKeyList}
           sensitiveCount={sensitiveSelectedCount}
           accessMode={accessMode}
           expiresAt={expiresAt}

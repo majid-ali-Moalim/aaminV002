@@ -63,6 +63,23 @@ export class NotificationsService {
       const enabled = await this.dispatch.isChannelEnabled(userId, category, 'IN_APP');
       if (!enabled) continue;
 
+      let recipientRedirect = redirectUrl;
+      if (payload.eventKey === 'MISSION_ASSIGNED') {
+        const recipient = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            role: true,
+            employee: { select: { employeeRole: { select: { name: true } } } },
+          },
+        });
+        const roleName = recipient?.employee?.employeeRole?.name?.toLowerCase() ?? '';
+        if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {
+          recipientRedirect = '/driver/missions/active';
+        } else if (recipient?.role === 'EMPLOYEE' && roleName.includes('nurse')) {
+          recipientRedirect = '/nurse/mission';
+        }
+      }
+
       try {
         const row = await this.createForRecipient({
           userId,
@@ -76,7 +93,7 @@ export class NotificationsService {
           eventKey: payload.eventKey,
           entityType: payload.entityType,
           entityId: payload.entityId,
-          redirectUrl,
+          redirectUrl: recipientRedirect,
         });
         if (row) created.push(row);
       } catch (err) {

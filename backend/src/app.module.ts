@@ -24,6 +24,7 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
 import { AccessControlModule } from './access-control/access-control.module';
 import { MasterDataModule } from './master-data/master-data.module';
 import { HospitalCoordinationModule } from './hospital-coordination/hospital-coordination.module';
+import { EmployeeAttendanceModule } from './employee-attendance/employee-attendance.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { HospitalCoordinationModule } from './hospital-coordination/hospital-coo
     AccessControlModule,
     MasterDataModule,
     HospitalCoordinationModule,
+    EmployeeAttendanceModule,
   ],
   controllers: [],
   providers: [],

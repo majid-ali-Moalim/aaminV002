@@ -24,7 +24,7 @@ function createDispatcherApi(): AxiosInstance {
       if (error.response?.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
-        window.location.replace('/dispatcher/login')
+        window.location.replace('/login')
       }
       return Promise.reject(error)
     },

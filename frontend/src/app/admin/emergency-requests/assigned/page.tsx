@@ -51,8 +51,12 @@ export default function AssignedRequestsPage() {
   useEffect(() => {
     fetchRequests()
     const interval = setInterval(async () => {
-      const data = await emergencyRequestsService.getAll()
-      setRequests(data.filter(r => r.status === 'ASSIGNED'))
+      try {
+        const data = await emergencyRequestsService.getAll()
+        setRequests(data.filter(r => r.status === 'ASSIGNED'))
+      } catch {
+        /* backend may be restarting */
+      }
     }, 10000)
     return () => clearInterval(interval)
   }, [])

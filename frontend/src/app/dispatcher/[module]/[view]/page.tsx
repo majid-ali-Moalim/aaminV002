@@ -2,16 +2,15 @@ import DispatcherModulePage from '@/components/dispatcher/DispatcherModulePage'
 import type { DispatcherModuleId } from '@/lib/dispatcher/navigation'
 
 const VALID: DispatcherModuleId[] = [
-  'operations',
-  'ambulances',
-  'crew',
+  'emergency',
+  'resources',
   'communications',
   'hospital',
-  'tracking',
-  'incidents',
+  'monitoring',
   'reports',
   'alerts',
   'tools',
+  'permissions',
 ]
 
 export default function Page({

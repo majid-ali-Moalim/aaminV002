@@ -7,8 +7,9 @@ import { Role } from '@/types'
 import {
   getPostLoginPath,
   persistAuthToken,
-  clearAuthTokenCookie,
   syncRoleStores,
+  clearAllAuthSessions,
+  CENTRAL_LOGIN_PATH,
 } from '@/lib/authRedirect'
 
 interface User {
@@ -16,8 +17,19 @@ interface User {
   username: string
   email: string
   role: Role
+  firstName?: string
+  lastName?: string
+  permissions?: string[]
+  activePermissionKeys?: string[]
   employee?: {
-    employeeRole: {
+    id?: string
+    firstName?: string
+    lastName?: string
+    profilePhoto?: string | null
+    phone?: string | null
+    employeeCode?: string | null
+    shiftStatus?: string | null
+    employeeRole?: {
       name: string
     }
   }
@@ -28,6 +40,7 @@ interface AuthContextType {
   token: string | null
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
   loading: boolean
 }
 
@@ -135,17 +148,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const refreshUser = async () => {
+    const authToken = token ?? (typeof window !== 'undefined' ? localStorage.getItem('token') : null)
+    if (!authToken) return
+    try {
+      const me: any = await authService.getMe(authToken)
+      const merged = {
+        id: me.id,
+        username: me.username,
+        email: me.email,
+        role: me.role,
+        firstName: me.employee?.firstName ?? me.patient?.firstName ?? '',
+        lastName: me.employee?.lastName ?? me.patient?.lastName ?? '',
+        employee: me.employee,
+        employeeRole: me.employee?.employeeRole?.name,
+        permissions: me.permissions ?? me.activePermissionKeys ?? [],
+        activePermissionKeys: me.activePermissionKeys ?? me.permissions ?? [],
+      }
+      setUser(merged as User)
+      localStorage.setItem('user', JSON.stringify(merged))
+    } catch (error) {
+      console.warn('Failed to refresh user profile:', error)
+    }
+  }
+
   const logout = () => {
     setUser(null)
     setToken(null)
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    clearAuthTokenCookie()
-    router.push('/login')
+    void clearAllAuthSessions()
+    router.replace(CENTRAL_LOGIN_PATH)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, refreshUser, loading }}>
       {children}
     </AuthContext.Provider>
   )

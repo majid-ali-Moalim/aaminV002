@@ -13,12 +13,17 @@ async function bootstrap() {
     prefix: '/uploads',
   });
 
-  // Enable CORS
+  // Enable CORS (all local dev ports)
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3002'
-    ],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true)
+      }
+      const allowed = process.env.FRONTEND_URL
+      if (allowed && origin === allowed) return callback(null, true)
+      callback(null, false)
+    },
     credentials: true,
   });
 

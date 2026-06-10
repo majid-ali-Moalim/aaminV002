@@ -1,7 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { NotificationCategory, NotificationPriority, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   ALL_PERMISSION_KEYS,
+  getBaselinePermissions,
   getSuggestedPermissions,
   isValidPermissionKey,
   resolveStaffProfile,
@@ -14,7 +17,10 @@ export type PermissionGrantInput = {
 
 @Injectable()
 export class AccessControlService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   /** Activity logs require a real users.id — hardcoded admin JWT id is not in DB. */
   private async resolveAuditUserId(requestedId: string): Promise<string> {
@@ -66,7 +72,7 @@ export class AccessControlService {
     if (!user) throw new NotFoundException('User not found');
 
     const profile = resolveStaffProfile(user.role, user.employee?.employeeRole?.name);
-    const suggested = getSuggestedPermissions(user.role, user.employee?.employeeRole?.name);
+    const baseline = getBaselinePermissions(user.role, user.employee?.employeeRole?.name);
 
     if (user.role === 'ADMIN') {
       return {
@@ -75,19 +81,31 @@ export class AccessControlService {
         employeeRole: user.employee?.employeeRole?.name ?? null,
         staffProfile: profile,
         canAssignPermissions: false,
-        suggestedPermissions: suggested,
+        baselinePermissions: [...ALL_PERMISSION_KEYS],
+        suggestedPermissions: baseline,
         grantedPermissions: ALL_PERMISSION_KEYS.map((key) => ({
           permissionKey: key,
           grantedAt: user.createdAt.toISOString(),
           expiresAt: null,
           isUnlimited: true,
           isExpired: false,
+          source: 'baseline' as const,
         })),
+        activePermissionKeys: [...ALL_PERMISSION_KEYS],
+        grantablePermissionKeys: [],
       };
     }
 
-    const grants = user.userPermissions.map((p) => this.mapGrant(p));
+    const grants = user.userPermissions.map((p) => ({
+      ...this.mapGrant(p),
+      source: 'granted' as const,
+    }));
     const activeGrants = grants.filter((g) => !g.isExpired);
+    const activeGrantedKeys = activeGrants.map((g) => g.permissionKey);
+    const activePermissionKeys = [...new Set([...baseline, ...activeGrantedKeys])];
+    const grantablePermissionKeys = ALL_PERMISSION_KEYS.filter(
+      (k) => !baseline.includes(k) && !activeGrantedKeys.includes(k),
+    );
 
     return {
       userId: user.id,
@@ -95,9 +113,12 @@ export class AccessControlService {
       employeeRole: user.employee?.employeeRole?.name ?? null,
       staffProfile: profile,
       canAssignPermissions: user.role !== 'PATIENT',
-      suggestedPermissions: suggested,
+      baselinePermissions: baseline,
+      suggestedPermissions: baseline,
       grantedPermissions: grants,
-      activePermissionKeys: activeGrants.map((g) => g.permissionKey),
+      activePermissionKeys,
+      activeGrantedKeys,
+      grantablePermissionKeys,
     };
   }
 
@@ -120,20 +141,24 @@ export class AccessControlService {
       throw new ForbiddenException('Administrator accounts have full access and cannot be modified here');
     }
 
-    const normalized = grants.map((g) => {
-      const expiresAtRaw = g.expiresAt !== undefined ? g.expiresAt : defaultExpiresAt;
-      let expiresAt: Date | null = null;
-      if (expiresAtRaw) {
-        expiresAt = new Date(expiresAtRaw);
-        if (Number.isNaN(expiresAt.getTime())) {
-          throw new BadRequestException(`Invalid expiry date for permission ${g.permissionKey}`);
+    const baseline = getBaselinePermissions(user.role, user.employee?.employeeRole?.name);
+
+    const normalized = grants
+      .map((g) => {
+        const expiresAtRaw = g.expiresAt !== undefined ? g.expiresAt : defaultExpiresAt;
+        let expiresAt: Date | null = null;
+        if (expiresAtRaw) {
+          expiresAt = new Date(expiresAtRaw);
+          if (Number.isNaN(expiresAt.getTime())) {
+            throw new BadRequestException(`Invalid expiry date for permission ${g.permissionKey}`);
+          }
+          if (expiresAt <= new Date()) {
+            throw new BadRequestException('Expiry must be in the future');
+          }
         }
-        if (expiresAt <= new Date()) {
-          throw new BadRequestException('Expiry must be in the future');
-        }
-      }
-      return { permissionKey: g.permissionKey, expiresAt };
-    });
+        return { permissionKey: g.permissionKey, expiresAt };
+      })
+      .filter((g) => !baseline.includes(g.permissionKey as (typeof baseline)[number]));
 
     const keys = normalized.map((g) => g.permissionKey);
     const uniqueKeys = [...new Set(keys)];
@@ -186,6 +211,34 @@ export class AccessControlService {
       console.error('[AccessControlService] Audit log failed (permissions still saved):', err);
     }
 
+    const permissionCount = byKey.size;
+    const expiryLabel =
+      expirySummary === 'unlimited'
+        ? 'Unlimited access'
+        : `Expires ${new Date(expirySummary).toLocaleString()}`;
+
+    try {
+      await this.notifications.dispatchEvent({
+        eventKey: 'SECURITY_ALERT',
+        title: 'Access permissions updated',
+        message: `You have been granted ${permissionCount} permission${permissionCount === 1 ? '' : 's'} by an administrator. ${expiryLabel}. Sign in again or open My Profile to review your access.`,
+        type: NotificationType.SYSTEM,
+        category: NotificationCategory.SYSTEM,
+        priority: NotificationPriority.HIGH,
+        senderName: 'Access Control',
+        entityType: 'UserPermission',
+        entityId: userId,
+        redirectUrl: user.role === 'EMPLOYEE' ? '/dispatcher/permissions/overview' : '/admin/profile',
+        context: {
+          directOnly: true,
+          recipientUserIds: [userId],
+          createdById: grantedById,
+        },
+      });
+    } catch (err) {
+      console.error('[AccessControlService] Permission grant notification failed:', err);
+    }
+
     return this.getUserPermissions(userId);
   }
 
@@ -195,6 +248,7 @@ export class AccessControlService {
       return [...ALL_PERMISSION_KEYS];
     }
 
+    const baseline = getBaselinePermissions(role, employeeRoleName);
     const now = new Date();
     const rows = await this.prisma.userPermission.findMany({
       where: {
@@ -204,6 +258,7 @@ export class AccessControlService {
       select: { permissionKey: true },
     });
 
-    return rows.map((r) => r.permissionKey);
+    const granted = rows.map((r) => r.permissionKey);
+    return [...new Set([...baseline, ...granted])];
   }
 }

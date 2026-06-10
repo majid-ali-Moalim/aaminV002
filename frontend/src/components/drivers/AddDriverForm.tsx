@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -160,10 +160,37 @@ function mapShiftStatus(value: string): string {
   return map[value] || 'OFF_DUTY'
 }
 
-export default function AddDriverForm() {
+export default function AddDriverForm({
+  listPath = '/admin/drivers',
+  systemSetupPath = '/admin/system-setup',
+  onSubmitForbidden,
+  persistKey,
+}: {
+  listPath?: string
+  systemSetupPath?: string
+  onSubmitForbidden?: (message: string) => void | Promise<void>
+  /** When set, saves step + form draft to sessionStorage (survives remounts). */
+  persistKey?: string
+}) {
   const router = useRouter()
-  const [step, setStep] = useState<StepId>('personal')
-  const [loading, setLoading] = useState(true)
+  const storageKey = persistKey ? `aamin-form:${persistKey}` : null
+
+  const readPersisted = () => {
+    if (!storageKey || typeof window === 'undefined') return null
+    try {
+      const raw = sessionStorage.getItem(storageKey)
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+
+  const persisted = readPersisted()
+  const hasPersistedDraft = Boolean(persisted?.step || persisted?.form)
+  const persistedDraftRef = useRef(persisted)
+
+  const [step, setStep] = useState<StepId>((persisted?.step as StepId) ?? 'personal')
+  const [loading, setLoading] = useState(!hasPersistedDraft)
   const [submitting, setSubmitting] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [createdDriver, setCreatedDriver] = useState<{ id: string; code: string; name: string } | null>(null)
@@ -180,7 +207,7 @@ export default function AddDriverForm() {
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<DriverFormErrors>({})
 
-  const [form, setForm] = useState({
+  const defaultForm = {
     profilePhoto: '',
     firstName: '',
     middleName: '',
@@ -217,7 +244,12 @@ export default function AddDriverForm() {
     confirmPassword: '',
     accountActive: true,
     notes: '',
-  })
+  }
+
+  const [form, setForm] = useState(() => ({
+    ...defaultForm,
+    ...(persisted?.form ?? {}),
+  }))
 
   const patch = (updates: Partial<typeof form>) => {
     setForm((f) => ({ ...f, ...updates }))
@@ -238,6 +270,11 @@ export default function AddDriverForm() {
       document.body.style.overflow = ''
     }
   }, [])
+
+  useEffect(() => {
+    if (!storageKey) return
+    sessionStorage.setItem(storageKey, JSON.stringify({ step, form }))
+  }, [storageKey, step, form])
 
   const loadMasterData = useCallback(async () => {
     setLoading(true)
@@ -286,21 +323,57 @@ export default function AddDriverForm() {
         )
       )
 
-      patch({
-        employeeCode: code,
-        departmentId: opsDept?.id || '',
-      })
+      const skipFormInit = Boolean(
+        storageKey && typeof window !== 'undefined' && sessionStorage.getItem(storageKey),
+      )
+
+      if (!skipFormInit) {
+        patch({
+          employeeCode: code,
+          departmentId: opsDept?.id || '',
+        })
+      } else {
+        try {
+          const draft = JSON.parse(sessionStorage.getItem(storageKey!)!)
+          if (draft?.form?.employeeCode) setDriverCode(draft.form.employeeCode)
+        } catch {
+          /* ignore */
+        }
+      }
     } catch {
       setMasterDataError('Failed to load form data. Check that the backend is running.')
       toast.error('Failed to load form data')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [storageKey])
 
   useEffect(() => {
     loadMasterData()
   }, [loadMasterData])
+
+  useEffect(() => {
+    const saved = persistedDraftRef.current?.form
+    if (!saved?.regionId) return
+
+    void (async () => {
+      setLoadingDistricts(true)
+      try {
+        const ds = await systemSetupService.getDistricts(saved.regionId)
+        setDistricts(Array.isArray(ds) ? ds : [])
+        if (saved.districtId) {
+          setLoadingStations(true)
+          const sts = await systemSetupService.getStations(saved.districtId)
+          setStations(Array.isArray(sts) ? sts : [])
+        }
+      } catch {
+        /* location lists optional on restore */
+      } finally {
+        setLoadingDistricts(false)
+        setLoadingStations(false)
+      }
+    })()
+  }, [])
 
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === form.regionId),
@@ -504,10 +577,16 @@ export default function AddDriverForm() {
         code: result.employeeCode || form.employeeCode,
         name,
       })
+      if (storageKey) sessionStorage.removeItem(storageKey)
       toast.success('Driver registered successfully')
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Registration failed'
-      toast.error(Array.isArray(msg) ? msg.join(', ') : msg)
+      const text = Array.isArray(msg) ? msg.join(', ') : String(msg)
+      if (err?.response?.status === 403 && onSubmitForbidden) {
+        await onSubmitForbidden(text)
+      } else {
+        toast.error(text)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -527,7 +606,7 @@ export default function AddDriverForm() {
             <TacticalBadge label={createdDriver.code} color="red" />
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <Link
-                href="/admin/drivers"
+                href={listPath}
                 className="flex-1 h-11 flex items-center justify-center rounded-xl bg-red-600 text-white text-sm font-bold uppercase hover:bg-red-700"
               >
                 All Drivers
@@ -535,6 +614,7 @@ export default function AddDriverForm() {
               <button
                 type="button"
                 onClick={() => {
+                  if (storageKey) sessionStorage.removeItem(storageKey)
                   setCreatedDriver(null)
                   setStep('personal')
                   setDistricts([])
@@ -602,7 +682,7 @@ export default function AddDriverForm() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => router.push('/admin/drivers')}
+              onClick={() => router.push(listPath)}
               className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 flex items-center justify-center transition"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -711,7 +791,7 @@ export default function AddDriverForm() {
                       Retry
                     </button>
                     <Link
-                      href="/admin/system-setup"
+                      href={systemSetupPath}
                       className="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold uppercase hover:bg-white"
                     >
                       System Setup

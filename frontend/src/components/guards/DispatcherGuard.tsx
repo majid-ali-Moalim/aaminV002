@@ -3,7 +3,12 @@
 import { useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { getPostLoginPath, isDispatcherUser, isDispatcherActive } from '@/lib/authRedirect'
+import {
+  getPostLoginPath,
+  isDispatcherUser,
+  isDispatcherActive,
+  CENTRAL_LOGIN_PATH,
+} from '@/lib/authRedirect'
 
 interface DispatcherGuardProps {
   children: ReactNode
@@ -20,7 +25,7 @@ export function DispatcherGuard({ children }: DispatcherGuardProps) {
     if (loading || isLoginPage) return
 
     if (!isAuthenticated || !user) {
-      router.replace('/dispatcher/login')
+      router.replace(CENTRAL_LOGIN_PATH)
       return
     }
 
@@ -30,11 +35,11 @@ export function DispatcherGuard({ children }: DispatcherGuardProps) {
     }
 
     if (!isDispatcherActive(user)) {
-      router.replace('/dispatcher/login?error=inactive')
+      router.replace(`${CENTRAL_LOGIN_PATH}?error=account_inactive`)
     }
   }, [user, isAuthenticated, router, loading, isLoginPage])
 
-  if (isLoginPage) return <>{children}</>
+  if (isLoginPage) return null
 
   if (loading || !isAuthenticated || !user) {
     return (

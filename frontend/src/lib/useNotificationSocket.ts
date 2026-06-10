@@ -6,7 +6,11 @@ import toast from 'react-hot-toast'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import type { AppNotification, NotificationStats } from '@/lib/notifications/types'
 
-const SOCKET_URL = 'http://localhost:3001'
+const SOCKET_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://127.0.0.1:3001'
+).replace(/\/$/, '')
 
 let globalSocket: Socket | null = null
 

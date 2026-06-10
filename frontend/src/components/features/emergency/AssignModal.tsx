@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { emergencyRequestsService } from '@/lib/api';
 import { EmergencyRequest, Ambulance, Employee } from '@/types';
+import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel';
 
 interface AssignModalProps {
   request: EmergencyRequest;
@@ -152,6 +153,11 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
               </div>
             </div>
           </div>
+
+          <PickupGpsPanel
+            request={request}
+            title="Patient shared GPS — send to assigned driver"
+          />
 
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Driver Section */}

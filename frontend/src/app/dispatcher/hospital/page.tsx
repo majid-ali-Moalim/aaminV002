@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function Page() {
-  redirect('/dispatcher/hospital/directory')
+  redirect('/dispatcher/hospital/hospitals')
 }

@@ -1,20 +1,49 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { Clock, Truck, RefreshCw, Search, MapPin, User, Phone } from 'lucide-react'
+import { Suspense, useEffect, useState, useCallback } from 'react'
+import { Clock, Truck, RefreshCw, Search, MapPin, User, Phone, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
 import AssignModal from '@/components/features/emergency/AssignModal'
+import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
+import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
+import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
 
 export default function PendingRequestsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 py-20 text-center">
+          <RefreshCw className="w-10 h-10 animate-spin mx-auto text-red-500" />
+        </div>
+      }
+    >
+      <PendingRequestsContent />
+    </Suspense>
+  )
+}
+
+function PendingRequestsContent() {
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
+  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
+  const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  const openCaseDetail = useCallback((request: EmergencyRequest) => {
+    setDetailCaseId(request.id)
+    setDetailPreview(request)
+    setHighlightId(request.id)
+    setTimeout(() => setHighlightId(null), 4000)
+  }, [])
+
+  useFocusedCaseFromUrl({ onOpenCase: openCaseDetail })
 
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
@@ -128,12 +157,15 @@ export default function PendingRequestsPage() {
             return (
               <div
                 key={request.id}
+                id={`case-row-${request.id}`}
                 className={`bg-white rounded-2xl border shadow-sm flex flex-col overflow-hidden group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 ${
-                  isDelayed
-                    ? 'border-red-300 ring-1 ring-red-100'
-                    : isWarning
-                      ? 'border-amber-200'
-                      : 'border-slate-100'
+                  highlightId === request.id
+                    ? 'border-red-400 ring-2 ring-red-300 shadow-lg'
+                    : isDelayed
+                      ? 'border-red-300 ring-1 ring-red-100'
+                      : isWarning
+                        ? 'border-amber-200'
+                        : 'border-slate-100'
                 }`}
               >
                 {/* Card header */}
@@ -206,9 +238,19 @@ export default function PendingRequestsPage() {
                       <p className="text-xs text-slate-600 line-clamp-2 mt-0.5">{request.notes}</p>
                     </div>
                   )}
+
+                  <PickupGpsPanel request={request} variant="compact" />
                 </div>
 
-                <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openCaseDetail(request)}
+                    className="w-full h-10 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View details
+                  </Button>
                   <Button
                     onClick={() => openAssignModal(request)}
                     className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-sm shadow-red-200 flex items-center justify-center gap-2"
@@ -230,6 +272,16 @@ export default function PendingRequestsPage() {
           onSuccess={() => fetchRequests(false)}
         />
       )}
+
+      <CaseDetailModal
+        caseId={detailCaseId}
+        open={Boolean(detailCaseId)}
+        preview={detailPreview}
+        onClose={() => {
+          setDetailCaseId(null)
+          setDetailPreview(null)
+        }}
+      />
     </div>
   )
 }

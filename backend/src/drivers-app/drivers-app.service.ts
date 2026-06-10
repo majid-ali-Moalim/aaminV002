@@ -131,7 +131,7 @@ export class DriversAppService {
     const employee = await this.prisma.employee.findFirst({ where: { userId } });
     if (!employee) throw new NotFoundException('Driver profile not found');
 
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ON_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
 
     const mission = await this.prisma.emergencyRequest.findFirst({
       where: {
@@ -223,7 +223,7 @@ export class DriversAppService {
     }
 
     const allowedStatuses = [
-      'ASSIGNED', 'DISPATCHED', 'ON_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED',
+      'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED',
     ];
     if (!allowedStatuses.includes(status)) {
       throw new BadRequestException(`Invalid status: ${status}`);
@@ -231,7 +231,7 @@ export class DriversAppService {
 
     const updateData: any = { status };
     if (status === 'DISPATCHED') updateData.dispatchedAt = new Date();
-    else if (status === 'ON_SCENE') updateData.arrivedAtSceneAt = new Date();
+    else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
     else if (status === 'ARRIVED_HOSPITAL') updateData.arrivedDestinationAt = new Date();
     else if (status === 'COMPLETED') {
@@ -369,7 +369,7 @@ export class DriversAppService {
       this.prisma.emergencyRequest.count({
         where: {
           driverId: employee.id,
-          status: { in: ['ASSIGNED', 'DISPATCHED', 'ON_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'] as any },
+          status: { in: ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'] as any },
         },
       }),
       this.prisma.shiftRecord.findMany({

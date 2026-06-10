@@ -46,10 +46,10 @@ export default function GrantAccessConfirmModal({
         : `${count} permissions`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 overflow-y-auto">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
         aria-label="Close dialog"
       />
@@ -57,9 +57,9 @@ export default function GrantAccessConfirmModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="grant-access-title"
-        className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[min(90vh,calc(100dvh-2rem))] animate-in fade-in zoom-in-95 duration-200 my-auto"
       >
-        <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-5 text-white">
+        <div className="shrink-0 bg-gradient-to-r from-red-600 to-red-700 px-6 py-5 text-white">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-white/15">
@@ -82,7 +82,7 @@ export default function GrantAccessConfirmModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm text-amber-900">
@@ -153,7 +153,7 @@ export default function GrantAccessConfirmModal({
           </p>
         </div>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+        <div className="shrink-0 px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
           <Button type="button" variant="outline" className="rounded-xl" onClick={onClose} disabled={confirming}>
             Cancel
           </Button>
@@ -161,7 +161,7 @@ export default function GrantAccessConfirmModal({
             type="button"
             className="rounded-xl bg-red-600 hover:bg-red-700 min-w-[140px]"
             onClick={onConfirm}
-            disabled={confirming || count === 0}
+            disabled={confirming}
           >
             {confirming ? (
               <>

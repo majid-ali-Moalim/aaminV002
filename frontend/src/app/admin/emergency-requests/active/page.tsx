@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Siren,
@@ -15,6 +15,7 @@ import {
   ExternalLink,
   ChevronDown,
   Filter,
+  Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
@@ -22,6 +23,9 @@ import { EmergencyRequest } from '@/types'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
+import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
+import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
+import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import {
   ACTIVE_MISSION_STATUSES,
   MISSION_PHASE_FILTERS,
@@ -51,11 +55,40 @@ function getProgress(status: string) {
 }
 
 export default function ActiveMissionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 py-20 text-center">
+          <RefreshCw className="w-10 h-10 animate-spin mx-auto text-red-500" />
+        </div>
+      }
+    >
+      <ActiveMissionsContent />
+    </Suspense>
+  )
+}
+
+function ActiveMissionsContent() {
   const router = useRouter()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [phaseFilter, setPhaseFilter] = useState<MissionPhaseFilter>('ALL')
+  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
+  const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  const openCaseDetail = useCallback((request: EmergencyRequest) => {
+    setDetailCaseId(request.id)
+    setDetailPreview(request)
+    setHighlightId(request.id)
+    setTimeout(() => setHighlightId(null), 4000)
+  }, [])
+
+  useFocusedCaseFromUrl({
+    onOpenCase: openCaseDetail,
+    redirectPendingTo: '/admin/emergency-requests/pending',
+  })
 
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
@@ -230,7 +263,12 @@ export default function ActiveMissionsPage() {
             return (
               <div
                 key={request.id}
-                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-red-100 transition-all duration-300"
+                id={`case-row-${request.id}`}
+                className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 ${
+                  highlightId === request.id
+                    ? 'border-red-400 ring-2 ring-red-300 shadow-lg'
+                    : 'border-slate-100 hover:border-red-100'
+                }`}
               >
                 <div className="flex flex-col lg:flex-row">
                   {/* Identity column */}
@@ -314,6 +352,9 @@ export default function ActiveMissionsPage() {
                         <p className="text-xs font-semibold text-slate-700 mt-1 line-clamp-2">
                           {request.pickupLocation}
                         </p>
+                        <div className="mt-2">
+                          <PickupGpsPanel request={request} variant="compact" />
+                        </div>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -348,6 +389,15 @@ export default function ActiveMissionsPage() {
                   <div className="p-5 lg:w-40 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
                     <Button
                       variant="outline"
+                      onClick={() => openCaseDetail(request)}
+                      className="w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                      title="View all case information"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => router.push(`/admin/emergency-requests/${request.id}`)}
                       className="w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
                     >
@@ -361,6 +411,16 @@ export default function ActiveMissionsPage() {
           })
         )}
       </div>
+
+      <CaseDetailModal
+        caseId={detailCaseId}
+        open={Boolean(detailCaseId)}
+        preview={detailPreview}
+        onClose={() => {
+          setDetailCaseId(null)
+          setDetailPreview(null)
+        }}
+      />
     </div>
   )
 }

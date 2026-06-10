@@ -22,6 +22,7 @@ import { EmergencyRequest } from '@/types'
 import { format, formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
+import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 
 export default function EmergencyCaseDetailPage() {
   const params = useParams()
@@ -170,6 +171,7 @@ export default function EmergencyCaseDetailPage() {
                   <p className="text-xs text-slate-500 mt-1">{request.pickupLandmark}</p>
                 )}
               </div>
+              <PickupGpsPanel request={request} />
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Destination

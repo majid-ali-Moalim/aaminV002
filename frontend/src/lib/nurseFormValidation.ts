@@ -200,7 +200,7 @@ function validatePersonal(form: NurseFormValues, errors: NurseFormErrors) {
   }
 }
 
-function validateLocation(form: NurseFormValues, errors: NurseFormErrors, _ctx?: NurseFormContext) {
+function validateLocation(form: NurseFormValues, errors: NurseFormErrors, ctx?: NurseFormContext) {
   const address = form.address.trim()
   if (!address) {
     setError(errors, 'address', 'Address is required')

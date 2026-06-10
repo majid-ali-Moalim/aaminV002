@@ -154,9 +154,43 @@ function fieldInputClass(error?: string) {
   return error ? `${inputClass} border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-100` : inputClass
 }
 
-export default function NewEmergencyCaseForm() {
+export type EmergencyFormContext = 'admin' | 'dispatcher'
+
+const FORM_ROUTES: Record<
+  EmergencyFormContext,
+  {
+    back: string
+    pending: string
+    viewCase: (caseId: string, trackingCode: string) => string
+    portalLabel: string
+  }
+> = {
+  admin: {
+    back: '/admin/emergency-requests',
+    pending: '/admin/emergency-requests/pending',
+    viewCase: (caseId) => `/admin/emergency-requests/track/${caseId}`,
+    portalLabel: 'Admin',
+  },
+  dispatcher: {
+    back: '/dispatcher/dashboard',
+    pending: '/dispatcher/emergency/pending',
+    viewCase: (_caseId, trackingCode) =>
+      trackingCode ? `/track/${encodeURIComponent(trackingCode)}` : '/dispatcher/emergency/pending',
+    portalLabel: 'Dispatcher',
+  },
+}
+
+export default function NewEmergencyCaseForm({
+  context = 'admin',
+  operatorName,
+}: {
+  context?: EmergencyFormContext
+  operatorName?: string
+}) {
   const router = useRouter()
   const { user } = useAuth()
+  const routes = FORM_ROUTES[context]
+  const displayName = operatorName || user?.username || routes.portalLabel
   const [step, setStep] = useState<StepId>('patient')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -632,13 +666,17 @@ export default function NewEmergencyCaseForm() {
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                href={createdCaseId ? `/admin/emergency-requests/track/${createdCaseId}` : '/admin/emergency-requests/pending'}
+                href={
+                  createdCaseId
+                    ? routes.viewCase(createdCaseId, successCode)
+                    : routes.pending
+                }
                 className="flex-1 h-12 flex items-center justify-center rounded-xl bg-[#0F172A] text-white text-sm font-bold uppercase tracking-wide hover:bg-slate-800"
               >
                 View Case
               </Link>
               <Link
-                href="/admin/emergency-requests/pending"
+                href={routes.pending}
                 className="flex-1 h-12 flex items-center justify-center rounded-xl border-2 border-slate-200 text-slate-700 text-sm font-bold uppercase tracking-wide hover:bg-slate-50"
               >
                 Pending Queue
@@ -660,7 +698,7 @@ export default function NewEmergencyCaseForm() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => router.push('/admin/emergency-requests')}
+              onClick={() => router.push(routes.back)}
               className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition"
               aria-label="Back"
             >
@@ -672,7 +710,7 @@ export default function NewEmergencyCaseForm() {
                 <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full animate-pulse">LIVE</span>
               </div>
               <p className="text-[11px] text-red-100 font-medium uppercase tracking-widest mt-0.5">
-                Aamin Emergency Dispatch · {user?.username || 'Admin'}
+                Aamin Emergency Dispatch · {displayName}
               </p>
             </div>
           </div>

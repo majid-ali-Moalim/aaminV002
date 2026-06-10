@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { getPostLoginPath } from '@/lib/authRedirect'
-import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import AaminLogo from '@/components/brand/AaminLogo'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -15,6 +16,14 @@ export default function LoginPage() {
 
   const { login, user, token, loading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const err = searchParams.get('error')
+    if (err === 'account_inactive') {
+      setError('Your account is inactive. Contact your system administrator.')
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (!loading && user && token) {
@@ -49,14 +58,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-            <AlertTriangle className="w-8 h-8 text-white" />
+          <div className="flex justify-center mb-5">
+            <AaminLogo size="auth" priority />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
             Emergency Ambulance Dispatch System
           </h1>
           <p className="text-gray-600">
-            Centralized Authentication Portal
+            Sign in as Admin, Dispatcher, Driver, Nurse, or any authorized role
           </p>
         </div>
 
@@ -186,5 +195,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-red-50 to-white flex items-center justify-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

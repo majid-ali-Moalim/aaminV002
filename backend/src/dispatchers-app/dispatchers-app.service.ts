@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessControlService } from '../access-control/access-control.service';
 import { EmergencyRequestStatus } from '@prisma/client';
 
 const ACTIVE_MISSION_STATUSES: EmergencyRequestStatus[] = [
@@ -29,7 +30,10 @@ function minutesBetween(from: Date, to: Date) {
 
 @Injectable()
 export class DispatchersAppService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private accessControl: AccessControlService,
+  ) {}
 
   private async getDispatcherByUserId(userId: string) {
     const employee = await this.prisma.employee.findFirst({
@@ -57,7 +61,16 @@ export class DispatchersAppService {
   }
 
   async getProfile(userId: string) {
-    return this.getDispatcherByUserId(userId);
+    const employee = await this.getDispatcherByUserId(userId);
+    const permData = await this.accessControl.getUserPermissions(userId);
+    return {
+      ...employee,
+      permissions: permData.activePermissionKeys,
+      activePermissionKeys: permData.activePermissionKeys,
+      baselinePermissions: permData.baselinePermissions,
+      activeGrantedKeys: permData.activeGrantedKeys ?? [],
+      grantablePermissionKeys: permData.grantablePermissionKeys ?? [],
+    };
   }
 
   async updateProfile(userId: string, data: Record<string, unknown>) {
@@ -568,6 +581,10 @@ export class DispatchersAppService {
         ],
       },
       cancelled: { status: 'CANCELLED' },
+      closed: { status: 'COMPLETED' },
+      incoming: { status: { in: ['TRANSPORTING', 'ARRIVED_HOSPITAL'] } },
+      decisions: { status: { in: ['CANCELLED', 'COMPLETED'] } },
+      directory: {},
     };
 
     const where = filters[view] ?? filters['all-cases'];
@@ -670,10 +687,15 @@ export class DispatchersAppService {
     });
 
     let items = hospitals;
-    if (view === 'receiving') items = hospitals.filter((h) => h.erReady);
-    if (view === 'capacity' || view === 'beds')
+    if (view === 'directory' || view === 'hospitals') {
+      items = hospitals;
+    } else if (view === 'receiving') {
+      items = hospitals.filter((h) => h.erReady || h.acceptEmergencyCases);
+    } else if (view === 'capacity' || view === 'availability' || view === 'beds') {
       items = hospitals.filter((h) => h.beds > 0);
-    if (view === 'icu') items = hospitals.filter((h) => h.status !== 'Full');
+    } else if (view === 'icu') {
+      items = hospitals.filter((h) => (h.icuTotalBeds ?? 0) > 0);
+    }
 
     return { view, items, total: items.length };
   }
@@ -714,13 +736,23 @@ export class DispatchersAppService {
       ]);
 
     const alertMap: Record<string, unknown[]> = {
+      all: [
+        ...critical,
+        ...delayed,
+        ...unassigned,
+        ...maintenanceAmbulances,
+        ...hospitalsFull,
+      ],
       critical,
+      emergency: critical,
       delays: delayed,
       unassigned,
+      resource: [...unassigned, ...maintenanceAmbulances],
       breakdowns: maintenanceAmbulances,
       'crew-shortage': [],
       'comm-failures': [],
       overcapacity: hospitalsFull,
+      hospital: hospitalsFull,
       maintenance: maintenanceAmbulances,
       system: [],
     };

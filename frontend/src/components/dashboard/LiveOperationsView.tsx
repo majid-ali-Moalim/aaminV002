@@ -139,9 +139,9 @@ export function LiveOperationsView() {
     const [metrics, statsRes, requests, ambulances, employees] = await Promise.all([
       reportsService.getRealTimeMetrics().catch(() => null),
       reportsService.getDashboardStats().catch(() => ({ stats: {}, recentActivity: [] })),
-      emergencyRequestsService.getAll(),
-      ambulancesService.getAll(),
-      employeesService.getAll(),
+      emergencyRequestsService.getAll().catch(() => []),
+      ambulancesService.getAll().catch(() => []),
+      employeesService.getAll().catch(() => []),
     ])
     return {
       metrics,

@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
 import { useState, useEffect } from 'react'
 import SidebarNavLink from '@/components/navigation/SidebarNavLink'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
+import AaminLogo from '@/components/brand/AaminLogo'
 import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/components/layout/AmbulanceManagementSidebar'
 import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
 import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
@@ -154,7 +156,7 @@ const workforceSubMenu = [
   { href: '/admin/drivers', label: 'Drivers', icon: Truck },
   { href: '/admin/nurses', label: 'Nurses / Paramedics', icon: Stethoscope },
   { href: '/admin/system-setup?tab=departments', label: 'Departments', icon: Building2 },
-  { href: '/admin/employees/attendance', label: 'Attendance & Duty Logs', icon: Clock },
+  { href: '/admin/employees/attendance', label: 'Attendance Management', icon: Clock },
   { href: '/admin/reports/performance', label: 'Staff Performance', icon: BarChart2 },
 ]
 
@@ -184,6 +186,7 @@ const masterDataSubMenu = [
 // 13. Permissions & Access Control — rendered via PermissionsAccessControlSidebar component
 
 export default function AdminSidebar() {
+  const { logout } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
   const { isActive: isNavActive } = useOptimisticNav()
@@ -372,20 +375,7 @@ export default function AdminSidebar() {
     >
       {/* Logo */}
       <div className="p-4 shrink-0" style={{ borderBottom: `1px solid ${SIDEBAR.border}` }}>
-        <h1 className="text-base font-black tracking-tight flex items-center" style={{ color: SIDEBAR.text }}>
-          <div
-            className="p-1.5 rounded-lg mr-2.5"
-            style={{ backgroundColor: SIDEBAR.primary }}
-          >
-            <Activity className="w-4 h-4 text-white" />
-          </div>
-          <span>
-            Aamin{' '}
-            <span className="font-light text-xs" style={{ color: SIDEBAR.muted }}>
-              Ambulance
-            </span>
-          </span>
-        </h1>
+        <AaminLogo size="sidebar" onDark priority />
       </div>
       
       {/* Scrollable Navigation */}
@@ -464,9 +454,10 @@ export default function AdminSidebar() {
           backgroundColor: 'rgba(17,24,39,0.5)',
         }}
       >
-        <Link
-          href="/logout"
-          className="flex items-center px-2.5 py-2 text-[12px] font-medium rounded-lg transition-all duration-200 group"
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="w-full flex items-center px-2.5 py-2 text-[12px] font-medium rounded-lg transition-all duration-200 group"
           style={{ color: SIDEBAR.muted }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = SIDEBAR.primary
@@ -479,7 +470,7 @@ export default function AdminSidebar() {
         >
           <LogOut className="w-3.5 h-3.5 mr-2.5 transition-transform group-hover:-translate-x-1" />
           Logout
-        </Link>
+        </button>
       </div>
     </div>
   )

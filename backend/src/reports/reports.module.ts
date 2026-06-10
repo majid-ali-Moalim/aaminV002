@@ -3,12 +3,11 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
-import { PermissionsGuard } from '../auth/guards/permissions.guard';
 
 @Module({
   imports: [PrismaModule, AuthModule],
   controllers: [ReportsController],
-  providers: [ReportsService, PermissionsGuard],
+  providers: [ReportsService],
   exports: [ReportsService],
 })
 export class ReportsModule {}

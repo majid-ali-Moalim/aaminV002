@@ -2,12 +2,16 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { ALL_PERMISSION_KEYS } from '../../access-control/permission-catalog';
+import { AccessControlService } from '../../access-control/access-control.service';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private accessControl: AccessControlService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -20,7 +24,13 @@ export class PermissionsGuard implements CanActivate {
 
     if (user.role === 'ADMIN') return true;
 
-    const granted: string[] = user.permissions ?? [];
+    const userId = user.sub ?? user.id;
+    const granted = await this.accessControl.getPermissionsForAuth(
+      userId,
+      user.role,
+      user.employeeRole,
+    );
+
     const hasAll = required.every((p) => granted.includes(p));
     if (!hasAll) {
       throw new ForbiddenException(`Missing required permission(s): ${required.join(', ')}`);

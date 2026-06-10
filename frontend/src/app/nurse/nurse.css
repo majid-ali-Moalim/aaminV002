@@ -1,0 +1,1833 @@
+/* Nurse Panel — EADS Clinical Ops */
+
+.nurse-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #0c0c0e;
+  color: #e4e4e7;
+}
+
+.nurse-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.nurse-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #450a0a 0%, #18181b 40%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 16px 12px;
+}
+
+.nurse-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 12px;
+}
+
+.nurse-sidebar-brand-icon {
+  color: #f87171;
+}
+
+.nurse-sidebar-brand-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fafafa;
+}
+
+.nurse-sidebar-brand-sub {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.nurse-sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nurse-sidebar-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #dc2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.nurse-sidebar-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f4f4f5;
+}
+
+.nurse-sidebar-meta {
+  font-size: 10px;
+  color: #a1a1aa;
+  font-weight: 600;
+}
+
+.nurse-sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.nurse-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4d4d8;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nurse-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.nurse-sidebar-link.active {
+  background: rgba(220, 38, 38, 0.25);
+  color: #fecaca;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+}
+
+.nurse-sidebar-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nurse-sidebar-logout:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.nurse-page {
+  min-height: 100vh;
+}
+
+.nurse-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.nurse-header-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f87171;
+  margin-bottom: 4px;
+}
+
+.nurse-header-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fafafa;
+}
+
+.nurse-header-sub {
+  font-size: 13px;
+  color: #71717a;
+  margin-top: 4px;
+}
+
+.nurse-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nurse-live-pill {
+  font-size: 11px;
+  font-weight: 800;
+  color: #4ade80;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+.nurse-notif-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d4d4d8;
+}
+
+.nurse-main {
+  padding: 20px 24px 40px;
+  max-width: 1200px;
+}
+
+.nurse-dash-hero {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.2), rgba(24, 24, 27, 0.9));
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  margin-bottom: 20px;
+}
+
+.nurse-dash-hero h2 {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.nurse-dash-hero p {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-top: 4px;
+}
+
+.nurse-dash-status {
+  color: #f87171 !important;
+  font-weight: 700;
+  margin-top: 8px !important;
+}
+
+.nurse-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.nurse-stat-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nurse-stat-value {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.nurse-stat-label {
+  font-size: 11px;
+  color: #71717a;
+  font-weight: 600;
+}
+
+.nurse-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.nurse-quick-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e4e4e7;
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.nurse-quick-card:hover {
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.nurse-quick-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nurse-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.nurse-search {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nurse-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f4f4f5;
+  font-size: 14px;
+}
+
+.nurse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+
+.nurse-btn.primary {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+}
+
+.nurse-btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nurse-btn.ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e4e4e7;
+}
+
+.nurse-loading,
+.nurse-empty {
+  text-align: center;
+  padding: 40px;
+  color: #71717a;
+}
+
+.nurse-empty-card {
+  text-align: center;
+  padding: 48px 24px;
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  color: #71717a;
+}
+
+.nurse-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nurse-case-card,
+.nurse-record-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.nurse-case-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.nurse-case-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  color: #f87171;
+  font-size: 14px;
+}
+
+.nurse-priority {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.nurse-priority.critical { background: rgba(220, 38, 38, 0.2); color: #fca5a5; }
+.nurse-priority.high { background: rgba(251, 146, 60, 0.2); color: #fdba74; }
+.nurse-priority.medium { background: rgba(234, 179, 8, 0.15); color: #fde047; }
+.nurse-priority.low { background: rgba(74, 222, 128, 0.15); color: #86efac; }
+
+.nurse-status-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+}
+
+.nurse-case-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #d4d4d8;
+  margin-top: 6px;
+}
+
+.nurse-case-row.muted {
+  color: #71717a;
+  font-size: 12px;
+}
+
+.nurse-record-notes {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.nurse-record-patient {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 6px;
+}
+
+.nurse-vitals-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #93c5fd;
+  margin-top: 8px;
+}
+
+.nurse-vitals-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nurse-form-card {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.nurse-form-header {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.nurse-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.nurse-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+}
+
+.nurse-form-grid label.span-2 {
+  grid-column: span 2;
+}
+
+.nurse-form-grid input,
+.nurse-form-grid textarea,
+.nurse-textarea {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  color: #f4f4f5;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.nurse-form-grid input.readonly {
+  opacity: 0.7;
+}
+
+.nurse-comm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.nurse-comm-grid .span-2 {
+  grid-column: span 2;
+}
+
+.nurse-comm-card {
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s;
+}
+
+.nurse-comm-card:hover {
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+.nurse-comm-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.15);
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.nurse-comm-card h3 {
+  font-weight: 800;
+  color: #fff;
+  font-size: 14px;
+}
+
+.nurse-comm-card p {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 4px;
+}
+
+.nurse-shift-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.nurse-shift-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.nurse-shift-badge.on {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.nurse-shift-badge.off {
+  background: rgba(113, 113, 122, 0.2);
+  color: #a1a1aa;
+}
+
+.nurse-shift-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nurse-notif-card {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.nurse-notif-card.unread {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.nurse-notif-title {
+  font-weight: 700;
+  color: #f4f4f5;
+  font-size: 14px;
+}
+
+.nurse-notif-msg {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin-top: 4px;
+}
+
+.nurse-notif-time {
+  font-size: 11px;
+  color: #52525b;
+  margin-top: 6px;
+}
+
+.nurse-perm-section {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nurse-perm-section.baseline {
+  background: rgba(74, 222, 128, 0.05);
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+.nurse-perm-section.granted {
+  background: rgba(220, 38, 38, 0.05);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.nurse-perm-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  color: #e4e4e7;
+}
+
+.nurse-perm-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nurse-perm-section li {
+  font-size: 13px;
+  color: #a1a1aa;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.nurse-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.nurse-profile-grid .span-2 {
+  grid-column: span 2;
+}
+
+.nurse-profile-hero {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(24, 24, 27, 0.95));
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.nurse-profile-photo {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 3px solid #dc2626;
+  background: #dc2626;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nurse-profile-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nurse-profile-photo span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.nurse-photo-edit {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+}
+
+.nurse-dl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.nurse-dl-grid dt {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.nurse-dl-grid dd {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e4e7;
+  margin-top: 2px;
+}
+
+.hidden {
+  display: none;
+}
+
+.nurse-live-pill.offline {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.25);
+}
+
+.nurse-header-badge,
+.nurse-sidebar-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nurse-sidebar-badge {
+  margin-left: auto;
+}
+
+.nurse-header-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+}
+
+.nurse-notif-btn {
+  position: relative;
+}
+
+.nurse-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 900px) {
+  .nurse-kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.nurse-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nurse-dash-section h3 {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a1a1aa;
+  margin-bottom: 12px;
+}
+
+.nurse-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nurse-quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e4e4e7;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nurse-quick-action-btn:hover {
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.nurse-dash-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .nurse-dash-columns {
+    grid-template-columns: 1fr 1.2fr;
+  }
+}
+
+.nurse-activity-feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.nurse-activity-feed li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.nurse-activity-feed li.muted {
+  color: #52525b;
+}
+
+.nurse-activity-feed .time {
+  flex-shrink: 0;
+  font-family: ui-monospace, monospace;
+  color: #52525b;
+  min-width: 44px;
+}
+
+.nurse-activity-feed .text {
+  color: #a1a1aa;
+}
+
+.nurse-mission-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nurse-mission-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-decoration: none;
+  color: inherit;
+  font-size: 12px;
+}
+
+@media (min-width: 768px) {
+  .nurse-mission-row {
+    grid-template-columns: auto 1fr 1fr auto auto auto;
+    align-items: center;
+  }
+}
+
+.nurse-mission-row .code {
+  font-family: ui-monospace, monospace;
+  font-weight: 800;
+  color: #f87171;
+}
+
+.nurse-mission-row .patient,
+.nurse-mission-row .driver {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #d4d4d8;
+}
+
+.nurse-empty-inline {
+  color: #71717a;
+  font-size: 13px;
+}
+
+.nurse-notif-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.nurse-notif-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.nurse-notif-filter {
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.nurse-notif-filter.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.nurse-notif-card.clickable {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.nurse-notif-card-top {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.nurse-notif-type {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #a1a1aa;
+}
+
+.nurse-notif-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.nurse-notif-sender {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #71717a;
+}
+
+.nurse-notif-link-icon {
+  margin-left: auto;
+  color: #52525b;
+}
+
+.nurse-sidebar-link {
+  position: relative;
+}
+
+/* Patient Care module */
+.npc-active {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.npc-active-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.npc-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+}
+
+.npc-case-code {
+  font-family: ui-monospace, monospace;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #f87171;
+}
+
+.npc-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.npc-info-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.npc-info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+
+.npc-info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.npc-notes-box {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  font-size: 14px;
+  color: #e4e4e7;
+}
+
+.npc-notes-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #f87171;
+  margin-bottom: 6px;
+}
+
+.npc-actions-section h3 {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a1a1aa;
+  margin-bottom: 10px;
+}
+
+.npc-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.npc-updated {
+  font-size: 12px;
+  text-align: center;
+}
+
+.npc-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.npc-filter-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.npc-filter-chip.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.npc-assigned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.npc-assigned-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.npc-assigned-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.npc-assigned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.npc-cell-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.npc-cell-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+  margin-top: 2px;
+}
+
+.npc-assigned-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.npc-split {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+.npc-form-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.npc-form-head h3 {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fafafa;
+}
+
+.npc-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.npc-history {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.npc-history h3 {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a1a1aa;
+  margin-bottom: 12px;
+}
+
+.npc-history-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.npc-history-item {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.npc-edit-link {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f87171;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .nurse-sidebar {
+    display: none;
+  }
+
+  .nurse-stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .nurse-form-grid,
+  .nurse-profile-grid,
+  .nurse-dl-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nurse-form-grid label.span-2,
+  .nurse-profile-grid .span-2,
+  .nurse-comm-grid .span-2 {
+    grid-column: span 1;
+  }
+
+  .npc-split {
+    grid-template-columns: 1fr;
+  }
+
+  .npc-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Nurse Mission Workflow */
+.nmw-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nmw-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.12), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.nmw-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #f87171;
+}
+
+.nmw-code {
+  font-family: ui-monospace, monospace;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #fafafa;
+  margin: 4px 0 8px;
+}
+
+.nmw-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nmw-stage-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e4e4e7;
+}
+
+.nmw-hero-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nmw-progress-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: conic-gradient(#dc2626 var(--pct), rgba(255, 255, 255, 0.08) 0);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.nmw-progress-ring::before {
+  content: '';
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #18181b;
+  position: absolute;
+}
+
+.nmw-progress-ring span {
+  position: relative;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fafafa;
+}
+
+.nmw-refresh {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #a1a1aa;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.nmw-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.nmw-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #dc2626, #f87171);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.nmw-patient-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  color: #d4d4d8;
+}
+
+.nmw-patient-strip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nmw-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+
+.nmw-span-2 {
+  grid-column: span 2;
+}
+
+.nmw-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nmw-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a1a1aa;
+  margin-bottom: 12px;
+}
+
+.nmw-timeline {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.nmw-timeline-item {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+  position: relative;
+}
+
+.nmw-timeline-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nmw-timeline-item.done::after {
+  background: rgba(220, 38, 38, 0.35);
+}
+
+.nmw-timeline-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  color: #71717a;
+}
+
+.nmw-timeline-item.done .nmw-timeline-dot {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: #dc2626;
+  color: #fca5a5;
+}
+
+.nmw-timeline-item.active .nmw-timeline-dot {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
+}
+
+.nmw-timeline-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #71717a;
+}
+
+.nmw-timeline-item.active .nmw-timeline-label {
+  color: #fafafa;
+}
+
+.nmw-timeline-item.done .nmw-timeline-label {
+  color: #d4d4d8;
+}
+
+.nmw-timeline-desc {
+  font-size: 11px;
+  color: #52525b;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.nmw-timeline-time {
+  font-size: 10px;
+  color: #71717a;
+  margin-top: 4px;
+}
+
+.nmw-stage-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fafafa;
+}
+
+.nmw-stage-desc {
+  font-size: 13px;
+  color: #a1a1aa;
+  margin: 6px 0 14px;
+}
+
+.nmw-warn {
+  font-size: 12px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.nmw-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.nmw-action-btn {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e4e4e7;
+  cursor: pointer;
+}
+
+.nmw-action-btn.primary {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.nmw-action-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.nmw-quick-tasks {
+  margin-bottom: 16px;
+}
+
+.nmw-quick-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #71717a;
+  margin-bottom: 8px;
+}
+
+.nmw-task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nmw-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.nmw-task-chip.active {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #fca5a5;
+}
+
+.nmw-comms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nmw-task-placeholder {
+  padding: 24px;
+  text-align: center;
+  color: #71717a;
+  font-size: 14px;
+}
+
+.nmw-task-form {
+  max-width: 640px;
+}
+
+.nmw-task-head h4 {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fafafa;
+}
+
+.nmw-task-head p {
+  font-size: 13px;
+  color: #71717a;
+  margin-bottom: 12px;
+}
+
+.nmw-doc-panel h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fafafa;
+  margin-bottom: 12px;
+}
+
+.nmw-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+}
+
+.nmw-doc-stat {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.nmw-doc-count {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #f87171;
+}
+
+.nmw-doc-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.nmw-doc-list {
+  list-style: none;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nmw-doc-list li {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.nmw-doc-list li span:first-child {
+  color: #71717a;
+  flex-shrink: 0;
+}
+
+.nmw-activity-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.nmw-activity-list li {
+  font-size: 12px;
+  color: #d4d4d8;
+}
+
+.nmw-activity-list li span {
+  color: #71717a;
+  margin-right: 8px;
+  font-family: ui-monospace, monospace;
+}
+
+.nmw-empty,
+.nmw-queue {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.nmw-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: rgba(220, 38, 38, 0.12);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+  color: #f87171;
+}
+
+.nmw-empty h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fafafa;
+  margin-bottom: 8px;
+}
+
+.nmw-empty p {
+  color: #71717a;
+  margin-bottom: 16px;
+}
+
+.nmw-empty .nurse-btn {
+  margin: 4px;
+}
+
+.nmw-queue-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: #fca5a5;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.nmw-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.nmw-queue-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nmw-queue-top {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nmw-queue-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nmw-case-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.nmw-case-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.nmw-case-chip.active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+@media (max-width: 1024px) {
+  .nmw-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nmw-span-2 {
+    grid-column: span 1;
+  }
+}

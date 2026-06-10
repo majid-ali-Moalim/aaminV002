@@ -19,6 +19,14 @@ export class AccessControlController {
     return this.accessControlService.getCatalog();
   }
 
+  @Get('me/permissions')
+  @Roles('ADMIN', 'DISPATCHER', 'DRIVER', 'NURSE')
+  @ApiOperation({ summary: 'Get current user granted permissions' })
+  getMyPermissions(@Req() req: { user: { id: string; sub?: string; role: string; employeeRole?: string } }) {
+    const userId = req.user.id ?? req.user.sub!;
+    return this.accessControlService.getUserPermissions(userId);
+  }
+
   @Get('users/:userId/permissions')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Get user granted and suggested permissions' })

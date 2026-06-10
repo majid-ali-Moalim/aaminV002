@@ -126,13 +126,16 @@ export class EmergencyRequestsService {
       // This prevents Prisma 'Invalid invocation' errors from unknown frontend fields
       // ISOLATION TEST: Bare minimum fields to find the bug
       const finalPayload: any = {
-        trackingCode: data.trackingCode || await this.generateTrackingCode(),
         priority: data.priority || 'MEDIUM',
         requestSource: data.requestSource || 'PHONE_CALL',
         pickupLocation: String(data.pickupLocation),
         // Relations
         patient: { connect: { id: patientId } },
       };
+
+      if (data.trackingCode) {
+        finalPayload.trackingCode = data.trackingCode;
+      }
       
       // Optional fields added one by one with safe checks
       if (data.incidentCategoryId) finalPayload.incidentCategory = { connect: { id: data.incidentCategoryId } };
@@ -155,6 +158,17 @@ export class EmergencyRequestsService {
       if (data.needsOxygen !== undefined) finalPayload.needsOxygen = Boolean(data.needsOxygen);
       if (data.needsStretcher !== undefined) finalPayload.needsStretcher = Boolean(data.needsStretcher);
 
+      const rawLat = data.pickupLatitude ?? data.latitude;
+      const rawLng = data.pickupLongitude ?? data.longitude;
+      if (rawLat != null && rawLng != null && rawLat !== '' && rawLng !== '') {
+        const lat = parseFloat(String(rawLat));
+        const lng = parseFloat(String(rawLng));
+        if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          finalPayload.pickupLatitude = lat;
+          finalPayload.pickupLongitude = lng;
+        }
+      }
+
       // Add Dispatch Assignment if provided
       let isAssigned = false;
       if (data.ambulanceId) { finalPayload.ambulance = { connect: { id: data.ambulanceId } }; isAssigned = true; }
@@ -166,25 +180,56 @@ export class EmergencyRequestsService {
         finalPayload.assignedAt = new Date();
       }
 
-      console.log('DIAGNOSTIC - Sending to Prisma:', JSON.stringify(finalPayload, null, 2));
+      let request:
+        | (Awaited<ReturnType<typeof this.prisma.emergencyRequest.create>> & {
+            patient: { fullName: string };
+            driver: { userId: string } | null;
+            nurse: { userId: string } | null;
+          })
+        | undefined;
+      const maxAttempts = data.trackingCode ? 1 : 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (!data.trackingCode) {
+          finalPayload.trackingCode = await this.generateTrackingCode();
+        }
+        try {
+          request = await this.prisma.emergencyRequest.create({
+            data: finalPayload,
+            include: { patient: true, driver: true, nurse: true },
+          });
+          break;
+        } catch (createError: any) {
+          const isDuplicateCode =
+            createError instanceof Prisma.PrismaClientKnownRequestError &&
+            createError.code === 'P2002' &&
+            JSON.stringify(createError.meta?.target ?? '').includes('trackingCode');
+          if (isDuplicateCode && !data.trackingCode && attempt < maxAttempts - 1) {
+            continue;
+          }
+          throw createError;
+        }
+      }
 
-      const request = await this.prisma.emergencyRequest.create({
-        data: finalPayload,
-        include: { patient: true, driver: true, nurse: true }
-      });
+      if (!request) {
+        throw new BadRequestException('Could not generate a unique tracking code. Please try again.');
+      }
 
       const assignedAtCreate = [request.driver?.userId, request.nurse?.userId].filter(Boolean) as string[];
 
       await this.notifications.dispatchEvent({
         eventKey: 'EMERGENCY_CREATED',
         title: 'New Emergency Case',
-        message: `Case ${request.trackingCode} created for ${request.patient.fullName} at ${request.pickupLocation}`,
+        message: `Case ${request.trackingCode} created for ${request.patient.fullName} at ${request.pickupLocation}${
+          request.pickupLatitude != null && request.pickupLongitude != null
+            ? ` (GPS: ${request.pickupLatitude}, ${request.pickupLongitude})`
+            : ''
+        }`,
         type: 'EMERGENCY',
         category: 'MISSION',
         priority: request.priority as any,
         entityType: 'EmergencyRequest',
         entityId: request.id,
-        redirectUrl: `/admin/emergency-requests/active?id=${request.id}`,
+        redirectUrl: `/admin/emergency-requests/pending?id=${request.id}`,
         context: {
           createdById: data.createdByUserId ?? data.dispatcherUserId,
           assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
@@ -408,10 +453,15 @@ export class EmergencyRequestsService {
 
     const assignedIds = [result.driver?.userId, result.nurse?.userId].filter(Boolean) as string[];
 
+    const gpsNote =
+      result.pickupLatitude != null && result.pickupLongitude != null
+        ? ` GPS: ${result.pickupLatitude}, ${result.pickupLongitude}`
+        : '';
+
     await this.notifications.dispatchEvent({
       eventKey: 'MISSION_ASSIGNED',
       title: 'Mission Assigned',
-      message: `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}`,
+      message: `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`,
       type: 'EMERGENCY',
       category: 'MISSION',
       priority: result.priority as any,
@@ -686,9 +736,34 @@ export class EmergencyRequestsService {
 
   private async generateTrackingCode(): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await this.prisma.emergencyRequest.count();
-    const sequence = String(count + 1).padStart(4, '0');
-    return `CASE-${year}-${sequence}`;
+    const prefix = `CASE-${year}-`;
+
+    const latest = await this.prisma.emergencyRequest.findFirst({
+      where: { trackingCode: { startsWith: prefix } },
+      orderBy: { trackingCode: 'desc' },
+      select: { trackingCode: true },
+    });
+
+    let nextSequence = 1;
+    if (latest?.trackingCode) {
+      const match = latest.trackingCode.match(/^CASE-\d{4}-(\d+)/);
+      if (match) {
+        nextSequence = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    for (let offset = 0; offset < 20; offset++) {
+      const sequence = String(nextSequence + offset).padStart(4, '0');
+      const code = `${prefix}${sequence}`;
+      const exists = await this.prisma.emergencyRequest.findUnique({
+        where: { trackingCode: code },
+        select: { id: true },
+      });
+      if (!exists) return code;
+    }
+
+    const fallback = `${prefix}${Date.now().toString().slice(-6)}`;
+    return fallback;
   }
 
   private mapBloodType(type: string): string | null {

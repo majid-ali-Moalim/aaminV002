@@ -34,9 +34,18 @@ function DispatcherShell({ children }: { children: ReactNode }) {
 export default function DispatcherLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === '/dispatcher/login'
+  const isFullScreen = pathname === '/dispatcher/new-emergency'
 
   if (isLoginPage) {
     return <>{children}</>
+  }
+
+  if (isFullScreen) {
+    return (
+      <DispatcherGuard>
+        <div className="min-h-screen">{children}</div>
+      </DispatcherGuard>
+    )
   }
 
   return <DispatcherShell>{children}</DispatcherShell>

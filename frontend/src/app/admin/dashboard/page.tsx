@@ -41,10 +41,10 @@ export default function AdminDashboard() {
 
   const fetcher = async () => {
     const [statsRes, requestsRes, ambulancesRes, employeesRes] = await Promise.all([
-      reportsService.getDashboardStats(),
-      emergencyRequestsService.getAll(),
-      ambulancesService.getAll(),
-      employeesService.getAll(),
+      reportsService.getDashboardStats().catch(() => ({ stats: {}, recentActivity: [] })),
+      emergencyRequestsService.getAll().catch(() => []),
+      ambulancesService.getAll().catch(() => []),
+      employeesService.getAll().catch(() => []),
     ])
       return {
       stats: statsRes.stats,

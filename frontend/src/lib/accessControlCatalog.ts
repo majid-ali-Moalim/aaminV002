@@ -182,9 +182,10 @@ export const SYSTEM_ROLES = [
     userCount: 12,
     isSystem: true,
     permissions: [
-      'driver.create', 'driver.view', 'nurse.create', 'nurse.view',
-      'ambulance.assign', 'ambulance.status', 'case.create', 'case.edit', 'case.assign',
-      'case.triage', 'dispatch.board', 'patient.create', 'patient.view',
+      'driver.view', 'nurse.view',
+      'ambulance.assign', 'ambulance.status',
+      'case.create', 'case.edit', 'case.assign', 'case.triage', 'dispatch.board',
+      'patient.create', 'patient.view',
       'report.view', 'hospital.view', 'hospital.handover',
     ],
   },
@@ -312,6 +313,14 @@ export function resolveStaffProfile(
 }
 
 export function getSuggestedPermissionsForUser(
+  role: string,
+  employeeRoleName?: string | null,
+): string[] {
+  return getBaselinePermissionsForUser(role, employeeRoleName)
+}
+
+/** Built-in role capabilities — always active without admin grant. */
+export function getBaselinePermissionsForUser(
   role: string,
   employeeRoleName?: string | null,
 ): string[] {

@@ -30,6 +30,7 @@ import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar
 import AssignModal from '@/components/features/emergency/AssignModal'
 import StatusUpdateModal from '@/components/features/emergency/StatusUpdateModal'
 import CancelModal from '@/components/features/emergency/CancelModal'
+import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 
 export default function EmergencyRequestsPage() {
   const router = useRouter()
@@ -42,6 +43,8 @@ export default function EmergencyRequestsPage() {
   // Modal states
   const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
   const [activeModal, setActiveModal] = useState<'assign' | 'status' | 'cancel' | null>(null)
+  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
+  const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
 
   const fetchRequests = async () => {
     try {
@@ -58,8 +61,12 @@ export default function EmergencyRequestsPage() {
   useEffect(() => {
     fetchRequests()
     const interval = setInterval(async () => {
-      const data = await emergencyRequestsService.getAll()
-      setRequests(data)
+      try {
+        const data = await emergencyRequestsService.getAll()
+        setRequests(data)
+      } catch {
+        /* backend may be restarting */
+      }
     }, 10000)
     return () => clearInterval(interval)
   }, [])
@@ -289,8 +296,12 @@ export default function EmergencyRequestsPage() {
                             ) : null}
 
                             <button 
-                              onClick={() => router.push(`/admin/emergency-requests/${request.id}`)}
+                              onClick={() => {
+                                setDetailCaseId(request.id)
+                                setDetailPreview(request)
+                              }}
                               className="p-2.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                              title="View all case information"
                             >
                               <Eye className="w-5 h-5" />
                             </button>
@@ -337,6 +348,16 @@ export default function EmergencyRequestsPage() {
           onSuccess={fetchRequests} 
         />
       )}
+
+      <CaseDetailModal
+        caseId={detailCaseId}
+        open={Boolean(detailCaseId)}
+        preview={detailPreview}
+        onClose={() => {
+          setDetailCaseId(null)
+          setDetailPreview(null)
+        }}
+      />
     </div>
   )
 }

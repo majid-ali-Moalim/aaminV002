@@ -381,6 +381,9 @@ model Employee {
   station              Station?             @relation(fields: [stationId], references: [id])
   user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   shiftRecords         ShiftRecord[]
+  leaveRequests        LeaveRequest[]
+  attendanceApprovals  AttendanceApprovalRequest[]
+  overtimeRecords      OvertimeRecord[]
 
   @@index([employeeRoleId])
   @@index([departmentId])
@@ -489,6 +492,8 @@ model EmergencyRequest {
   requestSource        RequestSource          @default(PHONE_CALL)
   pickupLocation       String
   pickupLandmark       String?
+  pickupLatitude       Float?
+  pickupLongitude      Float?
   destination          String?
   destinationHospitalId String?
   destinationLandmark  String?
@@ -887,6 +892,58 @@ model AttendanceRecord {
   @@unique([employeeId, date])
   @@index([employeeId])
   @@map("attendance_records")
+}
+
+model LeaveRequest {
+  id              String    @id @default(cuid())
+  employeeId      String
+  leaveType       String
+  startDate       DateTime
+  endDate         DateTime
+  status          String    @default("PENDING")
+  notes           String?
+  reviewerComment String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+model AttendanceApprovalRequest {
+  id                 String   @id @default(cuid())
+  employeeId         String
+  attendanceRecordId String?
+  requestType        String
+  status             String   @default("PENDING")
+  comment            String?
+  reviewerComment    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  employee           Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("attendance_approval_requests")
+}
+
+model OvertimeRecord {
+  id            String   @id @default(cuid())
+  employeeId    String
+  date          DateTime
+  shiftHours    Float    @default(0)
+  overtimeHours Float    @default(0)
+  status        String   @default("PENDING")
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([date])
+  @@map("overtime_records")
 }
 
 enum Role {

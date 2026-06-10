@@ -6,6 +6,7 @@ import {
   AlertTriangle, CheckCircle, Loader2, Phone, Siren, Clock, Coffee,
 } from 'lucide-react'
 import { MissionStatusBadge, PriorityBadge, ShiftBadge, StatCard, DriverSkeleton } from '@/components/driver/DriverUI'
+import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import type { DriverMission, DriverProfile, DashboardStats } from '@/lib/stores/driverStore'
 
 interface Props {
@@ -158,6 +159,7 @@ export function DriverDashboardOverview({
               </div>
             </div>
           </div>
+          <PickupGpsPanel request={activeMission} variant="compact" />
           {nextAction && (
             <button type="button" className={`driver-quick-action-btn ${nextAction.cls}`} onClick={onQuickAction}>
               <CheckCircle size={18} />

@@ -22,6 +22,7 @@ export function MissionStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     ASSIGNED: { label: 'Assigned', cls: 'badge-assigned' },
     DISPATCHED: { label: 'En Route', cls: 'badge-dispatched' },
+    ARRIVED_SCENE: { label: 'On Scene', cls: 'badge-on-scene' },
     ON_SCENE: { label: 'On Scene', cls: 'badge-on-scene' },
     TRANSPORTING: { label: 'Transporting', cls: 'badge-transporting' },
     ARRIVED_HOSPITAL: { label: 'At Hospital', cls: 'badge-hospital' },

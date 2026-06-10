@@ -95,6 +95,32 @@ export function clearAuthTokenCookie() {
   document.cookie = 'token=; path=/; max-age=0; SameSite=Lax'
 }
 
+/** Single sign-out entry: clears session and returns path to centralized login. */
+export const CENTRAL_LOGIN_PATH = '/login'
+
+export async function clearAllAuthSessions() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('refreshToken')
+  }
+  clearAuthTokenCookie()
+  try {
+    const { useAuthStore } = await import('@/store/authStore')
+    useAuthStore.getState().logout()
+  } catch {
+    /* optional */
+  }
+  try {
+    const { useDriverStore } = await import('@/lib/stores/driverStore')
+    const store = useDriverStore.getState() as { clearAuth?: () => void; logout?: () => void }
+    store.clearAuth?.()
+    store.logout?.()
+  } catch {
+    /* optional */
+  }
+}
+
 export async function syncRoleStores(accessToken: string, userData: AuthUserLike & { id?: string }) {
   if (isDriverUser(userData) && userData.id) {
     try {

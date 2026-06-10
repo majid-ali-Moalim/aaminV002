@@ -19,6 +19,13 @@ const DESCRIPTIONS: Partial<Record<DriverModuleId, string>> = {
   incidents: 'Report delays, breakdowns, and safety concerns to dispatch.',
 }
 
+const VIEW_DESCRIPTIONS: Partial<Record<string, string>> = {
+  active: 'Live mission command — navigate, update status, communicate, and complete your active case.',
+  assigned: 'Review and accept new dispatch assignments before starting your mission.',
+  workflow: 'Step-by-step mission execution tracker from assignment to completion.',
+  history: 'Completed and cancelled missions archive.',
+}
+
 interface Props {
   moduleId: string
   view: string
@@ -36,6 +43,7 @@ export default function DriverModulePage({ moduleId, view }: Props) {
   if (!mod) return null
 
   const title = resolvePageTitle(pathname)
+  const viewDescription = VIEW_DESCRIPTIONS[view] ?? DESCRIPTIONS[mod.id]
 
   const content = (() => {
     if (moduleId === 'missions') {
@@ -67,7 +75,7 @@ export default function DriverModulePage({ moduleId, view }: Props) {
 
   return (
     <DriverPageLayout title={title}>
-      <DriverModuleShell module={mod} description={DESCRIPTIONS[mod.id]}>
+      <DriverModuleShell module={mod} description={viewDescription}>
         {content}
       </DriverModuleShell>
     </DriverPageLayout>

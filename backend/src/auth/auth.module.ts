@@ -28,6 +28,6 @@ import { AccessControlModule } from '../access-control/access-control.module';
     RolesGuard,
     PermissionsGuard,
   ],
-  exports: [AuthService, PermissionsGuard],
+  exports: [AuthService, PermissionsGuard, AccessControlModule],
 })
 export class AuthModule {}

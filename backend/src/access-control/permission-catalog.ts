@@ -19,9 +19,10 @@ export type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
 export const STAFF_ROLE_SUGGESTIONS: Record<string, PermissionKey[]> = {
   administrator: [...ALL_PERMISSION_KEYS],
   dispatcher: [
-    'driver.create', 'driver.view', 'nurse.create', 'nurse.view',
-    'ambulance.assign', 'ambulance.status', 'case.create', 'case.edit', 'case.assign',
-    'case.triage', 'dispatch.board', 'patient.create', 'patient.view',
+    'driver.view', 'nurse.view',
+    'ambulance.assign', 'ambulance.status',
+    'case.create', 'case.edit', 'case.assign', 'case.triage', 'dispatch.board',
+    'patient.create', 'patient.view',
     'report.view', 'hospital.view', 'hospital.handover',
   ],
   driver: ['driver.view', 'driver.shifts', 'ambulance.status', 'patient.view', 'case.edit', 'hospital.view'],
@@ -60,6 +61,14 @@ export function resolveStaffProfile(
 }
 
 export function getSuggestedPermissions(
+  role: string,
+  employeeRoleName?: string | null,
+): PermissionKey[] {
+  return getBaselinePermissions(role, employeeRoleName);
+}
+
+/** Built-in capabilities for a staff profile — always active, not stored in DB. */
+export function getBaselinePermissions(
   role: string,
   employeeRoleName?: string | null,
 ): PermissionKey[] {

@@ -1,14 +1,16 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AccessControlService } from '../access-control/access-control.service';
 
 @Injectable()
 export class EmployeesService {
   constructor(
     private prisma: PrismaService,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private accessControl: AccessControlService,
   ) {}
 
   findAll(employeeRoleId?: string, departmentId?: string) {
@@ -68,6 +70,58 @@ export class EmployeesService {
     return isNaN(date.getTime()) ? undefined : date;
   }
 
+  private async assertCanCreateEmployee(
+    actor: { role?: string; sub?: string; id?: string; employeeRole?: string | null } | undefined,
+    employeeRoleId?: string,
+  ) {
+    if (!actor || actor.role === 'ADMIN') return;
+
+    const userId = actor.sub ?? actor.id;
+    if (!userId) throw new ForbiddenException('User not authenticated');
+
+    const permissions = await this.accessControl.getPermissionsForAuth(
+      userId,
+      actor.role ?? 'EMPLOYEE',
+      actor.employeeRole,
+    );
+
+    if (!employeeRoleId?.trim()) {
+      throw new ForbiddenException('Employee role is required');
+    }
+
+    const role = await this.prisma.employeeRole.findUnique({
+      where: { id: employeeRoleId },
+      select: { name: true },
+    });
+    const name = (role?.name ?? '').toLowerCase();
+
+    const required =
+      name.includes('driver')
+        ? 'driver.create'
+        : name.includes('nurse') || name.includes('paramedic')
+          ? 'nurse.create'
+          : name.includes('dispatch')
+            ? 'dispatcher.create'
+            : 'employee.create';
+
+    if (!permissions.includes(required)) {
+      const expired = await this.prisma.userPermission.findFirst({
+        where: {
+          userId,
+          permissionKey: required,
+          expiresAt: { lte: new Date() },
+        },
+        orderBy: { expiresAt: 'desc' },
+      });
+      if (expired) {
+        throw new ForbiddenException(
+          `Permission "${required}" has expired. Ask your administrator to grant it again (prefer unlimited duration).`,
+        );
+      }
+      throw new ForbiddenException(`Missing required permission: ${required}`);
+    }
+  }
+
   async create(data: {
     username: string;
     email: string;
@@ -114,9 +168,11 @@ export class EmployeesService {
     medicalClearanceStatus?: string;
     workDays?: string;
     backupShift?: string;
-  }, createdById?: string) {
+  }, createdById?: string, actor?: { role?: string; sub?: string; id?: string; employeeRole?: string | null }) {
     console.log('--- EMPLOYEE CREATION ATTEMPT ---');
     console.log('Payload:', JSON.stringify(data, null, 2));
+
+    await this.assertCanCreateEmployee(actor, data.employeeRoleId);
 
     try {
       const passwordHash = await bcrypt.hash(data.password, 10);

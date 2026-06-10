@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function Page() {
-  redirect('/dispatcher/alerts/critical')
+  redirect('/dispatcher/alerts/all')
 }

@@ -581,8 +581,8 @@ export default function AddDispatcherForm() {
               <p className="text-xs font-black uppercase text-red-600 tracking-widest">Portal credentials</p>
               <p className="text-slate-700">
                 Sign in at{' '}
-                <Link href="/dispatcher/login" className="text-red-700 font-bold underline">
-                  /dispatcher/login
+                <Link href="/login" className="text-red-700 font-bold underline">
+                  /login
                 </Link>
               </p>
               <p className="text-slate-600">

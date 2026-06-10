@@ -70,8 +70,8 @@ export default function NotificationDrawer() {
     loadFeed(true)
     const interval = setInterval(() => {
       if (!isOpen) {
-        notificationsService.getRecent().then((items) => setRecent(items ?? []))
-        notificationsService.getStats().then(setStats)
+        void notificationsService.getRecent().then((items) => setRecent(items ?? [])).catch(() => {})
+        void notificationsService.getStats().then(setStats).catch(() => {})
       }
     }, 30000)
     return () => clearInterval(interval)

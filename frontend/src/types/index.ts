@@ -323,6 +323,8 @@ export interface EmergencyRequest {
 
   pickupLocation: string;
   pickupLandmark?: string | null;
+  pickupLatitude?: number | null;
+  pickupLongitude?: number | null;
   destination?: string | null;
   destinationLandmark?: string | null;
 

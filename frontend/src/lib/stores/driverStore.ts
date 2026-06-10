@@ -9,6 +9,8 @@ export interface DriverMission {
   priority: string
   pickupLocation: string
   pickupLandmark?: string
+  pickupLatitude?: number | null
+  pickupLongitude?: number | null
   destination?: string
   patientCondition?: string
   notes?: string

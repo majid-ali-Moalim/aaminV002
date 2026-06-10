@@ -31,14 +31,14 @@ import toast from 'react-hot-toast'
 type Overview = Awaited<ReturnType<typeof dispatcherDashboardApi.getOverview>>
 
 const TOP_STATS = [
-  { key: 'liveEmergencyCases', label: 'Active Emergencies', icon: Siren, color: 'text-red-600', href: '/dispatcher/operations/all-cases' },
-  { key: 'busyAmbulances', label: 'Active Ambulances', icon: Truck, color: 'text-amber-600', href: '/dispatcher/ambulances/busy' },
-  { key: 'availableAmbulances', label: 'Available Ambulances', icon: Truck, color: 'text-emerald-600', href: '/dispatcher/ambulances/available' },
-  { key: 'criticalCases', label: 'Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/operations/critical' },
-  { key: 'pendingDispatches', label: 'Pending Dispatches', icon: Clock, color: 'text-orange-600', href: '/dispatcher/operations/pending-dispatch' },
-  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/tracking/delayed' },
-  { key: 'todayCompletedMissions', label: "Today's Missions", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/reports/missions' },
-  { key: 'averageResponseTimeMinutes', label: 'Avg Response Time', icon: Timer, color: 'text-violet-600', suffix: ' min', href: '/dispatcher/reports/response-time' },
+  { key: 'liveEmergencyCases', label: 'Active Emergencies', icon: Siren, color: 'text-red-600', href: '/dispatcher/emergency/active' },
+  { key: 'busyAmbulances', label: 'Active Ambulances', icon: Truck, color: 'text-amber-600', href: '/dispatcher/resources/ambulances' },
+  { key: 'availableAmbulances', label: 'Available Ambulances', icon: Truck, color: 'text-emerald-600', href: '/dispatcher/resources/availability' },
+  { key: 'criticalCases', label: 'Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/emergency/critical' },
+  { key: 'pendingDispatches', label: 'Pending Dispatches', icon: Clock, color: 'text-orange-600', href: '/dispatcher/emergency/pending' },
+  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/monitoring/incidents' },
+  { key: 'todayCompletedMissions', label: "Today's Missions", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/emergency/closed' },
+  { key: 'averageResponseTimeMinutes', label: 'Avg Response Time', icon: Timer, color: 'text-violet-600', suffix: ' min', href: '/dispatcher/reports/performance' },
 ] as const
 
 function MiniCase({ item }: { item: any }) {
@@ -113,7 +113,7 @@ export default function DispatcherCommandCenter() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Dashboard Overview</h1>
+          <h1 className="text-2xl font-black text-slate-900">Operations Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Operational command center · {profile?.firstName || 'Dispatcher'}
             {o.station && <span className="text-red-600 font-semibold"> · {o.station}</span>}
@@ -167,7 +167,7 @@ export default function DispatcherCommandCenter() {
                 <Radio className="w-4 h-4 text-red-600" />
                 Live Dispatch Board
               </h2>
-              <Link href="/dispatcher/operations/dispatch-board" className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
+              <Link href="/dispatcher/emergency/pending" className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
                 Full board <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -253,8 +253,8 @@ export default function DispatcherCommandCenter() {
             ) : (
               <p className="text-sm text-gray-400">Loading crew…</p>
             )}
-            <Link href="/dispatcher/crew/available" className="text-[10px] font-bold text-red-600 mt-2 inline-block">
-              Manage crew →
+            <Link href="/dispatcher/resources/availability" className="text-[10px] font-bold text-red-600 mt-2 inline-block">
+              Manage resources →
             </Link>
           </div>
 
@@ -282,7 +282,7 @@ export default function DispatcherCommandCenter() {
               <span className="font-black text-red-600">{kpis.pendingDispatches}</span> pending ·{' '}
               <span className="font-black text-amber-600">{kpis.delayedMissions}</span> delayed
             </p>
-            <Link href="/dispatcher/alerts/critical" className="text-[10px] font-bold text-red-600 mt-2 inline-block">
+            <Link href="/dispatcher/alerts/all" className="text-[10px] font-bold text-red-600 mt-2 inline-block">
               View all alerts →
             </Link>
           </div>
@@ -309,9 +309,9 @@ export default function DispatcherCommandCenter() {
       {/* Extended KPI sections */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {[
-          { title: 'Live Emergency Cases', data: o.liveCases, href: '/dispatcher/operations/all-cases' },
-          { title: 'Delayed Missions', data: o.delayedMissions, href: '/dispatcher/tracking/delayed' },
-          { title: 'Hospital Capacity Snapshot', data: o.hospitalCapacity, href: '/dispatcher/hospital/capacity', isHospital: true },
+          { title: 'Live Emergency Cases', data: o.liveCases, href: '/dispatcher/emergency/all' },
+          { title: 'Delayed Missions', data: o.delayedMissions, href: '/dispatcher/monitoring/incidents' },
+          { title: 'Hospital Capacity Snapshot', data: o.hospitalCapacity, href: '/dispatcher/hospital/availability', isHospital: true },
         ].map((section) => (
           <div key={section.title} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
             <div className="flex justify-between items-center mb-3">

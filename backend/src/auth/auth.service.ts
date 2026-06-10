@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
@@ -177,16 +177,43 @@ export class AuthService {
   }
 
   async refreshToken(user: any) {
+    const userId = user.userId ?? user.sub ?? user.id;
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { employee: { include: { employeeRole: true } } },
+    });
+
+    if (!dbUser) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const employeeRoleName = dbUser.employee?.employeeRole?.name ?? null;
+    const permissions =
+      dbUser.role === Role.ADMIN
+        ? [...ALL_PERMISSION_KEYS]
+        : await this.accessControlService.getPermissionsForAuth(
+            dbUser.id,
+            dbUser.role,
+            employeeRoleName,
+          );
+
     const payload = {
-      username: user.username,
-      sub: user.userId,
-      role: user.role,
+      username: dbUser.username,
+      sub: dbUser.id,
+      role: dbUser.role,
+      email: dbUser.email,
+      isActive: true,
+      employeeRole: employeeRoleName,
+      employeeStatus: dbUser.employee?.status ?? null,
+      employeeId: dbUser.employee?.id ?? null,
+      permissions,
     };
 
     return {
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.generateRefreshToken(),
-      expiresIn: 900, // 15 minutes
+      expiresIn: 900,
+      permissions,
     };
   }
 
@@ -221,7 +248,96 @@ export class AuthService {
     }
 
     const { passwordHash, ...result } = user;
-    return result;
+    const permissions =
+      user.role === Role.ADMIN
+        ? [...ALL_PERMISSION_KEYS]
+        : await this.accessControlService.getPermissionsForAuth(
+            user.id,
+            user.role,
+            user.employee?.employeeRole?.name ?? null,
+          );
+
+    return {
+      ...result,
+      permissions,
+      activePermissionKeys: permissions,
+    };
+  }
+
+  async updateMyProfile(
+    userId: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      alternatePhone?: string;
+      profilePhoto?: string;
+      emergencyContactName?: string;
+      emergencyPhone?: string;
+    },
+  ) {
+    if (userId === 'hardcoded-admin-uuid') {
+      throw new BadRequestException(
+        'This session cannot update profile. Sign in with your database admin account.',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { employee: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    let employeeId = user.employee?.id;
+
+    if (!employeeId && user.role === Role.ADMIN) {
+      const [adminRole, adminDept] = await Promise.all([
+        this.prisma.employeeRole.findFirst({ where: { name: 'Administrator' } }),
+        this.prisma.department.findFirst({ where: { name: 'Administration' } }),
+      ]);
+
+      const created = await this.prisma.employee.create({
+        data: {
+          userId: user.id,
+          firstName: data.firstName?.trim() || 'System',
+          lastName: data.lastName?.trim() || 'Admin',
+          status: 'ACTIVE',
+          employeeRoleId: adminRole?.id ?? undefined,
+          departmentId: adminDept?.id ?? undefined,
+        },
+      });
+      employeeId = created.id;
+    }
+
+    if (!employeeId) {
+      throw new BadRequestException(
+        'No staff profile is linked to this account. Contact your administrator.',
+      );
+    }
+
+    return this.prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        ...(typeof data.firstName === 'string' && { firstName: data.firstName.trim() }),
+        ...(typeof data.lastName === 'string' && { lastName: data.lastName.trim() }),
+        ...(typeof data.phone === 'string' && { phone: data.phone.trim() }),
+        ...(typeof data.alternatePhone === 'string' && { alternatePhone: data.alternatePhone.trim() }),
+        ...(typeof data.profilePhoto === 'string' && { profilePhoto: data.profilePhoto.trim() }),
+        ...(typeof data.emergencyContactName === 'string' && {
+          emergencyContactName: data.emergencyContactName.trim(),
+        }),
+        ...(typeof data.emergencyPhone === 'string' && { emergencyPhone: data.emergencyPhone.trim() }),
+      },
+      include: {
+        user: { select: { id: true, username: true, email: true, role: true } },
+        employeeRole: true,
+        department: true,
+        station: true,
+      },
+    });
   }
 
   async logout(userId: string) {
