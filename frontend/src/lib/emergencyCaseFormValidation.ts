@@ -23,9 +23,7 @@ export type EmergencyCaseFormValues = {
   requestSource: RequestSource
   regionId: string
   districtId: string
-  pickupAreaZone: string
   pickupLocation: string
-  pickupLandmark: string
   destination: string
   destinationHospitalId: string
   callerName: string
@@ -235,7 +233,7 @@ function validateEmergencyStep(form: EmergencyCaseFormValues, errors: EmergencyC
 function validateLocationStep(
   form: EmergencyCaseFormValues,
   errors: EmergencyCaseFormErrors,
-  districtCount: number
+  districtCount: number,
 ) {
   if (!form.regionId) {
     setError(errors, 'regionId', 'Region is required')
@@ -245,13 +243,6 @@ function validateLocationStep(
     setError(errors, 'districtId', 'District is required for the selected region')
   }
 
-  const areaZone = form.pickupAreaZone.trim()
-  if (areaZone.length > 100) {
-    setError(errors, 'pickupAreaZone', 'Area / zone cannot exceed 100 characters')
-  } else if (areaZone.length > 0 && areaZone.length < 2) {
-    setError(errors, 'pickupAreaZone', 'Area / zone must be at least 2 characters')
-  }
-
   const pickup = form.pickupLocation.trim()
   if (!pickup) {
     setError(errors, 'pickupLocation', 'Pickup address is required')
@@ -259,10 +250,6 @@ function validateLocationStep(
     setError(errors, 'pickupLocation', `Pickup address must be at least ${MIN_PICKUP_LENGTH} characters`)
   } else if (pickup.length > MAX_PICKUP_LENGTH) {
     setError(errors, 'pickupLocation', `Pickup address cannot exceed ${MAX_PICKUP_LENGTH} characters`)
-  }
-
-  if (form.pickupLandmark.trim().length > 200) {
-    setError(errors, 'pickupLandmark', 'Landmark cannot exceed 200 characters')
   }
 
   if (form.priority === Priority.CRITICAL || form.priority === Priority.HIGH) {
@@ -335,9 +322,7 @@ export function validateEmergencyCaseForm(
     priority: 'emergency',
     regionId: 'location',
     districtId: 'location',
-    pickupAreaZone: 'location',
     pickupLocation: 'location',
-    pickupLandmark: 'location',
     destination: 'location',
     destinationHospitalId: 'location',
     notes: 'dispatch',

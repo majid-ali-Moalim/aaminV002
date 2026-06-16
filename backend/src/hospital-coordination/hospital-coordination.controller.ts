@@ -130,10 +130,10 @@ export class HospitalCoordinationController {
   @RequirePermissions('hospital.handover')
   completeHandover(
     @Param('id') id: string,
-    @Body() body: { receivingStaffName?: string },
+    @Body() body: { receivingStaffName?: string; department?: string; notes?: string },
     @CurrentUser() user: any,
   ) {
-    return this.coordination.completeHandover(id, user?.id, body.receivingStaffName);
+    return this.coordination.completeHandover(id, user?.id, body);
   }
 
   @Patch('cases/:id/status')

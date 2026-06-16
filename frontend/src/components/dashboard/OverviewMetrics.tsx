@@ -3,20 +3,16 @@
 import Link from 'next/link'
 import {
   Activity,
-  Truck,
-  Users,
   CheckCircle,
   Zap,
   AlertTriangle,
   Clock,
   XCircle,
-  TrendingUp,
-  Heart,
-  Radio,
   RefreshCw,
   Plus,
   ArrowRight,
   BarChart3,
+  Monitor,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -52,11 +48,6 @@ interface ExtendedKpis {
   completedToday?: number
   cancelledToday?: number
   highPriority?: number
-  totalAmbulances?: number
-  onDutyAmbulances?: number
-  activeStaff?: number
-  totalPatients?: number
-  successRate?: number
 }
 
 interface OverviewMetricsProps {
@@ -65,11 +56,9 @@ interface OverviewMetricsProps {
   priorityData: any[]
   isRefreshing: boolean
   onRefresh: () => void
-  activeTab: 'dispatch' | 'analytics'
-  onTabChange: (tab: 'dispatch' | 'analytics') => void
-  dispatchContent?: ReactNode
   extendedKpis?: ExtendedKpis
   criticalAlertText?: string
+  liveOperationsContent?: ReactNode
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -102,7 +91,6 @@ type KpiTone = {
   bg: string
   spark: string
   trend?: string
-  trendUp?: boolean
 }
 
 export function OverviewMetrics({
@@ -111,17 +99,15 @@ export function OverviewMetrics({
   priorityData,
   isRefreshing,
   onRefresh,
-  activeTab,
-  onTabChange,
-  dispatchContent,
   extendedKpis,
   criticalAlertText,
+  liveOperationsContent,
 }: OverviewMetricsProps) {
   const kpiConfig: { label: string; value: string | number; tone: KpiTone; sparkData: number[] }[] = [
     {
-      label: 'Active Missions',
+      label: 'Active Cases',
       value: stats?.activeEmergencies || 0,
-      tone: { icon: Activity, accent: 'text-red-600', bg: 'bg-red-50', spark: '#EF4444', trend: 'Live', trendUp: true },
+      tone: { icon: Activity, accent: 'text-red-600', bg: 'bg-red-50', spark: '#EF4444', trend: 'Live' },
       sparkData: [1, 2, 2, 3, 2, 3, stats?.activeEmergencies || 0],
     },
     {
@@ -143,33 +129,9 @@ export function OverviewMetrics({
       sparkData: [1, 2, 1, 3, 2, 2, extendedKpis?.highPriority ?? 0],
     },
     {
-      label: 'Available Units',
-      value: stats?.availableAmbulances || 0,
-      tone: { icon: Truck, accent: 'text-blue-600', bg: 'bg-blue-50', spark: '#3B82F6' },
-      sparkData: [2, 2, 1, 2, 1, 1, stats?.availableAmbulances || 0],
-    },
-    {
-      label: 'Total Fleet',
-      value: extendedKpis?.totalAmbulances ?? 0,
-      tone: { icon: Truck, accent: 'text-indigo-600', bg: 'bg-indigo-50', spark: '#6366F1' },
-      sparkData: [2, 2, 2, 2, 2, 2, extendedKpis?.totalAmbulances ?? 0],
-    },
-    {
-      label: 'On Mission',
-      value: extendedKpis?.onDutyAmbulances ?? 0,
-      tone: { icon: Radio, accent: 'text-cyan-600', bg: 'bg-cyan-50', spark: '#06B6D4' },
-      sparkData: [0, 1, 1, 2, 1, 1, extendedKpis?.onDutyAmbulances ?? 0],
-    },
-    {
-      label: 'Staff On Shift',
-      value: extendedKpis?.activeStaff ?? stats?.totalUsers ?? 0,
-      tone: { icon: Users, accent: 'text-violet-600', bg: 'bg-violet-50', spark: '#8B5CF6' },
-      sparkData: [2, 3, 3, 4, 3, 4, extendedKpis?.activeStaff ?? 0],
-    },
-    {
       label: 'Completed Today',
       value: extendedKpis?.completedToday ?? stats?.completedCases ?? 0,
-      tone: { icon: CheckCircle, accent: 'text-emerald-600', bg: 'bg-emerald-50', spark: '#10B981', trendUp: true },
+      tone: { icon: CheckCircle, accent: 'text-emerald-600', bg: 'bg-emerald-50', spark: '#10B981' },
       sparkData: [0, 1, 2, 2, 3, 4, extendedKpis?.completedToday ?? 0],
     },
     {
@@ -177,18 +139,6 @@ export function OverviewMetrics({
       value: extendedKpis?.cancelledToday ?? 0,
       tone: { icon: XCircle, accent: 'text-slate-600', bg: 'bg-slate-100', spark: '#64748B' },
       sparkData: [0, 0, 1, 0, 0, 1, extendedKpis?.cancelledToday ?? 0],
-    },
-    {
-      label: 'Total Patients',
-      value: extendedKpis?.totalPatients ?? stats?.totalPatients ?? 0,
-      tone: { icon: Heart, accent: 'text-pink-600', bg: 'bg-pink-50', spark: '#EC4899' },
-      sparkData: [10, 12, 11, 14, 13, 15, extendedKpis?.totalPatients ?? 0],
-    },
-    {
-      label: 'Success Rate',
-      value: `${extendedKpis?.successRate ?? 0}%`,
-      tone: { icon: TrendingUp, accent: 'text-green-600', bg: 'bg-green-50', spark: '#22C55E', trendUp: true },
-      sparkData: [70, 72, 75, 78, 80, 82, extendedKpis?.successRate ?? 0],
     },
   ]
 
@@ -210,7 +160,7 @@ export function OverviewMetrics({
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-100">Aamin Command Center</p>
-                <h1 className="text-3xl sm:text-4xl font-black tracking-tight mt-1">Mission Control</h1>
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight mt-1">Overview Dashboard</h1>
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-xs font-bold">
                     <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
@@ -222,26 +172,6 @@ export function OverviewMetrics({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex p-1 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => onTabChange('dispatch')}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                    activeTab === 'dispatch' ? 'bg-white text-red-600 shadow-lg' : 'text-white/70 hover:text-white'
-                  }`}
-                >
-                  Live Operations
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onTabChange('analytics')}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                    activeTab === 'analytics' ? 'bg-white text-red-600 shadow-lg' : 'text-white/70 hover:text-white'
-                  }`}
-                >
-                  Analytics
-                </button>
-              </div>
               <button
                 type="button"
                 onClick={onRefresh}
@@ -274,7 +204,7 @@ export function OverviewMetrics({
               <p className="text-sm font-black text-red-800">
                 {extendedKpis?.criticalCases ?? 0} critical incident{(extendedKpis?.criticalCases ?? 0) !== 1 ? 's' : ''} active
               </p>
-              <p className="text-xs text-red-600/80 truncate mt-0.5">{criticalAlertText || 'Review and assign units immediately.'}</p>
+              <p className="text-xs text-red-600/80 truncate mt-0.5">{criticalAlertText || 'Review and assign ambulances immediately.'}</p>
             </div>
           </div>
           <Link
@@ -287,8 +217,8 @@ export function OverviewMetrics({
         </div>
       )}
 
-      {/* KPI grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+      {/* Summary KPIs — single row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {kpiConfig.map((kpi) => (
           <div
             key={kpi.label}
@@ -311,103 +241,99 @@ export function OverviewMetrics({
         ))}
       </div>
 
-      {/* Main content */}
-      {activeTab === 'dispatch' ? (
-        <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-              <Radio className="w-4 h-4 text-red-500" />
-              Live dispatch board
-            </h2>
-            <Link href="/admin/dispatch-management" className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1">
-              Full board <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+      {/* Analytics charts */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-base font-black text-slate-900">Case volume</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Hourly emergency request activity</p>
+            </div>
+            <BarChart3 className="w-5 h-5 text-red-400" />
           </div>
-          {dispatchContent}
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="caseGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="time" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid #E2E8F0',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                  }}
+                />
+                <Area type="monotone" dataKey="cases" stroke="#EF4444" strokeWidth={2.5} fill="url(#caseGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-3 duration-500">
-          <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 overflow-hidden">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-base font-black text-slate-900">Mission volume</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Hourly emergency request activity</p>
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+          <h3 className="text-base font-black text-slate-900 mb-1">Priority mix</h3>
+          <p className="text-xs text-slate-500 mb-6">Case distribution by urgency</p>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={priorityData} innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value" stroke="none">
+                  {priorityData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[entry.name] || '#94A3B8'} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            {priorityData.map((p) => (
+              <div key={p.name} className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: PRIORITY_COLORS[p.name] }} />
+                {p.name} ({p.value})
               </div>
-              <BarChart3 className="w-5 h-5 text-red-400" />
-            </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="missionGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#EF4444" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="time" stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: '12px',
-                      border: '1px solid #E2E8F0',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                    }}
-                  />
-                  <Area type="monotone" dataKey="missions" stroke="#EF4444" strokeWidth={2.5} fill="url(#missionGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            ))}
           </div>
+        </div>
 
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-base font-black text-slate-900 mb-1">Priority mix</h3>
-            <p className="text-xs text-slate-500 mb-6">Case distribution by urgency</p>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={priorityData} innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value" stroke="none">
-                    {priorityData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[entry.name] || '#94A3B8'} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {priorityData.map((p) => (
-                <div key={p.name} className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: PRIORITY_COLORS[p.name] }} />
-                  {p.name} ({p.value})
-                </div>
-              ))}
-            </div>
+        <div className="xl:col-span-3 bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+          <h3 className="text-base font-black text-slate-900 mb-4">Completed vs pending (today)</h3>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={[
+                  { name: 'Pending', count: extendedKpis?.pendingRequests ?? 0, fill: '#F59E0B' },
+                  { name: 'Critical', count: extendedKpis?.criticalCases ?? 0, fill: '#EF4444' },
+                  { name: 'High', count: extendedKpis?.highPriority ?? 0, fill: '#EA580C' },
+                  { name: 'Completed', count: extendedKpis?.completedToday ?? 0, fill: '#10B981' },
+                  { name: 'Cancelled', count: extendedKpis?.cancelledToday ?? 0, fill: '#94A3B8' },
+                ]}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
+        </div>
+      </div>
 
-          <div className="xl:col-span-3 bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-base font-black text-slate-900 mb-4">Completed vs pending (today)</h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    { name: 'Pending', count: extendedKpis?.pendingRequests ?? 0, fill: '#F59E0B' },
-                    { name: 'Critical', count: extendedKpis?.criticalCases ?? 0, fill: '#EF4444' },
-                    { name: 'High', count: extendedKpis?.highPriority ?? 0, fill: '#EA580C' },
-                    { name: 'Completed', count: extendedKpis?.completedToday ?? 0, fill: '#10B981' },
-                    { name: 'Cancelled', count: extendedKpis?.cancelledToday ?? 0, fill: '#94A3B8' },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+      {/* Live operations */}
+      {liveOperationsContent && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+            <Monitor className="w-4 h-4 text-red-500" />
+            Live Operations
+          </h2>
+          {liveOperationsContent}
         </div>
       )}
     </div>

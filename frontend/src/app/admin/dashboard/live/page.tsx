@@ -1,7 +1,5 @@
-'use client'
-
-import { LiveOperationsView } from '@/components/dashboard/LiveOperationsView'
+import { redirect } from 'next/navigation'
 
 export default function LiveOperationsPage() {
-  return <LiveOperationsView />
+  redirect('/admin/dashboard#live-operations')
 }

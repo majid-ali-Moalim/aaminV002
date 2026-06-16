@@ -11,6 +11,9 @@ const PUBLIC_PATHS = new Set([
   '/login',
   '/dispatcher/login',
   '/driver/login',
+  '/hospital/login',
+  '/hospital/forgot-password',
+  '/hospital/reset-password',
   '/register',
   '/forgot-password',
   '/reset-password',
@@ -78,7 +81,7 @@ function resolvePortalRole(payload: JwtPayload): string {
   if (role === 'DRIVER' || name.includes('DRIVER')) return 'DRIVER'
   if (role === 'NURSE' || name.includes('NURSE') || name.includes('PARAMEDIC')) return 'NURSE'
   if (role === 'MANAGER') return 'MANAGER'
-  if (role === 'HOSPITAL') return 'HOSPITAL'
+  if (role === 'HOSPITAL' || name.includes('HOSPITAL')) return 'HOSPITAL'
   return role
 }
 
@@ -88,7 +91,7 @@ function isPublicRoute(pathname: string): boolean {
 }
 
 function getRequiredPortalRole(pathname: string): string | null {
-  if (pathname.startsWith('/dispatcher/login') || pathname.startsWith('/driver/login')) {
+  if (pathname.startsWith('/dispatcher/login') || pathname.startsWith('/driver/login') || pathname.startsWith('/hospital/login')) {
     return null
   }
   for (const [portal, prefixes] of Object.entries(ROLE_ROUTES)) {

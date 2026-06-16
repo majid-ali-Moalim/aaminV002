@@ -564,6 +564,57 @@ export class EmergencyRequestsService {
     const trackingData = await this.trackingService.findByCodeOrPhone(existing.trackingCode);
     this.trackingGateway.emitTrackingUpdate(existing.trackingCode, trackingData);
 
+    if (existing.destinationHospitalId) {
+      const hospitalStatuses: EmergencyRequestStatus[] = [
+        'TRANSPORTING',
+        'EN_ROUTE',
+        'DISPATCHED',
+        'ARRIVED_HOSPITAL',
+        'ARRIVED_SCENE',
+        'PATIENT_STABILIZED',
+      ];
+      if (hospitalStatuses.includes(status)) {
+        const coordCase = await this.prisma.hospitalCoordinationCase.findFirst({
+          where: { emergencyRequestId: existing.id, hospitalId: existing.destinationHospitalId, deletedAt: null },
+          select: { id: true },
+        });
+        const eta = trackingData?.estimatedArrival;
+        let title = 'Mission Updated';
+        let message = `Case ${existing.trackingCode} status: ${status.replace(/_/g, ' ')}`;
+        let priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' = existing.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
+
+        if (status === 'TRANSPORTING') {
+          title = 'Ambulance En Route';
+          message = eta
+            ? `Ambulance is transporting patient. ETA: ${eta.replace(' mins', ' Minutes')}`
+            : 'Ambulance is transporting patient to your hospital.';
+        } else if (status === 'ARRIVED_HOSPITAL') {
+          title = 'Ambulance Has Arrived';
+          message = 'Ambulance has arrived. Proceed with patient reception.';
+          priority = 'CRITICAL';
+        } else if (existing.priority === 'CRITICAL' && ['EN_ROUTE', 'TRANSPORTING'].includes(status)) {
+          title = 'Critical Patient Alert';
+          message = eta
+            ? `Critical patient arriving. ETA: ${eta.replace(' mins', ' Minutes')}. Prepare emergency team immediately.`
+            : 'Critical patient en route. Prepare emergency team immediately.';
+        }
+
+        await this.notifications.notifyHospitalStaff(existing.destinationHospitalId, {
+          eventKey: 'HOSPITAL_RESPONSE',
+          title,
+          message,
+          type: 'EMERGENCY',
+          category: 'HOSPITAL',
+          priority,
+          entityType: 'HospitalCoordinationCase',
+          entityId: coordCase?.id ?? existing.id,
+          redirectUrl: coordCase?.id
+            ? `/hospital/emergency-cases/${coordCase.id}`
+            : '/hospital/emergency-cases?tab=active',
+        });
+      }
+    }
+
     // Audit log
     await this.auditLog.logCaseActivity(
       employeeId || 'SYSTEM',

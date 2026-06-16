@@ -51,6 +51,15 @@ export function isNurseUser(user: AuthUserLike): boolean {
   return name.includes('NURSE') || name.includes('PARAMEDIC')
 }
 
+export function isHospitalUser(user: AuthUserLike & { employee?: { hospitalId?: string | null } | null }): boolean {
+  if (!user?.role) return false
+  if (user.role === 'HOSPITAL') return true
+  if (user.role !== 'EMPLOYEE') return false
+  const name = getEmployeeRoleName(user)
+  if (user.employee?.hospitalId) return true
+  return name.includes('HOSPITAL') || (name.includes('COORD') && name.includes('HOSPITAL'))
+}
+
 /** Portal role used for route access (ADMIN, DISPATCHER, DRIVER, NURSE, PATIENT, …). */
 export function resolvePortalRole(user: AuthUserLike): string {
   const role = user.role ?? ''
@@ -61,7 +70,7 @@ export function resolvePortalRole(user: AuthUserLike): string {
   if (role === 'DRIVER' || isDriverUser(user)) return 'DRIVER'
   if (role === 'NURSE' || isNurseUser(user)) return 'NURSE'
   if (role === 'MANAGER') return 'MANAGER'
-  if (role === 'HOSPITAL') return 'HOSPITAL'
+  if (role === 'HOSPITAL' || isHospitalUser(user)) return 'HOSPITAL'
 
   return role
 }

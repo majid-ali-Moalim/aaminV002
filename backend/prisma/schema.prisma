@@ -292,6 +292,9 @@ model User {
   email         String         @unique
   passwordHash  String
   role          Role           @default(PATIENT)
+  mustChangePassword Boolean   @default(false)
+  failedLoginAttempts Int      @default(0)
+  lockedUntil   DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   activityLogs  ActivityLog[]
@@ -338,6 +341,7 @@ model Employee {
   employeeRoleId       String?
   departmentId         String?
   stationId            String?
+  hospitalId           String?
   assignedAmbulanceId  String?
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -379,6 +383,7 @@ model Employee {
   department           Department?          @relation(fields: [departmentId], references: [id])
   employeeRole         EmployeeRole?        @relation(fields: [employeeRoleId], references: [id])
   station              Station?             @relation(fields: [stationId], references: [id])
+  hospital             Hospital?            @relation(fields: [hospitalId], references: [id])
   user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   shiftRecords         ShiftRecord[]
   leaveRequests        LeaveRequest[]
@@ -388,6 +393,7 @@ model Employee {
   @@index([employeeRoleId])
   @@index([departmentId])
   @@index([stationId])
+  @@index([hospitalId])
   @@index([assignedAmbulanceId])
   @@index([status])
   @@index([employeeCode])
@@ -593,17 +599,25 @@ model Hospital {
   contactPersonRole      String?
   primaryPhone           String?                     @unique
   secondaryPhone         String?
+  emergencyShortCode     String?
   emergencyHotline       String?
   contactNumber          String?
   emergencyContact       String?
   email                  String?
+  website                String?
   acceptEmergencyCases   Boolean                     @default(false)
   medicalCapabilities    Json                        @default("[]")
   beds                   Int                         @default(0)
   icuTotalBeds           Int                         @default(0)
   emergencyBeds          Int                         @default(0)
+  operatingRooms         Int                         @default(0)
+  ambulanceReceptionCapacity Int                     @default(0)
   occupiedBeds           Int                         @default(0)
   icuOccupiedBeds        Int                         @default(0)
+  available24_7          Boolean                     @default(true)
+  acceptAmbulanceTransfers Boolean                   @default(true)
+  acceptWalkInPatients   Boolean                     @default(true)
+  capacityStatus         String                      @default("Available")
   erReady                Boolean                     @default(false)
   emergencyUnitStatus    String                      @default("Operational")
   availabilityStatus     String                      @default("Available")
@@ -620,6 +634,7 @@ model Hospital {
   requests               EmergencyRequest[]
   referrals              Referral[]
   coordinationCases      HospitalCoordinationCase[]
+  staff                  Employee[]
 
   @@index([regionId])
   @@index([districtId])

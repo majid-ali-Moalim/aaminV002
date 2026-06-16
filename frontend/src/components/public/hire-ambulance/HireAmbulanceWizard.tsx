@@ -25,12 +25,13 @@ import {
   Clock,
   Users,
   Share2,
+  Activity,
+  HelpCircle,
 } from 'lucide-react'
 import {
   API_BASE,
   STEPS,
   StepId,
-  EMERGENCY_TYPES,
   REQUEST_TYPES,
   COUNTRIES,
   DRAFT_KEY,
@@ -38,13 +39,16 @@ import {
 } from './constants'
 import {
   HireFormValues,
+  HireEmergencyTypeOption,
   defaultFormValues,
   validateStep,
   buildPayload,
   computePriority,
   formatSomaliaPhone,
   hasGpsLocation,
+  isOtherEmergencyType,
 } from './formHelpers'
+import { fetchHireEmergencyTypes } from '@/lib/hire-ambulance/emergencyTypes'
 
 const inputClass =
   'w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100'
@@ -83,6 +87,8 @@ export default function HireAmbulanceWizard() {
   const [districts, setDistricts] = useState<any[]>([])
   const [hospitals, setHospitals] = useState<any[]>([])
   const [fleet, setFleet] = useState<{ available: number; total: number }>({ available: 0, total: 0 })
+  const [emergencyTypes, setEmergencyTypes] = useState<HireEmergencyTypeOption[]>([])
+  const [loadingEmergencyTypes, setLoadingEmergencyTypes] = useState(true)
   const [locating, setLocating] = useState(false)
 
   const { register, handleSubmit, watch, setValue, reset, getValues } = useForm<HireFormValues>({
@@ -92,6 +98,21 @@ export default function HireAmbulanceWizard() {
   const values = watch()
   const currentStep = STEPS[stepIndex].id
   const priority = useMemo(() => computePriority(values), [values])
+
+  const selectedEmergencyType = useMemo(
+    () => emergencyTypes.find((t) => t.id === values.emergencyType),
+    [emergencyTypes, values.emergencyType],
+  )
+
+  const showEmergencyTypeOther = isOtherEmergencyType(selectedEmergencyType)
+
+  const emergencyTypeDisplayLabel = useMemo(() => {
+    if (!selectedEmergencyType) return '—'
+    if (isOtherEmergencyType(selectedEmergencyType)) {
+      return values.emergencyTypeOther.trim() || selectedEmergencyType.name
+    }
+    return selectedEmergencyType.name
+  }, [selectedEmergencyType, values.emergencyTypeOther])
 
   // Restore draft
   useEffect(() => {
@@ -119,13 +140,15 @@ export default function HireAmbulanceWizard() {
 
   const loadPublicData = useCallback(async () => {
     try {
-      const [regionsRes, hospitalsRes, fleetRes] = await Promise.all([
+      const [regionsRes, hospitalsRes, fleetRes, types] = await Promise.all([
         fetch(`${API_BASE}/api/setup/regions`),
         fetch(`${API_BASE}/api/hospitals`),
         fetch(`${API_BASE}/api/emergency-requests/available/ambulances`),
+        fetchHireEmergencyTypes(),
       ])
       if (regionsRes.ok) setRegions(await regionsRes.json())
       if (hospitalsRes.ok) setHospitals(await hospitalsRes.json())
+      setEmergencyTypes(types)
       if (fleetRes.ok) {
         const ambulances = await fleetRes.json()
         const list = Array.isArray(ambulances) ? ambulances : []
@@ -136,6 +159,8 @@ export default function HireAmbulanceWizard() {
       }
     } catch {
       /* non-blocking */
+    } finally {
+      setLoadingEmergencyTypes(false)
     }
   }, [])
 
@@ -208,7 +233,7 @@ export default function HireAmbulanceWizard() {
   const gpsShared = hasGpsLocation(values)
 
   const goNext = () => {
-    const err = validateStep(currentStep, values)
+    const err = validateStep(currentStep, values, { emergencyTypes })
     if (err) {
       toast.error(err)
       return
@@ -227,7 +252,12 @@ export default function HireAmbulanceWizard() {
   }
 
   const onSubmit = async (data: HireFormValues) => {
-    const err = validateStep('review', data)
+    const urgencyErr = validateStep('urgency', data, { emergencyTypes })
+    if (urgencyErr) {
+      toast.error(urgencyErr)
+      return
+    }
+    const err = validateStep('review', data, { emergencyTypes })
     if (err) {
       toast.error(err)
       return
@@ -237,7 +267,7 @@ export default function HireAmbulanceWizard() {
       const response = await fetch(`${API_BASE}/api/emergency-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(data)),
+        body: JSON.stringify(buildPayload(data, emergencyTypes)),
       })
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -459,29 +489,59 @@ export default function HireAmbulanceWizard() {
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Emergency Type" subtitle="What kind of emergency is this?">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {EMERGENCY_TYPES.map((et) => {
-                      const Icon = et.icon
-                      const selected = values.emergencyType === et.value
-                      return (
-                        <button
-                          key={et.value}
-                          type="button"
-                          onClick={() => setValue('emergencyType', et.value)}
-                          className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition-all ${
-                            selected ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          {selected && (
-                            <div className={`absolute inset-0 bg-gradient-to-br ${et.color} opacity-10`} />
-                          )}
-                          <Icon className={`w-6 h-6 mb-2 relative ${selected ? 'text-red-600' : 'text-slate-400'}`} />
-                          <p className="text-sm font-bold text-slate-900 relative">{et.label}</p>
-                        </button>
-                      )
-                    })}
-                  </div>
+                <SectionCard
+                  title="Emergency Type"
+                  subtitle="All types from Admin → Emergency Configuration; choose Others to type your own"
+                >
+                  {loadingEmergencyTypes ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-slate-500">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="text-sm font-medium">Loading emergency types…</span>
+                    </div>
+                  ) : emergencyTypes.length === 0 ? (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      Emergency types are not available right now. Please call {EMERGENCY_HOTLINE} directly.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {emergencyTypes.map((et) => {
+                          const selected = values.emergencyType === et.id
+                          const Icon = isOtherEmergencyType(et) ? HelpCircle : Activity
+                          return (
+                            <button
+                              key={et.id}
+                              type="button"
+                              onClick={() => {
+                                setValue('emergencyType', et.id)
+                                if (!isOtherEmergencyType(et)) setValue('emergencyTypeOther', '')
+                              }}
+                              className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition-all ${
+                                selected ? 'border-red-500 ring-2 ring-red-200 bg-red-50/40' : 'border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <Icon className={`w-6 h-6 mb-2 relative ${selected ? 'text-red-600' : 'text-slate-400'}`} />
+                              <p className="text-sm font-bold text-slate-900 relative">{et.name}</p>
+                              {et.incidentCategory?.name && (
+                                <p className="text-[10px] text-slate-500 mt-1 relative">{et.incidentCategory.name}</p>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {showEmergencyTypeOther && (
+                        <div className="mt-4">
+                          <FieldLabel required>Specify emergency type</FieldLabel>
+                          <input
+                            {...register('emergencyTypeOther', { required: true })}
+                            className={inputClass}
+                            placeholder="Type the emergency (required when Others is selected)"
+                            required
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </SectionCard>
 
                 <SectionCard title="Quick Triage" subtitle="Critical info for dispatch prioritization">
@@ -862,7 +922,7 @@ export default function HireAmbulanceWizard() {
                   <div className="space-y-4">
                     {[
                       { label: 'Request type', value: values.requestType },
-                      { label: 'Emergency', value: EMERGENCY_TYPES.find((e) => e.value === values.emergencyType)?.label },
+                      { label: 'Emergency type', value: emergencyTypeDisplayLabel },
                       { label: 'Priority', value: priority },
                       { label: 'Patient', value: values.patientName },
                       { label: 'Phone', value: values.callerPhone ? `+252 ${values.callerPhone}` : '' },

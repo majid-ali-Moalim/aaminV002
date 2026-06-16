@@ -5,10 +5,6 @@ import {
   Globe,
   ClipboardCheck,
   Siren,
-  Activity,
-  Baby,
-  Bone,
-  HelpCircle,
   Clock,
 } from 'lucide-react'
 
@@ -24,14 +20,6 @@ export const STEPS = [
 ] as const
 
 export type StepId = (typeof STEPS)[number]['id']
-
-export const EMERGENCY_TYPES = [
-  { value: 'ACCIDENT', label: 'Road Accident', icon: Activity, color: 'from-orange-500 to-red-600' },
-  { value: 'CARDIAC', label: 'Heart / Cardiac', icon: HeartPulse, color: 'from-red-500 to-rose-600' },
-  { value: 'TRAUMA', label: 'Injury / Trauma', icon: Bone, color: 'from-amber-500 to-orange-600' },
-  { value: 'PREGNANCY', label: 'Pregnancy', icon: Baby, color: 'from-pink-500 to-rose-600' },
-  { value: 'OTHER', label: 'Other Emergency', icon: HelpCircle, color: 'from-slate-500 to-slate-700' },
-] as const
 
 export const REQUEST_TYPES = [
   {

@@ -66,6 +66,16 @@ export class DriversController {
     return this.driversService.assignAmbulance(id, ambulanceId);
   }
 
+  @Get('availability/overview')
+  async getAvailabilityOverview() {
+    return this.driversService.getAvailabilityOverview();
+  }
+
+  @Get('availability/:id/detail')
+  async getAvailabilityDetail(@Param('id') id: string) {
+    return this.driversService.getAvailabilityDetail(id);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.driversService.findOne(id);

@@ -1,6 +1,7 @@
 export type MdmEntityKey =
   | 'regions'
   | 'districts'
+  | 'stations'
   | 'incident-categories'
   | 'emergency-types'
   | 'priority-levels'
@@ -18,7 +19,9 @@ export interface MdmFieldDef {
   type?: MdmFieldType
   required?: boolean
   placeholder?: string
-  optionsKey?: 'regions' | 'incident-categories'
+  optionsKey?: 'regions' | 'districts' | 'incident-categories'
+  /** When set, select options are filtered where option[optionsFilterBy] === form[optionsFilterBy] */
+  optionsFilterBy?: string
 }
 
 export interface MdmEntityDef {
@@ -26,7 +29,7 @@ export interface MdmEntityDef {
   label: string
   singular: string
   fields: MdmFieldDef[]
-  tableColumns: { key: string; label: string; render?: 'status' | 'region' | 'category' | 'color' | 'sortOrder' }[]
+  tableColumns: { key: string; label: string; render?: 'status' | 'region' | 'district' | 'category' | 'color' | 'sortOrder' }[]
 }
 
 export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
@@ -60,6 +63,35 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
       { key: 'code', label: 'Code' },
       { key: 'name', label: 'Name' },
       { key: 'region', label: 'Region', render: 'region' },
+      { key: 'isActive', label: 'Status', render: 'status' },
+    ],
+  },
+  stations: {
+    key: 'stations',
+    label: 'Stations',
+    singular: 'Station',
+    fields: [
+      { key: 'code', label: 'Station Code', placeholder: 'e.g. STN-HODAN' },
+      { key: 'name', label: 'Station Name', required: true, placeholder: 'e.g. Hodan Ambulance Station' },
+      { key: 'regionId', label: 'Region', type: 'select', required: true, optionsKey: 'regions' },
+      {
+        key: 'districtId',
+        label: 'District',
+        type: 'select',
+        required: true,
+        optionsKey: 'districts',
+        optionsFilterBy: 'regionId',
+      },
+      { key: 'address', label: 'Address', placeholder: 'Street, landmark, or coordinates' },
+      { key: 'phone', label: 'Phone', placeholder: 'Station contact number' },
+      { key: 'description', label: 'Description', type: 'textarea' },
+    ],
+    tableColumns: [
+      { key: 'code', label: 'Code' },
+      { key: 'name', label: 'Name' },
+      { key: 'region', label: 'Region', render: 'region' },
+      { key: 'district', label: 'District', render: 'district' },
+      { key: 'address', label: 'Address' },
       { key: 'isActive', label: 'Status', render: 'status' },
     ],
   },
@@ -200,7 +232,7 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
 }
 
 export const MDM_SECTIONS = {
-  locations: { title: 'Locations', tabs: ['regions', 'districts'] as MdmEntityKey[] },
+  locations: { title: 'Locations', tabs: ['regions', 'districts', 'stations'] as MdmEntityKey[] },
   emergency: {
     title: 'Emergency Configuration',
     tabs: ['incident-categories', 'emergency-types', 'priority-levels'] as MdmEntityKey[],

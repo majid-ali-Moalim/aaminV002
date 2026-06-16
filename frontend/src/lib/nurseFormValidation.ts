@@ -27,7 +27,6 @@ export type NurseFormValues = {
   address: string
   regionId: string
   districtId: string
-  areaZone: string
   stationId: string
   emergencyContactName: string
   emergencyPhone: string
@@ -85,7 +84,6 @@ const STEP_FIELD_ORDER: Record<NurseFormStep, (keyof NurseFormValues)[]> = {
     'address',
     'regionId',
     'districtId',
-    'areaZone',
     'stationId',
     'employeeCode',
     'departmentId',
@@ -212,14 +210,6 @@ function validateLocation(form: NurseFormValues, errors: NurseFormErrors, ctx?: 
 
   if (!form.regionId) setError(errors, 'regionId', 'Region is required')
   if (!form.districtId) setError(errors, 'districtId', 'District is required')
-
-  const areaZone = form.areaZone.trim()
-  if (areaZone.length > 100) {
-    setError(errors, 'areaZone', 'Area / zone cannot exceed 100 characters')
-  } else if (areaZone.length > 0 && areaZone.length < 2) {
-    setError(errors, 'areaZone', 'Area / zone must be at least 2 characters')
-  }
-
   if (!form.stationId) setError(errors, 'stationId', 'Assigned station is required')
   if (!form.departmentId) {
     setError(errors, 'departmentId', 'Department is required')

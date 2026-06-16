@@ -98,6 +98,13 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
   }
 
   const handleSave = async () => {
+    for (const f of def.fields) {
+      if (f.required && !form[f.key]?.trim?.()) {
+        toast.error(`${f.label} is required`)
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const payload: Record<string, unknown> = {}
@@ -337,19 +344,36 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                     <select
                       className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 px-3 text-sm bg-white dark:bg-gray-800"
                       value={form[f.key] ?? ''}
-                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                      disabled={Boolean(f.optionsFilterBy && !form[f.optionsFilterBy])}
+                      onChange={(e) => {
+                        const next = { ...form, [f.key]: e.target.value }
+                        if (f.key === 'regionId') next.districtId = ''
+                        setForm(next)
+                      }}
                     >
-                      <option value="">Select...</option>
-                      {(options[f.optionsKey] ?? []).map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
+                      <option value="">
+                        {f.optionsFilterBy && !form[f.optionsFilterBy]
+                          ? `Select ${def.fields.find((x) => x.key === f.optionsFilterBy)?.label?.toLowerCase() ?? 'parent'} first`
+                          : 'Select...'}
+                      </option>
+                      {(options[f.optionsKey] ?? [])
+                        .filter((o) => {
+                          if (!f.optionsFilterBy) return true
+                          const parentVal = form[f.optionsFilterBy]
+                          if (!parentVal) return false
+                          return o[f.optionsFilterBy] === parentVal
+                        })
+                        .map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
                     </select>
                   ) : (
                     <input
                       type={f.type === 'number' ? 'number' : f.type === 'color' ? 'color' : 'text'}
                       className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 px-3 text-sm bg-white dark:bg-gray-800"
+                      placeholder={f.placeholder}
                       value={form[f.key] ?? ''}
                       onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                     />
@@ -416,6 +440,7 @@ function renderCell(row: Row, key: string, render?: string) {
     )
   }
   if (render === 'region') return row.region?.name ?? '—'
+  if (render === 'district') return row.district?.name ?? '—'
   if (render === 'category') return row.incidentCategory?.name ?? '—'
   if (render === 'color')
     return (

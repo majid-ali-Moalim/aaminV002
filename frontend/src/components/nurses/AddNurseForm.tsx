@@ -84,7 +84,6 @@ const STEP_FIELDS = {
     'address',
     'regionId',
     'districtId',
-    'areaZone',
     'stationId',
     'employeeCode',
     'departmentId',
@@ -218,7 +217,6 @@ export default function AddNurseForm() {
     address: '',
     regionId: '',
     districtId: '',
-    areaZone: '',
     stationId: '',
     emergencyContactName: '',
     emergencyPhone: '',
@@ -424,7 +422,7 @@ export default function AddNurseForm() {
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = async (regionId: string) => {
-    patch({ regionId, districtId: '', areaZone: '', stationId: '', assignedAmbulanceId: '' })
+    patch({ regionId, districtId: '', stationId: '', assignedAmbulanceId: '' })
     setDistricts([])
     setStations([])
     if (!regionId) return
@@ -445,7 +443,7 @@ export default function AddNurseForm() {
   }
 
   const handleDistrictChange = async (districtId: string) => {
-    patch({ districtId, areaZone: '', stationId: '', assignedAmbulanceId: '' })
+    patch({ districtId, stationId: '', assignedAmbulanceId: '' })
     setStations([])
     if (!districtId) return
 
@@ -493,12 +491,7 @@ export default function AddNurseForm() {
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
-    const addressBase = form.address.trim()
-    const areaZone = form.areaZone.trim()
-    const fullAddress =
-      addressBase && areaZone && !addressBase.includes(areaZone)
-        ? `${addressBase}, ${areaZone}`
-        : addressBase || areaZone || undefined
+    const address = form.address.trim() || undefined
 
     return {
       role: 'EMPLOYEE' as const,
@@ -521,7 +514,7 @@ export default function AddNurseForm() {
       emergencyContactName: form.emergencyContactName.trim() || undefined,
       emergencyPhone: form.emergencyPhone.trim() || undefined,
       relationship: form.relationship.trim() || undefined,
-      address: fullAddress,
+      address,
       licenseNumber: form.licenseNumber.trim() || undefined,
       licenseType: 'NURSING',
       licenseExpiryDate: form.licenseExpiryDate || undefined,
@@ -652,7 +645,6 @@ export default function AddNurseForm() {
                     address: '',
                     regionId: '',
                     districtId: '',
-                    areaZone: '',
                     stationId: '',
                     emergencyContactName: '',
                     emergencyPhone: '',
@@ -757,7 +749,7 @@ export default function AddNurseForm() {
             onUpload={handlePhotoUpload}
           />
 
-          {(selectedDepartment || selectedRegion || selectedDistrict || form.areaZone.trim() || selectedStation) && (
+          {(selectedDepartment || selectedRegion || selectedDistrict || selectedStation) && (
             <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-red-100 space-y-2">
               <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Assignment</p>
               {selectedDepartment && (
@@ -773,11 +765,6 @@ export default function AddNurseForm() {
               {selectedDistrict && (
                 <p className="text-xs text-slate-600">
                   <span className="font-bold text-slate-800">District:</span> {selectedDistrict.name}
-                </p>
-              )}
-              {form.areaZone.trim() && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Area / Zone:</span> {form.areaZone.trim()}
                 </p>
               )}
               {selectedStation && (
@@ -960,18 +947,12 @@ export default function AddNurseForm() {
                   <>
                     <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Station assignment" color="red" />
 
-                    {(selectedRegion || selectedDistrict || form.areaZone.trim() || selectedStation) && (
+                    {(selectedRegion || selectedDistrict || selectedStation) && (
                       <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
                         <MapPin className="w-4 h-4 text-red-500 shrink-0" />
                         <span>{selectedRegion?.name || '—'}</span>
                         <ChevronRight className="w-3 h-3 text-red-300" />
                         <span>{selectedDistrict?.name || 'Select district'}</span>
-                        {form.areaZone.trim() && (
-                          <>
-                            <ChevronRight className="w-3 h-3 text-red-300" />
-                            <span>{form.areaZone.trim()}</span>
-                          </>
-                        )}
                         <ChevronRight className="w-3 h-3 text-red-300" />
                         <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
                       </div>
@@ -1017,16 +998,6 @@ export default function AddNurseForm() {
                               : 'No districts in this region'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-                      <FormInput
-                        label="Area / Zone"
-                        icon={MapPin}
-                        value={form.areaZone}
-                        error={fieldErrors.areaZone}
-                        maxLength={100}
-                        placeholder="e.g. Hodan, Wadajir, Zone 3"
-                        disabled={!form.districtId}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ areaZone: e.target.value })}
                       />
                       <FormSelect
                         label="Assigned Station"

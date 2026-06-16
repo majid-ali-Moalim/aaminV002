@@ -75,6 +75,7 @@ export interface Region {
   code?: string | null;
   description?: string | null;
   isActive: boolean;
+  districts?: District[];
 }
 
 export interface District {

@@ -48,6 +48,20 @@ export class AmbulancesController {
     return this.ambulancesService.findByStatus(status as AmbulanceStatus);
   }
 
+  @Get('availability/overview')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Ambulance availability dashboard data' })
+  getAvailabilityOverview() {
+    return this.ambulancesService.getAvailabilityOverview();
+  }
+
+  @Get('availability/:id/detail')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Ambulance availability detail with case history' })
+  getAvailabilityDetail(@Param('id') id: string) {
+    return this.ambulancesService.getAvailabilityDetail(id);
+  }
+
   @Get(':id')
   @Roles('ADMIN', 'DISPATCHER', 'DRIVER')
   @ApiOperation({ summary: 'Get ambulance by ID' })

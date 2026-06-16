@@ -5,6 +5,7 @@ import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 export type MdmEntityKey =
   | 'regions'
   | 'districts'
+  | 'stations'
   | 'incident-categories'
   | 'emergency-types'
   | 'priority-levels'
@@ -18,6 +19,7 @@ export type MdmEntityKey =
 const ENTITY_MAP: Record<MdmEntityKey, string> = {
   regions: 'region',
   districts: 'district',
+  stations: 'station',
   'incident-categories': 'incidentCategory',
   'emergency-types': 'emergencyType',
   'priority-levels': 'priorityLevel',
@@ -33,6 +35,7 @@ export type ListQuery = {
   search?: string;
   status?: 'all' | 'active' | 'inactive';
   regionId?: string;
+  districtId?: string;
   incidentCategoryId?: string;
   section?: string;
   page?: number;
@@ -59,7 +62,10 @@ export class MasterDataService implements OnModuleInit {
   }
 
   private buildWhere(entity: MdmEntityKey, query: ListQuery) {
-    const where: Record<string, unknown> = { deletedAt: null };
+    const where: Record<string, unknown> = {};
+    if (entity !== 'stations') {
+      where.deletedAt = null;
+    }
 
     if (query.status === 'active') where.isActive = true;
     else if (query.status === 'inactive') where.isActive = false;
@@ -67,7 +73,10 @@ export class MasterDataService implements OnModuleInit {
       where.isActive = true;
     }
 
-    if (query.regionId && entity === 'districts') where.regionId = query.regionId;
+    if (query.regionId && (entity === 'districts' || entity === 'stations')) {
+      where.regionId = query.regionId;
+    }
+    if (query.districtId && entity === 'stations') where.districtId = query.districtId;
     if (query.incidentCategoryId && entity === 'emergency-types') {
       where.incidentCategoryId = query.incidentCategoryId;
     }
@@ -97,6 +106,12 @@ export class MasterDataService implements OnModuleInit {
 
   private include(entity: MdmEntityKey) {
     if (entity === 'districts') return { region: { select: { id: true, name: true, code: true } } };
+    if (entity === 'stations') {
+      return {
+        region: { select: { id: true, name: true, code: true } },
+        district: { select: { id: true, name: true, code: true, regionId: true } },
+      };
+    }
     if (entity === 'emergency-types') {
       return { incidentCategory: { select: { id: true, name: true, code: true } } };
     }
@@ -135,8 +150,11 @@ export class MasterDataService implements OnModuleInit {
   }
 
   async getOne(entity: MdmEntityKey, id: string) {
+    const where: Record<string, unknown> = { id };
+    if (entity !== 'stations') where.deletedAt = null;
+
     const row = await this.model(entity).findFirst({
-      where: { id, deletedAt: null },
+      where,
       include: this.include(entity),
     });
     if (!row) throw new NotFoundException(`${entity} record not found`);
@@ -147,10 +165,29 @@ export class MasterDataService implements OnModuleInit {
     if (entity === 'districts' && !data.regionId) {
       throw new BadRequestException('District must belong to a region');
     }
+    if (entity === 'stations') {
+      if (!data.name || !String(data.name).trim()) {
+        throw new BadRequestException('Station name is required');
+      }
+      if (!data.regionId || !data.districtId) {
+        throw new BadRequestException('Station must belong to a region and district');
+      }
+      const district = await this.prisma.district.findFirst({
+        where: {
+          id: String(data.districtId),
+          regionId: String(data.regionId),
+          deletedAt: null,
+        },
+      });
+      if (!district) {
+        throw new BadRequestException('Selected district does not belong to the chosen region');
+      }
+    }
 
+    const usesAuditFields = entity !== 'system-settings' && entity !== 'stations';
     const payload = {
       ...data,
-      ...(userId && entity !== 'system-settings' ? { createdById: userId, updatedById: userId } : {}),
+      ...(userId && usesAuditFields ? { createdById: userId, updatedById: userId } : {}),
       ...(userId && entity === 'system-settings' ? { updatedById: userId } : {}),
     };
 
@@ -161,9 +198,26 @@ export class MasterDataService implements OnModuleInit {
 
   async update(entity: MdmEntityKey, id: string, data: Record<string, unknown>, userId?: string) {
     await this.getOne(entity, id);
+
+    if (entity === 'stations' && (data.regionId || data.districtId)) {
+      const existing = await this.model(entity).findUnique({ where: { id } });
+      const regionId = String(data.regionId ?? existing?.regionId ?? '');
+      const districtId = String(data.districtId ?? existing?.districtId ?? '');
+      if (!regionId || !districtId) {
+        throw new BadRequestException('Station must belong to a region and district');
+      }
+      const district = await this.prisma.district.findFirst({
+        where: { id: districtId, regionId, deletedAt: null },
+      });
+      if (!district) {
+        throw new BadRequestException('Selected district does not belong to the chosen region');
+      }
+    }
+
+    const usesAuditFields = entity !== 'stations';
     const payload = {
       ...data,
-      ...(userId ? { updatedById: userId } : {}),
+      ...(userId && usesAuditFields ? { updatedById: userId } : {}),
     };
     const row = await this.model(entity).update({ where: { id }, data: payload });
     await this.logAudit(userId, 'UPDATE', entity, id, payload);
@@ -177,6 +231,16 @@ export class MasterDataService implements OnModuleInit {
 
   async remove(entity: MdmEntityKey, id: string, userId?: string) {
     await this.getOne(entity, id);
+
+    if (entity === 'stations') {
+      const row = await this.model(entity).update({
+        where: { id },
+        data: { isActive: false },
+      });
+      await this.logAudit(userId, 'DELETE', entity, id);
+      return row;
+    }
+
     const row = await this.model(entity).update({
       where: { id },
       data: {
@@ -325,6 +389,7 @@ export class MasterDataService implements OnModuleInit {
           { code: 'FIRE', name: 'Fire Incident' },
           { code: 'PREGNANCY', name: 'Pregnancy Emergency' },
           { code: 'DISASTER', name: 'Disaster Incident' },
+          { code: 'OTHER', name: 'Others' },
         ],
       },
     ];
@@ -388,6 +453,7 @@ export class MasterDataService implements OnModuleInit {
       { code: 'STROKE', name: 'Stroke', cat: 'MEDICAL' },
       { code: 'BURN', name: 'Burn Injury', cat: 'FIRE' },
       { code: 'LABOR', name: 'Labor Emergency', cat: 'PREGNANCY' },
+      { code: 'OTHER', name: 'Others', cat: null },
     ];
     for (const et of emergencyTypes) {
       try {
@@ -396,7 +462,7 @@ export class MasterDataService implements OnModuleInit {
           create: {
             code: et.code,
             name: et.name,
-            incidentCategoryId: catByCode[et.cat] ?? null,
+            incidentCategoryId: et.cat ? (catByCode[et.cat] ?? null) : null,
           },
           update: {},
         });

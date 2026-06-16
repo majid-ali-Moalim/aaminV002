@@ -25,6 +25,7 @@ import { AccessControlModule } from './access-control/access-control.module';
 import { MasterDataModule } from './master-data/master-data.module';
 import { HospitalCoordinationModule } from './hospital-coordination/hospital-coordination.module';
 import { EmployeeAttendanceModule } from './employee-attendance/employee-attendance.module';
+import { HospitalAppModule } from './hospital-app/hospital-app.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { EmployeeAttendanceModule } from './employee-attendance/employee-attenda
     MasterDataModule,
     HospitalCoordinationModule,
     EmployeeAttendanceModule,
+    HospitalAppModule,
   ],
   controllers: [],
   providers: [],

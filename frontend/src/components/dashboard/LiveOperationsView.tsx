@@ -5,12 +5,10 @@ import useSWR from 'swr'
 import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
-import { DndContext, DragEndEvent } from '@dnd-kit/core'
 import {
   Monitor,
   Activity,
   AlertTriangle,
-  Clock,
   MapPin,
   Users,
   Truck,
@@ -18,7 +16,6 @@ import {
   Siren,
   CheckCircle,
   Radio,
-  Zap,
   Search,
   Filter,
   Bell,
@@ -29,7 +26,6 @@ import {
   XCircle,
   Loader2,
   ExternalLink,
-  Hammer,
 } from 'lucide-react'
 import {
   emergencyRequestsService,
@@ -38,10 +34,6 @@ import {
   reportsService,
 } from '@/lib/api'
 import { EmergencyRequest, Ambulance, Employee, AmbulanceStatus } from '@/types'
-import { EmergencyQueue } from '@/components/dashboard/EmergencyQueue'
-import { LiveDispatchBoard } from '@/components/dashboard/LiveDispatchBoard'
-import { StaffAvailability } from '@/components/dashboard/StaffAvailability'
-import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
 import AssignModal from '@/components/features/emergency/AssignModal'
 
 const ACTIVE_STATUSES = new Set([
@@ -114,15 +106,22 @@ function nextStatus(status: string): string | null {
   return STATUS_FLOW[idx + 1]
 }
 
-function findDriverForAmbulance(employees: Employee[], ambulanceId: string) {
-  return employees.find(
-    (e) =>
-      e.assignedAmbulanceId === ambulanceId &&
-      e.employeeRole?.name?.toLowerCase().includes('driver'),
-  )
-}
-
-export function LiveOperationsView() {
+export function LiveOperationsView({
+  embedded = false,
+  compact = false,
+  sharedData,
+  onRefreshExternal,
+}: {
+  embedded?: boolean
+  compact?: boolean
+  sharedData?: {
+    requests: EmergencyRequest[]
+    ambulances: Ambulance[]
+    employees: Employee[]
+    recentActivity: any[]
+  }
+  onRefreshExternal?: () => Promise<void>
+}) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [soundAlerts, setSoundAlerts] = useState(false)
@@ -130,7 +129,7 @@ export function LiveOperationsView() {
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL')
   const [statusFilter, setStatusFilter] = useState<string>('ACTIVE')
   const [assignTarget, setAssignTarget] = useState<EmergencyRequest | null>(null)
-  const [selectedMission, setSelectedMission] = useState<EmergencyRequest | null>(null)
+  const [selectedCase, setSelectedCase] = useState<EmergencyRequest | null>(null)
   const [actionBusy, setActionBusy] = useState<string | null>(null)
   const [now, setNow] = useState(new Date())
   const prevCriticalRef = useRef<number>(0)
@@ -153,30 +152,31 @@ export function LiveOperationsView() {
     }
   }, [])
 
-  const { data, error, mutate } = useSWR('live-operations', fetcher, {
-    refreshInterval: autoRefresh ? 8000 : 0,
-    revalidateOnFocus: true,
-  })
+  const { data, error, mutate } = useSWR(
+    sharedData ? null : 'live-operations',
+    fetcher,
+    {
+      refreshInterval: sharedData ? 0 : autoRefresh ? 8000 : 0,
+      revalidateOnFocus: !sharedData,
+    },
+  )
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
 
-  const requests = (data?.requests ?? []) as EmergencyRequest[]
-  const ambulances = (data?.ambulances ?? []) as Ambulance[]
-  const employees = (data?.employees ?? []) as Employee[]
-  const metrics = data?.metrics
-
+  const requests = (sharedData?.requests ?? data?.requests ?? []) as EmergencyRequest[]
+  const ambulances = (sharedData?.ambulances ?? data?.ambulances ?? []) as Ambulance[]
+  const employees = (sharedData?.employees ?? data?.employees ?? []) as Employee[]
   const derived = useMemo(() => {
-    const activeMissions = requests.filter((r) => isActiveEmergency(r.status))
+    const activeCases = requests.filter((r) => isActiveEmergency(r.status))
     const pending = requests.filter((r) => r.status === 'PENDING')
     const critical = requests.filter(
       (r) => r.priority === 'CRITICAL' && r.status !== 'COMPLETED' && r.status !== 'CANCELLED',
     )
     const availableAmbulances = ambulances.filter((a) => a.status === AmbulanceStatus.AVAILABLE)
-    const onMissionAmbulances = ambulances.filter((a) => a.status === AmbulanceStatus.ON_DUTY)
-    const maintenanceAmbulances = ambulances.filter((a) => a.status === AmbulanceStatus.MAINTENANCE)
+    const onCaseAmbulances = ambulances.filter((a) => a.status === AmbulanceStatus.ON_DUTY)
     const activeStaff = employees.filter((e) =>
       ['ON_DUTY', 'AVAILABLE'].includes(e.shiftStatus || ''),
     )
@@ -186,12 +186,11 @@ export function LiveOperationsView() {
     })
 
     return {
-      activeMissions,
+      activeCases,
       pending,
       critical,
       availableAmbulances,
-      onMissionAmbulances,
-      maintenanceAmbulances,
+      onCaseAmbulances,
       activeStaff,
       delayedPending,
     }
@@ -218,10 +217,10 @@ export function LiveOperationsView() {
     prevCriticalRef.current = count
   }, [derived.critical.length, soundAlerts])
 
-  const filteredMissions = useMemo(() => {
+  const filteredCases = useMemo(() => {
     let list =
       statusFilter === 'ACTIVE'
-        ? derived.activeMissions
+        ? derived.activeCases
         : statusFilter === 'PENDING'
           ? derived.pending
           : statusFilter === 'ALL'
@@ -246,107 +245,24 @@ export function LiveOperationsView() {
     return list.sort(
       (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
     )
-  }, [derived.activeMissions, derived.pending, requests, statusFilter, priorityFilter, search])
-
-  const kpiCards = useMemo(
-    () => [
-      {
-        label: 'Active Missions',
-        value: metrics?.activeEmergencies ?? derived.activeMissions.length,
-        icon: Siren,
-        accent: 'from-red-500 to-rose-600',
-      },
-      {
-        label: 'Pending Queue',
-        value: metrics?.pendingRequests ?? derived.pending.length,
-        icon: Clock,
-        accent: 'from-amber-400 to-orange-500',
-      },
-      {
-        label: 'Critical Cases',
-        value: metrics?.criticalCases ?? derived.critical.length,
-        icon: AlertTriangle,
-        accent: 'from-red-700 to-red-900',
-      },
-      {
-        label: 'Delayed (>5m)',
-        value: derived.delayedPending.length,
-        icon: Zap,
-        accent: 'from-orange-500 to-red-500',
-      },
-      {
-        label: 'Available Units',
-        value: metrics?.availableAmbulances ?? derived.availableAmbulances.length,
-        icon: Truck,
-        accent: 'from-emerald-500 to-teal-600',
-      },
-      {
-        label: 'On Mission',
-        value: metrics?.onMissionAmbulances ?? derived.onMissionAmbulances.length,
-        icon: Activity,
-        accent: 'from-sky-500 to-blue-600',
-      },
-      {
-        label: 'Staff on Shift',
-        value: metrics?.activeStaff ?? derived.activeStaff.length,
-        icon: Users,
-        accent: 'from-violet-500 to-indigo-600',
-      },
-      {
-        label: 'Fleet Total',
-        value: ambulances.length,
-        icon: Radio,
-        accent: 'from-slate-600 to-slate-800',
-      },
-    ],
-    [metrics, derived, ambulances.length],
-  )
+  }, [derived.activeCases, derived.pending, requests, statusFilter, priorityFilter, search])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await mutate()
+    if (onRefreshExternal) {
+      await onRefreshExternal()
+    } else {
+      await mutate()
+    }
     setTimeout(() => setIsRefreshing(false), 400)
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || !active) return
-
-    const request = active.data.current?.request as EmergencyRequest | undefined
-    const ambulance = over.data.current?.ambulance as Ambulance | undefined
-    if (!request || !ambulance) return
-
-    if (request.status !== 'PENDING') {
-      toast.error('Only pending cases can be dragged from the queue')
-      return
-    }
-
-    const driver = findDriverForAmbulance(employees, ambulance.id)
-    if (!driver) {
-      setAssignTarget(request)
-      toast('Select a driver for this unit in the assign dialog', { icon: 'ℹ️' })
-      return
-    }
-
-    setActionBusy(request.id)
-    try {
-      await emergencyRequestsService.assignAmbulance(request.id, ambulance.id, driver.id)
-      toast.success(`${ambulance.ambulanceNumber} dispatched to ${request.trackingCode}`)
-      await mutate()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Dispatch failed')
-      setAssignTarget(request)
-    } finally {
-      setActionBusy(null)
-    }
-  }
-
-  const handleAdvanceStatus = async (mission: EmergencyRequest) => {
-    const next = nextStatus(mission.status)
+  const handleAdvanceStatus = async (emergencyCase: EmergencyRequest) => {
+    const next = nextStatus(emergencyCase.status)
     if (!next) return
-    setActionBusy(mission.id)
+    setActionBusy(emergencyCase.id)
     try {
-      await emergencyRequestsService.updateStatus(mission.id, next)
+      await emergencyRequestsService.updateStatus(emergencyCase.id, next)
       toast.success(`Status updated to ${STATUS_LABELS[next] || next}`)
       await mutate()
     } catch (err: any) {
@@ -356,10 +272,10 @@ export function LiveOperationsView() {
     }
   }
 
-  const handleEscalate = async (mission: EmergencyRequest) => {
-    setActionBusy(mission.id)
+  const handleEscalate = async (emergencyCase: EmergencyRequest) => {
+    setActionBusy(emergencyCase.id)
     try {
-      await emergencyRequestsService.escalateRequest(mission.id, 'Escalated from live operations')
+      await emergencyRequestsService.escalateRequest(emergencyCase.id, 'Escalated from live operations')
       toast.success('Case escalated')
       await mutate()
     } catch (err: any) {
@@ -369,7 +285,7 @@ export function LiveOperationsView() {
     }
   }
 
-  if (error) {
+  if (error && !sharedData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] rounded-3xl bg-white border border-red-100 p-12 text-center">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
@@ -385,7 +301,7 @@ export function LiveOperationsView() {
     )
   }
 
-  if (!data) {
+  if (!sharedData && !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-10 h-10 text-red-500 animate-spin" />
@@ -395,8 +311,14 @@ export function LiveOperationsView() {
   }
 
   return (
-    <div className="min-h-screen -m-6 p-6 bg-gradient-to-br from-slate-50 via-white to-red-50/40 space-y-6">
-      {/* Hero */}
+    <div
+      className={
+        embedded
+          ? 'space-y-6'
+          : 'min-h-screen -m-6 p-6 bg-gradient-to-br from-slate-50 via-white to-red-50/40 space-y-6'
+      }
+    >
+      {!embedded && (
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 text-white shadow-xl shadow-red-900/20">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_20%,white,transparent_50%)]" />
         <div className="relative p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -455,9 +377,9 @@ export function LiveOperationsView() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Critical banner */}
-      {derived.critical.length > 0 && (
+      {!embedded && derived.critical.length > 0 && (
         <div className="flex items-start gap-4 p-4 rounded-2xl bg-red-50 border border-red-200 animate-pulse">
           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -480,36 +402,6 @@ export function LiveOperationsView() {
         </div>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        {kpiCards.map(({ label, value, icon: Icon, accent }) => (
-          <div
-            key={label}
-            className="group relative overflow-hidden rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md hover:border-red-100 transition-all"
-          >
-            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${accent}`} />
-            <Icon className="w-4 h-4 text-slate-400 group-hover:text-red-500 transition-colors mb-2" />
-            <p className="text-2xl font-black text-slate-900">{value}</p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Dispatch board */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Interactive Dispatch Board</h2>
-          <p className="text-xs text-slate-500">Drag pending cases onto available units to dispatch</p>
-        </div>
-        <DndContext onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <EmergencyQueue requests={requests} />
-            <LiveDispatchBoard ambulances={ambulances} />
-            <StaffAvailability employees={employees} />
-          </div>
-        </DndContext>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-3 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
         <div className="relative flex-1">
@@ -528,7 +420,7 @@ export function LiveOperationsView() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/30"
           >
-            <option value="ACTIVE">Active missions</option>
+            <option value="ACTIVE">Active cases</option>
             <option value="PENDING">Pending only</option>
             <option value="ALL">All open</option>
             <option value="ASSIGNED">Assigned</option>
@@ -549,15 +441,15 @@ export function LiveOperationsView() {
         </div>
       </div>
 
-      {/* Missions + detail panel */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Case tracker + detail panel */}
+      <div className={`grid grid-cols-1 ${compact ? '' : 'xl:grid-cols-3'} gap-6`}>
+        <div className={`${compact ? '' : 'xl:col-span-2'} bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden`}>
           <div className="p-5 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Activity className="w-5 h-5 text-red-600" />
-              <h2 className="text-lg font-bold text-slate-900">Mission Tracker</h2>
+              <h2 className="text-lg font-bold text-slate-900">Case Tracker</h2>
               <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                {filteredMissions.length}
+                {filteredCases.length}
               </span>
             </div>
             <Link
@@ -568,10 +460,10 @@ export function LiveOperationsView() {
             </Link>
           </div>
 
-          {filteredMissions.length === 0 ? (
+          {filteredCases.length === 0 ? (
             <div className="p-16 text-center">
               <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto mb-3" />
-              <p className="text-slate-600 font-semibold">No missions match your filters</p>
+              <p className="text-slate-600 font-semibold">No cases match your filters</p>
               <p className="text-slate-400 text-sm mt-1">System is clear or adjust filters above</p>
             </div>
           ) : (
@@ -588,50 +480,50 @@ export function LiveOperationsView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredMissions.map((mission) => {
-                    const progress = statusProgress(mission.status)
-                    const advance = nextStatus(mission.status)
-                    const isBusy = actionBusy === mission.id
+                  {filteredCases.map((emergencyCase) => {
+                    const progress = statusProgress(emergencyCase.status)
+                    const advance = nextStatus(emergencyCase.status)
+                    const isBusy = actionBusy === emergencyCase.id
                     const waitMins = Math.floor(
-                      (Date.now() - new Date(mission.createdAt).getTime()) / 60000,
+                      (Date.now() - new Date(emergencyCase.createdAt).getTime()) / 60000,
                     )
 
                     return (
                       <tr
-                        key={mission.id}
-                        onClick={() => setSelectedMission(mission)}
+                        key={emergencyCase.id}
+                        onClick={() => setSelectedCase(emergencyCase)}
                         className={`cursor-pointer transition-colors hover:bg-red-50/40 ${
-                          selectedMission?.id === mission.id ? 'bg-red-50/60' : ''
+                          selectedCase?.id === emergencyCase.id ? 'bg-red-50/60' : ''
                         }`}
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className={`w-2.5 h-2.5 rounded-full ${PRIORITY_DOT[mission.priority] || 'bg-slate-400'}`} />
+                            <div className={`w-2.5 h-2.5 rounded-full ${PRIORITY_DOT[emergencyCase.priority] || 'bg-slate-400'}`} />
                             <div>
-                              <p className="font-bold text-slate-900">{mission.trackingCode}</p>
+                              <p className="font-bold text-slate-900">{emergencyCase.trackingCode}</p>
                               <span
-                                className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[mission.status] || 'bg-slate-100 text-slate-600'}`}
+                                className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[emergencyCase.status] || 'bg-slate-100 text-slate-600'}`}
                               >
-                                {STATUS_LABELS[mission.status] || mission.status}
+                                {STATUS_LABELS[emergencyCase.status] || emergencyCase.status}
                               </span>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-slate-800">{mission.patient?.fullName || 'Unknown'}</p>
-                          <p className="text-xs text-slate-400">{mission.priority} • {waitMins}m</p>
+                          <p className="font-medium text-slate-800">{emergencyCase.patient?.fullName || 'Unknown'}</p>
+                          <p className="text-xs text-slate-400">{emergencyCase.priority} • {waitMins}m</p>
                         </td>
                         <td className="px-4 py-3 text-slate-600 max-w-[180px]">
                           <div className="flex items-start gap-1">
                             <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                            <span className="line-clamp-2 text-xs">{mission.pickupLocation || '—'}</span>
+                            <span className="line-clamp-2 text-xs">{emergencyCase.pickupLocation || '—'}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-700 text-xs font-semibold">
-                          {mission.ambulance?.ambulanceNumber || 'Unassigned'}
-                          {mission.driver && (
+                          {emergencyCase.ambulance?.ambulanceNumber || 'Unassigned'}
+                          {emergencyCase.driver && (
                             <p className="text-[10px] text-slate-400 font-normal mt-0.5">
-                              {mission.driver.firstName} {mission.driver.lastName}
+                              {emergencyCase.driver.firstName} {emergencyCase.driver.lastName}
                             </p>
                           )}
                         </td>
@@ -646,20 +538,20 @@ export function LiveOperationsView() {
                         </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
-                            {mission.status === 'PENDING' && (
+                            {emergencyCase.status === 'PENDING' && (
                               <button
                                 disabled={isBusy}
-                                onClick={() => setAssignTarget(mission)}
+                                onClick={() => setAssignTarget(emergencyCase)}
                                 className="p-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                                 title="Assign unit"
                               >
                                 <Truck className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            {advance && mission.status !== 'PENDING' && (
+                            {advance && emergencyCase.status !== 'PENDING' && (
                               <button
                                 disabled={isBusy}
-                                onClick={() => handleAdvanceStatus(mission)}
+                                onClick={() => handleAdvanceStatus(emergencyCase)}
                                 className="p-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
                                 title={`Advance to ${STATUS_LABELS[advance]}`}
                               >
@@ -670,10 +562,10 @@ export function LiveOperationsView() {
                                 )}
                               </button>
                             )}
-                            {mission.priority !== 'CRITICAL' && mission.status !== 'COMPLETED' && (
+                            {emergencyCase.priority !== 'CRITICAL' && emergencyCase.status !== 'COMPLETED' && (
                               <button
                                 disabled={isBusy}
-                                onClick={() => handleEscalate(mission)}
+                                onClick={() => handleEscalate(emergencyCase)}
                                 className="p-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
                                 title="Escalate priority"
                               >
@@ -681,7 +573,7 @@ export function LiveOperationsView() {
                               </button>
                             )}
                             <Link
-                              href={`/admin/emergency-requests/${mission.id}`}
+                              href={`/admin/emergency-requests/${emergencyCase.id}`}
                               className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"
                               title="Open case"
                             >
@@ -698,39 +590,39 @@ export function LiveOperationsView() {
           )}
         </div>
 
-        {/* Mission detail sidebar */}
+        {!compact && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 h-fit xl:sticky xl:top-6">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">
-            Mission Detail
+            Case Detail
           </h3>
-          {!selectedMission ? (
+          {!selectedCase ? (
             <div className="text-center py-12 text-slate-400">
               <Radio className="w-10 h-10 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Select a mission to view timeline</p>
+              <p className="text-sm">Select a case to view timeline</p>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider">Tracking code</p>
-                <p className="text-xl font-black text-red-600">{selectedMission.trackingCode}</p>
+                <p className="text-xl font-black text-red-600">{selectedCase.trackingCode}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase">Patient</p>
-                  <p className="font-semibold">{selectedMission.patient?.fullName || '—'}</p>
+                  <p className="font-semibold">{selectedCase.patient?.fullName || '—'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase">Priority</p>
-                  <p className="font-semibold text-red-600">{selectedMission.priority}</p>
+                  <p className="font-semibold text-red-600">{selectedCase.priority}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-[10px] text-slate-400 uppercase">Pickup</p>
-                  <p className="font-medium text-slate-700">{selectedMission.pickupLocation}</p>
+                  <p className="font-medium text-slate-700">{selectedCase.pickupLocation}</p>
                 </div>
-                {selectedMission.destination && (
+                {selectedCase.destination && (
                   <div className="col-span-2">
                     <p className="text-[10px] text-slate-400 uppercase">Destination</p>
-                    <p className="font-medium text-slate-700">{selectedMission.destination}</p>
+                    <p className="font-medium text-slate-700">{selectedCase.destination}</p>
                   </div>
                 )}
               </div>
@@ -739,13 +631,13 @@ export function LiveOperationsView() {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Timeline</p>
                 <div className="space-y-3">
                   {[
-                    { label: 'Created', time: selectedMission.createdAt },
-                    { label: 'Assigned', time: selectedMission.assignedAt },
-                    { label: 'Dispatched', time: selectedMission.dispatchedAt },
-                    { label: 'On scene', time: selectedMission.arrivedAtSceneAt },
-                    { label: 'Transporting', time: selectedMission.departedSceneAt },
-                    { label: 'At hospital', time: selectedMission.arrivedDestinationAt },
-                    { label: 'Completed', time: selectedMission.completedAt },
+                    { label: 'Created', time: selectedCase.createdAt },
+                    { label: 'Assigned', time: selectedCase.assignedAt },
+                    { label: 'Dispatched', time: selectedCase.dispatchedAt },
+                    { label: 'On scene', time: selectedCase.arrivedAtSceneAt },
+                    { label: 'Transporting', time: selectedCase.departedSceneAt },
+                    { label: 'At hospital', time: selectedCase.arrivedDestinationAt },
+                    { label: 'Completed', time: selectedCase.completedAt },
                   ].map(({ label, time }) => (
                     <div key={label} className="flex items-center gap-3">
                       <div
@@ -763,20 +655,20 @@ export function LiveOperationsView() {
               </div>
 
               <p className="text-[10px] text-slate-400">
-                Updated {formatDistanceToNow(new Date(selectedMission.updatedAt), { addSuffix: true })}
+                Updated {formatDistanceToNow(new Date(selectedCase.updatedAt), { addSuffix: true })}
               </p>
 
               <div className="flex gap-2 pt-2">
-                {selectedMission.status === 'PENDING' && (
+                {selectedCase.status === 'PENDING' && (
                   <button
-                    onClick={() => setAssignTarget(selectedMission)}
+                    onClick={() => setAssignTarget(selectedCase)}
                     className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-red-700"
                   >
                     Assign Unit
                   </button>
                 )}
                 <Link
-                  href={`/admin/emergency-requests/${selectedMission.id}`}
+                  href={`/admin/emergency-requests/${selectedCase.id}`}
                   className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-200 text-center"
                 >
                   Open Case
@@ -785,20 +677,21 @@ export function LiveOperationsView() {
             </div>
           )}
         </div>
+        )}
       </div>
 
-      {/* Fleet + Critical */}
+      {!compact && (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex items-center gap-3">
             <Truck className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-slate-900">Fleet Status</h2>
+            <h2 className="text-lg font-bold text-slate-900">Ambulance Status</h2>
           </div>
-          <div className="p-5 grid grid-cols-3 gap-3 mb-4">
+          <div className="p-5 grid grid-cols-2 gap-3 mb-4">
             {[
               { label: 'Available', count: derived.availableAmbulances.length, color: 'text-emerald-600 bg-emerald-50' },
-              { label: 'On mission', count: derived.onMissionAmbulances.length, color: 'text-blue-600 bg-blue-50' },
-              { label: 'Maintenance', count: derived.maintenanceAmbulances.length, color: 'text-amber-600 bg-amber-50' },
+              { label: 'On case', count: derived.onCaseAmbulances.length, color: 'text-blue-600 bg-blue-50' },
             ].map(({ label, count, color }) => (
               <div key={label} className={`rounded-xl p-3 text-center ${color}`}>
                 <p className="text-2xl font-black">{count}</p>
@@ -825,17 +718,6 @@ export function LiveOperationsView() {
                   <span className="text-[10px] font-bold text-emerald-700 uppercase">Ready</span>
                 </div>
               ))
-            )}
-            {derived.maintenanceAmbulances.length > 0 && (
-              <>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-2">Maintenance</p>
-                {derived.maintenanceAmbulances.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                    <Hammer className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm font-semibold">{a.ambulanceNumber}</span>
-                  </div>
-                ))}
-              </>
             )}
           </div>
         </div>
@@ -925,9 +807,8 @@ export function LiveOperationsView() {
           </div>
         )}
       </div>
-
-      {/* Activity feed */}
-      <ActivityFeed activities={data.recentActivity || []} />
+      </>
+      )}
 
       {assignTarget && (
         <AssignModal

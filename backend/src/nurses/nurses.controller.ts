@@ -45,6 +45,16 @@ export class NursesController {
     return this.nursesService.createIncidentReport(data);
   }
 
+  @Get('availability/overview')
+  async getAvailabilityOverview() {
+    return this.nursesService.getAvailabilityOverview();
+  }
+
+  @Get('availability/:id/detail')
+  async getAvailabilityDetail(@Param('id') id: string) {
+    return this.nursesService.getAvailabilityDetail(id);
+  }
+
   @Get(':id/performance')
   async getPerformance(@Param('id') id: string) {
     return this.nursesService.getPerformance(id);
@@ -65,6 +75,14 @@ export class NursesController {
     @Body('status') status: string,
   ) {
     return this.nursesService.updateMedicalStatus(id, status);
+  }
+
+  @Put(':id/ambulance')
+  async assignAmbulance(
+    @Param('id') id: string,
+    @Body('ambulanceId') ambulanceId: string | null,
+  ) {
+    return this.nursesService.assignAmbulance(id, ambulanceId);
   }
 
   @Get(':id')

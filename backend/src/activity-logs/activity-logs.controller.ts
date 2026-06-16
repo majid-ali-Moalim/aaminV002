@@ -12,6 +12,21 @@ import { ActivityLogsService } from './activity-logs.service';
 export class ActivityLogsController {
   constructor(private readonly activityLogsService: ActivityLogsService) {}
 
+  @Get('operational')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Operational activity feed for dashboard' })
+  getOperational(
+    @Query('limit') limit?: string,
+    @Query('category') category?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.activityLogsService.getOperationalFeed({
+      limit: limit ? parseInt(limit, 10) : undefined,
+      category,
+      search,
+    });
+  }
+
   @Get()
   @Roles('ADMIN')
   @ApiOperation({ summary: 'List activity audit logs' })

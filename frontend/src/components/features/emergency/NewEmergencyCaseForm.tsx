@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { filterCompatibleHospitals, hospitalAcceptsEmergency } from '@/lib/hospital/hospitalCompatibility'
 import {
   ArrowLeft,
   User,
@@ -79,7 +80,7 @@ const STEP_FIELDS: Record<StepId, readonly string[]> = {
     'newPatient.dateOfBirth',
   ],
   emergency: ['incidentCategoryId', 'patientCondition', 'symptoms', 'priority'],
-  location: ['regionId', 'districtId', 'pickupAreaZone', 'pickupLocation', 'pickupLandmark', 'destination', 'destinationHospitalId'],
+  location: ['regionId', 'districtId', 'pickupLocation', 'destination', 'destinationHospitalId'],
   dispatch: ['notes', 'manualDispatchNotes'],
 }
 
@@ -225,10 +226,8 @@ export default function NewEmergencyCaseForm({
     requestSource: RequestSource.PHONE_CALL,
     regionId: '',
     districtId: '',
-    pickupAreaZone: '',
     nearestStationId: '',
     pickupLocation: '',
-    pickupLandmark: '',
     destination: '',
     destinationHospitalId: '',
     callerName: '',
@@ -330,11 +329,13 @@ export default function NewEmergencyCaseForm({
     }
   }, [])
 
-  const loadHospitals = useCallback(async () => {
+  const loadHospitals = useCallback(async (filters?: { regionId?: string; districtId?: string }) => {
     setLoadingHospitals(true)
     try {
-      const data = await hospitalsService.getAll()
-      const list = Array.isArray(data) ? data.filter((h: any) => h.isActive !== false) : []
+      const data = await hospitalsService.getAll(filters)
+      const list = Array.isArray(data)
+        ? data.filter((h: any) => h.isActive !== false && hospitalAcceptsEmergency(h))
+        : []
       list.sort((a: any, b: any) => {
         const aAvailable = a.status === 'Available' ? 0 : 1
         const bAvailable = b.status === 'Available' ? 0 : 1
@@ -412,6 +413,16 @@ export default function NewEmergencyCaseForm({
     [categories, form.incidentCategoryId]
   )
 
+  const compatibleHospitals = useMemo(
+    () =>
+      filterCompatibleHospitals(hospitals, {
+        incidentCategory: selectedCategory?.name,
+        patientCondition: form.patientCondition,
+        priority: form.priority,
+      }),
+    [hospitals, selectedCategory, form.patientCondition, form.priority],
+  )
+
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === form.regionId),
     [regions, form.regionId]
@@ -456,7 +467,6 @@ export default function NewEmergencyCaseForm({
     patch({
       regionId,
       districtId: '',
-      pickupAreaZone: '',
       nearestStationId: '',
       ambulanceId: '',
       driverId: '',
@@ -464,7 +474,12 @@ export default function NewEmergencyCaseForm({
     })
     setDistricts([])
     setStations([])
-    if (!regionId) return
+    if (!regionId) {
+      loadHospitals()
+      return
+    }
+
+    loadHospitals({ regionId })
 
     setLoadingDistricts(true)
     try {
@@ -484,14 +499,19 @@ export default function NewEmergencyCaseForm({
   const handleDistrictChange = async (districtId: string) => {
     patch({
       districtId,
-      pickupAreaZone: '',
       nearestStationId: '',
       ambulanceId: '',
       driverId: '',
       nurseId: '',
     })
     setStations([])
-    if (!districtId) return
+    if (!districtId) {
+      if (form.regionId) loadHospitals({ regionId: form.regionId })
+      else loadHospitals()
+      return
+    }
+
+    loadHospitals({ regionId: form.regionId, districtId })
 
     setLoadingStations(true)
     try {
@@ -540,12 +560,7 @@ export default function NewEmergencyCaseForm({
   }
 
   const buildPayload = () => {
-    const pickupBase = form.pickupLocation.trim()
-    const areaZone = form.pickupAreaZone.trim()
-    const pickupLocation =
-      pickupBase && areaZone && !pickupBase.includes(areaZone)
-        ? `${pickupBase}, ${areaZone}`
-        : pickupBase || areaZone
+    const pickupLocation = form.pickupLocation.trim()
 
     const payload: Record<string, unknown> = {
       priority: form.priority,
@@ -562,7 +577,6 @@ export default function NewEmergencyCaseForm({
       'incidentCategoryId',
       'regionId',
       'districtId',
-      'pickupLandmark',
       'destination',
       'destinationHospitalId',
       'callerName',
@@ -1167,18 +1181,12 @@ export default function NewEmergencyCaseForm({
                       </div>
                     )}
 
-                    {(selectedRegion || selectedDistrict || form.pickupAreaZone.trim()) && (
+                    {(selectedRegion || selectedDistrict) && (
                       <div className="mb-4 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-slate-700">
                         <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>{selectedRegion?.name || '—'}</span>
                         <ChevronRight className="w-3 h-3 text-emerald-300" />
                         <span>{selectedDistrict?.name || 'Select district'}</span>
-                        {form.pickupAreaZone.trim() && (
-                          <>
-                            <ChevronRight className="w-3 h-3 text-emerald-300" />
-                            <span className="text-emerald-700">{form.pickupAreaZone.trim()}</span>
-                          </>
-                        )}
                       </div>
                     )}
 
@@ -1235,17 +1243,6 @@ export default function NewEmergencyCaseForm({
                         </select>
                       </div>
                       <div>
-                        <FieldLabel error={fieldErrors.pickupAreaZone}>Area / Zone</FieldLabel>
-                        <input
-                          className={fieldInputClass(fieldErrors.pickupAreaZone)}
-                          value={form.pickupAreaZone}
-                          disabled={!form.districtId}
-                          maxLength={100}
-                          placeholder="e.g. Hodan, Wadajir, Zone 3"
-                          onChange={(e) => patch({ pickupAreaZone: e.target.value })}
-                        />
-                      </div>
-                      <div>
                         <FieldLabel>Nearest Station {loadingStations && '…'}</FieldLabel>
                         <select
                           className={fieldInputClass(undefined)}
@@ -1299,16 +1296,6 @@ export default function NewEmergencyCaseForm({
                           placeholder="Street, building, or exact location for dispatch"
                         />
                       </div>
-                      <div>
-                        <FieldLabel error={fieldErrors.pickupLandmark}>Landmark</FieldLabel>
-                        <input
-                          className={fieldInputClass(fieldErrors.pickupLandmark)}
-                          value={form.pickupLandmark}
-                          maxLength={200}
-                          onChange={(e) => patch({ pickupLandmark: e.target.value })}
-                          placeholder="Near mosque, market, etc."
-                        />
-                      </div>
                     </div>
                   </SectionCard>
 
@@ -1321,20 +1308,20 @@ export default function NewEmergencyCaseForm({
                         <RefreshCw className="w-4 h-4 text-purple-500 animate-spin" />
                       ) : (
                         <span className="text-[10px] font-bold text-purple-700">
-                          {hospitals.length} from registry
+                          {compatibleHospitals.length} compatible
                         </span>
                       )
                     }
                   >
                     <p className="text-[10px] text-slate-500 font-medium mb-3">
-                      All active hospitals from the registry
-                      {hospitals.length === 0 && !loadingHospitals && ' — none found, try alternate destination below'}
+                      All hospitals accepting emergencies and matching case capabilities
+                      {compatibleHospitals.length === 0 && !loadingHospitals && ' — none compatible, try alternate destination below'}
                     </p>
                     <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
                       {loadingHospitals && (
                         <p className="text-sm text-slate-500 text-center py-8">Loading hospitals…</p>
                       )}
-                      {!loadingHospitals && hospitals.length === 0 && (
+                      {!loadingHospitals && compatibleHospitals.length === 0 && (
                         <p className="text-sm text-slate-500 text-center py-8">
                           No hospitals in the registry.{' '}
                           <Link href="/admin/system-setup?tab=hospitals" className="text-red-600 font-bold">
@@ -1343,7 +1330,7 @@ export default function NewEmergencyCaseForm({
                         </p>
                       )}
                       {!loadingHospitals &&
-                        hospitals.map((h) => {
+                        compatibleHospitals.map((h) => {
                           const selected = form.destinationHospitalId === h.id
                           const statusOk = h.status === 'Available'
                           return (
@@ -1362,6 +1349,8 @@ export default function NewEmergencyCaseForm({
                                   <p className="font-bold text-sm text-slate-800">{h.name}</p>
                                   <p className="text-xs text-slate-500 mt-0.5">
                                     {h.district?.name || h.region?.name || 'Somalia'} · {h.beds} beds
+                                    {(h.emergencyShortCode || h.emergencyHotline) &&
+                                      ` · ${h.emergencyShortCode ? `☎ ${h.emergencyShortCode}` : h.emergencyHotline}`}
                                     {h.erReady && ' · ER Ready'}
                                   </p>
                                 </div>

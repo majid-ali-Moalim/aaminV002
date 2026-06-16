@@ -2,7 +2,8 @@
 
 import { useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, UserRole } from '@/store/authStore'
+import { useAuthStore } from '@/store/authStore'
+import { isHospitalUser } from '@/lib/authRedirect'
 
 interface HospitalGuardProps {
   children: ReactNode
@@ -13,60 +14,26 @@ export function HospitalGuard({ children }: HospitalGuardProps) {
   const { user, isAuthenticated } = useAuthStore()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // If not authenticated, redirect to login
-      if (!isAuthenticated || !user) {
-        router.push('/login')
-        return
-      }
-
-      // If not hospital role, redirect to appropriate dashboard
-      if (user.role !== 'HOSPITAL') {
-        const roleRedirects: Record<UserRole, string> = {
-          ADMIN: '/admin/dashboard',
-          DISPATCHER: '/dispatcher/dashboard',
-          DRIVER: '/driver/dashboard',
-          NURSE: '/nurse/dashboard',
-          MANAGER: '/manager/dashboard',
-          HOSPITAL: '/hospital/dashboard',
-          PATIENT: '/patient/dashboard'
-        }
-        
-        const redirectPath = roleRedirects[user.role]
-        if (redirectPath) {
-          router.push(redirectPath)
-        }
-        return
-      }
-
-      // Check if user is active
-      if (!user.isActive) {
-        router.push('/login?error=account_inactive')
-        return
-      }
+    if (!isAuthenticated || !user) {
+      router.push('/hospital/login')
+      return
     }
-
-    checkAuth()
+    if (!isHospitalUser(user)) {
+      router.push('/login?error=hospital_only')
+      return
+    }
+    if (user.isActive === false) {
+      router.push('/hospital/login?error=account_inactive')
+    }
   }, [user, isAuthenticated, router])
 
-  // Show loading state while checking auth
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !user || !isHospitalUser(user)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600" />
       </div>
     )
   }
 
-  // Only render children if user is hospital staff
-  if (user.role === 'HOSPITAL' && user.isActive) {
-    return <>{children}</>
-  }
-
-  // Fallback loading state
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-    </div>
-  )
+  return <>{children}</>
 }

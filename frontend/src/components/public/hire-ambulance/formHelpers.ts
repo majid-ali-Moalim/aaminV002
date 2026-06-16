@@ -1,5 +1,29 @@
 import { StepId } from './constants'
 
+export type HireEmergencyTypeOption = {
+  id: string
+  code: string | null
+  name: string
+  incidentCategoryId?: string | null
+  incidentCategory?: { id: string; name: string } | null
+}
+
+export function isOtherEmergencyType(
+  type: Pick<HireEmergencyTypeOption, 'code' | 'name'> | undefined,
+): boolean {
+  if (!type) return false
+  const code = (type.code || '').toUpperCase().replace(/-/g, '_')
+  const name = type.name.trim().toLowerCase()
+  return (
+    code === 'OTHER' ||
+    code === 'OTHERS' ||
+    name === 'other' ||
+    name === 'others' ||
+    name.startsWith('other ') ||
+    name.includes('other emergency')
+  )
+}
+
 export type HireFormValues = {
   isPatient: string
   callerName: string
@@ -16,6 +40,7 @@ export type HireFormValues = {
   nationalityType: string
   country: string
   emergencyType: string
+  emergencyTypeOther: string
   conditionDescription: string
   consciousStatus: string
   breathingStatus: string
@@ -51,6 +76,7 @@ export const defaultFormValues: HireFormValues = {
   nationalityType: '',
   country: '',
   emergencyType: '',
+  emergencyTypeOther: '',
   conditionDescription: '',
   consciousStatus: '',
   breathingStatus: '',
@@ -116,11 +142,21 @@ export function hasManualLocation(data: HireFormValues): boolean {
   )
 }
 
-export function validateStep(step: StepId, data: HireFormValues): string | null {
+export function validateStep(
+  step: StepId,
+  data: HireFormValues,
+  context?: { emergencyTypes?: HireEmergencyTypeOption[] },
+): string | null {
   switch (step) {
     case 'urgency':
       if (!data.requestType) return 'Select request type'
       if (!data.emergencyType) return 'Select emergency type'
+      {
+        const selectedType = context?.emergencyTypes?.find((t) => t.id === data.emergencyType)
+        if (selectedType && isOtherEmergencyType(selectedType) && !data.emergencyTypeOther.trim()) {
+          return 'Please type the emergency type when you select Others'
+        }
+      }
       if (!data.consciousStatus) return 'Indicate if patient is conscious'
       if (!data.breathingStatus) return 'Indicate breathing status'
       if (!data.conditionDescription.trim()) return 'Describe what happened'
@@ -160,7 +196,16 @@ export function validateStep(step: StepId, data: HireFormValues): string | null 
   }
 }
 
-export function buildPayload(data: HireFormValues) {
+export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergencyTypeOption[]) {
+  const selectedType = emergencyTypes?.find((t) => t.id === data.emergencyType)
+  const emergencyTypeLabel = selectedType
+    ? isOtherEmergencyType(selectedType)
+      ? data.emergencyTypeOther.trim()
+      : selectedType.name
+    : data.emergencyType
+  const incidentCategoryId =
+    selectedType?.incidentCategoryId || selectedType?.incidentCategory?.id || undefined
+
   const finalCallerName =
     data.isPatient === 'YES' ? data.patientName : data.callerName || 'Unknown Caller'
   const finalRelationship = data.isPatient === 'YES' ? 'SELF' : data.callerRelationship || 'OTHER'
@@ -203,6 +248,7 @@ export function buildPayload(data: HireFormValues) {
     breathingStatus: data.breathingStatus,
     destination: data.destinationHospital || undefined,
     priority: computePriority(data),
+    incidentCategoryId,
     regionId: data.regionId || undefined,
     districtId: data.districtId || undefined,
     pickupLocation,
@@ -212,7 +258,8 @@ export function buildPayload(data: HireFormValues) {
     pickupLatitude: gps ? parseFloat(data.latitude) : undefined,
     pickupLongitude: gps ? parseFloat(data.longitude) : undefined,
     notes: [
-      `Emergency Type: ${data.emergencyType}`,
+      `Emergency Type: ${emergencyTypeLabel}`,
+      selectedType?.code && !isOtherEmergencyType(selectedType) ? `Type Code: ${selectedType.code}` : '',
       `Directions: ${data.additionalDirections || 'N/A'}`,
       `Language: ${data.preferredLanguage}`,
       `Special Instructions: ${data.specialInstructions || 'None'}`,

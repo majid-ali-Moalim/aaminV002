@@ -92,11 +92,10 @@ function SectionLabel({ label }: { label: string }) {
 
 // 1. Dashboard
 const dashboardSubMenu = [
-  { href: '/admin/dashboard', label: 'Overview', icon: LayoutGrid, exact: true },
-  { href: '/admin/dashboard/live', label: 'Live Operations', icon: Monitor },
-  { href: '/admin/dashboard/kpi', label: 'KPI Summary', icon: PieChart },
+  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid, exact: true },
+  { href: '/admin/dashboard#recent-activities', label: 'Recent Activity', icon: History },
+  { href: '/admin/dashboard#live-operations', label: 'Live Operations', icon: Monitor },
   { href: '/admin/notifications?tab=critical', label: 'Alerts & Notifications', icon: AlertCircle },
-  { href: '/admin/audit-logs/recent', label: 'Recent Activity', icon: History },
 ]
 
 // 2. Emergency Operations — rendered via EmergencyOperationsSidebar component
@@ -199,7 +198,12 @@ export default function AdminSidebar() {
   const isDashboardActive = pathname.startsWith('/admin/dashboard')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = isPatientsCaseRecordsPath(pathname)
-  const isDispatchResourcesActive = pathname.startsWith('/admin/ambulances/availability') || pathname.startsWith('/admin/drivers/availability')
+  const isDispatchResourcesActive =
+    pathname.startsWith('/admin/ambulances/availability') ||
+    pathname.startsWith('/admin/drivers/availability') ||
+    pathname.startsWith('/admin/nurses/availability') ||
+    pathname.startsWith('/admin/dispatch-management/readiness') ||
+    pathname.startsWith('/admin/system-setup/coverage')
   const isDispatchCenterOperationsActive =
     pathname.startsWith('/admin/dispatch-management') ||
     pathname.startsWith('/admin/assignment-board') ||

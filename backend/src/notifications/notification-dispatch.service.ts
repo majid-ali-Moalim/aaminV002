@@ -58,6 +58,19 @@ export class NotificationDispatchService {
     return employees.map((e) => e.userId);
   }
 
+  async findHospitalStaffUserIds(hospitalId: string): Promise<string[]> {
+    if (!hospitalId) return [];
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        status: 'ACTIVE',
+        hospitalId,
+        userId: { not: undefined },
+      },
+      select: { userId: true },
+    });
+    return employees.map((e) => e.userId).filter(Boolean);
+  }
+
   async resolveRecipients(
     eventKey: NotificationEventKey,
     context: DispatchContext = {},

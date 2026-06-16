@@ -2,4 +2,4 @@ import HireAmbulanceWizard from '@/components/public/hire-ambulance/HireAmbulanc
 
 export default function HireAmbulancePage() {
   return <HireAmbulanceWizard />
-}
+ }

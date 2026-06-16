@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse, isAxiosError } from 'axios'
 import { AmbulanceStatus, Role, EmergencyRequestStatus, Priority, ReferralStatus, Ambulance, Employee } from '@/types'
+import { normalizeUnifiedDashboard } from '@/lib/dashboard/unifiedDashboard'
 
 /** Prefer env; fallback to 127.0.0.1 (avoids Windows localhost / IPv6 issues). */
 export const API_BASE_URL = (
@@ -200,6 +201,18 @@ export const ambulancesService = {
   assignNurse: async (id: string, nurseEmployeeId: string) => {
     const api = new ApiService()
     return await api.patch(`/api/ambulances/${id}/assign-nurse`, { nurseEmployeeId })
+  },
+
+  getAvailabilityOverview: async () => {
+    const api = new ApiService()
+    return await api.get<import('@/lib/ambulance/availability').AmbulanceAvailabilityOverview>(
+      '/api/ambulances/availability/overview',
+    )
+  },
+
+  getAvailabilityDetail: async (id: string) => {
+    const api = new ApiService()
+    return await api.get<any>(`/api/ambulances/availability/${id}/detail`)
   },
 }
 
@@ -466,6 +479,17 @@ export const reportsService = {
     return await api.get('/api/reports/realtime/metrics')
   },
 
+  getDispatchReadiness: async () => {
+    const api = new ApiService()
+    return await api.get('/api/reports/dispatch-readiness')
+  },
+
+  getUnifiedDashboard: async () => {
+    const api = new ApiService()
+    const raw = await api.get('/api/reports/dashboard/unified')
+    return normalizeUnifiedDashboard(raw)
+  },
+
   getSystemHealth: async () => {
     const api = new ApiService()
     return await api.get('/api/reports/system/health')
@@ -511,6 +535,10 @@ export const systemSetupService = {
     const api = new ApiService()
     return await api.get('/api/setup/incident-categories')
   },
+  getEmergencyTypes: async () => {
+    const api = new ApiService()
+    return await api.get('/api/setup/emergency-types')
+  },
   getStations: async (districtId?: string) => {
     const api = new ApiService()
     const url = districtId ? `/api/setup/stations?districtId=${districtId}` : '/api/setup/stations'
@@ -520,6 +548,10 @@ export const systemSetupService = {
     const api = new ApiService()
     const url = districtId ? `/api/setup/areas?districtId=${districtId}` : '/api/setup/areas'
     return await api.get(url)
+  },
+  getCoverage: async () => {
+    const api = new ApiService()
+    return await api.get('/api/setup/coverage')
   },
   getHospitals: async (districtId?: string) => {
     const api = new ApiService()
@@ -642,7 +674,19 @@ export const driversService = {
   assignAmbulance: async (id: string, ambulanceId: string | null) => {
     const api = new ApiService()
     return await api.put(`/api/drivers/${id}/ambulance`, { ambulanceId })
-  }
+  },
+
+  getAvailabilityOverview: async () => {
+    const api = new ApiService()
+    return await api.get<import('@/lib/drivers/availability').DriverAvailabilityOverview>(
+      '/api/drivers/availability/overview',
+    )
+  },
+
+  getAvailabilityDetail: async (id: string) => {
+    const api = new ApiService()
+    return await api.get<any>(`/api/drivers/availability/${id}/detail`)
+  },
 }
 
 // Dispatchers service
@@ -729,7 +773,24 @@ export const nursesService = {
   updateClearance: async (id: string, status: string) => {
     const api = new ApiService()
     return await api.patch(`/api/nurses/${id}/clearance`, { status })
-  }
+  },
+
+  assignAmbulance: async (id: string, ambulanceId: string | null) => {
+    const api = new ApiService()
+    return await api.put(`/api/nurses/${id}/ambulance`, { ambulanceId })
+  },
+
+  getAvailabilityOverview: async () => {
+    const api = new ApiService()
+    return await api.get<import('@/lib/nurses/availability').NurseAvailabilityOverview>(
+      '/api/nurses/availability/overview',
+    )
+  },
+
+  getAvailabilityDetail: async (id: string) => {
+    const api = new ApiService()
+    return await api.get<any>(`/api/nurses/availability/${id}/detail`)
+  },
 }
 
 // Notifications service
@@ -921,6 +982,17 @@ export const activityLogsService = {
     const qs = search.toString() ? `?${search.toString()}` : ''
     return await api.get<any[]>(`/api/activity-logs${qs}`)
   },
+  getOperational: async (params?: { limit?: number; category?: string; search?: string }) => {
+    const api = new ApiService()
+    const search = new URLSearchParams()
+    if (params?.limit) search.append('limit', String(params.limit))
+    if (params?.category) search.append('category', params.category)
+    if (params?.search) search.append('search', params.search)
+    const qs = search.toString() ? `?${search.toString()}` : ''
+    return await api.get<import('@/lib/dashboard/operationalActivities').OperationalActivityFeed>(
+      `/api/activity-logs/operational${qs}`,
+    )
+  },
 }
 
 // Upload service
@@ -1076,4 +1148,63 @@ export const hospitalsService = {
     const api = new ApiService()
     return await api.delete(`/api/hospitals/${id}`)
   }
+}
+
+// Hospital portal app service
+export const hospitalAppApi = {
+  getProfile: async () => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/profile')
+  },
+  getDashboard: async () => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/dashboard')
+  },
+  listCases: async (params?: { tab?: string; search?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/cases', { params })
+  },
+  getCase: async (id: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/hospital-app/cases/${id}`)
+  },
+  updatePreparation: async (id: string, preparation: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-app/cases/${id}/preparation`, preparation)
+  },
+  acceptCase: async (id: string, receivingStaffName?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-app/cases/${id}/accept`, { receivingStaffName })
+  },
+  rejectCase: async (id: string, reason: string, notes?: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-app/cases/${id}/reject`, { reason, notes })
+  },
+  getIncomingAmbulances: async () => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/ambulances/incoming')
+  },
+  getHandoverQueue: async () => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/handover/queue')
+  },
+  startHandover: async (id: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-app/handover/${id}/start`)
+  },
+  completeHandover: async (
+    id: string,
+    data: { receivingStaffName?: string; department?: string; notes?: string },
+  ) => {
+    const api = new ApiService()
+    return await api.patch(`/api/hospital-app/handover/${id}/complete`, data)
+  },
+  updateCapacity: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch('/api/hospital-app/capacity', data)
+  },
+  getReports: async (params?: { startDate?: string; endDate?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/hospital-app/reports', { params })
+  },
 }

@@ -196,14 +196,12 @@ export default function AddDriverForm({
   const [createdDriver, setCreatedDriver] = useState<{ id: string; code: string; name: string } | null>(null)
 
   const [regions, setRegions] = useState<Region[]>([])
-  const [districts, setDistricts] = useState<District[]>([])
-  const [stations, setStations] = useState<Station[]>([])
+  const [allDistricts, setAllDistricts] = useState<District[]>([])
+  const [allStations, setAllStations] = useState<Station[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [driverRoleId, setDriverRoleId] = useState('')
   const [driverCode, setDriverCode] = useState('DR-001')
-  const [loadingDistricts, setLoadingDistricts] = useState(false)
-  const [loadingStations, setLoadingStations] = useState(false)
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<DriverFormErrors>({})
 
@@ -280,8 +278,10 @@ export default function AddDriverForm({
     setLoading(true)
     setMasterDataError(null)
     try {
-      const [regs, depts, roles, ambs, stats] = await Promise.all([
+      const [regs, dists, stns, depts, roles, ambs, stats] = await Promise.all([
         systemSetupService.getRegions(),
+        systemSetupService.getDistricts().catch(() => []),
+        systemSetupService.getStations().catch(() => []),
         systemSetupService.getDepartments(),
         systemSetupService.getRoles(),
         ambulancesService.getAll().catch(() => emergencyRequestsService.getAvailableAmbulances()),
@@ -291,15 +291,29 @@ export default function AddDriverForm({
       const regionsList = Array.isArray(regs) ? regs : []
       const deptList = Array.isArray(depts) ? depts : []
       const rolesList = Array.isArray(roles) ? roles : []
+      let districtList = Array.isArray(dists) ? dists : []
+      if (!districtList.length) {
+        districtList = regionsList.flatMap((r) =>
+          Array.isArray(r.districts) ? r.districts.filter((d) => d.isActive !== false) : [],
+        )
+      }
+      const stationList = Array.isArray(stns) ? stns : []
 
       if (!regionsList.length) {
         setMasterDataError('No regions found. Add regions in System Setup first.')
+      }
+      if (!districtList.length) {
+        setMasterDataError((prev) =>
+          prev ? `${prev} Also add districts in System Setup.` : 'No districts found. Add districts in System Setup.',
+        )
       }
       if (!rolesList.length) {
         setMasterDataError('Employee roles not loaded. Check your connection or System Setup.')
       }
 
       setRegions(regionsList)
+      setAllDistricts(districtList.filter((d) => d.isActive !== false))
+      setAllStations(stationList.filter((s) => s.isActive !== false))
       setDepartments(deptList)
 
       const driverRole = rolesList.find((r: EmployeeRole) => r.name === 'Driver')
@@ -352,40 +366,31 @@ export default function AddDriverForm({
     loadMasterData()
   }, [loadMasterData])
 
-  useEffect(() => {
-    const saved = persistedDraftRef.current?.form
-    if (!saved?.regionId) return
+  const districtsForRegion = useMemo(() => {
+    if (!form.regionId) return []
+    const region = regions.find((r) => r.id === form.regionId)
+    if (region?.districts?.length) {
+      return region.districts.filter((d) => d.isActive !== false)
+    }
+    return allDistricts.filter((d) => d.regionId === form.regionId)
+  }, [form.regionId, regions, allDistricts])
 
-    void (async () => {
-      setLoadingDistricts(true)
-      try {
-        const ds = await systemSetupService.getDistricts(saved.regionId)
-        setDistricts(Array.isArray(ds) ? ds : [])
-        if (saved.districtId) {
-          setLoadingStations(true)
-          const sts = await systemSetupService.getStations(saved.districtId)
-          setStations(Array.isArray(sts) ? sts : [])
-        }
-      } catch {
-        /* location lists optional on restore */
-      } finally {
-        setLoadingDistricts(false)
-        setLoadingStations(false)
-      }
-    })()
-  }, [])
+  const stationsForDistrict = useMemo(() => {
+    if (!form.districtId) return []
+    return allStations.filter((s) => s.districtId === form.districtId)
+  }, [form.districtId, allStations])
 
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === form.regionId),
     [regions, form.regionId]
   )
   const selectedDistrict = useMemo(
-    () => districts.find((d) => d.id === form.districtId),
-    [districts, form.districtId]
+    () => districtsForRegion.find((d) => d.id === form.districtId),
+    [districtsForRegion, form.districtId]
   )
   const selectedStation = useMemo(
-    () => stations.find((s) => s.id === form.stationId),
-    [stations, form.stationId]
+    () => stationsForDistrict.find((s) => s.id === form.stationId),
+    [stationsForDistrict, form.stationId]
   )
 
   const filteredAmbulances = useMemo(() => {
@@ -403,47 +408,12 @@ export default function AddDriverForm({
   }, [])
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
-  const handleRegionChange = async (regionId: string) => {
+  const handleRegionChange = (regionId: string) => {
     patch({ regionId, districtId: '', stationId: '', assignedAmbulanceId: '' })
-    setDistricts([])
-    setStations([])
-    if (!regionId) return
-
-    setLoadingDistricts(true)
-    try {
-      const d = await systemSetupService.getDistricts(regionId)
-      setDistricts(Array.isArray(d) ? d : [])
-      if (!Array.isArray(d) || d.length === 0) {
-        toast.error('No districts in this region. Add districts in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load districts')
-      setDistricts([])
-    } finally {
-      setLoadingDistricts(false)
-    }
   }
 
-  const handleDistrictChange = async (districtId: string) => {
+  const handleDistrictChange = (districtId: string) => {
     patch({ districtId, stationId: '', assignedAmbulanceId: '' })
-    if (!districtId) {
-      setStations([])
-      return
-    }
-
-    setLoadingStations(true)
-    try {
-      const stns = await systemSetupService.getStations(districtId)
-      setStations(Array.isArray(stns) ? stns : [])
-      if (!Array.isArray(stns) || stns.length === 0) {
-        toast.error('No stations in this district. Add a station in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load stations')
-      setStations([])
-    } finally {
-      setLoadingStations(false)
-    }
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -617,8 +587,6 @@ export default function AddDriverForm({
                   if (storageKey) sessionStorage.removeItem(storageKey)
                   setCreatedDriver(null)
                   setStep('personal')
-                  setDistricts([])
-                  setStations([])
                   setFieldErrors({})
                   loadMasterData()
                   setForm({
@@ -949,15 +917,15 @@ export default function AddDriverForm({
                         label="District"
                         required
                         icon={MapPin}
-                        options={districts}
+                        options={districtsForRegion}
                         value={form.districtId}
                         error={fieldErrors.districtId}
-                        disabled={!form.regionId}
-                        loading={loadingDistricts}
+                        disabled={!form.regionId || loading}
+                        loading={loading}
                         emptyHint={
                           !form.regionId
                             ? 'Select a region first'
-                            : districts.length
+                            : districtsForRegion.length
                               ? 'Select District'
                               : 'No districts in this region'
                         }
@@ -967,15 +935,15 @@ export default function AddDriverForm({
                         label="Assigned Station"
                         required
                         icon={Building2}
-                        options={stations}
+                        options={stationsForDistrict}
                         value={form.stationId}
                         error={fieldErrors.stationId}
-                        disabled={!form.districtId}
-                        loading={loadingStations}
+                        disabled={!form.districtId || loading}
+                        loading={loading}
                         emptyHint={
                           !form.districtId
                             ? 'Select a district first'
-                            : stations.length
+                            : stationsForDistrict.length
                               ? 'Select Station'
                               : 'No stations — add in System Setup'
                         }

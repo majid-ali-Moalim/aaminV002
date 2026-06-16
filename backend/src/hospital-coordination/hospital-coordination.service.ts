@@ -18,6 +18,13 @@ const CASE_INCLUDE = {
       nurse: true,
       ambulance: true,
       incidentCategory: true,
+      dispatcher: true,
+      statusLogs: { orderBy: { createdAt: 'desc' as const } },
+      patientCareRecords: {
+        orderBy: { createdAt: 'desc' as const },
+        include: { nurse: { select: { firstName: true, lastName: true } } },
+      },
+      incidentReport: true,
     },
   },
 } satisfies Prisma.HospitalCoordinationCaseInclude;
@@ -59,16 +66,16 @@ export class HospitalCoordinationService {
         },
       });
 
-      await this.notifications.dispatchEvent({
+      await this.notifications.notifyHospitalStaff(req.destinationHospitalId, {
         eventKey: 'HOSPITAL_RESPONSE',
-        title: 'New Incoming Case',
-        message: `Case ${req.trackingCode} is en route to hospital`,
+        title: 'New Emergency Case Assigned',
+        message: `Case ${req.trackingCode} has been assigned to your hospital.`,
         type: 'PATIENT_CARE',
         category: 'HOSPITAL',
         priority: req.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
-        entityType: 'HospitalCoordination',
+        entityType: 'HospitalCoordinationCase',
         entityId: req.id,
-        redirectUrl: '/admin/hospitals/incoming',
+        redirectUrl: '/hospital/emergency-cases?tab=incoming',
       });
     }
   }
@@ -171,7 +178,11 @@ export class HospitalCoordinationService {
       icuTotalBeds?: number;
       icuOccupiedBeds?: number;
       emergencyUnitStatus?: string;
+      capacityStatus?: string;
       availabilityStatus?: string;
+      operationalStatus?: string;
+      emergencyBeds?: number;
+      operatingRooms?: number;
       erReady?: boolean;
     },
     userId?: string,
@@ -211,6 +222,25 @@ export class HospitalCoordinationService {
         type: 'PATIENT_CARE',
         category: 'HOSPITAL',
         priority: 'HIGH',
+        entityType: 'Hospital',
+        entityId: hospitalId,
+        redirectUrl: '/admin/hospitals/availability',
+        context: { createdById: userId },
+      });
+    }
+
+    if (availabilityStatus !== hospital.availabilityStatus) {
+      await this.notifications.dispatchEvent({
+        eventKey: 'HOSPITAL_RESPONSE',
+        title: 'Hospital Availability Changed',
+        message: `${hospital.name} is now ${availabilityStatus}`,
+        type: 'PATIENT_CARE',
+        category: 'HOSPITAL',
+        priority: ['Full Capacity', 'Temporarily Unavailable', 'Under Maintenance'].includes(
+          availabilityStatus,
+        )
+          ? 'HIGH'
+          : 'MEDIUM',
         entityType: 'Hospital',
         entityId: hospitalId,
         redirectUrl: '/admin/hospitals/availability',
@@ -270,6 +300,18 @@ export class HospitalCoordinationService {
         recordedById: userId,
       },
       include: CASE_INCLUDE,
+    });
+
+    await this.notifications.notifyHospitalStaff(existing.hospitalId, {
+      eventKey: 'HOSPITAL_RESPONSE',
+      title: 'Case Accepted',
+      message: `Case ${existing.caseNumber} accepted. Prepare receiving team.`,
+      type: 'PATIENT_CARE',
+      category: 'HOSPITAL',
+      priority: 'MEDIUM',
+      entityType: 'HospitalCoordinationCase',
+      entityId: caseId,
+      redirectUrl: `/hospital/emergency-cases/${caseId}`,
     });
 
     await this.notifications.dispatchEvent({
@@ -363,14 +405,24 @@ export class HospitalCoordinationService {
     });
   }
 
-  async completeHandover(caseId: string, userId?: string, receivingStaffName?: string) {
+  async completeHandover(
+    caseId: string,
+    userId?: string,
+    payload?: { receivingStaffName?: string; department?: string; notes?: string },
+  ) {
+    const noteParts = [
+      payload?.department ? `Department: ${payload.department}` : '',
+      payload?.notes?.trim() ?? '',
+    ].filter(Boolean);
+
     const updated = await this.prisma.hospitalCoordinationCase.update({
       where: { id: caseId },
       data: {
         stage: 'ACCEPTED',
         status: 'UNDER_TREATMENT',
         handoverCompletedAt: new Date(),
-        receivingStaffName,
+        receivingStaffName: payload?.receivingStaffName || payload?.department,
+        notes: noteParts.length ? noteParts.join('\n') : undefined,
         recordedById: userId,
       },
       include: CASE_INCLUDE,

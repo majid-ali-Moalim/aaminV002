@@ -104,6 +104,22 @@ export class NotificationsService {
     return created;
   }
 
+  /** Send notification only to active employees linked to a hospital. */
+  async notifyHospitalStaff(hospitalId: string, payload: DispatchPayload) {
+    const recipientUserIds = await this.dispatch.findHospitalStaffUserIds(hospitalId);
+    if (!recipientUserIds.length) return [];
+
+    return this.dispatchEvent({
+      ...payload,
+      category: payload.category ?? 'HOSPITAL',
+      context: {
+        ...payload.context,
+        recipientUserIds,
+        directOnly: true,
+      },
+    });
+  }
+
   /** Ensure createdById references an existing user — avoids FK violations. */
   private async resolveValidUserId(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({

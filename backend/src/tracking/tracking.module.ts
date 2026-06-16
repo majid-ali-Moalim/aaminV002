@@ -32,6 +32,6 @@ import { GlobalTrackingExceptionFilter } from './tracking-exception.filter';
     }
   ],
   controllers: [TrackingController],
-  exports: [TrackingGateway, TrackingService, AuditLogService, NotificationEventEmitter]
+  exports: [TrackingGateway, TrackingService, AuditLogService, NotificationEventEmitter, EtaCalculationService]
 })
 export class TrackingModule {}

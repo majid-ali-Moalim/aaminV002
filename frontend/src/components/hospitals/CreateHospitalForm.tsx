@@ -22,6 +22,7 @@ import {
   INITIAL_HOSPITAL_FORM,
   validateCreateHospitalForm,
   type CreateHospitalFormData,
+  COMMON_EMERGENCY_SHORT_CODES,
 } from '@/lib/hospital-registration/constants'
 
 function SectionCard({
@@ -132,16 +133,38 @@ export default function CreateHospitalForm() {
     setLoading(true)
     try {
       const payload = {
-        ...form,
         name: form.name.trim(),
+        hospitalType: form.hospitalType,
+        ownershipType: form.ownershipType,
+        regionId: form.regionId,
+        districtId: form.districtId,
         address: form.address.trim(),
         contactPersonName: form.contactPersonName.trim(),
         contactPersonRole: form.contactPersonRole.trim(),
         primaryPhone: form.primaryPhone.trim(),
         secondaryPhone: form.secondaryPhone.trim() || undefined,
-        emergencyHotline: form.emergencyHotline.trim(),
-        email: form.email.trim() || undefined,
-        beds: 0,
+        emergencyShortCode: form.emergencyShortCode.trim() || undefined,
+        emergencyHotline: form.emergencyHotline.trim() || undefined,
+        email: form.email.trim(),
+        website: form.website.trim() || undefined,
+        acceptEmergencyCases: form.acceptEmergencyCases,
+        medicalCapabilities: form.medicalCapabilities,
+        beds: Number(form.beds) || 0,
+        icuTotalBeds: Number(form.icuTotalBeds) || 0,
+        emergencyBeds: Number(form.emergencyBeds) || 0,
+        operatingRooms: Number(form.operatingRooms) || 0,
+        ambulanceReceptionCapacity: Number(form.ambulanceReceptionCapacity) || 0,
+        capacityStatus: form.capacityStatus,
+        operationalStatus: form.operationalStatus,
+        available24_7: form.available24_7,
+        acceptAmbulanceTransfers: form.acceptAmbulanceTransfers,
+        acceptWalkInPatients: form.acceptWalkInPatients,
+        accountUsername: form.accountUsername.trim(),
+        accountEmail: form.accountEmail.trim(),
+        accountPassword: form.accountPassword,
+        hospitalRole: form.hospitalRole,
+        accountStatus: form.accountStatus,
+        forcePasswordChange: form.forcePasswordChange,
       }
       const result = await hospitalsService.createHospital(payload)
       setSuccessCode(result.hospitalCode ?? result.id)
@@ -242,11 +265,34 @@ export default function CreateHospitalForm() {
         <Field label="Secondary Phone Number" error={errors.secondaryPhone}>
           <input className={inputCls} value={form.secondaryPhone} onChange={(e) => set('secondaryPhone', e.target.value)} />
         </Field>
-        <Field label="Emergency Hotline" required error={errors.emergencyHotline}>
-          <input className={inputCls} value={form.emergencyHotline} onChange={(e) => set('emergencyHotline', e.target.value)} />
+        <Field label="Emergency Short Code" error={errors.emergencyShortCode}>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {COMMON_EMERGENCY_SHORT_CODES.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => set('emergencyShortCode', code)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                  form.emergencyShortCode === code
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-gray-50 border-gray-200 text-gray-600'
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+          <input className={inputCls} value={form.emergencyShortCode} onChange={(e) => set('emergencyShortCode', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="999, 112, 997" maxLength={5} />
+          <p className="text-xs text-gray-400 mt-1">Short dial code (2–5 digits). Required if no full hotline.</p>
         </Field>
-        <Field label="Email" error={errors.email}>
-          <input type="email" className={inputCls} value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="optional@hospital.org" />
+        <Field label="Emergency Hotline (full number)" error={errors.emergencyHotline}>
+          <input className={inputCls} value={form.emergencyHotline} onChange={(e) => set('emergencyHotline', e.target.value)} placeholder="+252 61 000 0000 (optional if short code set)" />
+        </Field>
+        <Field label="Email" required error={errors.email}>
+          <input type="email" className={inputCls} value={form.email} onChange={(e) => set('email', e.target.value)} />
+        </Field>
+        <Field label="Website">
+          <input className={inputCls} value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" />
         </Field>
       </SectionCard>
 
@@ -254,7 +300,7 @@ export default function CreateHospitalForm() {
         <div className="md:col-span-2 flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-950/30">
           <div>
             <p className="font-bold text-sm text-gray-900 dark:text-white">Accept Emergency Cases</p>
-            <p className="text-xs text-gray-500 mt-0.5">Stored as configuration only — no dispatch routing applied here</p>
+            <p className="text-xs text-gray-500 mt-0.5">When disabled, hospital is hidden from emergency assignment lists</p>
           </div>
           <button
             type="button"
@@ -293,7 +339,20 @@ export default function CreateHospitalForm() {
         </div>
       </section>
 
-      <SectionCard title="Status Settings" icon={Settings2}>
+      <SectionCard title="Capacity Information" icon={Settings2}>
+        <Field label="Emergency Beds"><input type="number" className={inputCls} value={form.emergencyBeds} onChange={(e) => set('emergencyBeds', e.target.value)} /></Field>
+        <Field label="ICU Beds"><input type="number" className={inputCls} value={form.icuTotalBeds} onChange={(e) => set('icuTotalBeds', e.target.value)} /></Field>
+        <Field label="Total Beds"><input type="number" className={inputCls} value={form.beds} onChange={(e) => set('beds', e.target.value)} /></Field>
+        <Field label="Operating Rooms"><input type="number" className={inputCls} value={form.operatingRooms} onChange={(e) => set('operatingRooms', e.target.value)} /></Field>
+        <Field label="Ambulance Reception Capacity" className="md:col-span-2"><input type="number" className={inputCls} value={form.ambulanceReceptionCapacity} onChange={(e) => set('ambulanceReceptionCapacity', e.target.value)} /></Field>
+        <Field label="Current Capacity Status" className="md:col-span-2">
+          <select className={inputCls} value={form.capacityStatus} onChange={(e) => set('capacityStatus', e.target.value)}>
+            {['Available', 'Limited Capacity', 'Full Capacity'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+      </SectionCard>
+
+      <SectionCard title="Operational Settings" icon={Settings2}>
         <Field label="Operational Status" required className="md:col-span-2">
           <div className="flex flex-wrap gap-3">
             {OPERATIONAL_STATUSES.map((s) => (
@@ -304,6 +363,37 @@ export default function CreateHospitalForm() {
             ))}
           </div>
         </Field>
+        {[
+          ['available24_7', 'Available 24/7'],
+          ['acceptAmbulanceTransfers', 'Accept Ambulance Transfers'],
+          ['acceptWalkInPatients', 'Accept Walk-In Patients'],
+        ].map(([key, label]) => (
+          <label key={key} className="md:col-span-2 flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={form[key as keyof CreateHospitalFormData] as boolean} onChange={(e) => set(key as keyof CreateHospitalFormData, e.target.checked as any)} />
+            {label}
+          </label>
+        ))}
+      </SectionCard>
+
+      <SectionCard title="Hospital Portal Account" icon={Settings2}>
+        <Field label="Username" required error={errors.accountUsername}><input className={inputCls} value={form.accountUsername} onChange={(e) => set('accountUsername', e.target.value)} /></Field>
+        <Field label="Email Login" required error={errors.accountEmail}><input type="email" className={inputCls} value={form.accountEmail} onChange={(e) => set('accountEmail', e.target.value)} /></Field>
+        <Field label="Temporary Password" required error={errors.accountPassword}><input type="password" className={inputCls} value={form.accountPassword} onChange={(e) => set('accountPassword', e.target.value)} /></Field>
+        <Field label="Confirm Password" required error={errors.accountPasswordConfirm}><input type="password" className={inputCls} value={form.accountPasswordConfirm} onChange={(e) => set('accountPasswordConfirm', e.target.value)} /></Field>
+        <Field label="Hospital Role">
+          <select className={inputCls} value={form.hospitalRole} onChange={(e) => set('hospitalRole', e.target.value)}>
+            {['Hospital Coordinator', 'Emergency Coordinator', 'Hospital Manager'].map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="Account Status">
+          <select className={inputCls} value={form.accountStatus} onChange={(e) => set('accountStatus', e.target.value)}>
+            {['Active', 'Suspended', 'Pending Activation'].map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <label className="md:col-span-2 flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={form.forcePasswordChange} onChange={(e) => set('forcePasswordChange', e.target.checked)} />
+          Force password change on first login
+        </label>
       </SectionCard>
 
       <div className="flex justify-end pb-8">

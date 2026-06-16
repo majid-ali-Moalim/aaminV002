@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type ReportPeriod = {
@@ -481,6 +482,402 @@ export class ReportsService {
       activeStaff,
       systemStatus: 'operational',
       lastUpdated: new Date().toISOString()
+    };
+  }
+
+  // ─── Unified Admin Dashboard (single real-time payload) ───
+  private readonly DASHBOARD_ACTIVE_MISSION: EmergencyRequestStatus[] = [
+    'REVIEWING', 'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
+    'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
+  ];
+
+  private async getDashboardKpiMetrics(todayStart: Date) {
+    const now = new Date();
+    const closedStatuses: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
+    const openFilter = { status: { notIn: closedStatuses } };
+    const pendingDelayCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+    const missionDelayCutoff = new Date(now.getTime() - 45 * 60 * 1000);
+    const responseWindowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalEmergencyCases,
+      activeCases,
+      pendingCases,
+      criticalCases,
+      delayedCases,
+      completedCasesToday,
+      hospitalsAvailable,
+      activeAssignments,
+      ambulances,
+      drivers,
+      nurses,
+      responseTimeRecords,
+    ] = await Promise.all([
+      this.prisma.emergencyRequest.count(),
+      this.prisma.emergencyRequest.count({
+        where: { status: { in: this.DASHBOARD_ACTIVE_MISSION } },
+      }),
+      this.prisma.emergencyRequest.count({ where: { status: 'PENDING' } }),
+      this.prisma.emergencyRequest.count({
+        where: { priority: 'CRITICAL', ...openFilter },
+      }),
+      this.prisma.emergencyRequest.count({
+        where: {
+          status: { notIn: closedStatuses },
+          OR: [
+            { status: 'PENDING', createdAt: { lt: pendingDelayCutoff } },
+            {
+              status: { in: this.DASHBOARD_ACTIVE_MISSION },
+              updatedAt: { lt: missionDelayCutoff },
+            },
+          ],
+        },
+      }),
+      this.prisma.emergencyRequest.count({
+        where: { status: 'COMPLETED', completedAt: { gte: todayStart } },
+      }),
+      this.prisma.hospital.count({
+        where: {
+          isActive: true,
+          acceptEmergencyCases: true,
+          availabilityStatus: { in: ['Available', 'Limited Capacity'] },
+        },
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: {
+          status: { in: this.DASHBOARD_ACTIVE_MISSION },
+          OR: [
+            { ambulanceId: { not: null } },
+            { driverId: { not: null } },
+            { nurseId: { not: null } },
+          ],
+        },
+        select: { ambulanceId: true, driverId: true, nurseId: true },
+      }),
+      this.prisma.ambulance.findMany({ select: { id: true, status: true } }),
+      this.prisma.employee.findMany({
+        where: { employeeRole: { name: { equals: 'Driver', mode: 'insensitive' } } },
+        select: { id: true, shiftStatus: true, status: true },
+      }),
+      this.prisma.employee.findMany({
+        where: { employeeRole: { name: { equals: 'Nurse', mode: 'insensitive' } } },
+        select: { id: true, shiftStatus: true, status: true, medicalClearanceStatus: true },
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: {
+          dispatchedAt: { not: null },
+          createdAt: { gte: responseWindowStart },
+        },
+        select: { createdAt: true, dispatchedAt: true, responseMinutes: true },
+      }),
+    ]);
+
+    const busyAmbulanceIds = new Set(
+      activeAssignments.map((c) => c.ambulanceId).filter(Boolean) as string[],
+    );
+    const busyDriverIds = new Set(
+      activeAssignments.map((c) => c.driverId).filter(Boolean) as string[],
+    );
+    const busyNurseIds = new Set(
+      activeAssignments.map((c) => c.nurseId).filter(Boolean) as string[],
+    );
+
+    const availableAmbulances = ambulances.filter(
+      (a) => a.status === 'AVAILABLE' && !busyAmbulanceIds.has(a.id),
+    ).length;
+    const ambulancesOnCase = busyAmbulanceIds.size;
+
+    const availableDrivers = drivers.filter(
+      (d) => d.status === 'ACTIVE' && d.shiftStatus === 'AVAILABLE' && !busyDriverIds.has(d.id),
+    ).length;
+    const availableNurses = nurses.filter(
+      (n) =>
+        n.status === 'ACTIVE' &&
+        n.shiftStatus === 'AVAILABLE' &&
+        n.medicalClearanceStatus !== 'PENDING' &&
+        !busyNurseIds.has(n.id),
+    ).length;
+
+    const responseSamples = responseTimeRecords
+      .map((r) => {
+        if (r.responseMinutes != null && r.responseMinutes >= 0) return r.responseMinutes;
+        if (r.dispatchedAt && r.createdAt) {
+          return Math.round(
+            (new Date(r.dispatchedAt).getTime() - new Date(r.createdAt).getTime()) / 60000,
+          );
+        }
+        return null;
+      })
+      .filter((v): v is number => v != null && v >= 0);
+
+    const averageResponseTimeMinutes =
+      responseSamples.length > 0
+        ? Math.round(responseSamples.reduce((sum, v) => sum + v, 0) / responseSamples.length)
+        : null;
+
+    return {
+      totalEmergencyCases,
+      activeCases,
+      pendingCases,
+      criticalCases,
+      availableAmbulances,
+      ambulancesOnCase,
+      availableCrew: availableDrivers + availableNurses,
+      availableDrivers,
+      availableNurses,
+      hospitalsAvailable,
+      completedCasesToday,
+      averageResponseTimeMinutes,
+      delayedCases,
+    };
+  }
+
+  async getUnifiedDashboard() {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const openFilter = { status: { notIn: ['COMPLETED', 'CANCELLED'] as ('COMPLETED' | 'CANCELLED')[] } };
+
+    const [
+      dashboard,
+      realtime,
+      emergencyKpis,
+      performance,
+      resources,
+      weekly,
+      monthly,
+      requests,
+      ambulances,
+      employees,
+      priorityGroups,
+      todayRequests,
+      criticalAlerts,
+      highPriorityCount,
+      completedToday,
+      cancelledToday,
+      kpiMetrics,
+      hospitals,
+    ] = await Promise.all([
+      this.getDashboardStats(),
+      this.getRealTimeMetrics(),
+      this.getEmergencyKPIs('day'),
+      this.getPerformanceMetrics(),
+      this.getResourceUtilization(),
+      this.getWeeklyTrends(),
+      this.getMonthlyTrends(),
+      this.prisma.emergencyRequest.findMany({
+        include: {
+          patient: true,
+          dispatcher: { include: { user: true, employeeRole: true } },
+          driver: { include: { user: true, employeeRole: true } },
+          nurse: { include: { user: true, employeeRole: true } },
+          ambulance: { include: { station: true } },
+          region: true,
+          district: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.ambulance.findMany({
+        include: { station: true, region: true, district: true },
+        orderBy: { ambulanceNumber: 'asc' },
+      }),
+      this.prisma.employee.findMany({
+        include: { user: true, employeeRole: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.emergencyRequest.groupBy({
+        by: ['priority'],
+        _count: true,
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: { createdAt: { gte: todayStart } },
+        select: { createdAt: true },
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: { priority: 'CRITICAL', ...openFilter },
+        take: 10,
+        include: { patient: true },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.emergencyRequest.count({
+        where: { priority: 'HIGH', ...openFilter },
+      }),
+      this.prisma.emergencyRequest.count({
+        where: { status: 'COMPLETED', completedAt: { gte: todayStart } },
+      }),
+      this.prisma.emergencyRequest.count({
+        where: { status: 'CANCELLED', cancelledAt: { gte: todayStart } },
+      }),
+      this.getDashboardKpiMetrics(todayStart),
+      this.prisma.hospital.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          availabilityStatus: true,
+          capacityStatus: true,
+          beds: true,
+          occupiedBeds: true,
+          acceptEmergencyCases: true,
+          erReady: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    const hourlyChart = Array.from({ length: 18 }, (_, i) => i + 6).map((hour) => ({
+      time: `${hour.toString().padStart(2, '0')}:00`,
+      cases: todayRequests.filter((r) => new Date(r.createdAt).getHours() === hour).length,
+    }));
+
+    const priorityColors: Record<string, string> = {
+      CRITICAL: '#EF4444',
+      HIGH: '#F59E0B',
+      MEDIUM: '#3B82F6',
+      LOW: '#10B981',
+    };
+
+    const priorityDistribution = (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const).map((name) => ({
+      name,
+      value: priorityGroups.find((g) => g.priority === name)?._count ?? 0,
+      color: priorityColors[name],
+    }));
+
+    const ambulanceStatus = [
+      { name: 'Available', count: kpiMetrics.availableAmbulances, color: '#10B981' },
+      { name: 'On Case', count: kpiMetrics.ambulancesOnCase, color: '#3B82F6' },
+      { name: 'Maintenance', count: resources.maintenanceAmbulances, color: '#F59E0B' },
+      {
+        name: 'Unavailable',
+        count: Math.max(
+          0,
+          resources.totalAmbulances -
+            kpiMetrics.availableAmbulances -
+            kpiMetrics.ambulancesOnCase -
+            resources.maintenanceAmbulances,
+        ),
+        color: '#EF4444',
+      },
+    ];
+
+    const summary = {
+      ...kpiMetrics,
+      pendingQueue: kpiMetrics.pendingCases,
+      highPriority: highPriorityCount,
+      completedToday: kpiMetrics.completedCasesToday,
+      cancelledToday,
+      openCases: realtime.activeEmergencies,
+    };
+
+    const kpis = [
+      {
+        key: 'totalEmergencyCases',
+        label: 'Total Emergency Cases',
+        value: kpiMetrics.totalEmergencyCases,
+        format: 'number' as const,
+      },
+      {
+        key: 'activeCases',
+        label: 'Active Cases',
+        value: kpiMetrics.activeCases,
+        format: 'number' as const,
+        live: true,
+      },
+      {
+        key: 'pendingCases',
+        label: 'Pending Cases',
+        value: kpiMetrics.pendingCases,
+        format: 'number' as const,
+      },
+      {
+        key: 'criticalCases',
+        label: 'Critical Cases',
+        value: kpiMetrics.criticalCases,
+        format: 'number' as const,
+      },
+      {
+        key: 'availableAmbulances',
+        label: 'Available Ambulances',
+        value: kpiMetrics.availableAmbulances,
+        format: 'number' as const,
+      },
+      {
+        key: 'ambulancesOnCase',
+        label: 'Ambulances On Case',
+        value: kpiMetrics.ambulancesOnCase,
+        format: 'number' as const,
+      },
+      {
+        key: 'availableCrew',
+        label: 'Available Crew',
+        value: kpiMetrics.availableCrew,
+        format: 'number' as const,
+      },
+      {
+        key: 'hospitalsAvailable',
+        label: 'Hospitals Available',
+        value: kpiMetrics.hospitalsAvailable,
+        format: 'number' as const,
+      },
+      {
+        key: 'completedCasesToday',
+        label: 'Completed Cases Today',
+        value: kpiMetrics.completedCasesToday,
+        format: 'number' as const,
+      },
+      {
+        key: 'delayedCases',
+        label: 'Delayed Cases',
+        value: kpiMetrics.delayedCases,
+        format: 'number' as const,
+      },
+    ];
+
+    const criticalAlertText = criticalAlerts
+      .slice(0, 3)
+      .map((r) => {
+        const loc = (r.pickupLocation || 'Unknown').split(',')[0];
+        return `${r.trackingCode} (${r.patient?.fullName || 'Case'} / ${loc})`;
+      })
+      .join(' — ');
+
+    return {
+      lastUpdated: new Date().toISOString(),
+      summary,
+      kpis,
+      stats: dashboard.stats,
+      performance: {
+        successRate: performance.successRate,
+        systemEfficiency: performance.systemEfficiency,
+        ambulanceUtilization: performance.fleetUtilization,
+        staffUtilization: performance.staffUtilization,
+      },
+      resources,
+      emergencyKpis,
+      charts: {
+        hourly: hourlyChart,
+        weekly: weekly.data,
+        monthly: monthly.data,
+        priorityDistribution,
+        ambulanceStatus,
+        todayBreakdown: [
+          { name: 'Pending', count: kpiMetrics.pendingCases, fill: '#F59E0B' },
+          { name: 'Critical', count: kpiMetrics.criticalCases, fill: '#EF4444' },
+          { name: 'High', count: highPriorityCount, fill: '#EA580C' },
+          { name: 'Completed', count: kpiMetrics.completedCasesToday, fill: '#10B981' },
+          { name: 'Delayed', count: kpiMetrics.delayedCases, fill: '#F97316' },
+          { name: 'Cancelled', count: cancelledToday, fill: '#94A3B8' },
+        ],
+      },
+      recentActivity: dashboard.recentActivity,
+      criticalAlerts,
+      criticalAlertText,
+      operational: {
+        requests,
+        ambulances,
+        employees,
+      },
+      hospitals,
     };
   }
 
@@ -1148,5 +1545,117 @@ export class ReportsService {
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     return 'Just now';
+  }
+
+  private readonly READINESS_ACTIVE_CASES: EmergencyRequestStatus[] = [
+    'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
+    'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'REVIEWING',
+  ];
+
+  async getDispatchReadiness() {
+    const closedStatuses = ['COMPLETED', 'CANCELLED'] as const;
+    const openFilter = { status: { notIn: [...closedStatuses] } };
+
+    const [ambulances, drivers, nurses, pendingCases, criticalCases, activeCases, stations] =
+      await Promise.all([
+        this.prisma.ambulance.findMany({
+          select: {
+            id: true,
+            ambulanceNumber: true,
+            status: true,
+            stationId: true,
+            station: { select: { id: true, name: true } },
+          },
+        }),
+        this.prisma.employee.findMany({
+          where: { employeeRole: { name: { equals: 'Driver', mode: 'insensitive' } } },
+          select: { id: true, shiftStatus: true, status: true, stationId: true, firstName: true, lastName: true },
+        }),
+        this.prisma.employee.findMany({
+          where: { employeeRole: { name: { equals: 'Nurse', mode: 'insensitive' } } },
+          select: {
+            id: true, shiftStatus: true, status: true, stationId: true,
+            firstName: true, lastName: true, medicalClearanceStatus: true,
+          },
+        }),
+        this.prisma.emergencyRequest.count({ where: { status: 'PENDING' } }),
+        this.prisma.emergencyRequest.count({ where: { priority: 'CRITICAL', ...openFilter } }),
+        this.prisma.emergencyRequest.findMany({
+          where: { status: { in: this.READINESS_ACTIVE_CASES }, ambulanceId: { not: null } },
+          select: { ambulanceId: true, driverId: true, nurseId: true },
+        }),
+        this.prisma.station.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, region: { select: { name: true } }, district: { select: { name: true } } },
+          orderBy: { name: 'asc' },
+        }),
+      ]);
+
+    const busyAmbulanceIds = new Set(activeCases.map((c) => c.ambulanceId).filter(Boolean));
+    const busyDriverIds = new Set(activeCases.map((c) => c.driverId).filter(Boolean));
+    const busyNurseIds = new Set(activeCases.map((c) => c.nurseId).filter(Boolean));
+
+    const isAmbAvailable = (a: { status: string; id: string }) =>
+      a.status === 'AVAILABLE' && !busyAmbulanceIds.has(a.id);
+    const isDriverAvailable = (e: { shiftStatus: string; status: string; id: string }) =>
+      e.status === 'ACTIVE' && e.shiftStatus === 'AVAILABLE' && !busyDriverIds.has(e.id);
+    const isNurseAvailable = (e: { shiftStatus: string; status: string; id: string; medicalClearanceStatus?: string | null }) =>
+      e.status === 'ACTIVE' && e.shiftStatus === 'AVAILABLE' && !busyNurseIds.has(e.id) &&
+      e.medicalClearanceStatus !== 'PENDING';
+
+    const ambAvailable = ambulances.filter(isAmbAvailable).length;
+    const driverAvailable = drivers.filter(isDriverAvailable).length;
+    const nurseAvailable = nurses.filter(isNurseAvailable).length;
+
+    const pct = (avail: number, total: number) => (total ? Math.round((avail / total) * 100) : 0);
+
+    const ambPct = pct(ambAvailable, ambulances.length);
+    const driverPct = pct(driverAvailable, drivers.length);
+    const nursePct = pct(nurseAvailable, nurses.length);
+    const readinessScore = Math.round((ambPct + driverPct + nursePct) / 3);
+
+    let readinessLevel: 'ready' | 'limited' | 'critical' = 'ready';
+    if (readinessScore < 50 || pendingCases > ambAvailable) readinessLevel = 'critical';
+    else if (readinessScore < 75 || criticalCases > 0) readinessLevel = 'limited';
+
+    const stationReadiness = stations.map((station) => {
+      const stationAmbs = ambulances.filter((a) => a.stationId === station.id);
+      const stationDrivers = drivers.filter((d) => d.stationId === station.id);
+      const stationNurses = nurses.filter((n) => n.stationId === station.id);
+      const availAmbs = stationAmbs.filter(isAmbAvailable).length;
+      const availDrivers = stationDrivers.filter(isDriverAvailable).length;
+      const availNurses = stationNurses.filter(isNurseAvailable).length;
+      const stationScore = Math.round(
+        (pct(availAmbs, stationAmbs.length) + pct(availDrivers, stationDrivers.length) + pct(availNurses, stationNurses.length)) / 3,
+      );
+      return {
+        id: station.id,
+        name: station.name,
+        region: station.region?.name ?? null,
+        district: station.district?.name ?? null,
+        ambulances: { total: stationAmbs.length, available: availAmbs },
+        drivers: { total: stationDrivers.length, available: availDrivers },
+        nurses: { total: stationNurses.length, available: availNurses },
+        readinessScore: stationScore,
+        status: stationScore >= 75 ? 'ready' : stationScore >= 40 ? 'limited' : 'critical',
+      };
+    });
+
+    return {
+      summary: {
+        readinessScore,
+        readinessLevel,
+        pendingCases,
+        criticalCases,
+        activeCases: activeCases.length,
+      },
+      resources: {
+        ambulances: { total: ambulances.length, available: ambAvailable, unavailable: ambulances.length - ambAvailable },
+        drivers: { total: drivers.length, available: driverAvailable, unavailable: drivers.length - driverAvailable },
+        nurses: { total: nurses.length, available: nurseAvailable, unavailable: nurses.length - nurseAvailable },
+      },
+      stationReadiness,
+      updatedAt: new Date().toISOString(),
+    };
   }
 }

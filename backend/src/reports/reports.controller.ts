@@ -14,6 +14,11 @@ export class ReportsController {
     return this.reportsService.getDashboardStats();
   }
 
+  @Get('dashboard/unified')
+  getUnifiedDashboard() {
+    return this.reportsService.getUnifiedDashboard();
+  }
+
   // ─── KPI endpoints (used by /admin/dashboard and /admin/dashboard/kpi) ───
   @Get('kpi/emergency')
   getEmergencyKPIs(@Query('timeRange') timeRange?: string) {
@@ -55,6 +60,11 @@ export class ReportsController {
   @Get('realtime/metrics')
   getRealTimeMetrics() {
     return this.reportsService.getRealTimeMetrics();
+  }
+
+  @Get('dispatch-readiness')
+  getDispatchReadiness() {
+    return this.reportsService.getDispatchReadiness();
   }
 
   // ─── Admin Analytics & Reports pages ───

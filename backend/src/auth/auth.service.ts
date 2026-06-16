@@ -71,14 +71,30 @@ export class AuthService {
       return null;
     }
 
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      this.log(`[AuthService] Account locked: "${username}"`);
+      return null;
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     this.log(`[AuthService] Password match: ${isPasswordValid}`);
     
     if (isPasswordValid) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
       this.log(`[AuthService] Login successful: ${user.username}`);
       const { passwordHash, ...result } = user;
       return result;
     }
+
+    const attempts = (user.failedLoginAttempts ?? 0) + 1;
+    const lockData: { failedLoginAttempts: number; lockedUntil?: Date } = { failedLoginAttempts: attempts };
+    if (attempts >= 5) {
+      lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+    }
+    await this.prisma.user.update({ where: { id: user.id }, data: lockData });
     
     this.log(`[AuthService] Invalid password for: ${user.username}`);
     return null;
@@ -121,6 +137,8 @@ export class AuthService {
       employeeRole: employeeRoleName,
       employeeStatus: user.employee?.status ?? null,
       employeeId: user.employee?.id ?? null,
+      hospitalId: user.employee?.hospitalId ?? null,
+      mustChangePassword: user.mustChangePassword ?? false,
       permissions,
     };
 
@@ -148,9 +166,11 @@ export class AuthService {
               status: user.employee.status,
               shiftStatus: user.employee.shiftStatus,
               stationId: user.employee.stationId,
+              hospitalId: user.employee.hospitalId,
               employeeRole: user.employee.employeeRole,
             }
           : null,
+        mustChangePassword: user.mustChangePassword ?? false,
         profile: {
           phone: user.employee?.phone || user.patient?.phone,
           avatar: user.employee?.profilePhoto || user.patient?.avatar,
@@ -206,6 +226,8 @@ export class AuthService {
       employeeRole: employeeRoleName,
       employeeStatus: dbUser.employee?.status ?? null,
       employeeId: dbUser.employee?.id ?? null,
+      hospitalId: dbUser.employee?.hospitalId ?? null,
+      mustChangePassword: dbUser.mustChangePassword ?? false,
       permissions,
     };
 

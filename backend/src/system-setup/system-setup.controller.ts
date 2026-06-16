@@ -44,9 +44,19 @@ export class SystemSetupController {
   getIncidentCategories() { return this.setupService.getIncidentCategories(); }
 
   @Public()
+  @Get('emergency-types')
+  @ApiOperation({ summary: 'Get all active emergency types' })
+  getEmergencyTypes() { return this.setupService.getEmergencyTypes(); }
+
+  @Public()
   @Get('stations')
   @ApiOperation({ summary: 'Get all active stations' })
   getStations(@Query('districtId') districtId?: string) { return this.setupService.getStations(districtId); }
+
+  @Public()
+  @Get('coverage')
+  @ApiOperation({ summary: 'Area and station coverage overview' })
+  getCoverage() { return this.setupService.getCoverageOverview(); }
 
   @Public()
   @Get('areas')
