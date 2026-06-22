@@ -6,9 +6,9 @@ export default function OutOfServicePage() {
   return (
     <AmbulanceFleetView
       title="Out of Service"
-      subtitle="Units under maintenance or temporarily unavailable for deployment."
-      heroBadge="Out of Service"
-      presetStatuses={['MAINTENANCE', 'UNAVAILABLE']}
+      subtitle="Ambulances marked unavailable for deployment."
+      heroBadge="Unavailable"
+      presetStatuses={['UNAVAILABLE', 'MAINTENANCE']}
       hideStatusFilter
       showRegisterButton={false}
       emptyTitle="No out-of-service units"

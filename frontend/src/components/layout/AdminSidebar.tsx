@@ -1,9 +1,8 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import SidebarNavLink from '@/components/navigation/SidebarNavLink'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
@@ -12,59 +11,41 @@ import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/compone
 import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
 import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
+import DispatcherDashboardSidebar, { isDispatcherDashboardPath } from '@/components/layout/DispatcherDashboardSidebar'
 import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
 import {
-  LayoutDashboard,
+  LayoutGrid,
   Users,
-  Truck, 
+  Truck,
   Activity,
   FileText,
   Bell,
-  Settings,
   LogOut,
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  UserCog,
   Calendar,
   Radio,
-  Shield,
-  Clock,
   BarChart2,
   UserPlus,
   Shuffle,
   Stethoscope,
-  Medal,
-  AlertCircle,
   MapPin,
-  Map as MapIcon,
-  History,
-  Database,
   Warehouse,
-  Building2,
-  AlertTriangle,
-  Siren,
-  HeartPulse,
-  ScrollText,
-  Lock,
-  Eye,
-  LayoutGrid,
-  CheckCircle2,
-  CheckSquare,
-  XCircle,
-  Ban,
-  Timer as TimerIcon,
   Monitor,
-  PieChart,
-  ShieldCheck,
+  Siren,
+  Clock,
+  Building2,
+  UserCog,
+  Database,
+  Settings,
+  AlertTriangle,
   PlusCircle,
+  ShieldCheck,
+  XCircle,
   ListTodo,
-  LifeBuoy,
-  Key,
-  Terminal,
 } from 'lucide-react'
 
-// EMS command center sidebar palette (sidebar only)
 const SIDEBAR = {
   bg: '#0B1220',
   panel: '#111827',
@@ -88,21 +69,6 @@ function SectionLabel({ label }: { label: string }) {
   )
 }
 
-// ─── Sub-menu Configurations ───
-
-// 1. Dashboard
-const dashboardSubMenu = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid, exact: true },
-  { href: '/admin/dashboard#recent-activities', label: 'Recent Activity', icon: History },
-  { href: '/admin/dashboard#live-operations', label: 'Live Operations', icon: Monitor },
-  { href: '/admin/notifications?tab=critical', label: 'Alerts & Notifications', icon: AlertCircle },
-]
-
-// 2. Emergency Operations — rendered via EmergencyOperationsSidebar component
-
-// 3. Patients & Case Records — rendered via PatientsCaseRecordsSidebar component
-
-// 4. Dispatch Resources
 const dispatchResourcesSubMenu = [
   { href: '/admin/ambulances/availability', label: 'Ambulance Availability', icon: Truck },
   { href: '/admin/ambulances/assignment-history', label: 'Ambulance Assignment', icon: Shuffle },
@@ -112,7 +78,6 @@ const dispatchResourcesSubMenu = [
   { href: '/admin/system-setup/coverage', label: 'Area / Station Coverage', icon: MapPin },
 ]
 
-// 4b. Dispatch Center — Dispatcher Management
 const dispatcherManagementSubMenu = [
   { href: '/admin/dispatchers', label: 'All Dispatchers', icon: Users, exact: true },
   { href: '/admin/dispatchers/add', label: 'Add New Dispatcher', icon: UserPlus },
@@ -123,7 +88,6 @@ const dispatcherManagementSubMenu = [
   { href: '/admin/dispatchers/activity', label: 'Dispatch Activity', icon: Activity },
 ]
 
-// 4c. Dispatch Center — Operations
 const dispatchCenterOperationsSubMenu = [
   { href: '/admin/dispatch-management', label: 'Live Dispatch Board', icon: Monitor, exact: true },
   { href: '/admin/assignment-board', label: 'Assignment Board', icon: LayoutGrid },
@@ -131,13 +95,6 @@ const dispatchCenterOperationsSubMenu = [
   { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
 ]
 
-// 5. Driver Management — rendered via DriverManagementSidebar component
-
-// 6. Nurse Management — rendered via NurseManagementSidebar component
-
-// 7. Ambulance Management — rendered via AmbulanceManagementSidebar component
-
-// 8. Hospital Coordination
 const hospitalCoordinationSubMenu = [
   { href: '/admin/hospitals', label: 'All Hospitals', icon: Building2, exact: true },
   { href: '/admin/hospitals/create', label: 'Create Hospital', icon: PlusCircle },
@@ -149,7 +106,6 @@ const hospitalCoordinationSubMenu = [
   { href: '/admin/hospitals/analytics', label: 'Hospital Performance Analytics', icon: BarChart2 },
 ]
 
-// 9. Workforce & Organization
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
   { href: '/admin/drivers', label: 'Drivers', icon: Truck },
@@ -159,7 +115,6 @@ const workforceSubMenu = [
   { href: '/admin/reports/performance', label: 'Staff Performance', icon: BarChart2 },
 ]
 
-// 10. Analytics & Reports
 const analyticsSubMenu = [
   { href: '/admin/reports/emergency', label: 'Emergency Reports', icon: FileText },
   { href: '/admin/reports/utilization', label: 'Ambulance Utilization', icon: Truck },
@@ -170,9 +125,6 @@ const analyticsSubMenu = [
   { href: '/admin/reports/export', label: 'Export PDF / Excel', icon: FileText },
 ]
 
-// Notifications — single centralized menu entry
-
-// Master Data Management
 const masterDataSubMenu = [
   { href: '/admin/master-data/locations', label: 'Locations', icon: MapPin },
   { href: '/admin/master-data/emergency', label: 'Emergency Configuration', icon: AlertTriangle },
@@ -182,22 +134,17 @@ const masterDataSubMenu = [
   { href: '/admin/master-data/settings', label: 'System Settings', icon: Settings },
 ]
 
-// 13. Permissions & Access Control — rendered via PermissionsAccessControlSidebar component
-
 export default function AdminSidebar() {
   const { logout } = useAuth()
   const pathname = usePathname()
-  const router = useRouter()
   const { isActive: isNavActive } = useOptimisticNav()
 
-  useEffect(() => {
-    hospitalCoordinationSubMenu.forEach((item) => router.prefetch(item.href))
-  }, [router])
-
-  // ─── Active state checks ───
-  const isDashboardActive = pathname.startsWith('/admin/dashboard')
+  const isDashboardActive =
+    pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
+  const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = isPatientsCaseRecordsPath(pathname)
+  const isDispatcherDashboardActive = isDispatcherDashboardPath(pathname)
   const isDispatchResourcesActive =
     pathname.startsWith('/admin/ambulances/availability') ||
     pathname.startsWith('/admin/drivers/availability') ||
@@ -205,7 +152,7 @@ export default function AdminSidebar() {
     pathname.startsWith('/admin/dispatch-management/readiness') ||
     pathname.startsWith('/admin/system-setup/coverage')
   const isDispatchCenterOperationsActive =
-    pathname.startsWith('/admin/dispatch-management') ||
+    (pathname.startsWith('/admin/dispatch-management') && !pathname.includes('/readiness')) ||
     pathname.startsWith('/admin/assignment-board') ||
     pathname === '/admin/emergency-requests/pending' ||
     pathname === '/admin/emergency-requests/active'
@@ -220,13 +167,11 @@ export default function AdminSidebar() {
     (pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive)
   const isAccessControlActive = isAccessControlPath(pathname)
   const isAnalyticsActive = pathname.startsWith('/admin/reports')
-  const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isMasterDataActive = pathname.startsWith('/admin/master-data')
 
-  // ─── Toggle states ───
-  const [dashboardOpen, setDashboardOpen] = useState(isDashboardActive)
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
+  const [dispatcherDashboardOpen, setDispatcherDashboardOpen] = useState(isDispatcherDashboardActive)
   const [dispatchResourcesOpen, setDispatchResourcesOpen] = useState(isDispatchResourcesActive)
   const [dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen] = useState(isDispatchCenterOperationsActive)
   const [dispatcherManagementOpen, setDispatcherManagementOpen] = useState(isDispatcherManagementActive)
@@ -239,10 +184,11 @@ export default function AdminSidebar() {
   const [masterDataOpen, setMasterDataOpen] = useState(isMasterDataActive)
   const [accessControlOpen, setAccessControlOpen] = useState(isAccessControlActive)
 
-  const renderLink = (href: string, label: string, Icon: any, isActive: boolean) => (
+  const renderLink = (href: string, label: string, Icon: React.ElementType, isActive: boolean) => (
     <SidebarNavLink
       navKey={`${label}-${href}`}
       href={href}
+      exact={href === '/admin/dashboard'}
       className="flex items-center px-2.5 py-2 text-[13px] font-medium rounded-lg"
       activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }}
       inactiveStyle={{ color: SIDEBAR.secondary }}
@@ -269,12 +215,12 @@ export default function AdminSidebar() {
 
   const renderCollapsible = (
     label: string,
-    Icon: any,
+    Icon: React.ElementType,
     isActive: boolean,
     isOpen: boolean,
     setOpen: (v: boolean) => void,
-    subItems: any[],
-    opts?: { queryBased?: boolean }
+    subItems: { href: string; label: string; icon: React.ElementType; exact?: boolean }[],
+    opts?: { queryBased?: boolean },
   ) => (
     <div>
       <button
@@ -329,7 +275,7 @@ export default function AdminSidebar() {
             let active = false
             if (opts?.queryBased && sub.href.includes('?')) {
               active = typeof window !== 'undefined' && window.location.search.includes(sub.href.split('?')[1])
-            } else if ((sub as any).exact) {
+            } else if (sub.exact) {
               active = isNavActive(navKey, sub.href, true)
             } else {
               active = isNavActive(navKey, sub.href)
@@ -339,7 +285,7 @@ export default function AdminSidebar() {
                 key={navKey}
                 navKey={navKey}
                 href={sub.href}
-                exact={(sub as any).exact}
+                exact={sub.exact}
                 className="flex items-center px-2.5 py-1.5 text-xs rounded-md"
                 activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text, fontWeight: 600 }}
                 inactiveStyle={{ color: SIDEBAR.secondary }}
@@ -377,19 +323,15 @@ export default function AdminSidebar() {
         borderRight: `1px solid ${SIDEBAR.border}`,
       }}
     >
-      {/* Logo */}
       <div className="p-4 shrink-0" style={{ borderBottom: `1px solid ${SIDEBAR.border}` }}>
         <AaminLogo size="sidebar" onDark priority />
       </div>
-      
-      {/* Scrollable Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 space-y-px px-2.5 custom-scrollbar">
-        
-        {/* ══════ General ══════ */}
-        <SectionLabel label="General" />
-        {renderCollapsible('Dashboard', LayoutDashboard, isDashboardActive, dashboardOpen, setDashboardOpen, dashboardSubMenu)}
 
-        {/* ══════ Emergency Command ══════ */}
+      <nav className="flex-1 overflow-y-auto py-3 space-y-px px-2.5 custom-scrollbar">
+        <SectionLabel label="Dashboard" />
+        {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
+        {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
+
         <SectionLabel label="Emergency Command" />
         <div className="px-0.5">
           <EmergencyOperationsSidebar
@@ -398,59 +340,96 @@ export default function AdminSidebar() {
           />
         </div>
         <div className="px-0.5">
-          <PatientsCaseRecordsSidebar
-            isOpen={patientsOpen}
-            setOpen={setPatientsOpen}
+          <PatientsCaseRecordsSidebar isOpen={patientsOpen} setOpen={setPatientsOpen} />
+        </div>
+        <div className="px-0.5">
+          <DispatcherDashboardSidebar
+            isOpen={dispatcherDashboardOpen}
+            setOpen={setDispatcherDashboardOpen}
           />
         </div>
-        {renderCollapsible('Dispatch Resources', Warehouse, isDispatchResourcesActive, dispatchResourcesOpen, setDispatchResourcesOpen, dispatchResourcesSubMenu)}
+        {renderCollapsible(
+          'Dispatch Resources',
+          Warehouse,
+          isDispatchResourcesActive,
+          dispatchResourcesOpen,
+          setDispatchResourcesOpen,
+          dispatchResourcesSubMenu,
+        )}
 
-        {/* ══════ Dispatch Center ══════ */}
-        <SectionLabel label="Dispatch Center" />
-        {renderCollapsible('Dispatch Operations', Monitor, isDispatchCenterOperationsActive, dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen, dispatchCenterOperationsSubMenu)}
-        {renderCollapsible('Dispatcher Management', Radio, isDispatcherManagementActive, dispatcherManagementOpen, setDispatcherManagementOpen, dispatcherManagementSubMenu)}
-
-        {/* ══════ Field Operations ══════ */}
         <SectionLabel label="Field Operations" />
         <div className="px-0.5">
-          <DriverManagementSidebar
-            isOpen={driversOpen}
-            setOpen={setDriversOpen}
-          />
+          <DriverManagementSidebar isOpen={driversOpen} setOpen={setDriversOpen} />
         </div>
         <div className="px-0.5">
-          <NurseManagementSidebar
-            isOpen={nursesOpen}
-            setOpen={setNursesOpen}
-          />
+          <NurseManagementSidebar isOpen={nursesOpen} setOpen={setNursesOpen} />
         </div>
         <div className="px-0.5">
-          <AmbulanceManagementSidebar
-            isOpen={ambulancesOpen}
-            setOpen={setAmbulancesOpen}
-          />
+          <AmbulanceManagementSidebar isOpen={ambulancesOpen} setOpen={setAmbulancesOpen} />
         </div>
+        {renderCollapsible(
+          'Dispatcher Management',
+          Radio,
+          isDispatcherManagementActive,
+          dispatcherManagementOpen,
+          setDispatcherManagementOpen,
+          dispatcherManagementSubMenu,
+        )}
 
-        {/* ══════ Hospital Coordination ══════ */}
+        <SectionLabel label="Dispatch Center" />
+        {renderCollapsible(
+          'Dispatch Operations',
+          Monitor,
+          isDispatchCenterOperationsActive,
+          dispatchCenterOperationsOpen,
+          setDispatchCenterOperationsOpen,
+          dispatchCenterOperationsSubMenu,
+        )}
+
         <SectionLabel label="Hospital Coordination" />
-        {renderCollapsible('Hospital Coordination', Building2, isHospitalCoordinationActive, hospitalCoordinationOpen, setHospitalCoordinationOpen, hospitalCoordinationSubMenu)}
+        {renderCollapsible(
+          'Hospital Coordination',
+          Building2,
+          isHospitalCoordinationActive,
+          hospitalCoordinationOpen,
+          setHospitalCoordinationOpen,
+          hospitalCoordinationSubMenu,
+        )}
 
-        {/* ══════ Organization & Control ══════ */}
         <SectionLabel label="Organization & Control" />
-        {renderCollapsible('Workforce & Organization', UserCog, isWorkforceActive, workforceOpen, setWorkforceOpen, workforceSubMenu)}
-        {renderCollapsible('Analytics & Reports', BarChart2, isAnalyticsActive, analyticsOpen, setAnalyticsOpen, analyticsSubMenu)}
-        {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
-        {renderCollapsible('Master Data Management', Database, isMasterDataActive, masterDataOpen, setMasterDataOpen, masterDataSubMenu)}
+        {renderCollapsible(
+          'Workforce & Organization',
+          UserCog,
+          isWorkforceActive,
+          workforceOpen,
+          setWorkforceOpen,
+          workforceSubMenu,
+          { queryBased: true },
+        )}
+        {renderCollapsible(
+          'Analytics & Reports',
+          BarChart2,
+          isAnalyticsActive,
+          analyticsOpen,
+          setAnalyticsOpen,
+          analyticsSubMenu,
+        )}
+        {renderCollapsible(
+          'Master Data Management',
+          Database,
+          isMasterDataActive,
+          masterDataOpen,
+          setMasterDataOpen,
+          masterDataSubMenu,
+        )}
         <div className="px-0.5">
           <PermissionsAccessControlSidebar
             isOpen={accessControlOpen}
             setOpen={setAccessControlOpen}
           />
         </div>
-
       </nav>
-      
-      {/* Bottom Logout */}
+
       <div
         className="p-2.5 shrink-0"
         style={{

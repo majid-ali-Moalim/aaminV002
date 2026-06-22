@@ -7,6 +7,7 @@ import DispatcherSidebarSections from '@/components/dispatcher/DispatcherSidebar
 import DispatcherTopBar from '@/components/dispatcher/DispatcherTopBar'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { OptimisticNavProvider } from '@/lib/navigation/optimisticNav'
+import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
 
 function DispatcherShell({ children }: { children: ReactNode }) {
   const { stats } = useDispatcherAccess()
@@ -17,7 +18,6 @@ function DispatcherShell({ children }: { children: ReactNode }) {
       <DispatcherGuard>
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
         <DispatcherSidebarSections
-          pendingCount={stats?.pending ?? 0}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
@@ -34,7 +34,7 @@ function DispatcherShell({ children }: { children: ReactNode }) {
 export default function DispatcherLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === '/dispatcher/login'
-  const isFullScreen = pathname === '/dispatcher/new-emergency'
+  const isFullScreen = pathname === '/dispatcher/new-emergency' || pathname === '/dispatcher/emergency-requests/new'
 
   if (isLoginPage) {
     return <>{children}</>
@@ -43,7 +43,9 @@ export default function DispatcherLayout({ children }: { children: ReactNode }) 
   if (isFullScreen) {
     return (
       <DispatcherGuard>
-        <div className="min-h-screen">{children}</div>
+        <EmergencyPortalProvider portal="dispatcher">
+          <div className="min-h-screen">{children}</div>
+        </EmergencyPortalProvider>
       </DispatcherGuard>
     )
   }

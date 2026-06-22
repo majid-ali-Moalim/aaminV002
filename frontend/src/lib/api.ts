@@ -122,10 +122,29 @@ export const authService = {
     return await api.post('/api/auth/forgot-password', { email })
   },
 
-  resetPassword: async (token: string, password: string) => {
+  resetPassword: async (email: string, password: string, confirmPassword: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/reset-password', { token, password })
-  }
+    return await api.post('/api/auth/reset-password', { email, password, confirmPassword })
+  },
+
+  verifyResetOtp: async (email: string, otp: string) => {
+    const api = new ApiService()
+    return await api.post('/api/auth/verify-reset-otp', { email, otp })
+  },
+
+  changePassword: async (data: {
+    currentPassword: string
+    newPassword: string
+    confirmPassword: string
+  }) => {
+    const api = new ApiService()
+    return await api.post('/api/auth/change-password', data)
+  },
+
+  getSecurityActivity: async () => {
+    const api = new ApiService()
+    return await api.get('/api/auth/security-activity')
+  },
 }
 
 // Users service
@@ -298,7 +317,7 @@ export const emergencyRequestsService = {
 
   update: async (id: string, data: any) => {
     const api = new ApiService()
-    return await api.put(`/api/emergency-requests/${id}`, data)
+    return await api.patch(`/api/emergency-requests/${id}`, data)
   },
 
   delete: async (id: string) => {
@@ -506,6 +525,13 @@ export const reportsService = {
     const query = params.toString()
     return await api.get(`/api/reports/admin/${type}${query ? `?${query}` : ''}`)
   }
+}
+
+export const publicService = {
+  getStats: async () => {
+    const api = new ApiService()
+    return await api.get('/api/public/stats')
+  },
 }
 
 // System Setup Service

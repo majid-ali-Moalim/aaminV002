@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
+import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 
 interface EmergencyFilteredPageProps {
   title: string
@@ -35,6 +36,7 @@ export default function EmergencyFilteredPage({
   onRowAction,
 }: EmergencyFilteredPageProps) {
   const router = useRouter()
+  const paths = useEmergencyPaths()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -147,7 +149,7 @@ export default function EmergencyFilteredPage({
                   <Button
                     size="sm"
                     className="rounded-xl bg-red-600 hover:bg-red-700"
-                    onClick={() => router.push(`/admin/emergency-requests/${request.id}`)}
+                    onClick={() => router.push(paths.caseDetail(request.id))}
                   >
                     Open <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>

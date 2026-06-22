@@ -295,6 +295,15 @@ model User {
   mustChangePassword Boolean   @default(false)
   failedLoginAttempts Int      @default(0)
   lockedUntil   DateTime?
+  passwordResetTokenHash String?
+  passwordResetExpires   DateTime?
+  passwordResetOtpHash   String?
+  passwordResetOtpExpires DateTime?
+  passwordResetOtpAttempts Int @default(0)
+  passwordResetVerifiedUntil DateTime?
+  lastPasswordChangedAt DateTime?
+  lastLoginAt           DateTime?
+  lastFailedLoginAt     DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   activityLogs  ActivityLog[]

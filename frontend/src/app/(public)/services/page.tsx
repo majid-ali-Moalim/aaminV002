@@ -29,9 +29,9 @@ export default function ServicesPage() {
     },
     {
       icon: Activity,
-      title: 'Staff Management',
-      description: 'Comprehensive management of medical staff, drivers, and emergency responders with scheduling and training.',
-      features: ['Staff scheduling', 'Training programs', 'Performance tracking', 'Certification management']
+      title: 'Staff Coordination',
+      description: 'Coordination of drivers, nurses, and emergency responders with scheduling and training support.',
+      features: ['Staff scheduling', 'Training programs', 'Performance tracking', 'Certification support']
     },
     {
       icon: FileText,

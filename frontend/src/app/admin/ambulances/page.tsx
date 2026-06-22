@@ -5,8 +5,8 @@ import AmbulanceFleetView from '@/components/features/ambulances/AmbulanceFleetV
 export default function AmbulancesPage() {
   return (
     <AmbulanceFleetView
-      title="Ambulance Fleet"
-      subtitle="Live fleet overview — units, readiness, crew, and deployment status."
+      title="Ambulance"
+      subtitle="Live overview — units, readiness, crew, and deployment status."
     />
   )
 }

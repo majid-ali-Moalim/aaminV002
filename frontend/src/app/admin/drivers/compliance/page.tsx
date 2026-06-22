@@ -186,7 +186,7 @@ export default function LicenseCompliancePage() {
                            </td>
                            <td className="py-2 px-6 whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                 <div className="p-1 px-1.5 bg-gray-100 rounded text-[9px] font-black uppercase text-gray-600 whitespace-nowrap tracking-widest border border-gray-200/50">{driver.licenseType || 'CLASS C'}</div>
+                                 <div className="p-1 px-1.5 bg-gray-100 rounded text-[9px] font-black uppercase text-gray-600 whitespace-nowrap tracking-widest border border-gray-200/50">Class {driver.licenseClass || 'C'}</div>
                                  <span className="text-[11px] font-black text-gray-500">{driver.licenseNumber || '-------'}</span>
                               </div>
                            </td>

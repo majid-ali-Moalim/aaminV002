@@ -19,7 +19,7 @@ export function resolveNurseNotificationUrl(notification: {
     return '/nurse/mission'
   }
   if (notification.category === 'COMMUNICATION') {
-    return '/nurse/communications'
+    return '/nurse/notifications'
   }
   if (notification.category === 'ATTENDANCE') {
     return '/nurse/shifts'

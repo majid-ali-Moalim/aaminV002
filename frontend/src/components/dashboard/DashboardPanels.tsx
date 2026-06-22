@@ -21,7 +21,6 @@ import {
   AlertTriangle,
   Bell,
   Building2,
-  Calendar,
   ChevronRight,
   Clock,
   LayoutGrid,
@@ -71,10 +70,10 @@ export function DashboardAnalytics({ charts }: { charts: UnifiedDashboardData['c
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Case volume today</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Weekly case volume</p>
         <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={charts.hourly}>
+            <AreaChart data={charts.weekly}>
               <defs>
                 <linearGradient id="dashCaseGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
@@ -82,10 +81,10 @@ export function DashboardAnalytics({ charts }: { charts: UnifiedDashboardData['c
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-              <XAxis dataKey="time" fontSize={10} tickLine={false} axisLine={false} />
+              <XAxis dataKey="day" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis fontSize={10} tickLine={false} axisLine={false} width={24} />
               <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '11px' }} />
-              <Area type="monotone" dataKey="cases" stroke="#EF4444" strokeWidth={2} fill="url(#dashCaseGrad)" />
+              <Area type="monotone" dataKey="requests" stroke="#EF4444" strokeWidth={2} fill="url(#dashCaseGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -106,7 +105,7 @@ export function DashboardAnalytics({ charts }: { charts: UnifiedDashboardData['c
         </div>
       </div>
       <div className="md:col-span-2">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Today&apos;s breakdown</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Case breakdown</p>
         <div className="h-36">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={charts.todayBreakdown}>
@@ -346,13 +345,11 @@ export function DashboardQuickActions({ summary }: { summary: UnifiedDashboardDa
   )
 }
 
-export function DashboardTodaySummary({ summary, charts }: { summary: UnifiedDashboardData['summary']; charts: UnifiedDashboardData['charts'] }) {
-  const todayTotal = charts.hourly.reduce((s, h) => s + h.cases, 0)
-
+export function DashboardOperationsSummary({ summary }: { summary: UnifiedDashboardData['summary'] }) {
   const rows = [
-    { label: 'Cases today', value: todayTotal },
-    { label: 'Completed', value: summary.completedCasesToday },
-    { label: 'Cancelled', value: summary.cancelledToday },
+    { label: 'Total cases', value: summary.totalEmergencyCases },
+    { label: 'Completed', value: summary.completedCases ?? summary.completedCasesToday ?? 0 },
+    { label: 'Cancelled', value: summary.cancelledCases ?? summary.cancelledToday ?? 0 },
     { label: 'Delayed', value: summary.delayedCases },
     { label: 'High priority', value: summary.highPriority },
   ]
@@ -365,10 +362,7 @@ export function DashboardTodaySummary({ summary, charts }: { summary: UnifiedDas
           <span className="font-black text-slate-900">{row.value}</span>
         </div>
       ))}
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-          <Calendar className="w-3 h-3" /> Today
-        </span>
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-end">
         <Link href="/admin/reports" className="text-[10px] font-bold text-red-600">Reports →</Link>
       </div>
     </div>

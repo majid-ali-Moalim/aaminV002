@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function Page() {
-  redirect('/dispatcher/tools/quick-dispatch')
+export default function DispatcherToolsPage() {
+  redirect('/dispatcher/dashboard')
 }

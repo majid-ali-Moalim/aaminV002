@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react'
 import {
   LayoutGrid,
   Siren,
-  MessageSquare,
   Truck,
   HeartHandshake,
   Clock,
@@ -22,7 +21,6 @@ import {
 export type DriverModuleId =
   | 'dashboard'
   | 'missions'
-  | 'communications'
   | 'ambulance'
   | 'transport'
   | 'shifts'
@@ -67,14 +65,6 @@ export const DRIVER_MODULES: DriverNavModule[] = [
       { slug: 'workflow', label: 'Mission Workflow', icon: GitBranch },
       { slug: 'history', label: 'Mission History', icon: History },
     ],
-  },
-  {
-    id: 'communications',
-    label: 'Communication Center',
-    icon: MessageSquare,
-    basePath: '/driver/communications',
-    singlePage: true,
-    items: [{ slug: 'center', label: 'Communication Center', icon: MessageSquare }],
   },
   {
     id: 'ambulance',
@@ -144,6 +134,7 @@ export const MISSION_WORKFLOW_STEPS = [
 export const LEGACY_DRIVER_REDIRECTS: Record<string, string> = {
   '/driver/missions': '/driver/missions/active',
   '/driver/incidents': '/driver/incidents/new',
+  '/driver/communications': '/driver',
 }
 
 export function getModuleById(id: DriverModuleId): DriverNavModule | undefined {

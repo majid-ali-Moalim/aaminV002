@@ -6,7 +6,7 @@ export default function EmergencyCasesPage() {
   return (
     <PatientCasesView
       title="Emergency Cases"
-      subtitle="Complete archive of all emergency dispatch cases and patient encounters."
+      subtitle="Full case archive including completed, cancelled, and closed emergency dispatches."
       heroBadge="Emergency Cases"
     />
   )

@@ -30,8 +30,8 @@ export type GrantedSidebarUnlock = {
 export const PERMISSION_ACTION_LINKS: Record<string, { href: string; label: string }> = {
   'driver.create': { href: '/dispatcher/add-driver', label: 'Register new driver' },
   'nurse.create': { href: '/dispatcher/add-nurse', label: 'Register new nurse' },
-  'case.create': { href: '/dispatcher/new-emergency', label: 'Create emergency case' },
-  'dispatch.board': { href: '/dispatcher/emergency/pending', label: 'Open dispatch board' },
+  'case.create': { href: '/dispatcher/emergency-requests/new', label: 'Create emergency case' },
+  'dispatch.board': { href: '/dispatcher/emergency-requests/pending', label: 'Open dispatch board' },
   'report.view': { href: '/dispatcher/reports/emergency', label: 'View reports' },
   'report.kpi': { href: '/dispatcher/reports/performance', label: 'KPI dashboard' },
   'hospital.manage': { href: '/dispatcher/hospital/hospitals', label: 'Manage hospitals' },

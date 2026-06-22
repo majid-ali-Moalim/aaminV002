@@ -1,7 +1,11 @@
 import Link from 'next/link'
-import { Phone, MapPin, Clock, Shield, Users, Activity } from 'lucide-react'
+import { Phone, MapPin, Shield, Users, Activity } from 'lucide-react'
+import { PublicStatsGrid } from '@/components/public/PublicStatsGrid'
+import { fetchPublicStats } from '@/lib/public/stats'
 
-export default function Home() {
+export default async function Home() {
+  const stats = await fetchPublicStats()
+
   return (
     <div className="pt-16">
       {/* Hero Section */}
@@ -49,17 +53,19 @@ export default function Home() {
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <Activity className="w-8 h-8 text-red-600 mb-3" />
                     <h3 className="font-semibold text-gray-900 mb-1">Quick Response</h3>
-                    <p className="text-sm text-gray-600">Under 15 minutes</p>
+                    <p className="text-sm text-gray-600">Rapid dispatch when every minute counts</p>
                   </div>
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <Users className="w-8 h-8 text-red-600 mb-3" />
-                    <h3 className="font-semibold text-gray-900 mb-1">Expert Staff</h3>
-                    <p className="text-sm text-gray-600">Professional medical team</p>
+                    <h3 className="font-semibold text-gray-900 mb-1">Field Crew</h3>
+                    <p className="text-sm text-gray-600">
+                      {stats.drivers.toLocaleString()} drivers · {stats.nurses.toLocaleString()} nurses
+                    </p>
                   </div>
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <Shield className="w-8 h-8 text-red-600 mb-3" />
                     <h3 className="font-semibold text-gray-900 mb-1">Fully Equipped</h3>
-                    <p className="text-sm text-gray-600">Modern ambulances</p>
+                    <p className="text-sm text-gray-600">{stats.ambulances.toLocaleString()} active ambulances</p>
                   </div>
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <MapPin className="w-8 h-8 text-red-600 mb-3" />
@@ -104,10 +110,10 @@ export default function Home() {
                 <Users className="w-8 h-8 text-red-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                Professional Medical Staff
+                Drivers & Nurses
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Highly trained paramedics and medical professionals providing expert care
+                Active drivers and nurses providing emergency medical care in the field
               </p>
             </div>
 
@@ -120,18 +126,6 @@ export default function Home() {
               </h3>
               <p className="text-gray-600 leading-relaxed">
                 State-of-the-art ambulances equipped with advanced medical equipment
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
-                <Clock className="w-8 h-8 text-red-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                Quick Response Time
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                Average response time under 15 minutes in urban areas
               </p>
             </div>
 
@@ -155,7 +149,7 @@ export default function Home() {
                 Easy Booking
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Simple ambulance booking system with real-time tracking
+                Simple ambulance booking through our online request form
               </p>
             </div>
           </div>
@@ -170,28 +164,11 @@ export default function Home() {
               Trusted by Thousands
             </h2>
             <p className="text-xl text-gray-600">
-              Our commitment to excellence in emergency medical services
+              Live operational statistics from the Aamin dispatch system
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">10,000+</div>
-              <div className="text-gray-600">Emergency Calls</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">50+</div>
-              <div className="text-gray-600">Ambulances</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">200+</div>
-              <div className="text-gray-600">Medical Staff</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">15min</div>
-              <div className="text-gray-600">Avg Response Time</div>
-            </div>
-          </div>
+          <PublicStatsGrid stats={stats} variant="home" />
         </div>
       </section>
 

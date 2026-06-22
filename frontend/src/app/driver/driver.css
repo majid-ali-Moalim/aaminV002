@@ -1,7 +1,83 @@
 /* ═══════════════════════════════════════════════════════════════════
    EADS Driver Portal — driver.css
-   Mobile-first. Emergency red #dc2626 + dark #0f0f0f brand.
+   Aamin medical brand: red #dc2626 (blood) + white (clinical).
+   Default shell is dark for field ops; light variant matches admin.
    ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Light theme (admin-aligned red & white) ─────────────────────── */
+.driver-shell:has(.driver-app--light) {
+  background: #f9fafb;
+}
+
+.driver-app--light {
+  background: #f9fafb;
+  color: #0f172a;
+}
+
+.driver-app--light .driver-header {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.driver-app--light .driver-header-title {
+  color: #0f172a;
+}
+
+.driver-app--light .driver-header-sub {
+  color: #64748b;
+}
+
+.driver-app--light .driver-logo-text {
+  color: #0f172a;
+}
+
+.driver-app--light .driver-back-btn {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.driver-app--light .driver-back-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.driver-app--light .driver-notif-btn {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.driver-app--light .driver-notif-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.driver-app--light .driver-bottom-nav {
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #fecaca;
+}
+
+.driver-app--light .driver-nav-item {
+  color: #6b7280;
+}
+
+.driver-app--light .driver-nav-item:hover {
+  color: #374151;
+}
+
+.driver-app--light .driver-nav-item.active {
+  color: #dc2626;
+}
+
+.driver-app--light .driver-nav-badge {
+  border-color: #fff;
+}
+
+.driver-app--light .offline-banner {
+  background: rgba(254, 243, 199, 0.9);
+  color: #b45309;
+  border-bottom-color: #fcd34d;
+}
 
 /* ─── Reset / Base ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

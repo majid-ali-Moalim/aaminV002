@@ -11,6 +11,9 @@ export const OWNERSHIP_TYPES = ['Public', 'Private', 'NGO', 'Military'] as const
 
 export const OPERATIONAL_STATUSES = ['Active', 'Inactive', 'Maintenance'] as const
 
+/** Shown on admin create-hospital form (Maintenance excluded). */
+export const CREATE_OPERATIONAL_STATUSES = ['Active', 'Inactive'] as const
+
 export const CAPACITY_STATUSES = [
   'Available',
   'Limited Capacity',

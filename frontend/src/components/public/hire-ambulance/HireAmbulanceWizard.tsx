@@ -11,8 +11,6 @@ import {
   Navigation,
   ChevronRight,
   ChevronLeft,
-  CheckCircle2,
-  Copy,
   ExternalLink,
   Loader2,
   Truck,
@@ -25,15 +23,13 @@ import {
   Clock,
   Users,
   Share2,
-  Activity,
-  HelpCircle,
+  RefreshCw,
 } from 'lucide-react'
 import {
   API_BASE,
   STEPS,
   StepId,
   REQUEST_TYPES,
-  COUNTRIES,
   DRAFT_KEY,
   EMERGENCY_HOTLINE,
 } from './constants'
@@ -46,9 +42,16 @@ import {
   computePriority,
   formatSomaliaPhone,
   hasGpsLocation,
+  hasManualLocation,
+  hasPickupLocation,
+  isEmergencyRequest,
   isOtherEmergencyType,
+  calculateAgeFromDateOfBirth,
+  syncEstimatedAgeFromDob,
 } from './formHelpers'
 import { fetchHireEmergencyTypes } from '@/lib/hire-ambulance/emergencyTypes'
+import { COUNTRY_NAMES } from '@/lib/countries'
+import { googleMapsUrl } from '@/lib/pickupGps'
 
 const inputClass =
   'w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100'
@@ -81,12 +84,11 @@ export default function HireAmbulanceWizard() {
   const router = useRouter()
   const [stepIndex, setStepIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [caseId, setCaseId] = useState('')
   const [regions, setRegions] = useState<any[]>([])
   const [districts, setDistricts] = useState<any[]>([])
   const [hospitals, setHospitals] = useState<any[]>([])
   const [fleet, setFleet] = useState<{ available: number; total: number }>({ available: 0, total: 0 })
+  const [fleetStatus, setFleetStatus] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [emergencyTypes, setEmergencyTypes] = useState<HireEmergencyTypeOption[]>([])
   const [loadingEmergencyTypes, setLoadingEmergencyTypes] = useState(true)
   const [locating, setLocating] = useState(false)
@@ -98,6 +100,10 @@ export default function HireAmbulanceWizard() {
   const values = watch()
   const currentStep = STEPS[stepIndex].id
   const priority = useMemo(() => computePriority(values), [values])
+  const isEmergency = isEmergencyRequest(values)
+  const gpsShared = hasGpsLocation(values)
+  const manualAddress = hasManualLocation(values)
+  const hasLocation = hasPickupLocation(values)
 
   const selectedEmergencyType = useMemo(
     () => emergencyTypes.find((t) => t.id === values.emergencyType),
@@ -139,6 +145,7 @@ export default function HireAmbulanceWizard() {
   }, [values, stepIndex, getValues])
 
   const loadPublicData = useCallback(async () => {
+    setFleetStatus('loading')
     try {
       const [regionsRes, hospitalsRes, fleetRes, types] = await Promise.all([
         fetch(`${API_BASE}/api/setup/regions`),
@@ -152,13 +159,17 @@ export default function HireAmbulanceWizard() {
       if (fleetRes.ok) {
         const ambulances = await fleetRes.json()
         const list = Array.isArray(ambulances) ? ambulances : []
+        const available = list.filter((a: any) => a.status === 'AVAILABLE').length
         setFleet({
           total: list.length,
-          available: list.filter((a: any) => a.status === 'AVAILABLE').length,
+          available,
         })
+        setFleetStatus(available > 0 ? 'available' : 'unavailable')
+      } else {
+        setFleetStatus('available')
       }
     } catch {
-      /* non-blocking */
+      setFleetStatus('available')
     } finally {
       setLoadingEmergencyTypes(false)
     }
@@ -180,6 +191,39 @@ export default function HireAmbulanceWizard() {
       .then(setDistricts)
       .catch(() => setDistricts([]))
   }, [values.regionId])
+
+  useEffect(() => {
+    setValue('estimatedAge', syncEstimatedAgeFromDob(values.dateOfBirth))
+  }, [values.dateOfBirth, setValue])
+
+  useEffect(() => {
+    if (values.isPatient === 'YES' && values.callerName.trim() && !values.patientName.trim()) {
+      setValue('patientName', values.callerName.trim())
+    }
+  }, [values.isPatient, values.callerName, values.patientName, setValue])
+
+  const estimatedAgeDisplay = useMemo(() => {
+    const age = calculateAgeFromDateOfBirth(values.dateOfBirth)
+    return age !== null ? String(age) : ''
+  }, [values.dateOfBirth])
+
+  const selectRequestType = (requestType: string) => {
+    setValue('requestType', requestType)
+    if (requestType === 'NON_EMERGENCY') {
+      setValue('emergencyType', '')
+      setValue('emergencyTypeOther', '')
+      setValue('consciousStatus', '')
+      setValue('breathingStatus', '')
+      setValue('needsOxygen', false)
+      setValue('needsStretcher', false)
+    }
+  }
+
+  const setUnknownNationality = () => {
+    setValue('nationalityType', 'UNKNOWN')
+    setValue('nationalityUnknown', true)
+    setValue('country', 'Unknown')
+  }
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
@@ -230,8 +274,6 @@ export default function HireAmbulanceWizard() {
     }
   }
 
-  const gpsShared = hasGpsLocation(values)
-
   const goNext = () => {
     const err = validateStep(currentStep, values, { emergencyTypes })
     if (err) {
@@ -252,6 +294,10 @@ export default function HireAmbulanceWizard() {
   }
 
   const onSubmit = async (data: HireFormValues) => {
+    if (fleetStatus === 'unavailable' || fleet.available === 0) {
+      toast.error('No ambulances are available right now. Please try again later or call the emergency hotline.')
+      return
+    }
     const urgencyErr = validateStep('urgency', data, { emergencyTypes })
     if (urgencyErr) {
       toast.error(urgencyErr)
@@ -274,23 +320,17 @@ export default function HireAmbulanceWizard() {
         throw new Error(errorData.message || 'Failed to create ambulance request')
       }
       const result = await response.json()
-      setCaseId(result.trackingCode)
-      setSuccess(true)
+      const trackingCode = result.trackingCode || ''
       sessionStorage.removeItem(DRAFT_KEY)
-      toast.success('Ambulance request submitted — help is on the way')
+      router.push(
+        trackingCode
+          ? `/hire-ambulance/success?code=${encodeURIComponent(trackingCode)}`
+          : '/hire-ambulance/success',
+      )
     } catch (error: any) {
       toast.error(error.message || 'Failed to submit request')
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(caseId)
-      toast.success('Tracking code copied')
-    } catch {
-      toast.error('Could not copy code')
     }
   }
 
@@ -301,47 +341,75 @@ export default function HireAmbulanceWizard() {
     LOW: 'bg-blue-500 text-white',
   }[priority]
 
-  if (success) {
+  if (fleetStatus === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50 pt-20 pb-16 px-4">
-        <div className="max-w-lg mx-auto">
-          <div className="rounded-3xl overflow-hidden shadow-2xl border border-red-100 bg-white">
-            <div className="bg-gradient-to-r from-red-600 to-rose-500 px-8 py-10 text-center text-white">
-              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
-                <CheckCircle2 className="w-10 h-10" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50 flex items-center justify-center px-4 pt-20">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-10 h-10 animate-spin text-red-600 mx-auto" />
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Checking ambulance availability…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (fleetStatus === 'unavailable') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 pt-20 pb-16 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="rounded-3xl overflow-hidden shadow-2xl border border-slate-200 bg-white">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-8 py-10 text-center text-white">
+              <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-4">
+                <Truck className="w-10 h-10" />
               </div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Request Received</h1>
-              <p className="text-red-100 text-sm mt-2">Your case is logged in the Aamin dispatch system</p>
+              <h1 className="text-2xl font-black tracking-tight">No Ambulances Available Right Now</h1>
+              <p className="text-slate-300 text-sm mt-3 max-w-md mx-auto leading-relaxed">
+                We are sorry — all ambulances in our fleet are currently assigned or unavailable. Online requests
+                cannot be accepted at this time.
+              </p>
             </div>
             <div className="p-8 space-y-6">
-              <div className="rounded-2xl bg-red-50 border border-red-100 p-6 text-center">
-                <p className="text-xs font-bold uppercase tracking-widest text-red-500 mb-2">Tracking Code</p>
-                <p className="text-3xl font-black font-mono text-red-700 tracking-wider">{caseId}</p>
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700"
-                >
-                  <Copy className="w-4 h-4" /> Copy code
-                </button>
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 p-5 flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-950 space-y-2">
+                  <p className="font-bold">If this is a life-threatening emergency</p>
+                  <p>
+                    Please call our emergency hotline immediately. Do not wait for an ambulance to become available
+                    online.
+                  </p>
+                  <a
+                    href={`tel:${EMERGENCY_HOTLINE}`}
+                    className="inline-flex items-center gap-2 font-black text-red-600 hover:text-red-700"
+                  >
+                    <Phone className="w-4 h-4" />
+                    Call {EMERGENCY_HOTLINE}
+                  </a>
+                </div>
               </div>
-              <p className="text-sm text-slate-600 text-center">
-                Save this code to track your ambulance in real time. A dispatcher will contact you shortly.
-              </p>
-              <div className="flex flex-col gap-3">
-                <Link
-                  href={`/ambulance-tracking?code=${caseId}`}
-                  className="h-12 flex items-center justify-center gap-2 rounded-xl bg-red-600 text-white font-bold uppercase text-sm hover:bg-red-700 transition"
-                >
-                  Track Ambulance <ExternalLink className="w-4 h-4" />
-                </Link>
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5 text-sm text-slate-600 space-y-2">
+                <p>
+                  For non-urgent transport, please try again shortly. Fleet status updates every 30 seconds when
+                  ambulances return to service.
+                </p>
+                <p className="text-slate-500">
+                  Our dispatch team apologizes for the inconvenience and is working to restore availability as quickly
+                  as possible.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
-                  onClick={() => router.push('/')}
-                  className="h-12 rounded-xl border-2 border-slate-200 text-slate-700 font-bold uppercase text-sm hover:bg-slate-50 transition"
+                  onClick={() => void loadPublicData()}
+                  className="h-12 flex-1 rounded-xl bg-red-600 text-white font-bold uppercase text-sm hover:bg-red-700 transition inline-flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Check Again
+                </button>
+                <Link
+                  href="/"
+                  className="h-12 flex-1 rounded-xl border-2 border-slate-200 text-slate-700 font-bold uppercase text-sm hover:bg-slate-50 transition inline-flex items-center justify-center"
                 >
                   Return Home
-                </button>
+                </Link>
               </div>
             </div>
           </div>
@@ -475,7 +543,7 @@ export default function HireAmbulanceWizard() {
                         <button
                           key={rt.value}
                           type="button"
-                          onClick={() => setValue('requestType', rt.value)}
+                          onClick={() => selectRequestType(rt.value)}
                           className={`p-5 rounded-2xl border-2 text-left transition-all ${
                             selected ? `${rt.accent} ring-2` : 'border-slate-200 hover:border-slate-300 bg-white'
                           }`}
@@ -489,9 +557,11 @@ export default function HireAmbulanceWizard() {
                   </div>
                 </SectionCard>
 
+                {isEmergency ? (
+                  <>
                 <SectionCard
                   title="Emergency Type"
-                  subtitle="All types from Admin → Emergency Configuration; choose Others to type your own"
+                  subtitle="All types from Master Data → Emergency Configuration; choose Others to type your own"
                 >
                   {loadingEmergencyTypes ? (
                     <div className="flex items-center justify-center gap-2 py-10 text-slate-500">
@@ -504,31 +574,24 @@ export default function HireAmbulanceWizard() {
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {emergencyTypes.map((et) => {
-                          const selected = values.emergencyType === et.id
-                          const Icon = isOtherEmergencyType(et) ? HelpCircle : Activity
-                          return (
-                            <button
-                              key={et.id}
-                              type="button"
-                              onClick={() => {
-                                setValue('emergencyType', et.id)
-                                if (!isOtherEmergencyType(et)) setValue('emergencyTypeOther', '')
-                              }}
-                              className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition-all ${
-                                selected ? 'border-red-500 ring-2 ring-red-200 bg-red-50/40' : 'border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <Icon className={`w-6 h-6 mb-2 relative ${selected ? 'text-red-600' : 'text-slate-400'}`} />
-                              <p className="text-sm font-bold text-slate-900 relative">{et.name}</p>
-                              {et.incidentCategory?.name && (
-                                <p className="text-[10px] text-slate-500 mt-1 relative">{et.incidentCategory.name}</p>
-                              )}
-                            </button>
-                          )
+                      <FieldLabel required>Emergency Type</FieldLabel>
+                      <select
+                        {...register('emergencyType', {
+                          onChange: (e) => {
+                            const selected = emergencyTypes.find((t) => t.id === e.target.value)
+                            if (!isOtherEmergencyType(selected)) setValue('emergencyTypeOther', '')
+                          },
                         })}
-                      </div>
+                        className={selectClass}
+                      >
+                        <option value="">Select emergency type</option>
+                        {emergencyTypes.map((et) => (
+                          <option key={et.id} value={et.id}>
+                            {et.name}
+                            {et.incidentCategory?.name ? ` — ${et.incidentCategory.name}` : ''}
+                          </option>
+                        ))}
+                      </select>
                       {showEmergencyTypeOther && (
                         <div className="mt-4">
                           <FieldLabel required>Specify emergency type</FieldLabel>
@@ -590,6 +653,25 @@ export default function HireAmbulanceWizard() {
                     </label>
                   </div>
                 </SectionCard>
+                  </>
+                ) : (
+                  <SectionCard
+                    title="Transport Details"
+                    subtitle="Optional — dispatch will confirm details when they contact you"
+                  >
+                    <FieldLabel>Reason for transport (optional)</FieldLabel>
+                    <textarea
+                      {...register('conditionDescription')}
+                      rows={4}
+                      placeholder="e.g. clinic appointment, hospital transfer, scheduled pickup, mobility assistance..."
+                      className={`${inputClass} h-auto py-3 resize-none`}
+                    />
+                    <p className="text-sm text-slate-500 mt-4 leading-relaxed">
+                      Medical triage questions are not required for non-emergency requests. Our dispatch team can
+                      update clinical details during handover or after the case is completed.
+                    </p>
+                  </SectionCard>
+                )}
               </>
             )}
 
@@ -675,8 +757,31 @@ export default function HireAmbulanceWizard() {
               <SectionCard title="Patient Information" subtitle="Medical details for the response team">
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <FieldLabel required>Patient full name</FieldLabel>
+                    <FieldLabel required={values.isPatient === 'YES'}>
+                      Patient full name
+                      {values.isPatient === 'NO' ? ' (optional if unknown)' : ''}
+                    </FieldLabel>
                     <input {...register('patientName')} className={inputClass} placeholder="Patient's full name" />
+                  </div>
+                  <div>
+                    <FieldLabel required>Date of birth</FieldLabel>
+                    <input
+                      type="date"
+                      {...register('dateOfBirth')}
+                      className={inputClass}
+                      max={new Date().toISOString().slice(0, 10)}
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Estimated age</FieldLabel>
+                    <input
+                      type="text"
+                      readOnly
+                      value={estimatedAgeDisplay}
+                      className={`${inputClass} bg-slate-50 text-slate-700 cursor-not-allowed`}
+                      placeholder="Set date of birth first"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Calculated automatically from date of birth</p>
                   </div>
                   <div>
                     <FieldLabel required>Gender</FieldLabel>
@@ -686,44 +791,24 @@ export default function HireAmbulanceWizard() {
                       <option value="FEMALE">Female</option>
                     </select>
                   </div>
-                  {values.isPatient === 'NO' && (
-                    <div>
-                      <FieldLabel required>Estimated age</FieldLabel>
-                      <input type="number" {...register('estimatedAge')} className={inputClass} min={0} max={120} />
-                    </div>
-                  )}
                   <div>
-                    <FieldLabel required>Date of birth</FieldLabel>
-                    <input type="date" {...register('dateOfBirth')} className={inputClass} />
-                  </div>
-                  <div>
-                    <FieldLabel required>Marital status</FieldLabel>
+                    <FieldLabel required={values.isPatient === 'YES'}>
+                      Marital status
+                      {values.isPatient === 'NO' ? ' (optional if unknown)' : ''}
+                    </FieldLabel>
                     <select {...register('maritalStatus')} className={selectClass}>
                       <option value="">Select</option>
                       <option value="SINGLE">Single</option>
                       <option value="MARRIED">Married</option>
-                      <option value="DIVORCED">Divorced</option>
-                      <option value="WIDOWED">Widowed</option>
-                      <option value="UNKNOWN">Other</option>
                     </select>
                   </div>
                   <div>
-                    <FieldLabel required>Blood group</FieldLabel>
+                    <FieldLabel>Blood group (optional)</FieldLabel>
                     <select {...register('bloodGroup')} className={selectClass}>
                       <option value="">Select</option>
                       {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => (
                         <option key={b} value={b}>{b}</option>
                       ))}
-                    </select>
-                  </div>
-                  <div>
-                    <FieldLabel required>Medical status</FieldLabel>
-                    <select {...register('medicalStatus')} className={selectClass}>
-                      <option value="">Select</option>
-                      <option value="STABLE">Stable</option>
-                      <option value="FAIR">Fair</option>
-                      <option value="SERIOUS">Serious</option>
-                      <option value="CRITICAL">Critical</option>
                     </select>
                   </div>
                 </div>
@@ -733,8 +818,30 @@ export default function HireAmbulanceWizard() {
             {/* STEP: Location */}
             {currentStep === 'location' && (
               <>
-                <SectionCard title="GPS Location" subtitle="Share your exact coordinates for faster dispatch">
-                  <div className="rounded-2xl border-2 border-dashed border-red-200 bg-red-50/40 p-6">
+                <SectionCard
+                  title="Pickup Location"
+                  subtitle="Provide GPS coordinates or a pickup address — at least one is required"
+                >
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 mb-6 text-sm text-slate-700">
+                    {hasLocation ? (
+                      <p className="font-semibold text-green-800">
+                        Location provided — {gpsShared ? 'GPS captured' : 'address entered'}
+                        {gpsShared && manualAddress ? ' (address added for clarity)' : ''}.
+                      </p>
+                    ) : (
+                      <p>
+                        Share your GPS location <strong>or</strong> complete the pickup address below. You do not need
+                        both, but at least one is required to dispatch an ambulance.
+                      </p>
+                    )}
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title="GPS Location"
+                  subtitle="Pin the exact spot where the patient is — share GPS or describe the building and street"
+                >
+                  <div className="rounded-2xl border-2 border-dashed border-red-200 bg-red-50/40 p-6 space-y-4">
                     <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                       <button
                         type="button"
@@ -747,7 +854,7 @@ export default function HireAmbulanceWizard() {
                         ) : (
                           <Navigation className="w-5 h-5" />
                         )}
-                        {locating ? 'Getting location…' : 'Share GPS location'}
+                        {locating ? 'Getting location…' : 'Share my GPS location'}
                       </button>
                       {gpsShared && (
                         <>
@@ -760,36 +867,88 @@ export default function HireAmbulanceWizard() {
                             Share with others
                           </button>
                           <a
-                            href={`https://www.google.com/maps?q=${values.latitude},${values.longitude}`}
+                            href={googleMapsUrl(parseFloat(values.latitude), parseFloat(values.longitude))}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl border-2 border-slate-200 text-slate-800 font-bold text-sm hover:bg-white transition"
                           >
                             <ExternalLink className="w-5 h-5" />
-                            Open in Maps
+                            Adjust pin in Maps
                           </a>
                         </>
                       )}
                     </div>
+
                     {gpsShared && (
-                      <div className="mt-4 flex items-center gap-2 text-sm text-green-800 font-semibold bg-green-100 px-4 py-3 rounded-xl border border-green-200">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span>
-                          Location shared: {values.latitude}, {values.longitude}
-                        </span>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-2 text-sm text-green-800 font-semibold bg-green-100 px-4 py-3 rounded-xl border border-green-200">
+                          <MapPin className="w-4 h-4 shrink-0" />
+                          <span>
+                            Patient location pinned: {values.latitude}, {values.longitude}
+                          </span>
+                        </div>
+                        <iframe
+                          title="Patient pickup map"
+                          className="w-full h-48 rounded-xl border border-green-200 bg-white"
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          src={`https://maps.google.com/maps?q=${values.latitude},${values.longitude}&z=17&output=embed`}
+                        />
+                        <p className="text-xs text-slate-600">
+                          The map shows the patient&apos;s GPS pin. If it is not exact, tap{' '}
+                          <strong>Adjust pin in Maps</strong> or fine-tune the coordinates below.
+                        </p>
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div>
+                            <FieldLabel>Latitude (fine-tune)</FieldLabel>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className={inputClass}
+                              value={values.latitude}
+                              onChange={(e) => setValue('latitude', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel>Longitude (fine-tune)</FieldLabel>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className={inputClass}
+                              value={values.longitude}
+                              onChange={(e) => setValue('longitude', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <FieldLabel>Where is the patient? (building, street, floor)</FieldLabel>
+                          <textarea
+                            {...register('gpsLocationDescription')}
+                            rows={3}
+                            className={`${inputClass} h-auto py-3 resize-none`}
+                            placeholder="e.g. Blue building near Z block, 2nd floor, Gate 3, Wadajir street…"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Help crews find the patient even if GPS is approximate — describe the building, street, or
+                            landmark.
+                          </p>
+                        </div>
+                      </>
                     )}
-                    <p className="text-sm text-slate-600 mt-4">
+
+                    <p className="text-sm text-slate-600">
                       {gpsShared
-                        ? 'GPS captured. You can continue, or add address details below for extra clarity.'
-                        : 'Allow location access when prompted. GPS alone is enough to dispatch an ambulance.'}
+                        ? 'GPS captured. Add building or street details above, or continue with the address section below.'
+                        : manualAddress
+                          ? 'Address provided. GPS is optional but pins the patient faster.'
+                          : 'Share GPS to mark where the patient is, or enter the pickup address below.'}
                     </p>
                   </div>
                 </SectionCard>
 
                 <SectionCard
                   title="Pickup Address"
-                  subtitle={gpsShared ? 'Optional — add street or landmark details' : 'Required if GPS is not shared'}
+                  subtitle={gpsShared ? 'Optional — add street or area details' : 'Required when GPS is not shared'}
                 >
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -814,17 +973,9 @@ export default function HireAmbulanceWizard() {
                         ))}
                       </select>
                     </div>
-                    <div>
+                    <div className="sm:col-span-2">
                       <FieldLabel required={!gpsShared}>Area / Sub-area</FieldLabel>
                       <input {...register('areaName')} className={inputClass} placeholder="e.g. Hodan, Wadajir" />
-                    </div>
-                    <div>
-                      <FieldLabel required={!gpsShared}>Landmark</FieldLabel>
-                      <input
-                        {...register('landmarkDescription')}
-                        className={inputClass}
-                        placeholder="Near mosque, shop, or building name"
-                      />
                     </div>
                     <div className="sm:col-span-2">
                       <FieldLabel>Additional directions (optional)</FieldLabel>
@@ -854,33 +1005,66 @@ export default function HireAmbulanceWizard() {
                         <label
                           key={n.value}
                           className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition ${
-                            values.nationalityType === n.value
+                            values.nationalityType === n.value && !values.nationalityUnknown
                               ? 'border-red-500 bg-red-50'
                               : 'border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <input type="radio" value={n.value} {...register('nationalityType')} className="w-5 h-5 text-red-600" />
+                          <input
+                            type="radio"
+                            value={n.value}
+                            checked={values.nationalityType === n.value && !values.nationalityUnknown}
+                            onChange={() => {
+                              setValue('nationalityType', n.value)
+                              setValue('nationalityUnknown', false)
+                              if (n.value === 'LOCAL') setValue('country', 'Somalia')
+                              else setValue('country', '')
+                            }}
+                            className="w-5 h-5 text-red-600"
+                          />
                           <span className="font-semibold text-slate-800">{n.label}</span>
                         </label>
                       ))}
                     </div>
+                    <button
+                      type="button"
+                      onClick={setUnknownNationality}
+                      className={`mt-3 w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl border-2 text-sm font-bold transition ${
+                        values.nationalityType === 'UNKNOWN' || values.nationalityUnknown
+                          ? 'border-amber-500 bg-amber-50 text-amber-900'
+                          : 'border-slate-200 text-slate-700 hover:border-amber-300 hover:bg-amber-50/50'
+                      }`}
+                    >
+                      Unknown nationality
+                    </button>
+                    {(values.nationalityType === 'UNKNOWN' || values.nationalityUnknown) && (
+                      <p className="text-xs text-amber-800 mt-2 font-medium">
+                        Nationality not known — dispatch will confirm with the patient or caller.
+                      </p>
+                    )}
                   </div>
 
-                  {values.nationalityType === 'INTERNATIONAL' && (
+                  {values.nationalityType === 'INTERNATIONAL' && !values.nationalityUnknown && (
                     <div>
                       <FieldLabel required>Country</FieldLabel>
                       <select {...register('country')} className={selectClass}>
                         <option value="">Select country</option>
-                        {COUNTRIES.map((c) => (
+                        {COUNTRY_NAMES.map((c) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Don&apos;t know the patient&apos;s country? Tap <strong>Unknown nationality</strong> above.
+                      </p>
                     </div>
                   )}
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <FieldLabel required>Preferred language</FieldLabel>
+                      <FieldLabel required={values.isPatient === 'YES'}>
+                        Preferred language
+                        {values.isPatient === 'NO' ? ' (optional)' : ''}
+                      </FieldLabel>
                       <select {...register('preferredLanguage')} className={selectClass}>
                         <option value="">Select</option>
                         <option value="SOMALI">Somali</option>
@@ -921,19 +1105,43 @@ export default function HireAmbulanceWizard() {
                 <SectionCard title="Review Your Request" subtitle="Confirm details before dispatch">
                   <div className="space-y-4">
                     {[
-                      { label: 'Request type', value: values.requestType },
-                      { label: 'Emergency type', value: emergencyTypeDisplayLabel },
+                      {
+                        label: 'Request type',
+                        value: isEmergency ? 'Emergency' : 'Non-Emergency',
+                      },
+                      ...(isEmergency
+                        ? [{ label: 'Emergency type', value: emergencyTypeDisplayLabel }]
+                        : []),
                       { label: 'Priority', value: priority },
-                      { label: 'Patient', value: values.patientName },
+                      { label: 'Patient', value: values.patientName || (values.isPatient === 'NO' ? 'Not provided' : '—') },
+                      {
+                        label: 'Age',
+                        value: estimatedAgeDisplay ? `${estimatedAgeDisplay} years` : '—',
+                      },
                       { label: 'Phone', value: values.callerPhone ? `+252 ${values.callerPhone}` : '' },
                       {
                         label: 'Location',
                         value: gpsShared
-                          ? `GPS: ${values.latitude}, ${values.longitude}`
-                          : `${values.areaName}${values.landmarkDescription ? `, ${values.landmarkDescription}` : ''}`,
+                          ? `GPS: ${values.latitude}, ${values.longitude}${
+                              values.gpsLocationDescription
+                                ? ` · ${values.gpsLocationDescription}`
+                                : manualAddress
+                                  ? ` · ${values.areaName}`
+                                  : ''
+                            }`
+                          : values.areaName || '—',
                       },
                       { label: 'Region', value: regions.find((r) => r.id === values.regionId)?.name },
-                      { label: 'Condition', value: values.conditionDescription?.slice(0, 80) + (values.conditionDescription?.length > 80 ? '…' : '') },
+                      ...(values.conditionDescription.trim()
+                        ? [
+                            {
+                              label: isEmergency ? 'Condition' : 'Transport notes',
+                              value:
+                                values.conditionDescription.slice(0, 80) +
+                                (values.conditionDescription.length > 80 ? '…' : ''),
+                            },
+                          ]
+                        : []),
                     ].map((row) => (
                       <div key={row.label} className="flex justify-between gap-4 py-2 border-b border-slate-50 text-sm">
                         <span className="text-slate-500 font-medium">{row.label}</span>

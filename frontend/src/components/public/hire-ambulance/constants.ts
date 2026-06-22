@@ -38,10 +38,6 @@ export const REQUEST_TYPES = [
   },
 ] as const
 
-export const COUNTRIES = [
-  'USA', 'UK', 'Kenya', 'Ethiopia', 'Djibouti', 'Uganda', 'UAE', 'Saudi Arabia', 'Other',
-]
-
 export const DRAFT_KEY = 'aamin-hire-ambulance-draft'
 
 export const EMERGENCY_HOTLINE = '999'

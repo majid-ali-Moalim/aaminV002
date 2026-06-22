@@ -32,7 +32,7 @@ import {
   DashboardHospitalStatus,
   DashboardStaffStatus,
   DashboardQuickActions,
-  DashboardTodaySummary,
+  DashboardOperationsSummary,
 } from '@/components/dashboard/DashboardPanels'
 import type { UnifiedDashboardData } from '@/lib/dashboard/unifiedDashboard'
 import { formatKpiValue } from '@/lib/dashboard/unifiedDashboard'
@@ -54,7 +54,7 @@ const KPI_ICONS: Record<string, typeof Activity> = {
   ambulancesOnCase: Truck,
   availableCrew: Users,
   hospitalsAvailable: Building2,
-  completedCasesToday: CheckCircle,
+  completedCases: CheckCircle,
   delayedCases: Zap,
 }
 
@@ -67,7 +67,7 @@ const KPI_TONES: Record<string, { accent: string; bg: string }> = {
   ambulancesOnCase: { accent: 'text-blue-600', bg: 'bg-blue-50' },
   availableCrew: { accent: 'text-indigo-600', bg: 'bg-indigo-50' },
   hospitalsAvailable: { accent: 'text-teal-600', bg: 'bg-teal-50' },
-  completedCasesToday: { accent: 'text-emerald-600', bg: 'bg-emerald-50' },
+  completedCases: { accent: 'text-emerald-600', bg: 'bg-emerald-50' },
   delayedCases: { accent: 'text-orange-600', bg: 'bg-orange-50' },
 }
 
@@ -208,7 +208,7 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
         </div>
       </div>
 
-      {/* BOTTOM — Resource / Hospital / Staff / Quick Actions / Today */}
+      {/* BOTTOM — Resource / Hospital / Staff / Quick Actions / Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <DashboardSection icon={Truck} title="Resource Status">
           <DashboardResourceStatus charts={charts} ambulances={operational.ambulances} />
@@ -226,8 +226,8 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
           <DashboardQuickActions summary={summary} />
         </DashboardSection>
 
-        <DashboardSection icon={Calendar} title="Today&apos;s Summary">
-          <DashboardTodaySummary summary={summary} charts={charts} />
+        <DashboardSection icon={Calendar} title="Operations Summary">
+          <DashboardOperationsSummary summary={summary} />
         </DashboardSection>
       </div>
     </div>

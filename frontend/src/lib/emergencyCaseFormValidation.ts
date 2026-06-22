@@ -19,7 +19,7 @@ export type NewPatientFormValues = {
 export type EmergencyCaseFormValues = {
   patientId: string
   priority: Priority
-  incidentCategoryId: string
+  emergencyTypeId: string
   requestSource: RequestSource
   regionId: string
   districtId: string
@@ -185,8 +185,8 @@ function validatePatientStep(
 }
 
 function validateEmergencyStep(form: EmergencyCaseFormValues, errors: EmergencyCaseFormErrors) {
-  if (!form.incidentCategoryId) {
-    setError(errors, 'incidentCategoryId', 'Incident category is required')
+  if (!form.emergencyTypeId) {
+    setError(errors, 'emergencyTypeId', 'Emergency type is required')
   }
 
   const conditionText = form.patientCondition.trim()
@@ -316,7 +316,7 @@ export function validateEmergencyCaseForm(
     'newPatient.alternatePhone': 'patient',
     'newPatient.age': 'patient',
     'newPatient.dateOfBirth': 'patient',
-    incidentCategoryId: 'emergency',
+    emergencyTypeId: 'emergency',
     patientCondition: 'emergency',
     symptoms: 'emergency',
     priority: 'emergency',

@@ -1,7 +1,11 @@
 import Link from 'next/link'
-import { Phone, MapPin, Clock, Users, Shield, Activity, Truck, Target } from 'lucide-react'
+import { Phone, MapPin, Clock, Shield, Activity, Truck, Target } from 'lucide-react'
+import { PublicStatsGrid } from '@/components/public/PublicStatsGrid'
+import { fetchPublicStats } from '@/lib/public/stats'
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const stats = await fetchPublicStats()
+
   return (
     <div className="pt-16 pb-12">
       {/* Hero Section */}
@@ -94,24 +98,11 @@ export default function AboutPage() {
                 <Truck className="w-8 h-8 text-red-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                Ambulance Management
+                Ambulance Services
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Real-time tracking and coordination of our fleet of modern ambulances equipped 
+                Real-time coordination of our fleet of modern ambulances equipped 
                 with advanced medical equipment and staffed by trained professionals.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
-                <Users className="w-8 h-8 text-red-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                Patient Management
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                Comprehensive patient information system ensuring proper care coordination, 
-                medical history tracking, and seamless handoffs to healthcare facilities.
               </p>
             </div>
 
@@ -149,8 +140,8 @@ export default function AboutPage() {
                 Staff Coordination
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                Efficient management of medical staff, drivers, and emergency responders 
-                ensuring optimal team deployment and communication.
+                Coordinated deployment of drivers, nurses, and emergency responders 
+                ensuring optimal team communication in the field.
               </p>
             </div>
 
@@ -176,28 +167,11 @@ export default function AboutPage() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Impact</h2>
             <p className="text-xl text-gray-600">
-              Making a difference in communities across Somalia
+              Live operational statistics from the Aamin dispatch system
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">50,000+</div>
-              <div className="text-gray-600">Lives Saved</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">15min</div>
-              <div className="text-gray-600">Avg Response Time</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">100+</div>
-              <div className="text-gray-600">Medical Staff</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-red-600 mb-2">24/7</div>
-              <div className="text-gray-600">Service Available</div>
-            </div>
-          </div>
+          <PublicStatsGrid stats={stats} variant="about" />
         </div>
       </section>
 

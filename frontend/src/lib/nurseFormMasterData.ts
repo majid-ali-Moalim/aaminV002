@@ -5,12 +5,15 @@ import {
   emergencyRequestsService,
   nursesService,
 } from '@/lib/api'
-import type { Ambulance, Department, EmployeeRole, EquipmentLevel, Region } from '@/types'
+import type { Ambulance, Department, District, EmployeeRole, EquipmentLevel, Region, Station } from '@/types'
+import { ADMIN_STAFF_STATUS_OPTIONS } from '@/lib/staff/status'
 
 export type SelectOption = { id: string; label: string }
 
 export type NurseFormMasterData = {
   regions: Region[]
+  districts: District[]
+  stations: Station[]
   departments: Department[]
   employeeRoles: EmployeeRole[]
   equipmentLevels: EquipmentLevel[]
@@ -38,12 +41,10 @@ const DEFAULT_SPECIALIZATIONS = ['Emergency', 'ICU', 'Trauma', 'General', 'Pedia
 
 const DEFAULT_EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Rotational']
 
-export const SHIFT_STATUS_OPTIONS: SelectOption[] = [
-  { id: 'OFF_DUTY', label: 'Off Duty' },
-  { id: 'AVAILABLE', label: 'Available' },
-  { id: 'ON_DUTY', label: 'On Duty' },
-  { id: 'UNAVAILABLE', label: 'On Leave / Unavailable' },
-]
+export const SHIFT_STATUS_OPTIONS: SelectOption[] = ADMIN_STAFF_STATUS_OPTIONS.map((o) => ({
+  id: o.id,
+  label: o.label,
+}))
 
 export function genderOptions(): SelectOption[] {
   return [
@@ -74,8 +75,10 @@ function uniqueOptions(values: (string | null | undefined)[], defaults: string[]
 }
 
 export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
-  const [regs, depts, roles, levels, ambs, stats, nurses] = await Promise.all([
+  const [regs, dists, stns, depts, roles, levels, ambs, stats, nurses] = await Promise.all([
     systemSetupService.getRegions(),
+    systemSetupService.getDistricts().catch(() => []),
+    systemSetupService.getStations().catch(() => []),
     systemSetupService.getDepartments(),
     systemSetupService.getRoles(),
     systemSetupService.getEquipmentLevels().catch(() => []),
@@ -85,6 +88,15 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
   ])
 
   const regions = Array.isArray(regs) ? regs.filter((r) => r.isActive !== false) : []
+  let districts = Array.isArray(dists) ? dists : []
+  if (!districts.length) {
+    districts = regions.flatMap((r) =>
+      Array.isArray(r.districts) ? r.districts.filter((d) => d.isActive !== false) : [],
+    )
+  } else {
+    districts = districts.filter((d) => d.isActive !== false)
+  }
+  const stations = (Array.isArray(stns) ? stns : []).filter((s) => s.isActive !== false)
   const departments = Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : []
   const employeeRoles = Array.isArray(roles) ? roles.filter((r) => r.isActive !== false) : []
   const equipmentLevels = Array.isArray(levels) ? levels.filter((l) => l.isActive !== false) : []
@@ -111,6 +123,8 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
 
   return {
     regions,
+    districts,
+    stations,
     departments,
     employeeRoles,
     equipmentLevels,

@@ -34,6 +34,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
     nurseId: '',
   });
 
+  const filterDispatchReady = (staff: Employee[]) =>
+    staff.filter((member) => member.assignedAmbulanceId || member.assignedAmbulance)
+
   const fetchUnits = async () => {
     try {
       setIsFetchingUnits(true);
@@ -43,14 +46,16 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
         emergencyRequestsService.getAvailableNurses()
       ]);
       setAvailableAmbulances(ambulances);
-      setAvailableDrivers(drivers);
-      setAvailableNurses(nurses);
+      const readyDrivers = filterDispatchReady(drivers);
+      const readyNurses = filterDispatchReady(nurses);
+      setAvailableDrivers(readyDrivers);
+      setAvailableNurses(readyNurses);
       
-      if (drivers.length > 0 && !assignmentParams.driverId) {
+      if (readyDrivers.length > 0 && !assignmentParams.driverId) {
         setAssignmentParams(prev => ({ 
           ...prev, 
-          driverId: drivers[0].id,
-          ambulanceId: drivers[0].assignedAmbulanceId || ''
+          driverId: readyDrivers[0].id,
+          ambulanceId: readyDrivers[0].assignedAmbulanceId || ''
         }));
       }
     } catch (err) {
@@ -164,7 +169,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select Driver</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select available Driver</h3>
                 <Filter className="w-4 h-4 text-slate-400" />
               </div>
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
@@ -174,8 +179,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                     <span className="text-[10px] font-bold uppercase tracking-widest">Scanning network...</span>
                   </div>
                 ) : availableDrivers.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-red-400 text-[10px] font-bold uppercase tracking-widest">
-                    No active drivers found
+                  <div className="h-32 flex items-center justify-center text-red-400 text-[10px] font-bold uppercase tracking-widest text-center px-4">
+                    No available drivers with an assigned ambulance
                   </div>
                 ) : availableDrivers.map(driver => (
                   <div
@@ -211,7 +216,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select Nurse / Medic</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select available Nurse</h3>
               </div>
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                 {isFetchingUnits && availableNurses.length === 0 ? (
@@ -220,8 +225,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                     <span className="text-[10px] font-bold uppercase tracking-widest">Scanning network...</span>
                   </div>
                 ) : availableNurses.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                    No active nurses found
+                  <div className="h-32 flex items-center justify-center text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center px-4">
+                    No available nurses with an assigned ambulance
                   </div>
                 ) : availableNurses.map(nurse => (
                   <div
@@ -239,7 +244,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                       <div className="flex-1">
                         <h4 className="text-sm font-bold text-slate-800">{nurse.firstName} {nurse.lastName}</h4>
                         <p className="text-[10px] font-bold text-emerald-600 mt-1 uppercase tracking-wider">
-                          Certified Medic
+                          {nurse.assignedAmbulance
+                            ? `Vehicle: ${nurse.assignedAmbulance.ambulanceNumber}`
+                            : 'No vehicle assigned'}
                         </p>
                       </div>
                       {assignmentParams.nurseId === nurse.id && (

@@ -3,32 +3,35 @@
 import { Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import SectionTabs from '@/components/features/access-control/SectionTabs'
-import PatientEmergencyCasesPage from '../emergency-cases/page'
-import PatientActiveCasesPage from '../active-cases/page'
+import PatientCaseRecordsView from '@/components/features/patients/PatientCaseRecordsView'
 import { Loader2 } from 'lucide-react'
 
 function PatientCasesContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const tab = searchParams.get('tab') === 'active' ? 'active' : 'emergency'
+  const tab = searchParams.get('tab') === 'active' ? 'active' : 'all'
 
   const setTab = (id: string) => {
-    router.replace(`/admin/patients/cases?tab=${id === 'active' ? 'active' : 'emergency'}`)
+    const patient = searchParams.get('patient')
+    const patientQuery = patient ? `&patient=${encodeURIComponent(patient)}` : ''
+    router.replace(
+      `/admin/patients/cases?tab=${id === 'active' ? 'active' : 'all'}${patientQuery}`,
+    )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-0">
       <div className="px-6 pt-6 max-w-[1600px] mx-auto">
         <SectionTabs
           tabs={[
-            { id: 'emergency', label: 'Emergency Cases' },
+            { id: 'all', label: 'All Cases' },
             { id: 'active', label: 'Active Cases' },
           ]}
           active={tab}
           onChange={setTab}
         />
       </div>
-      {tab === 'emergency' ? <PatientEmergencyCasesPage /> : <PatientActiveCasesPage />}
+      <PatientCaseRecordsView activeOnly={tab === 'active'} />
     </div>
   )
 }

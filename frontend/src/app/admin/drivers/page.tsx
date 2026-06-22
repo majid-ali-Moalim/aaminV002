@@ -16,6 +16,14 @@ import { driversService, systemSetupService, ambulancesService, employeesService
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import {
+  ADMIN_STAFF_STATUS_OPTIONS,
+  getAdminStaffStatusValue,
+  getStaffStatusLabel,
+  getStaffStatusStyles,
+} from '@/lib/staff/status'
+import { SOMALIA_DRIVER_LICENSE_CLASSES } from '@/lib/drivers/somaliaDriverLicense'
+import SomaliaDriverLicenseInfo from '@/components/drivers/SomaliaDriverLicenseInfo'
 
 interface Driver {
   id: string
@@ -33,6 +41,8 @@ interface Driver {
   availabilityStatus?: string
   readinessStatus?: string
   drivingLicenseNumber?: string
+  licenseClass?: string
+  licenseNumber?: string
   licenseStatus?: 'VALID' | 'EXPIRING' | 'EXPIRED'
   licenseExpiryDate?: string
   yearsOfExperience?: string
@@ -139,6 +149,7 @@ export default function DriversPage() {
     
     // Driver Professional Details (3 fields)
     drivingLicenseNumber: '',
+    licenseClass: 'B',
     licenseExpiryDate: '',
     yearsOfExperience: '',
     
@@ -206,7 +217,11 @@ export default function DriversPage() {
         driver.email?.toLowerCase().includes(searchTerm.toLowerCase())
       
       const stationMatch = !stationFilter || driver.stationId === stationFilter
-      const statusMatch = !statusFilter || driver.shiftStatus === statusFilter
+      const statusMatch =
+        !statusFilter ||
+        (statusFilter === 'AVAILABLE'
+          ? driver.shiftStatus === 'AVAILABLE'
+          : driver.shiftStatus !== 'AVAILABLE')
       const licenseMatch = !licenseFilter || driver.licenseStatus === licenseFilter
       const ratingMatch = !ratingFilter || (driver.rating && driver.rating >= parseFloat(ratingFilter))
 
@@ -214,15 +229,7 @@ export default function DriversPage() {
     })
   }, [drivers, searchTerm, stationFilter, statusFilter, licenseFilter, ratingFilter])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE': return 'text-green-600 bg-green-50 border-green-200'
-      case 'ON_DUTY': return 'text-blue-600 bg-blue-50 border-blue-200'
-      case 'ON_BREAK': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'UNAVAILABLE': return 'text-red-600 bg-red-50 border-red-200'
-      default: return 'text-slate-600 bg-slate-50 border-slate-200'
-    }
-  }
+  const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
 
   const getLicenseStatusColor = (status: string) => {
     switch (status) {
@@ -282,12 +289,13 @@ export default function DriversPage() {
       employmentStatus: driver.employmentStatus || '',
       
       // Dispatch & Operational Status (3 fields)
-      shiftStatus: driver.shiftStatus || '',
+      shiftStatus: getAdminStaffStatusValue(driver.shiftStatus || ''),
       availabilityStatus: driver.availabilityStatus || '',
       readinessStatus: driver.readinessStatus || '',
       
       // Driver Professional Details (3 fields)
-      drivingLicenseNumber: driver.drivingLicenseNumber || '',
+      drivingLicenseNumber: driver.drivingLicenseNumber || driver.licenseNumber || '',
+      licenseClass: driver.licenseClass || 'B',
       licenseExpiryDate: driver.licenseExpiryDate || '',
       yearsOfExperience: driver.yearsOfExperience || '',
       
@@ -326,6 +334,9 @@ export default function DriversPage() {
           status: formData.employmentStatus,
           shiftStatus: formData.shiftStatus,
           licenseNumber: formData.drivingLicenseNumber,
+          licenseClass: formData.licenseClass,
+          licenseType: `Class ${formData.licenseClass}`,
+          licenseExpiryDate: formData.licenseExpiryDate || undefined,
         }
         await employeesService.update(editingDriver.id, updatePayload)
         toast.success('Driver updated successfully')
@@ -587,8 +598,6 @@ export default function DriversPage() {
               >
                 <option value="">All Status</option>
                 <option value="AVAILABLE">Available</option>
-                <option value="ON_DUTY">On Duty</option>
-                <option value="ON_BREAK">On Break</option>
                 <option value="UNAVAILABLE">Unavailable</option>
               </select>
               <select
@@ -750,7 +759,7 @@ export default function DriversPage() {
                           'inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium border',
                           getStatusColor(driver.shiftStatus || '')
                         )}>
-                          {driver.shiftStatus?.replace('_', ' ') || 'UNKNOWN'}
+                          {getStaffStatusLabel(driver.shiftStatus || '')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -857,7 +866,7 @@ export default function DriversPage() {
                             'inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border',
                             getStatusColor(driver.shiftStatus || '')
                           )}>
-                            {driver.shiftStatus?.replace('_', ' ') || 'UNKNOWN'}
+                            {getStaffStatusLabel(driver.shiftStatus || '')}
                           </span>
                           <div className="flex items-center">
                             {getRatingStars(driver.rating || 0)}
@@ -1344,10 +1353,11 @@ export default function DriversPage() {
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     >
                       <option value="">Select Status</option>
-                      <option value="AVAILABLE">Available</option>
-                      <option value="ON_DUTY">On Duty</option>
-                      <option value="ON_BREAK">On Break</option>
-                      <option value="UNAVAILABLE">Unavailable</option>
+                      {ADMIN_STAFF_STATUS_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -1393,6 +1403,8 @@ export default function DriversPage() {
                   <Shield className="w-4 h-4 text-red-600" />
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Driver Professional Details</h3>
                 </div>
+
+                <SomaliaDriverLicenseInfo compact />
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -1401,11 +1413,28 @@ export default function DriversPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Driver license number"
+                      placeholder="MoTCA license number (linked to National ID)"
                       value={formData.drivingLicenseNumber}
-                      onChange={(e) => setFormData({ ...formData, drivingLicenseNumber: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, drivingLicenseNumber: e.target.value.toUpperCase() })}
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      License Class
+                    </label>
+                    <select
+                      value={formData.licenseClass}
+                      onChange={(e) => setFormData({ ...formData, licenseClass: e.target.value })}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                    >
+                      {SOMALIA_DRIVER_LICENSE_CLASSES.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.label} — {cls.description}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-1.5">

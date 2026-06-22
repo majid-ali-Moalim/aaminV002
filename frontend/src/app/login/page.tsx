@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { getPostLoginPath } from '@/lib/authRedirect'
@@ -142,6 +143,12 @@ function LoginForm() {
                 'Sign In'
               )}
             </button>
+
+            <div className="text-center pt-1">
+              <Link href="/forgot-password" className="text-sm font-medium text-red-600 hover:text-red-700">
+                Forgot password?
+              </Link>
+            </div>
           </form>
 
           {/* Role Information */}

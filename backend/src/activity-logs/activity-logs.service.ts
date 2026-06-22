@@ -364,13 +364,11 @@ export class ActivityLogsService {
       });
     }
 
-    const todayOperationalCount = items.filter(
-      (i) => new Date(i.createdAt) >= todayStart,
-    ).length;
+    const activityCount = items.length;
 
     return {
       summary: {
-        todayCount: todayOperationalCount,
+        todayCount: activityCount,
         criticalCount: criticalActive,
         pendingCount: pendingCases,
       },

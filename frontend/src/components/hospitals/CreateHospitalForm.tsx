@@ -17,7 +17,7 @@ import { getCachedDistricts, getCachedRegions, loadLocationReferenceData } from 
 import {
   HOSPITAL_TYPES,
   OWNERSHIP_TYPES,
-  OPERATIONAL_STATUSES,
+  CREATE_OPERATIONAL_STATUSES,
   MEDICAL_CAPABILITIES,
   INITIAL_HOSPITAL_FORM,
   validateCreateHospitalForm,
@@ -153,16 +153,15 @@ export default function CreateHospitalForm() {
         icuTotalBeds: Number(form.icuTotalBeds) || 0,
         emergencyBeds: Number(form.emergencyBeds) || 0,
         operatingRooms: Number(form.operatingRooms) || 0,
-        ambulanceReceptionCapacity: Number(form.ambulanceReceptionCapacity) || 0,
         capacityStatus: form.capacityStatus,
         operationalStatus: form.operationalStatus,
         available24_7: form.available24_7,
         acceptAmbulanceTransfers: form.acceptAmbulanceTransfers,
-        acceptWalkInPatients: form.acceptWalkInPatients,
+        acceptWalkInPatients: INITIAL_HOSPITAL_FORM.acceptWalkInPatients,
         accountUsername: form.accountUsername.trim(),
         accountEmail: form.accountEmail.trim(),
         accountPassword: form.accountPassword,
-        hospitalRole: form.hospitalRole,
+        hospitalRole: INITIAL_HOSPITAL_FORM.hospitalRole,
         accountStatus: form.accountStatus,
         forcePasswordChange: form.forcePasswordChange,
       }
@@ -344,7 +343,6 @@ export default function CreateHospitalForm() {
         <Field label="ICU Beds"><input type="number" className={inputCls} value={form.icuTotalBeds} onChange={(e) => set('icuTotalBeds', e.target.value)} /></Field>
         <Field label="Total Beds"><input type="number" className={inputCls} value={form.beds} onChange={(e) => set('beds', e.target.value)} /></Field>
         <Field label="Operating Rooms"><input type="number" className={inputCls} value={form.operatingRooms} onChange={(e) => set('operatingRooms', e.target.value)} /></Field>
-        <Field label="Ambulance Reception Capacity" className="md:col-span-2"><input type="number" className={inputCls} value={form.ambulanceReceptionCapacity} onChange={(e) => set('ambulanceReceptionCapacity', e.target.value)} /></Field>
         <Field label="Current Capacity Status" className="md:col-span-2">
           <select className={inputCls} value={form.capacityStatus} onChange={(e) => set('capacityStatus', e.target.value)}>
             {['Available', 'Limited Capacity', 'Full Capacity'].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -355,7 +353,7 @@ export default function CreateHospitalForm() {
       <SectionCard title="Operational Settings" icon={Settings2}>
         <Field label="Operational Status" required className="md:col-span-2">
           <div className="flex flex-wrap gap-3">
-            {OPERATIONAL_STATUSES.map((s) => (
+            {CREATE_OPERATIONAL_STATUSES.map((s) => (
               <label key={s} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer text-sm font-bold transition-colors ${form.operationalStatus === s ? 'border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200' : 'border-gray-200 dark:border-gray-700 text-gray-600'}`}>
                 <input type="radio" name="operationalStatus" value={s} checked={form.operationalStatus === s} onChange={() => set('operationalStatus', s)} className="accent-teal-600" />
                 {s}
@@ -366,7 +364,6 @@ export default function CreateHospitalForm() {
         {[
           ['available24_7', 'Available 24/7'],
           ['acceptAmbulanceTransfers', 'Accept Ambulance Transfers'],
-          ['acceptWalkInPatients', 'Accept Walk-In Patients'],
         ].map(([key, label]) => (
           <label key={key} className="md:col-span-2 flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" checked={form[key as keyof CreateHospitalFormData] as boolean} onChange={(e) => set(key as keyof CreateHospitalFormData, e.target.checked as any)} />
@@ -380,11 +377,6 @@ export default function CreateHospitalForm() {
         <Field label="Email Login" required error={errors.accountEmail}><input type="email" className={inputCls} value={form.accountEmail} onChange={(e) => set('accountEmail', e.target.value)} /></Field>
         <Field label="Temporary Password" required error={errors.accountPassword}><input type="password" className={inputCls} value={form.accountPassword} onChange={(e) => set('accountPassword', e.target.value)} /></Field>
         <Field label="Confirm Password" required error={errors.accountPasswordConfirm}><input type="password" className={inputCls} value={form.accountPasswordConfirm} onChange={(e) => set('accountPasswordConfirm', e.target.value)} /></Field>
-        <Field label="Hospital Role">
-          <select className={inputCls} value={form.hospitalRole} onChange={(e) => set('hospitalRole', e.target.value)}>
-            {['Hospital Coordinator', 'Emergency Coordinator', 'Hospital Manager'].map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </Field>
         <Field label="Account Status">
           <select className={inputCls} value={form.accountStatus} onChange={(e) => set('accountStatus', e.target.value)}>
             {['Active', 'Suspended', 'Pending Activation'].map((s) => <option key={s} value={s}>{s}</option>)}

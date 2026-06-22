@@ -1,170 +1,263 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Loader2, Save, User, Shield, RefreshCw } from 'lucide-react'
-import { profilePhotoUrl } from '@/lib/profilePhoto'
+import { useEffect, useRef, useState } from 'react'
+import { Camera, Loader2, Save, Shield, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { dispatcherProfileApi } from '@/lib/dispatcherApi'
+import { authService, uploadService } from '@/lib/api'
+import { useAuth } from '@/context/AuthContext'
+import { profilePhotoUrl } from '@/lib/profilePhoto'
+import ChangePasswordCard from '@/components/auth/ChangePasswordCard'
+import SecurityActivityCard from '@/components/auth/SecurityActivityCard'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
-import { usePermissions } from '@/lib/hooks/usePermissions'
-import { getPermissionLabel } from '@/lib/accessControlCatalog'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
+type ProfileForm = {
+  firstName: string
+  lastName: string
+  phone: string
+  alternatePhone: string
+  profilePhoto: string
+  emergencyContactName: string
+  emergencyPhone: string
+}
+
+const EMPTY_FORM: ProfileForm = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  alternatePhone: '',
+  profilePhoto: '',
+  emergencyContactName: '',
+  emergencyPhone: '',
+}
+
+const inputClass =
+  'mt-1 w-full h-11 px-3 rounded-xl border border-gray-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-red-500/10 outline-none text-sm font-medium'
+
 export default function DispatcherProfilePage() {
-  const { profile: cached, refresh } = useDispatcherAccess()
-  const { permissions, loading: permLoading, refresh: refreshPermissions } = usePermissions()
-  const [profile, setProfile] = useState<any>(null)
-  const [form, setForm] = useState({ phone: '', alternatePhone: '', emergencyContactName: '', emergencyPhone: '' })
+  const { refreshUser } = useAuth()
+  const { refresh } = useDispatcherAccess()
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [employeeCode, setEmployeeCode] = useState('')
+  const [roleLabel, setRoleLabel] = useState('Dispatcher')
+  const [shiftStatus, setShiftStatus] = useState('')
+  const [licenseNumber, setLicenseNumber] = useState('')
+  const [licenseExpiryDate, setLicenseExpiryDate] = useState<string | null>(null)
+  const [stationName, setStationName] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [securityRefreshKey, setSecurityRefreshKey] = useState(0)
 
   useEffect(() => {
-    dispatcherProfileApi
-      .get()
-      .then((p) => {
-        setProfile(p)
+    authService
+      .getMe()
+      .then((me: any) => {
+        const emp = me.employee
+        setUsername(me.username ?? '')
+        setEmail(me.email ?? '')
+        setEmployeeCode(emp?.employeeCode ?? '')
+        setRoleLabel(emp?.employeeRole?.name ?? 'Dispatcher')
+        setShiftStatus(emp?.shiftStatus ?? '')
+        setLicenseNumber(emp?.licenseNumber ?? '')
+        setLicenseExpiryDate(emp?.licenseExpiryDate ?? null)
+        setStationName(emp?.station?.name ?? '')
         setForm({
-          phone: p.phone || '',
-          alternatePhone: p.alternatePhone || '',
-          emergencyContactName: p.emergencyContactName || '',
-          emergencyPhone: p.emergencyPhone || '',
+          firstName: emp?.firstName ?? '',
+          lastName: emp?.lastName ?? '',
+          phone: emp?.phone ?? '',
+          alternatePhone: emp?.alternatePhone ?? '',
+          profilePhoto: emp?.profilePhoto ?? '',
+          emergencyContactName: emp?.emergencyContactName ?? '',
+          emergencyPhone: emp?.emergencyPhone ?? '',
         })
-        if (p.activePermissionKeys?.length) {
-          void refreshPermissions()
-        }
       })
+      .catch(() => toast.error('Could not load profile'))
       .finally(() => setLoading(false))
-  }, [refreshPermissions])
+  }, [])
+
+  const handlePhotoPick = async (file: File | null) => {
+    if (!file) return
+    setUploadingPhoto(true)
+    try {
+      const res: any = await uploadService.uploadFile(file)
+      const url = res?.url ?? ''
+      setForm((f) => ({ ...f, profilePhoto: url }))
+      toast.success('Photo uploaded — save profile to apply')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Photo upload failed')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   const handleSave = async () => {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      toast.error('First and last name are required')
+      return
+    }
     setSaving(true)
     try {
-      await dispatcherProfileApi.update(form)
-      toast.success('Profile updated')
-      await refresh()
+      await authService.updateMe(form)
+      await Promise.all([refreshUser(), refresh()])
+      toast.success('Profile saved')
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Update failed')
+      toast.error(err?.response?.data?.message || 'Failed to save profile')
     } finally {
       setSaving(false)
     }
   }
 
   if (loading) {
-    return <div className="flex justify-center py-24"><Loader2 className="w-10 h-10 text-red-600 animate-spin" /></div>
+    return (
+      <div className="flex justify-center py-24">
+        <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+      </div>
+    )
   }
 
-  const p = profile || cached
+  const photoSrc = profilePhotoUrl(form.profilePhoto)
+  const displayName = `${form.firstName} ${form.lastName}`.trim() || username || 'Dispatcher'
 
   return (
     <div className="space-y-6 pb-20 max-w-2xl">
       <div>
         <h1 className="text-2xl font-black text-slate-900">My Profile</h1>
-        <p className="text-sm text-slate-500 mt-1">Your admin-issued dispatcher credentials and contact info</p>
+        <p className="text-sm text-slate-500 mt-1">
+          Update your photo, contact information, and security settings
+        </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-red-50 p-6 flex items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl border-2 border-white shadow-lg ring-2 ring-red-600 overflow-hidden bg-red-600 shrink-0">
-          {profilePhotoUrl(p?.profilePhoto) ? (
-            <img
-              src={profilePhotoUrl(p?.profilePhoto)}
-              alt={`${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim()}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white text-xl font-black">
-              {p?.firstName?.[0]}
-              {p?.lastName?.[0]}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploadingPhoto}
+            className="relative w-28 h-28 rounded-2xl border-2 border-white shadow-lg ring-2 ring-red-600 overflow-hidden bg-red-600 shrink-0 group"
+            aria-label="Upload profile photo"
+          >
+            {photoSrc ? (
+              <img src={photoSrc} alt={displayName} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <User className="w-10 h-10 text-white" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+              {uploadingPhoto ? (
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : (
+                <Camera className="w-6 h-6 text-white" />
+              )}
             </div>
-          )}
-        </div>
-        <div>
-          <p className="text-lg font-black">{p?.firstName} {p?.lastName}</p>
-          <p className="text-sm text-red-600 font-bold">{p?.employeeCode}</p>
-          <p className="text-xs text-slate-500">{p?.user?.email}</p>
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handlePhotoPick(e.target.files?.[0] ?? null)}
+          />
+          <div className="text-center sm:text-left flex-1">
+            <p className="text-lg font-black text-slate-900">{displayName}</p>
+            <p className="text-sm text-red-600 font-bold">{employeeCode || roleLabel}</p>
+            <p className="text-xs text-slate-500 mt-1">{email}</p>
+            <p className="text-[10px] text-slate-400 mt-2">Tap the photo to upload a new image (max 5MB)</p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-red-50 p-6 space-y-4">
-        <h2 className="text-xs font-black uppercase text-red-600 tracking-widest flex items-center gap-2">
-          <User className="w-4 h-4" />
-          Credentials (read-only)
-        </h2>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+        <h2 className="text-xs font-black uppercase text-red-600 tracking-widest">Account (read-only)</h2>
         <dl className="grid sm:grid-cols-2 gap-4 text-sm">
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Username</dt><dd className="font-bold">{p?.user?.username}</dd></div>
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Status</dt><dd className="font-bold">{p?.status}</dd></div>
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Shift</dt><dd className="font-bold">{p?.shiftStatus}</dd></div>
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Cert ID</dt><dd className="font-bold">{p?.licenseNumber || '—'}</dd></div>
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Cert Expiry</dt><dd className="font-bold">{p?.licenseExpiryDate ? format(new Date(p.licenseExpiryDate), 'MMM d, yyyy') : '—'}</dd></div>
-          <div><dt className="text-slate-400 text-xs font-bold uppercase">Station</dt><dd className="font-bold">{p?.station?.name || '—'}</dd></div>
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Username</dt>
+            <dd className="font-bold">{username || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Email</dt>
+            <dd className="font-bold">{email || '—'}</dd>
+          </div>
         </dl>
       </div>
 
-      <div className="bg-white rounded-2xl border border-red-50 p-6 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xs font-black uppercase text-red-600 tracking-widest flex items-center gap-2">
-            <Shield className="w-4 h-4" />
-            My Access Permissions
-          </h2>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-lg text-xs"
-            onClick={() => refreshPermissions()}
-            disabled={permLoading}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${permLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+        <h2 className="text-xs font-black uppercase text-red-600 tracking-widest">Personal information</h2>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {(['firstName', 'lastName'] as const).map((field) => (
+            <div key={field}>
+              <label className="text-xs font-bold text-slate-500 uppercase">
+                {field === 'firstName' ? 'First name' : 'Last name'} *
+              </label>
+              <input
+                className={inputClass}
+                value={form[field]}
+                onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
+              />
+            </div>
+          ))}
         </div>
-        {permLoading && permissions.length === 0 ? (
-          <p className="text-sm text-slate-500">Loading permissions…</p>
-        ) : permissions.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No extra permissions granted yet. Your administrator can assign access from User Access.
-          </p>
-        ) : (
-          <ul className="grid sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-            {permissions.map((key) => (
-              <li
-                key={key}
-                className="text-sm font-semibold text-slate-800 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 border border-slate-100"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                {getPermissionLabel(key)}
-              </li>
-            ))}
-          </ul>
-        )}
-        {permissions.includes('driver.create') && (
-          <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-            You can register new drivers — open{' '}
-            <a href="/dispatcher/permissions/granted" className="font-bold underline">
-              My Permissions
-            </a>{' '}
-            or Resources → Drivers.
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl border border-red-50 p-6 space-y-4">
-        <h2 className="text-xs font-black uppercase text-red-600 tracking-widest">Contact details</h2>
         {(['phone', 'alternatePhone', 'emergencyContactName', 'emergencyPhone'] as const).map((field) => (
           <div key={field}>
-            <label className="text-xs font-bold text-slate-500 uppercase">{field.replace(/([A-Z])/g, ' $1')}</label>
+            <label className="text-xs font-bold text-slate-500 uppercase">
+              {field.replace(/([A-Z])/g, ' $1')}
+            </label>
             <input
-              className="mt-1 w-full h-11 px-3 rounded-xl border border-red-100 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-red-500/10 outline-none text-sm font-medium"
+              className={inputClass}
               value={form[field]}
               onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
             />
           </div>
         ))}
-        <Button onClick={handleSave} disabled={saving} className="w-full h-11 bg-red-600 hover:bg-red-700 rounded-xl font-black">
+        <Button
+          onClick={handleSave}
+          disabled={saving || uploadingPhoto}
+          className="w-full h-11 bg-red-600 hover:bg-red-700 rounded-xl font-black"
+        >
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Save Contact Info
+          Save Profile
         </Button>
       </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+        <h2 className="text-xs font-black uppercase text-red-600 tracking-widest flex items-center gap-2">
+          <Shield className="w-4 h-4" />
+          Dispatcher credentials (read-only)
+        </h2>
+        <dl className="grid sm:grid-cols-2 gap-4 text-sm">
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Role</dt>
+            <dd className="font-bold">{roleLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Shift status</dt>
+            <dd className="font-bold">{shiftStatus || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Cert ID</dt>
+            <dd className="font-bold">{licenseNumber || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400 text-xs font-bold uppercase">Cert expiry</dt>
+            <dd className="font-bold">
+              {licenseExpiryDate ? format(new Date(licenseExpiryDate), 'MMM d, yyyy') : '—'}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-slate-400 text-xs font-bold uppercase">Station</dt>
+            <dd className="font-bold">{stationName || '—'}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <ChangePasswordCard onSuccess={() => setSecurityRefreshKey((k) => k + 1)} />
+      <SecurityActivityCard refreshKey={securityRefreshKey} />
     </div>
   )
 }

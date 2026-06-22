@@ -3,7 +3,7 @@ import HospitalHandoverPortalView from '@/components/hospital/views/HospitalHand
 
 export default function HospitalHandoverPage() {
   return (
-    <HospitalPageLayout title="Patient Handover Queue" subtitle="Receive patients and complete clinical handover">
+    <HospitalPageLayout title="Handover Patients" subtitle="Receive patients and complete clinical handover">
       <HospitalHandoverPortalView />
     </HospitalPageLayout>
   )

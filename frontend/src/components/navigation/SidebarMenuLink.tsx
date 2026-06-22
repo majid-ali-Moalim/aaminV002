@@ -22,6 +22,7 @@ interface SidebarMenuLinkProps {
   accentColor?: string
   className?: string
   iconClassName?: string
+  onNavigate?: () => void
 }
 
 export default function SidebarMenuLink({
@@ -34,6 +35,7 @@ export default function SidebarMenuLink({
   accentColor,
   className = 'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium',
   iconClassName = 'w-4 h-4 shrink-0',
+  onNavigate,
 }: SidebarMenuLinkProps) {
   const { isActive } = useOptimisticNav()
   const key = navKey ?? `${label}-${href}`
@@ -60,6 +62,7 @@ export default function SidebarMenuLink({
           e.currentTarget.style.color = SIDEBAR.secondary
         }
       }}
+      onNavigate={onNavigate}
     >
       <Icon
         className={iconClassName}

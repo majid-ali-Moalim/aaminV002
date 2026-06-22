@@ -13,7 +13,6 @@ import {
   Loader2,
   MapPin,
   Phone,
-  Radio,
   RefreshCw,
   Stethoscope,
   Truck,
@@ -607,16 +606,13 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
           <PickupGpsPanel request={mission} tone="dark" title="Scene GPS" />
 
-          <div className="nmw-comms">
-            <Link href="/nurse/communications" className="nurse-btn ghost">
-              <Radio size={14} /> Communication Center
-            </Link>
-            {mission.driver?.phone && (
+          {mission.driver?.phone && (
+            <div className="nmw-comms">
               <a href={`tel:${mission.driver.phone}`} className="nurse-btn ghost">
                 <Phone size={14} /> Call Driver
               </a>
-            )}
-          </div>
+            </div>
+          )}
         </section>
 
         {/* Task panel */}

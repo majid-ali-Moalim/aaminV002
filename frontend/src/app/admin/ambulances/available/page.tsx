@@ -7,7 +7,7 @@ export default function AvailableUnitsPage() {
     <AmbulanceFleetView
       title="Available Units"
       subtitle="Ambulances ready for dispatch — standing by at base stations."
-      heroBadge="Available Fleet"
+      heroBadge="Available Ambulances"
       presetStatuses={['AVAILABLE']}
       hideStatusFilter
       showRegisterButton={false}

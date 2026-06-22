@@ -51,6 +51,18 @@ import {
   MIN_DRIVER_AGE,
   MAX_DRIVER_AGE,
 } from '@/lib/driverFormValidation'
+import {
+  ADMIN_STAFF_STATUS_OPTIONS,
+  mapStaffShiftStatus,
+} from '@/lib/staff/status'
+import {
+  SOMALIA_DRIVER_LICENSE_CLASSES,
+  SOMALIA_LICENSE_NUMBER_HINT,
+  SOMALIA_NATIONAL_ID_LICENSE_NOTE,
+  SOMALIA_LICENSE_VALIDITY_YEARS,
+  computeSomaliaLicenseExpiry,
+} from '@/lib/drivers/somaliaDriverLicense'
+import SomaliaDriverLicenseInfo from '@/components/drivers/SomaliaDriverLicenseInfo'
 
 const STEPS = [
   { id: 'personal', label: 'Personal', icon: User },
@@ -84,7 +96,7 @@ const STEP_FIELDS = {
     'relationship',
     'emergencyPhone',
   ],
-  professional: ['licenseNumber', 'licenseClass', 'licenseExpiryDate', 'yearsOfExperience', 'notes'],
+  professional: ['licenseNumber', 'licenseClass', 'licenseIssueDate', 'licenseExpiryDate', 'yearsOfExperience', 'notes'],
   account: ['email', 'username', 'password', 'confirmPassword'],
 } as const satisfies Record<StepId, readonly (keyof DriverFormErrors)[]>
 
@@ -146,18 +158,6 @@ function PhotoUploadBlock({
       </div>
     </div>
   )
-}
-
-function mapShiftStatus(value: string): string {
-  const map: Record<string, string> = {
-    'On Duty': 'ON_DUTY',
-    'Off Duty': 'OFF_DUTY',
-    'On Leave': 'UNAVAILABLE',
-    AVAILABLE: 'AVAILABLE',
-    ON_DUTY: 'ON_DUTY',
-    OFF_DUTY: 'OFF_DUTY',
-  }
-  return map[value] || 'OFF_DUTY'
 }
 
 export default function AddDriverForm({
@@ -226,10 +226,11 @@ export default function AddDriverForm({
     departmentId: '',
     employmentType: 'Full-time',
     joinDate: new Date().toISOString().split('T')[0],
-    shiftStatus: 'Off Duty',
+    shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
     licenseNumber: '',
     licenseClass: 'B',
+    licenseIssueDate: '',
     licenseExpiryDate: '',
     yearsOfExperience: '',
     emergencyDrivingTraining: false,
@@ -375,22 +376,21 @@ export default function AddDriverForm({
     return allDistricts.filter((d) => d.regionId === form.regionId)
   }, [form.regionId, regions, allDistricts])
 
-  const stationsForDistrict = useMemo(() => {
-    if (!form.districtId) return []
-    return allStations.filter((s) => s.districtId === form.districtId)
-  }, [form.districtId, allStations])
+  const stationOptions = useMemo(() => allStations, [allStations])
 
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === form.regionId),
     [regions, form.regionId]
   )
   const selectedDistrict = useMemo(
-    () => districtsForRegion.find((d) => d.id === form.districtId),
-    [districtsForRegion, form.districtId]
+    () =>
+      districtsForRegion.find((d) => d.id === form.districtId) ||
+      allDistricts.find((d) => d.id === form.districtId),
+    [districtsForRegion, allDistricts, form.districtId]
   )
   const selectedStation = useMemo(
-    () => stationsForDistrict.find((s) => s.id === form.stationId),
-    [stationsForDistrict, form.stationId]
+    () => allStations.find((s) => s.id === form.stationId),
+    [allStations, form.stationId]
   )
 
   const filteredAmbulances = useMemo(() => {
@@ -409,11 +409,25 @@ export default function AddDriverForm({
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = (regionId: string) => {
-    patch({ regionId, districtId: '', stationId: '', assignedAmbulanceId: '' })
+    patch({ regionId, districtId: '' })
   }
 
   const handleDistrictChange = (districtId: string) => {
-    patch({ districtId, stationId: '', assignedAmbulanceId: '' })
+    patch({ districtId })
+  }
+
+  const handleStationChange = (stationId: string) => {
+    const station = allStations.find((s) => s.id === stationId)
+    patch({
+      stationId,
+      assignedAmbulanceId: '',
+      ...(station
+        ? {
+            regionId: station.regionId || form.regionId,
+            districtId: station.districtId || form.districtId,
+          }
+        : {}),
+    })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,14 +491,15 @@ export default function AddDriverForm({
       address: form.address.trim() || undefined,
       licenseNumber: form.licenseNumber.trim() || undefined,
       licenseClass: form.licenseClass || undefined,
-      licenseType: 'DRIVING',
+      licenseType: `Class ${form.licenseClass}`,
+      licenseIssueDate: form.licenseIssueDate || undefined,
       licenseExpiryDate: form.licenseExpiryDate || undefined,
       licenseStatus: 'VALID',
       medicalFitness: 'FIT',
       employmentDate: form.joinDate || undefined,
       defaultShift: form.employmentType,
       assignedAmbulanceId: form.assignedAmbulanceId || undefined,
-      shiftStatus: mapShiftStatus(form.shiftStatus),
+      shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
       certificationUpload: form.certificationUpload || undefined,
       qualification: buildQualification(),
@@ -610,10 +625,11 @@ export default function AddDriverForm({
                     departmentId: form.departmentId,
                     employmentType: 'Full-time',
                     joinDate: new Date().toISOString().split('T')[0],
-                    shiftStatus: 'Off Duty',
+                    shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
                     licenseNumber: '',
                     licenseClass: 'B',
+                    licenseIssueDate: '',
                     licenseExpiryDate: '',
                     yearsOfExperience: '',
                     emergencyDrivingTraining: false,
@@ -843,9 +859,10 @@ export default function AddDriverForm({
                         value={form.nationalId}
                         error={fieldErrors.nationalId}
                         maxLength={20}
-                        placeholder="5–20 characters"
+                        placeholder="Linked to your driver license"
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ nationalId: e.target.value })}
                       />
+                      <p className="md:col-span-2 -mt-3 text-[10px] text-slate-500">{SOMALIA_NATIONAL_ID_LICENSE_NOTE}</p>
                       <FormInput
                         label="Phone"
                         required
@@ -904,6 +921,24 @@ export default function AddDriverForm({
                         />
                       </div>
                       <FormSelect
+                        label="Assigned Station"
+                        required
+                        icon={Building2}
+                        options={stationOptions}
+                        value={form.stationId}
+                        error={fieldErrors.stationId}
+                        disabled={loading}
+                        loading={loading}
+                        emptyHint={
+                          stationOptions.length
+                            ? 'Select Station'
+                            : 'No stations — add in System Setup'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                          handleStationChange(e.target.value)
+                        }
+                      />
+                      <FormSelect
                         label="Region"
                         required
                         icon={MapPin}
@@ -930,26 +965,6 @@ export default function AddDriverForm({
                               : 'No districts in this region'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="Assigned Station"
-                        required
-                        icon={Building2}
-                        options={stationsForDistrict}
-                        value={form.stationId}
-                        error={fieldErrors.stationId}
-                        disabled={!form.districtId || loading}
-                        loading={loading}
-                        emptyHint={
-                          !form.districtId
-                            ? 'Select a district first'
-                            : stationsForDistrict.length
-                              ? 'Select Station'
-                              : 'No stations — add in System Setup'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                          patch({ stationId: e.target.value, assignedAmbulanceId: '' })
-                        }
                       />
 
                       {selectedStation && (
@@ -1057,11 +1072,7 @@ export default function AddDriverForm({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormSelect
                           label="Initial Shift Status"
-                          options={[
-                            { id: 'Off Duty', label: 'Off Duty' },
-                            { id: 'On Duty', label: 'On Duty' },
-                            { id: 'On Leave', label: 'On Leave' },
-                          ]}
+                          options={ADMIN_STAFF_STATUS_OPTIONS}
                           value={form.shiftStatus}
                           onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                             patch({ shiftStatus: e.target.value })
@@ -1096,31 +1107,49 @@ export default function AddDriverForm({
 
                 {step === 'professional' && (
                   <>
-                    <SectionHeader icon={Shield} title="License & Skills" subtitle="Credentials & training" color="red" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <SectionHeader icon={Shield} title="License & Skills" subtitle="Somalia MoTCA credentials & training" color="red" />
+                    <SomaliaDriverLicenseInfo />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                       <FormInput
                         label="License Number"
                         required
                         value={form.licenseNumber}
                         error={fieldErrors.licenseNumber}
                         maxLength={25}
+                        placeholder="As printed on license card"
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           patch({ licenseNumber: e.target.value.toUpperCase() })
                         }
                       />
+                      <p className="md:col-span-2 -mt-4 text-[10px] text-slate-500">{SOMALIA_LICENSE_NUMBER_HINT}</p>
                       <FormSelect
                         label="License Class"
                         required
-                        options={[
-                          { id: 'B', label: 'Class B' },
-                          { id: 'C', label: 'Class C' },
-                          { id: 'D', label: 'Class D' },
-                        ]}
+                        options={SOMALIA_DRIVER_LICENSE_CLASSES.map((cls) => ({
+                          id: cls.id,
+                          label: `${cls.label} — ${cls.description}`,
+                        }))}
                         value={form.licenseClass}
                         error={fieldErrors.licenseClass}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           patch({ licenseClass: e.target.value })
                         }
+                      />
+                      <FormInput
+                        label="License Issue Date"
+                        type="date"
+                        value={form.licenseIssueDate}
+                        error={fieldErrors.licenseIssueDate}
+                        max={todayStr}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const issueDate = e.target.value
+                          patch({
+                            licenseIssueDate: issueDate,
+                            licenseExpiryDate: issueDate
+                              ? computeSomaliaLicenseExpiry(issueDate)
+                              : form.licenseExpiryDate,
+                          })
+                        }}
                       />
                       <FormInput
                         label="License Expiry"
@@ -1133,6 +1162,10 @@ export default function AddDriverForm({
                           patch({ licenseExpiryDate: e.target.value })
                         }
                       />
+                      <p className="md:col-span-2 text-[10px] text-slate-500">
+                        Standard Somali driver licenses are valid for {SOMALIA_LICENSE_VALIDITY_YEARS} years. Expiry
+                        auto-fills when you enter an issue date.
+                      </p>
                       <FormInput
                         label="Years of Experience"
                         type="number"

@@ -8,6 +8,7 @@ import AdminSidebar from '@/components/layout/AdminSidebar'
 import AdminTopBar from '@/components/layout/AdminTopBar'
 import LiveToastContainer from '@/components/notifications/LiveToastContainer'
 import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
+import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
 
 export default function AdminLayout({
   children,
@@ -49,24 +50,28 @@ export default function AdminLayout({
   // Immersive full-screen mode — sidebar & topbar hidden
   if (isFullScreen) {
     return (
-      <div className="min-h-screen bg-[#F3F4F6]">
-        <LiveToastContainer />
-        {children}
-      </div>
+      <EmergencyPortalProvider portal="admin">
+        <div className="min-h-screen bg-[#F3F4F6]">
+          <LiveToastContainer />
+          {children}
+        </div>
+      </EmergencyPortalProvider>
     )
   }
 
   return (
-    <OptimisticNavProvider>
-      <div className="min-h-screen bg-gray-50">
-        <LiveToastContainer />
-        <NavigationProgressBar />
-        <AdminSidebar />
-        <div className="ml-64">
-          <AdminTopBar />
-          <main className="p-6">{children}</main>
+    <EmergencyPortalProvider portal="admin">
+      <OptimisticNavProvider>
+        <div className="min-h-screen bg-gray-50">
+          <LiveToastContainer />
+          <NavigationProgressBar />
+          <AdminSidebar />
+          <div className="ml-64">
+            <AdminTopBar />
+            <main className="p-6">{children}</main>
+          </div>
         </div>
-      </div>
-    </OptimisticNavProvider>
+      </OptimisticNavProvider>
+    </EmergencyPortalProvider>
   )
 }

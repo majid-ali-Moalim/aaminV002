@@ -11,7 +11,6 @@ import {
   MapPin,
   User,
   AlertCircle,
-  Wrench,
   X,
   Loader2,
   RefreshCw,
@@ -25,29 +24,16 @@ import {
 import { Button } from '@/components/ui/button'
 import { ambulancesService, employeesService, systemSetupService } from '@/lib/api'
 import { Ambulance, Employee, EmployeeRole } from '@/types'
+import {
+  ADMIN_AMBULANCE_STATUS_OPTIONS,
+  getAdminAmbulanceStatusValue,
+  getAmbulanceStatusLabel,
+  getAmbulanceStatusStyles,
+  isAmbulanceAvailable,
+  isAmbulanceUnavailable,
+} from '@/lib/ambulance/status'
 
-const STATUS_STYLES: Record<string, { badge: string; header: string; label: string }> = {
-  AVAILABLE: {
-    badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    header: 'from-emerald-600 to-emerald-700',
-    label: 'Available',
-  },
-  ON_DUTY: {
-    badge: 'bg-blue-100 text-blue-800 border-blue-200',
-    header: 'from-blue-600 to-blue-700',
-    label: 'On Duty',
-  },
-  MAINTENANCE: {
-    badge: 'bg-amber-100 text-amber-800 border-amber-200',
-    header: 'from-amber-500 to-orange-600',
-    label: 'Maintenance',
-  },
-  UNAVAILABLE: {
-    badge: 'bg-slate-100 text-slate-700 border-slate-200',
-    header: 'from-slate-600 to-slate-800',
-    label: 'Unavailable',
-  },
-}
+const UNAVAILABLE_FILTER = '__UNAVAILABLE__'
 
 function getEmployeeByRole(ambulance: Ambulance, roleHint: string) {
   return ambulance.employees?.find((e) =>
@@ -69,7 +55,7 @@ export interface AmbulanceFleetViewConfig {
 export default function AmbulanceFleetView({
   title,
   subtitle,
-  heroBadge = 'Fleet Management',
+  heroBadge = 'Ambulance Management',
   presetStatuses,
   hideStatusFilter = false,
   showRegisterButton = true,
@@ -138,15 +124,18 @@ export default function AmbulanceFleetView({
       ambulance.fleetNumber?.toLowerCase().includes(q) ||
       ambulance.vehicleType?.toLowerCase().includes(q) ||
       ambulance.station?.name?.toLowerCase().includes(q)
-    const matchesStatus = statusFilter === '' || ambulance.status === statusFilter
+    const matchesStatus =
+      statusFilter === '' ||
+      (statusFilter === 'AVAILABLE' && isAmbulanceAvailable(ambulance.status)) ||
+      (statusFilter === UNAVAILABLE_FILTER && isAmbulanceUnavailable(ambulance.status))
     return matchesSearch && matchesStatus
   })
 
   const stats = {
     total: scopedAmbulances.length,
-    available: scopedAmbulances.filter((a) => a.status === 'AVAILABLE').length,
-    onDuty: scopedAmbulances.filter((a) => a.status === 'ON_DUTY').length,
-    maintenance: scopedAmbulances.filter((a) => a.status === 'MAINTENANCE').length,
+    available: scopedAmbulances.filter((a) => isAmbulanceAvailable(a.status)).length,
+    unavailable: scopedAmbulances.filter((a) => isAmbulanceUnavailable(a.status)).length,
+    unavailableOnDuty: scopedAmbulances.filter((a) => a.status === 'ON_DUTY').length,
   }
 
   const handleViewDetails = (ambulance: Ambulance) => {
@@ -185,7 +174,7 @@ export default function AmbulanceFleetView({
   }
 
   const handleDeleteAmbulance = async (id: string) => {
-    if (!confirm('Delete this ambulance from the fleet?')) return
+    if (!confirm('Delete this ambulance?')) return
     try {
       await ambulancesService.delete(id)
       fetchAmbulances(false)
@@ -229,12 +218,17 @@ export default function AmbulanceFleetView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: presetStatuses ? 'Units Shown' : 'Total Fleet', value: stats.total, icon: Truck, color: 'text-red-600 bg-red-50' },
+          { label: presetStatuses ? 'Units Shown' : 'Total Ambulance', value: stats.total, icon: Truck, color: 'text-red-600 bg-red-50' },
           { label: 'Available', value: stats.available, icon: Truck, color: 'text-emerald-600 bg-emerald-50' },
-          { label: 'On Duty', value: stats.onDuty, icon: MapPin, color: 'text-blue-600 bg-blue-50' },
-          { label: 'Maintenance', value: stats.maintenance, icon: Wrench, color: 'text-amber-600 bg-amber-50' },
+          {
+            label: 'Unavailable',
+            value: stats.unavailable,
+            sub: stats.unavailableOnDuty > 0 ? `${stats.unavailableOnDuty} on duty` : undefined,
+            icon: MapPin,
+            color: 'text-slate-600 bg-slate-100',
+          },
         ].map((item) => {
           const Icon = item.icon
           return (
@@ -247,6 +241,9 @@ export default function AmbulanceFleetView({
                   {item.label}
                 </p>
                 <p className="text-3xl font-black text-slate-900 mt-1">{item.value}</p>
+                {'sub' in item && item.sub && (
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1">{item.sub}</p>
+                )}
               </div>
               <div className={`p-3 rounded-xl ${item.color}`}>
                 <Icon className="w-6 h-6" />
@@ -275,9 +272,7 @@ export default function AmbulanceFleetView({
           >
             <option value="">All statuses</option>
             <option value="AVAILABLE">Available</option>
-            <option value="ON_DUTY">On Duty</option>
-            <option value="MAINTENANCE">Maintenance</option>
-            <option value="UNAVAILABLE">Unavailable</option>
+            <option value={UNAVAILABLE_FILTER}>Unavailable</option>
           </select>
         )}
       </div>
@@ -292,7 +287,7 @@ export default function AmbulanceFleetView({
       {loading && ambulances.length === 0 ? (
         <div className="py-24 text-center bg-white rounded-2xl border border-slate-100">
           <Loader2 className="w-10 h-10 animate-spin mx-auto text-red-500 mb-4" />
-          <p className="text-sm font-semibold text-slate-500">Loading fleet…</p>
+          <p className="text-sm font-semibold text-slate-500">Loading ambulances…</p>
         </div>
       ) : filteredAmbulances.length === 0 ? (
         <div className="py-24 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
@@ -311,7 +306,7 @@ export default function AmbulanceFleetView({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredAmbulances.map((ambulance) => {
-            const style = STATUS_STYLES[ambulance.status] || STATUS_STYLES.UNAVAILABLE
+            const style = getAmbulanceStatusStyles(ambulance.status)
             const driver = getEmployeeByRole(ambulance, 'DRIVER')
             const nurse = getEmployeeByRole(ambulance, 'NURSE')
             const readiness = ambulance.readinessScore ?? 100
@@ -444,14 +439,21 @@ export default function AmbulanceFleetView({
                     </Button>
                   )}
                   <select
-                    value={ambulance.status}
+                    value={getAdminAmbulanceStatusValue(ambulance.status)}
                     onChange={(e) => handleUpdateStatus(ambulance.id, e.target.value)}
-                    className="flex-1 min-w-[100px] text-xs font-semibold rounded-xl border border-slate-200 bg-white px-2 py-2"
+                    disabled={ambulance.status === 'ON_DUTY'}
+                    title={
+                      ambulance.status === 'ON_DUTY'
+                        ? 'Status is set automatically while on duty'
+                        : undefined
+                    }
+                    className="flex-1 min-w-[100px] text-xs font-semibold rounded-xl border border-slate-200 bg-white px-2 py-2 disabled:bg-slate-50 disabled:text-slate-500"
                   >
-                    <option value="AVAILABLE">Available</option>
-                    <option value="ON_DUTY">On Duty</option>
-                    <option value="MAINTENANCE">Maintenance</option>
-                    <option value="UNAVAILABLE">Unavailable</option>
+                    {ADMIN_AMBULANCE_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                   <Button
                     variant="outline"
@@ -535,7 +537,7 @@ export default function AmbulanceFleetView({
             <div className="p-6 grid sm:grid-cols-2 gap-6">
               {[
                 { label: 'Fleet Number', value: selectedAmbulance.fleetNumber || '—' },
-                { label: 'Status', value: selectedAmbulance.status.replace('_', ' ') },
+                { label: 'Status', value: getAmbulanceStatusLabel(selectedAmbulance.status) },
                 { label: 'Type', value: selectedAmbulance.vehicleType || '—' },
                 {
                   label: 'Brand / Model / Year',

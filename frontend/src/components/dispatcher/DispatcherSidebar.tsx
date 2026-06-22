@@ -1,11 +1,11 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
 import { LogOut, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import SidebarNavLink from '@/components/navigation/SidebarNavLink'
-import { isModulePathActive, moduleDefaultHref } from '@/lib/dispatcher/navigation'
-import { useDispatcherNavigation } from '@/lib/hooks/useDispatcherNavigation'
+import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
+import DispatcherEmergencyCommandSidebar from '@/components/dispatcher/DispatcherEmergencyCommandSidebar'
+import DispatcherAccountSidebar from '@/components/dispatcher/DispatcherAccountSidebar'
+import { DISPATCHER_DASHBOARD_ITEM } from '@/lib/dispatcher/emergencyCommandNav'
 import AaminLogo from '@/components/brand/AaminLogo'
 
 const SIDEBAR = {
@@ -19,23 +19,12 @@ const SIDEBAR = {
 } as const
 
 interface Props {
-  pendingCount?: number
   open?: boolean
   onClose?: () => void
 }
 
-export default function DispatcherSidebarSections({
-  pendingCount = 0,
-  open = false,
-  onClose,
-}: Props) {
-  const pathname = usePathname()
+export default function DispatcherSidebarSections({ open = false, onClose }: Props) {
   const { logout } = useAuth()
-  const { sidebarModules } = useDispatcherNavigation()
-
-  const handleLogout = () => {
-    logout()
-  }
 
   return (
     <>
@@ -74,53 +63,33 @@ export default function DispatcherSidebarSections({
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2 px-2 custom-scrollbar">
-          <div className="px-2 pt-2 pb-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: SIDEBAR.muted }}>
-              Dispatcher Operations Center
+          <div className="pt-2 pb-1.5 px-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: SIDEBAR.muted }}>
+              Dashboard
             </span>
           </div>
-          {sidebarModules.map((mod) => {
-            const href = moduleDefaultHref(mod)
-            const navKey = `dispatcher-${mod.id}`
-            const active = isModulePathActive(pathname, mod)
-            const Icon = mod.icon
-            const showBadge = mod.id === 'emergency' && pendingCount > 0
+          <div className="px-0.5 mb-1">
+            <SidebarMenuLink
+              navKey="dispatcher-dashboard"
+              href={DISPATCHER_DASHBOARD_ITEM.href}
+              label={DISPATCHER_DASHBOARD_ITEM.label}
+              icon={DISPATCHER_DASHBOARD_ITEM.icon}
+              exact={DISPATCHER_DASHBOARD_ITEM.exact}
+              sidebar={SIDEBAR}
+              accentColor={DISPATCHER_DASHBOARD_ITEM.accent ? SIDEBAR[DISPATCHER_DASHBOARD_ITEM.accent] : SIDEBAR.muted}
+              className="flex items-center gap-2.5 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
+              onNavigate={onClose}
+            />
+          </div>
 
-            return (
-              <SidebarNavLink
-                key={mod.id}
-                navKey={navKey}
-                href={href}
-                exact={mod.id === 'dashboard' || mod.id === 'profile'}
-                onNavigate={onClose}
-                className="flex items-center justify-between gap-2 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
-                activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }}
-                inactiveStyle={{ color: SIDEBAR.secondary }}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Icon
-                    className="w-4 h-4 shrink-0"
-                    style={{ color: active ? SIDEBAR.text : SIDEBAR.muted }}
-                  />
-                  <span className="truncate">{mod.label}</span>
-                </div>
-                {showBadge && (
-                  <span
-                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0"
-                    style={{ backgroundColor: SIDEBAR.primary }}
-                  >
-                    {pendingCount}
-                  </span>
-                )}
-              </SidebarNavLink>
-            )
-          })}
+          <DispatcherEmergencyCommandSidebar onNavigate={onClose} />
+          <DispatcherAccountSidebar onNavigate={onClose} />
         </nav>
 
         <div className="p-2 shrink-0" style={{ borderTop: `1px solid ${SIDEBAR.border}` }}>
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={() => logout()}
             className="w-full flex items-center gap-2 px-2.5 py-2 text-[12px] font-medium rounded-lg"
             style={{ color: SIDEBAR.muted }}
           >

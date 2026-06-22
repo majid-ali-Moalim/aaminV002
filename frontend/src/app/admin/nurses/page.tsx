@@ -12,6 +12,7 @@ import {
 import { nursesService, systemSetupService } from '@/lib/api'
 import { Employee, Station } from '@/types'
 import { format } from 'date-fns'
+import { getStaffStatusLabel, getStaffStatusStyles } from '@/lib/staff/status'
 
 export default function NursesDashboard() {
   const router = useRouter()
@@ -71,15 +72,7 @@ export default function NursesDashboard() {
     })
   }, [nurses, searchTerm, stationFilter, statusFilter, specializationFilter])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE': return 'bg-success/10 text-success border-success/20'
-      case 'ON_DUTY': return 'bg-red-100 text-red-600 border-red-200'
-      case 'ON_BREAK': return 'bg-warning/10 text-warning border-warning/20'
-      case 'UNAVAILABLE': return 'bg-destructive/10 text-destructive border-destructive/20'
-      default: return 'bg-gray-100 text-gray-500 border-gray-200'
-    }
-  }
+  const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
 
   const getClearanceBadge = (status: string) => {
     switch (status) {
@@ -243,7 +236,7 @@ export default function NursesDashboard() {
                     </td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black border ${getStatusColor(nurse.shiftStatus || '')}`}>
-                        {nurse.shiftStatus?.replace('_', ' ') || 'UNKNOWN'}
+                        {getStaffStatusLabel(nurse.shiftStatus || nurse.status || '')}
                       </span>
                     </td>
                     <td className="py-4 px-6">

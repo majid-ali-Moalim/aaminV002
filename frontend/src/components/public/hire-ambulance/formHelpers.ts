@@ -35,7 +35,6 @@ export type HireFormValues = {
   estimatedAge: string
   dateOfBirth: string
   bloodGroup: string
-  medicalStatus: string
   destinationHospital: string
   nationalityType: string
   country: string
@@ -58,6 +57,8 @@ export type HireFormValues = {
   needsStretcher: boolean
   latitude: string
   longitude: string
+  gpsLocationDescription: string
+  nationalityUnknown: boolean
 }
 
 export const defaultFormValues: HireFormValues = {
@@ -71,7 +72,6 @@ export const defaultFormValues: HireFormValues = {
   estimatedAge: '',
   dateOfBirth: '',
   bloodGroup: '',
-  medicalStatus: '',
   destinationHospital: '',
   nationalityType: '',
   country: '',
@@ -94,25 +94,37 @@ export const defaultFormValues: HireFormValues = {
   needsStretcher: false,
   latitude: '',
   longitude: '',
+  gpsLocationDescription: '',
+  nationalityUnknown: false,
 }
 
 export function computePriority(data: HireFormValues): 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' {
-  if (
-    data.breathingStatus === 'NOT_BREATHING' ||
-    data.consciousStatus === 'UNCONSCIOUS' ||
-    data.medicalStatus === 'CRITICAL'
-  ) {
+  if (!isEmergencyRequest(data)) return 'LOW'
+  if (data.breathingStatus === 'NOT_BREATHING' || data.consciousStatus === 'UNCONSCIOUS') {
     return 'CRITICAL'
   }
-  if (
-    data.breathingStatus === 'DIFFICULTY' ||
-    data.medicalStatus === 'SERIOUS' ||
-    data.requestType === 'EMERGENCY'
-  ) {
-    return 'HIGH'
+  if (data.breathingStatus === 'DIFFICULTY') return 'HIGH'
+  return 'HIGH'
+}
+
+export function calculateAgeFromDateOfBirth(dateOfBirth: string): number | null {
+  if (!dateOfBirth) return null
+  const dob = new Date(`${dateOfBirth}T00:00:00`)
+  if (Number.isNaN(dob.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (dob > today) return null
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age -= 1
   }
-  if (data.requestType === 'NON_EMERGENCY') return 'LOW'
-  return 'MEDIUM'
+  return age
+}
+
+export function syncEstimatedAgeFromDob(dateOfBirth: string): string {
+  const age = calculateAgeFromDateOfBirth(dateOfBirth)
+  return age !== null ? String(age) : ''
 }
 
 export function formatSomaliaPhone(raw: string): string {
@@ -130,16 +142,29 @@ export function normalizePhone(raw: string): string {
 }
 
 export function hasGpsLocation(data: HireFormValues): boolean {
-  return Boolean(data.latitude?.trim() && data.longitude?.trim())
+  if (!data.latitude?.trim() || !data.longitude?.trim()) return false
+  const lat = parseFloat(data.latitude)
+  const lng = parseFloat(data.longitude)
+  return (
+    !Number.isNaN(lat) &&
+    !Number.isNaN(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  )
 }
 
 export function hasManualLocation(data: HireFormValues): boolean {
-  return Boolean(
-    data.regionId &&
-      data.districtId &&
-      data.areaName.trim() &&
-      data.landmarkDescription.trim(),
-  )
+  return Boolean(data.regionId && data.districtId && data.areaName.trim())
+}
+
+export function hasPickupLocation(data: HireFormValues): boolean {
+  return hasGpsLocation(data) || hasManualLocation(data)
+}
+
+export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): boolean {
+  return data.requestType === 'EMERGENCY'
 }
 
 export function validateStep(
@@ -150,6 +175,7 @@ export function validateStep(
   switch (step) {
     case 'urgency':
       if (!data.requestType) return 'Select request type'
+      if (!isEmergencyRequest(data)) return null
       if (!data.emergencyType) return 'Select emergency type'
       {
         const selectedType = context?.emergencyTypes?.find((t) => t.id === data.emergencyType)
@@ -170,23 +196,41 @@ export function validateStep(
       if (!data.callerPhone.trim()) return 'Phone number is required'
       return null
     case 'patient':
-      if (!data.patientName.trim()) return 'Patient name is required'
+      if (data.isPatient === 'YES' && !data.patientName.trim()) {
+        return 'Patient name is required when you are the patient'
+      }
       if (!data.gender) return 'Gender is required'
       if (!data.dateOfBirth) return 'Date of birth is required'
-      if (!data.maritalStatus) return 'Marital status is required'
-      if (!data.bloodGroup) return 'Blood group is required'
-      if (!data.medicalStatus) return 'Medical status is required'
-      if (data.isPatient === 'NO' && !data.estimatedAge) return 'Estimated age is required'
+      {
+        const age = calculateAgeFromDateOfBirth(data.dateOfBirth)
+        if (age === null) return 'Enter a valid date of birth that is not in the future'
+      }
+      if (data.isPatient === 'YES' && !data.maritalStatus) {
+        return 'Marital status is required when you are the patient'
+      }
       return null
     case 'location':
-      if (!hasGpsLocation(data) && !hasManualLocation(data)) {
-        return 'Share your GPS location or enter pickup address details'
+      if (data.latitude?.trim() || data.longitude?.trim()) {
+        if (!hasGpsLocation(data)) {
+          return 'Enter valid GPS coordinates or clear them and use the pickup address'
+        }
+      }
+      if (!hasPickupLocation(data)) {
+        return 'Provide GPS coordinates or a complete pickup address — at least one is required'
       }
       return null
     case 'details':
-      if (!data.nationalityType) return 'Select nationality type'
-      if (data.nationalityType === 'INTERNATIONAL' && !data.country) return 'Select country'
-      if (!data.preferredLanguage) return 'Select preferred language'
+      if (!data.nationalityType) return 'Select nationality or choose Unknown nationality'
+      if (
+        data.nationalityType === 'INTERNATIONAL' &&
+        !data.nationalityUnknown &&
+        !data.country
+      ) {
+        return 'Select country or tap Unknown nationality if not known'
+      }
+      if (data.isPatient === 'YES' && !data.preferredLanguage) {
+        return 'Select preferred language'
+      }
       return null
     case 'review':
       if (!data.consent) return 'You must confirm this is a genuine request'
@@ -209,22 +253,26 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
   const finalCallerName =
     data.isPatient === 'YES' ? data.patientName : data.callerName || 'Unknown Caller'
   const finalRelationship = data.isPatient === 'YES' ? 'SELF' : data.callerRelationship || 'OTHER'
-  const finalAge = data.isPatient === 'YES' ? 0 : Number(data.estimatedAge) || 0
+  const finalAge = calculateAgeFromDateOfBirth(data.dateOfBirth) ?? 0
   const finalCountry =
-    data.nationalityType === 'LOCAL' ? 'Somalia' : data.country || 'Unknown'
+    data.nationalityType === 'UNKNOWN' || data.nationalityUnknown
+      ? 'Unknown'
+      : data.nationalityType === 'LOCAL'
+        ? 'Somalia'
+        : data.country || 'Unknown'
 
   const gps = hasGpsLocation(data)
   const manual = hasManualLocation(data)
 
   const gpsLabel = gps ? `GPS: ${data.latitude}, ${data.longitude}` : ''
-  const manualLabel = manual
-    ? data.areaName
-      ? `${data.areaName}, ${data.landmarkDescription}`
-      : data.landmarkDescription
-    : ''
+  const manualLabel = manual ? data.areaName.trim() : ''
 
-  const pickupLocation = [manualLabel, gpsLabel].filter(Boolean).join(' | ') || gpsLabel
-  const pickupLandmark = data.landmarkDescription.trim() || gpsLabel
+  const gpsDetail = data.gpsLocationDescription.trim()
+  const pickupLocation = [manualLabel, gpsLabel, gpsDetail ? `Place: ${gpsDetail}` : '']
+    .filter(Boolean)
+    .join(' | ') || gpsLabel
+  const pickupLandmark =
+    data.areaName.trim() || gpsDetail || data.additionalDirections.trim() || gpsLabel
 
   return {
     callerName: finalCallerName,
@@ -232,7 +280,7 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     callerAltPhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : '',
     callerRelationship: finalRelationship,
     newPatient: {
-      fullName: data.patientName,
+      fullName: data.patientName.trim() || (data.isPatient === 'NO' ? 'Unknown Patient' : ''),
       gender: data.gender || 'UNKNOWN',
       age: finalAge,
       dateOfBirth: data.dateOfBirth || undefined,
@@ -243,9 +291,13 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
       phone: normalizePhone(data.callerPhone),
       alternatePhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : undefined,
     },
-    patientCondition: data.conditionDescription,
-    consciousStatus: data.consciousStatus,
-    breathingStatus: data.breathingStatus,
+    patientCondition:
+      data.conditionDescription.trim() ||
+      (isEmergencyRequest(data)
+        ? 'Emergency transport request'
+        : 'Non-emergency transport — details to be confirmed by dispatch'),
+    consciousStatus: data.consciousStatus || undefined,
+    breathingStatus: data.breathingStatus || undefined,
     destination: data.destinationHospital || undefined,
     priority: computePriority(data),
     incidentCategoryId,
@@ -258,13 +310,17 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     pickupLatitude: gps ? parseFloat(data.latitude) : undefined,
     pickupLongitude: gps ? parseFloat(data.longitude) : undefined,
     notes: [
-      `Emergency Type: ${emergencyTypeLabel}`,
-      selectedType?.code && !isOtherEmergencyType(selectedType) ? `Type Code: ${selectedType.code}` : '',
+      isEmergencyRequest(data) && emergencyTypeLabel ? `Emergency Type: ${emergencyTypeLabel}` : '',
+      isEmergencyRequest(data) && selectedType?.code && !isOtherEmergencyType(selectedType)
+        ? `Type Code: ${selectedType.code}`
+        : '',
       `Directions: ${data.additionalDirections || 'N/A'}`,
-      `Language: ${data.preferredLanguage}`,
+      `Language: ${data.preferredLanguage || 'Not specified'}`,
       `Special Instructions: ${data.specialInstructions || 'None'}`,
-      `Request Type: ${data.requestType}`,
+      `Request Type: ${data.requestType === 'EMERGENCY' ? 'Emergency' : 'Non-Emergency'}`,
+      !isEmergencyRequest(data) ? 'Triage: To be completed by dispatch if needed' : '',
       gps ? `Coordinates: ${data.latitude}, ${data.longitude}` : '',
+      gps && gpsDetail ? `Patient location details: ${gpsDetail}` : '',
       gps ? `Maps: https://www.google.com/maps?q=${data.latitude},${data.longitude}` : '',
     ]
       .filter(Boolean)

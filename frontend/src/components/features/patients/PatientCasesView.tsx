@@ -57,6 +57,8 @@ export default function PatientCasesView({
 
   const filteredRequests = useMemo(() => {
     return requests.filter(req => {
+      if (activeOnly && CLOSED_STATUSES.includes(req.status)) return false
+
       const pName = (req.patient?.fullName || '').toLowerCase()
       const cName = (req.callerName || '').toLowerCase()
       const phone = (req.callerPhone || req.patient?.phone || '').toLowerCase()

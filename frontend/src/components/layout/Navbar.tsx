@@ -50,7 +50,6 @@ const Navbar = () => {
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
     { href: '/contact', label: 'Contact' },
-    { href: '/track', label: 'Track Patient' },
   ]
 
 

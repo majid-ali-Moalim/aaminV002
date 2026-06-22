@@ -776,6 +776,12 @@ export class EmergencyRequestsService {
     return this.prisma.emergencyRequest.update({
       where: { id },
       data,
+      include: {
+        patient: true,
+        ambulance: true,
+        driver: true,
+        dispatcher: true,
+      },
     });
   }
 
@@ -868,7 +874,9 @@ export class EmergencyRequestsService {
       where: {
         employeeRoleId: driverRole.id,
         status: 'ACTIVE',
-        id: { notIn: busyDriverIds as string[] }
+        shiftStatus: 'AVAILABLE',
+        assignedAmbulanceId: { not: null },
+        id: { notIn: busyDriverIds as string[] },
       },
       include: {
         user: {
@@ -903,7 +911,9 @@ export class EmergencyRequestsService {
       where: {
         employeeRoleId: nurseRole.id,
         status: 'ACTIVE',
-        id: { notIn: busyNurseIds as string[] }
+        shiftStatus: 'AVAILABLE',
+        assignedAmbulanceId: { not: null },
+        id: { notIn: busyNurseIds as string[] },
       },
       include: {
         user: {

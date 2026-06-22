@@ -8,6 +8,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { RefreshTokenStrategy } from './strategies/refresh-token.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
+import { MailService } from './mail.service';
 import { AccessControlModule } from '../access-control/access-control.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { AccessControlModule } from '../access-control/access-control.module';
   controllers: [AuthController],
   providers: [
     AuthService,
+    MailService,
     JwtStrategy,
     LocalStrategy,
     RefreshTokenStrategy,

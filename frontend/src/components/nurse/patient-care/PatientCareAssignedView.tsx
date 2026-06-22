@@ -99,14 +99,10 @@ export default function PatientCareAssignedView() {
                   <Link href={`/nurse/medical-records?tab=history&caseId=${m.id}`} className="nurse-btn ghost">
                     View Patient
                   </Link>
-                  {m.driver?.phone ? (
+                  {m.driver?.phone && (
                     <a href={`tel:${m.driver.phone}`} className="nurse-btn ghost">
                       <Phone size={14} /> Contact Driver
                     </a>
-                  ) : (
-                    <Link href="/nurse/communications" className="nurse-btn ghost">
-                      <Phone size={14} /> Contact Driver
-                    </Link>
                   )}
                 </div>
                 <p className="npc-updated muted">

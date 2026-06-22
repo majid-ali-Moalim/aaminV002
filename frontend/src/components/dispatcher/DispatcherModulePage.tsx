@@ -41,7 +41,19 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
         return dispatcherDashboardApi.getAmbulances(RESOURCE_VIEW_API.ambulances ?? 'all')
       }
       if (view === 'drivers' || view === 'nurses') {
-        return dispatcherDashboardApi.getCrew(RESOURCE_VIEW_API[view] ?? view)
+        const crew = await dispatcherDashboardApi.getCrew(RESOURCE_VIEW_API[view] ?? view)
+        if (view === 'nurses') {
+          const [directory, capacity] = await Promise.all([
+            dispatcherDashboardApi.getHospitals('directory'),
+            dispatcherDashboardApi.getHospitals('capacity'),
+          ])
+          return {
+            ...crew,
+            hospitals: directory?.items ?? [],
+            hospitalCapacity: capacity?.items ?? [],
+          }
+        }
+        return crew
       }
       if (view === 'availability') {
         const [crew, ambulances] = await Promise.all([
@@ -88,19 +100,6 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
     }
     case 'reports':
       return dispatcherDashboardApi.getOverview()
-    case 'communications':
-      return dispatcherDashboardApi.getOverview()
-    case 'tools': {
-      if (view === 'quick-dispatch') {
-        const queue = await dispatcherDashboardApi.getPendingQueue()
-        const items = Array.isArray(queue) ? queue : (queue as { items?: unknown[] })?.items ?? []
-        return { items }
-      }
-      if (view === 'search' || view === 'finder' || view === 'directory' || view === 'handover-notes') {
-        return { items: [] }
-      }
-      return { items: [] }
-    }
     case 'permissions':
       return { items: [] }
     default:
@@ -196,6 +195,31 @@ export default function DispatcherModulePage({
         return (
           <DispatcherPanel title={navItem.label} empty={!items.length ? 'No ambulances in this category' : undefined}>
             <AmbulanceGrid items={items} />
+          </DispatcherPanel>
+        )
+      }
+      if (view === 'nurses') {
+        const hospitalItems = (data as any)?.hospitals ?? []
+        const capacityItems = (data as any)?.hospitalCapacity ?? []
+        const hospitals = hospitalItems.length ? hospitalItems : capacityItems
+        return (
+          <DispatcherPanel title="Nurse & Hospital Resources">
+            <p className="text-[10px] font-bold uppercase text-blue-600 mb-2">
+              Nurses ({items.length})
+            </p>
+            {items.length ? (
+              <CrewGrid items={items} />
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">No nurses found</p>
+            )}
+            <p className="text-[10px] font-bold uppercase text-emerald-600 mt-6 mb-2">
+              Hospitals ({hospitals.length})
+            </p>
+            {hospitals.length ? (
+              <HospitalGrid items={hospitals} />
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">No hospitals found</p>
+            )}
           </DispatcherPanel>
         )
       }
@@ -314,60 +338,6 @@ export default function DispatcherModulePage({
           ))}
         </div>
       )
-    }
-
-    if (moduleId === 'communications') {
-      return (
-        <PlaceholderView
-          title={navItem.label}
-          hint="Real-time messaging with crews and hospitals. Channels connect dispatchers with field staff and hospital coordinators."
-        />
-      )
-    }
-
-    if (moduleId === 'tools') {
-      if (view === 'quick-dispatch') {
-        return (
-          <DispatcherPanel title="Quick Dispatch" empty={!items.length ? 'Queue is clear' : undefined}>
-            <EmergencyTable
-              items={items}
-              onAssign={canOperate ? (r) => setAssignTarget(r) : undefined}
-            />
-          </DispatcherPanel>
-        )
-      }
-      if (view === 'search') {
-        return (
-          <PlaceholderView
-            title="Case Search"
-            hint="Search by case ID, patient name, phone number, or date range."
-          />
-        )
-      }
-      if (view === 'finder') {
-        return (
-          <PlaceholderView
-            title="Resource Finder"
-            hint="Locate available ambulances, drivers, nurses, and suitable hospitals for a case."
-          />
-        )
-      }
-      if (view === 'directory') {
-        return (
-          <PlaceholderView
-            title="Emergency Directory"
-            hint="Hospitals, police, fire services, and emergency contacts."
-          />
-        )
-      }
-      if (view === 'handover-notes') {
-        return (
-          <PlaceholderView
-            title="Shift Handover Notes"
-            hint="Dispatcher notes, pending cases, and critical cases for shift change."
-          />
-        )
-      }
     }
 
     return <PlaceholderView title={navItem.label} />

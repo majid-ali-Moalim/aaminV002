@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function Page() {
-  redirect('/dispatcher/communications/dispatch')
+export default function DispatcherCommunicationsPage() {
+  redirect('/dispatcher/dashboard')
 }

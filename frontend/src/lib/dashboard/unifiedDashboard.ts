@@ -19,14 +19,18 @@ export interface UnifiedDashboardSummary {
   availableDrivers: number
   availableNurses: number
   hospitalsAvailable: number
-  completedCasesToday: number
+  completedCases: number
+  cancelledCases: number
   averageResponseTimeMinutes: number | null
   delayedCases: number
   /** @deprecated use pendingCases */
   pendingQueue: number
   highPriority: number
-  /** @deprecated use completedCasesToday */
+  /** @deprecated use completedCases */
+  completedCasesToday: number
+  /** @deprecated use completedCases */
   completedToday: number
+  /** @deprecated use cancelledCases */
   cancelledToday: number
   openCases: number
 }

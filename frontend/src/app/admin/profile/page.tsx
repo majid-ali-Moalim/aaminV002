@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { authService, uploadService } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
+import ChangePasswordCard from '@/components/auth/ChangePasswordCard'
+import SecurityActivityCard from '@/components/auth/SecurityActivityCard'
 import toast from 'react-hot-toast'
 
 type ProfileForm = {
@@ -38,6 +40,7 @@ export default function AdminProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [securityRefreshKey, setSecurityRefreshKey] = useState(0)
 
   useEffect(() => {
     authService
@@ -108,7 +111,7 @@ export default function AdminProfilePage() {
     <div className="space-y-6 pb-20 max-w-2xl">
       <div>
         <h1 className="text-2xl font-black text-slate-900">My Profile</h1>
-        <p className="text-sm text-slate-500 mt-1">Update your photo and contact information</p>
+        <p className="text-sm text-slate-500 mt-1">Update your photo, contact information, and security settings</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
@@ -202,6 +205,9 @@ export default function AdminProfilePage() {
           Save Profile
         </Button>
       </div>
+
+      <ChangePasswordCard onSuccess={() => setSecurityRefreshKey((k) => k + 1)} />
+      <SecurityActivityCard refreshKey={securityRefreshKey} />
     </div>
   )
 }

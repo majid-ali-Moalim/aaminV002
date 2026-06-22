@@ -4,11 +4,9 @@ import {
   Siren,
   Truck,
   Building2,
-  MessageSquare,
   Radio,
   Bell,
   BarChart2,
-  Wrench,
   User,
   Lock,
   List,
@@ -19,13 +17,9 @@ import {
   XCircle,
   Bed,
   HeartHandshake,
-  Megaphone,
   MapPin,
   Activity,
   History,
-  Search,
-  Zap,
-  FileText,
   Stethoscope,
   Users,
   Shield,
@@ -36,11 +30,9 @@ export type DispatcherModuleId =
   | 'emergency'
   | 'resources'
   | 'hospital'
-  | 'communications'
   | 'monitoring'
   | 'alerts'
   | 'reports'
-  | 'tools'
   | 'permissions'
   | 'profile'
   | 'driver-registration'
@@ -123,21 +115,6 @@ export const DISPATCHER_MODULES: NavModule[] = [
     ],
   },
   {
-    id: 'communications',
-    label: 'Communication Center',
-    icon: MessageSquare,
-    basePath: '/dispatcher/communications',
-    description: 'Real-time messaging with crews and hospitals',
-    defaultSlug: 'dispatch',
-    items: [
-      { slug: 'dispatch', label: 'Dispatch Chat', icon: MessageSquare },
-      { slug: 'crew', label: 'Crew Chat', icon: Users },
-      { slug: 'hospital', label: 'Hospital Chat', icon: Building2 },
-      { slug: 'mission', label: 'Mission Chat', icon: Radio },
-      { slug: 'broadcasts', label: 'Broadcasts', icon: Megaphone },
-    ],
-  },
-  {
     id: 'monitoring',
     label: 'Live Monitoring',
     icon: MapPin,
@@ -181,21 +158,6 @@ export const DISPATCHER_MODULES: NavModule[] = [
     ],
   },
   {
-    id: 'tools',
-    label: 'Dispatcher Tools',
-    icon: Wrench,
-    basePath: '/dispatcher/tools',
-    description: 'Quick dispatch, search, and operational utilities',
-    defaultSlug: 'quick-dispatch',
-    items: [
-      { slug: 'quick-dispatch', label: 'Quick Dispatch', icon: Zap },
-      { slug: 'search', label: 'Case Search', icon: Search },
-      { slug: 'finder', label: 'Resource Finder', icon: Search },
-      { slug: 'directory', label: 'Emergency Directory', icon: FileText },
-      { slug: 'handover-notes', label: 'Shift Handover', icon: FileText },
-    ],
-  },
-  {
     id: 'permissions',
     label: 'My Permissions',
     icon: Lock,
@@ -227,6 +189,7 @@ export function getModuleByPath(pathname: string): NavModule | undefined {
     return getModuleById('dashboard')
   }
   if (pathname === '/dispatcher/profile') return getModuleById('profile')
+  if (pathname.startsWith('/dispatcher/patients')) return undefined
   if (pathname.startsWith('/dispatcher/add-driver')) return getModuleById('driver-registration')
   if (pathname.startsWith('/dispatcher/add-nurse')) return getModuleById('nurse-registration')
   return DISPATCHER_MODULES.find(
@@ -305,8 +268,15 @@ export const ALERTS_VIEW_API: Record<string, string> = {
 
 /** Legacy route redirects */
 export const LEGACY_DISPATCHER_REDIRECTS: Record<string, string> = {
-  '/dispatcher/emergencies': '/dispatcher/emergency/pending',
-  '/dispatcher/operations': '/dispatcher/emergency/all',
+  '/dispatcher/new-emergency': '/dispatcher/emergency-requests/new',
+  '/dispatcher/emergencies': '/dispatcher/emergency-requests/pending',
+  '/dispatcher/operations': '/dispatcher/emergency-requests',
+  '/dispatcher/emergency/all': '/dispatcher/emergency-requests',
+  '/dispatcher/emergency/new': '/dispatcher/emergency-requests/new',
+  '/dispatcher/emergency/critical': '/dispatcher/emergency-requests/critical',
+  '/dispatcher/emergency/pending': '/dispatcher/emergency-requests/pending',
+  '/dispatcher/emergency/active': '/dispatcher/emergency-requests/active',
+  '/dispatcher/emergency/closed': '/dispatcher/emergency-requests/completed',
   '/dispatcher/fleet': '/dispatcher/resources/ambulances',
   '/dispatcher/ambulances': '/dispatcher/resources/ambulances',
   '/dispatcher/staff': '/dispatcher/resources/drivers',
@@ -315,4 +285,8 @@ export const LEGACY_DISPATCHER_REDIRECTS: Record<string, string> = {
   '/dispatcher/tracking': '/dispatcher/monitoring/missions',
   '/dispatcher/incidents': '/dispatcher/monitoring/incidents',
   '/dispatcher/cases': '/dispatcher/monitoring/incidents',
+  '/dispatcher/communications': '/dispatcher/dashboard',
+  '/dispatcher/tools': '/dispatcher/dashboard',
+  '/dispatcher/communications/dispatch': '/dispatcher/dashboard',
+  '/dispatcher/tools/quick-dispatch': '/dispatcher/dashboard',
 }

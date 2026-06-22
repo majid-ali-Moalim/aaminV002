@@ -28,7 +28,6 @@ export type DispatcherFormValues = {
   address: string
   regionId: string
   districtId: string
-  areaZone: string
   stationId: string
   emergencyContactName: string
   emergencyPhone: string
@@ -43,7 +42,6 @@ export type DispatcherFormValues = {
   qualification: string
   yearsOfExperience: string
   certificationUpload: string
-  dispatchConsoleTrained: boolean
   email: string
   username: string
   password: string
@@ -73,7 +71,6 @@ const STEP_FIELDS: Record<DispatcherFormStep, (keyof DispatcherFormValues)[]> = 
     'address',
     'regionId',
     'districtId',
-    'areaZone',
     'stationId',
     'employeeCode',
     'departmentId',
@@ -162,9 +159,6 @@ function validateLocation(form: DispatcherFormValues, errors: DispatcherFormErro
   }
   if (!form.regionId) setError(errors, 'regionId', 'Region is required')
   if (!form.districtId) setError(errors, 'districtId', 'District is required')
-  const areaZone = form.areaZone.trim()
-  if (areaZone.length > 100) setError(errors, 'areaZone', 'Area / zone cannot exceed 100 characters')
-  else if (areaZone.length > 0 && areaZone.length < 2) setError(errors, 'areaZone', 'Area / zone must be at least 2 characters')
   if (!form.stationId) setError(errors, 'stationId', 'Dispatch station is required')
   const code = form.employeeCode.trim()
   if (!code) setError(errors, 'employeeCode', 'Employee code is required')

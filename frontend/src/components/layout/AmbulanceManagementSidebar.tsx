@@ -33,7 +33,7 @@ type MenuItem = {
 }
 
 const ambulanceMenuItems: MenuItem[] = [
-  { href: '/admin/ambulances', label: 'Fleet', icon: Truck, exact: true },
+  { href: '/admin/ambulances', label: 'Ambulance', icon: Truck, exact: true },
   { href: '/admin/ambulances/add', label: 'Register Ambulance', icon: PlusCircle },
   { href: '/admin/ambulances/history-reports', label: 'History & Reports', icon: History },
 ]

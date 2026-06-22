@@ -7,6 +7,12 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MailService } from './mail.service';
+import {
+  assertPasswordMeetsPolicy,
+  generateOtpCode,
+  passwordsMatch,
+} from './password-policy';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +20,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private accessControlService: AccessControlService,
+    private mailService: MailService,
   ) {}
 
   private log(message: string) {
@@ -31,30 +38,14 @@ export class AuthService {
       return null;
     }
 
-    // Hardcoded Admin Fallback — must resolve a real DB user id for FK-backed features (audit logs, reports, etc.)
-    if (username === 'aamin@admin' && password === '123321@admin') {
-      const adminUser = await this.prisma.user.findFirst({
-        where: { OR: [{ username: 'aamin@admin' }, { email: 'aamin@admin@aamin.so' }] },
-        include: {
-          employee: { include: { employeeRole: true } },
-          patient: true,
-        },
-      });
-      if (adminUser) {
-        this.log(`[AuthService] Hardcoded admin login successful (db user ${adminUser.id})`);
-        const { passwordHash, ...result } = adminUser;
-        return result;
-      }
-      this.log(`[AuthService] Hardcoded admin credentials matched but no admin user exists in DB`);
-    }
-
-    // Search by username OR email
+    // Search by username OR email (case-insensitive for email)
+    const normalized = username.trim();
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { username: username },
-          { email: username }
-        ]
+          { username: normalized },
+          { email: { equals: normalized, mode: 'insensitive' } },
+        ],
       },
       include: {
         employee: {
@@ -82,7 +73,11 @@ export class AuthService {
     if (isPasswordValid) {
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { failedLoginAttempts: 0, lockedUntil: null },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          lastLoginAt: new Date(),
+        },
       });
       this.log(`[AuthService] Login successful: ${user.username}`);
       const { passwordHash, ...result } = user;
@@ -94,7 +89,10 @@ export class AuthService {
     if (attempts >= 5) {
       lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
     }
-    await this.prisma.user.update({ where: { id: user.id }, data: lockData });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { ...lockData, lastFailedLoginAt: new Date() },
+    });
     
     this.log(`[AuthService] Invalid password for: ${user.username}`);
     return null;
@@ -371,6 +369,237 @@ export class AuthService {
       message: 'Logout successful',
       success: true,
     };
+  }
+
+  async changePassword(
+    userId: string,
+    dto: { currentPassword: string; newPassword: string; confirmPassword: string },
+    ipAddress?: string,
+  ) {
+    if (userId === 'hardcoded-admin-uuid') {
+      throw new BadRequestException(
+        'This session cannot change password. Sign in with your database admin account.',
+      );
+    }
+
+    if (!passwordsMatch(dto.newPassword, dto.confirmPassword)) {
+      throw new BadRequestException('Passwords do not match.');
+    }
+
+    if (passwordsMatch(dto.currentPassword, dto.newPassword)) {
+      throw new BadRequestException('New password cannot be the same as your current password.');
+    }
+
+    assertPasswordMeetsPolicy(dto.newPassword);
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const currentValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!currentValid) {
+      throw new BadRequestException('Current password is incorrect.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    const now = new Date();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        lastPasswordChangedAt: now,
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    await this.logSecurityAudit(user.id, user.username, 'PASSWORD_CHANGED', ipAddress);
+
+    this.log(`[AuthService] Password changed for ${user.username}`);
+    return { message: 'Password updated successfully.', success: true };
+  }
+
+  async getSecurityActivity(userId: string) {
+    if (userId === 'hardcoded-admin-uuid') {
+      return {
+        lastPasswordChangedAt: null,
+        lastLoginAt: null,
+        lastFailedLoginAt: null,
+        activeSessionsCount: 1,
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        lastPasswordChangedAt: true,
+        lastLoginAt: true,
+        lastFailedLoginAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      lastPasswordChangedAt: user.lastPasswordChangedAt,
+      lastLoginAt: user.lastLoginAt,
+      lastFailedLoginAt: user.lastFailedLoginAt,
+      activeSessionsCount: 1,
+    };
+  }
+
+  private async logSecurityAudit(
+    userId: string,
+    username: string,
+    action: string,
+    ipAddress?: string,
+  ) {
+    await this.prisma.activityLog.create({
+      data: {
+        userId,
+        action,
+        entityType: 'User',
+        entityId: userId,
+        metadata: {
+          username,
+          ipAddress: ipAddress ?? null,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
+  async requestPasswordReset(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+
+    if (user) {
+      const otp = generateOtpCode();
+      const otpHash = await bcrypt.hash(otp, 10);
+      const expires = new Date(Date.now() + 10 * 60 * 1000);
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetOtpHash: otpHash,
+          passwordResetOtpExpires: expires,
+          passwordResetOtpAttempts: 0,
+          passwordResetVerifiedUntil: null,
+          passwordResetTokenHash: null,
+          passwordResetExpires: null,
+        },
+      });
+
+      await this.mailService.sendPasswordResetOtpEmail(user.email, otp);
+      this.log(`[AuthService] Password reset OTP sent to ${user.email}`);
+    }
+
+    return {
+      message:
+        'If an account exists for that email, a verification code has been sent.',
+      success: true,
+    };
+  }
+
+  async verifyResetOtp(email: string, otp: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+
+    if (!user || !user.passwordResetOtpHash || !user.passwordResetOtpExpires) {
+      throw new BadRequestException('Invalid or expired verification code.');
+    }
+
+    if (user.passwordResetOtpExpires <= new Date()) {
+      throw new BadRequestException('Verification code has expired. Request a new code.');
+    }
+
+    if ((user.passwordResetOtpAttempts ?? 0) >= 3) {
+      throw new BadRequestException('Too many failed attempts. Request a new verification code.');
+    }
+
+    const otpValid = await bcrypt.compare(otp.trim(), user.passwordResetOtpHash);
+    if (!otpValid) {
+      const attempts = (user.passwordResetOtpAttempts ?? 0) + 1;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetOtpAttempts: attempts },
+      });
+      const remaining = Math.max(0, 3 - attempts);
+      throw new BadRequestException(
+        remaining > 0
+          ? `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+          : 'Too many failed attempts. Request a new verification code.',
+      );
+    }
+
+    const verifiedUntil = new Date(Date.now() + 15 * 60 * 1000);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetOtpHash: null,
+        passwordResetOtpExpires: null,
+        passwordResetOtpAttempts: 0,
+        passwordResetVerifiedUntil: verifiedUntil,
+      },
+    });
+
+    return { message: 'Verification successful. You may now set a new password.', success: true };
+  }
+
+  async resetPassword(
+    email: string,
+    password: string,
+    confirmPassword: string,
+    ipAddress?: string,
+  ) {
+    if (!passwordsMatch(password, confirmPassword)) {
+      throw new BadRequestException('Passwords do not match.');
+    }
+
+    assertPasswordMeetsPolicy(password);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+
+    if (!user || !user.passwordResetVerifiedUntil || user.passwordResetVerifiedUntil <= new Date()) {
+      throw new BadRequestException('Verification expired. Start the password reset process again.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const now = new Date();
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetVerifiedUntil: null,
+        passwordResetTokenHash: null,
+        passwordResetExpires: null,
+        passwordResetOtpHash: null,
+        passwordResetOtpExpires: null,
+        passwordResetOtpAttempts: 0,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        mustChangePassword: false,
+        lastPasswordChangedAt: now,
+      },
+    });
+
+    await this.logSecurityAudit(user.id, user.username, 'PASSWORD_CHANGED', ipAddress);
+
+    this.log(`[AuthService] Password reset completed for ${user.email}`);
+    return { message: 'Password updated successfully.', success: true };
   }
 
   private generateRefreshToken(): string {

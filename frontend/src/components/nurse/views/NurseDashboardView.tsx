@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import {
   Activity,
-  Bell,
   ClipboardList,
   HeartPulse,
   Stethoscope,
@@ -103,8 +102,6 @@ export default function NurseDashboardView() {
     { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
     { label: 'Record Vital Signs', href: '/nurse/medical-records?tab=vitals', icon: Activity },
     { label: 'Add Treatment', href: '/nurse/mission', icon: Zap },
-    { label: 'Contact Driver', href: '/nurse/communications', icon: Truck },
-    { label: 'Contact Dispatcher', href: '/nurse/communications', icon: Bell },
     { label: 'Complete Handover', href: '/nurse/mission', icon: ClipboardList },
   ]
 

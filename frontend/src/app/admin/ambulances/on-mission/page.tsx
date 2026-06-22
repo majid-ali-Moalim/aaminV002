@@ -5,14 +5,14 @@ import AmbulanceFleetView from '@/components/features/ambulances/AmbulanceFleetV
 export default function OnMissionUnitsPage() {
   return (
     <AmbulanceFleetView
-      title="On Mission Units"
+      title="Unavailable (On Duty)"
       subtitle="Ambulances currently deployed on active emergency missions."
-      heroBadge="Active Missions"
+      heroBadge="On Duty"
       presetStatuses={['ON_DUTY']}
       hideStatusFilter
       showRegisterButton={false}
-      emptyTitle="No units on mission"
-      emptyDescription="No ambulances are currently marked as on duty."
+      emptyTitle="No ambulances on duty"
+      emptyDescription="No ambulances are currently unavailable because of duty."
     />
   )
 }

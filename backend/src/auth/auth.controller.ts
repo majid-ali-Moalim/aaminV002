@@ -1,10 +1,21 @@
-import { Controller, Post, Request, UseGuards, Get, Body, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { Controller, Post, Request, UseGuards, Get, Body, HttpCode, HttpStatus, Patch, Req } from '@nestjs/common';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { VerifyResetOtpDto } from './dto/verify-reset-otp.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
+
+function clientIp(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): string | undefined {
+  const forwarded = req.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0]?.trim();
+  }
+  return req.ip;
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -13,45 +24,61 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Centralized login for all user roles',
-    description: 'Login endpoint for ADMIN, DISPATCHER, DRIVER, NURSE, MANAGER, HOSPITAL, and PATIENT roles'
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Login successful',
-    schema: {
-      type: 'object',
-      properties: {
-        user: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            email: { type: 'string' },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            role: { type: 'string', enum: ['ADMIN', 'DISPATCHER', 'DRIVER', 'NURSE', 'MANAGER', 'HOSPITAL', 'PATIENT'] },
-            isActive: { type: 'boolean' }
-          }
-        },
-        accessToken: { type: 'string' },
-        refreshToken: { type: 'string' },
-        expiresIn: { type: 'number' }
-      }
-    }
+    description: 'Login endpoint for ADMIN, DISPATCHER, DRIVER, NURSE, MANAGER, HOSPITAL, and PATIENT roles',
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  @ApiResponse({ status: 403, description: 'Account inactive' })
   async login(@Body() loginDto: any) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset OTP by email' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('verify-reset-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify password reset OTP' })
+  async verifyResetOtp(@Body() dto: VerifyResetOtpDto) {
+    return this.authService.verifyResetOtp(dto.email, dto.otp);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set new password after OTP verification' })
+  async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: any) {
+    return this.authService.resetPassword(dto.email, dto.password, dto.confirmPassword, clientIp(req));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password for authenticated user' })
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto, @Req() httpReq: any) {
+    return this.authService.changePassword(
+      req.user.id || req.user.sub,
+      dto,
+      clientIp(httpReq),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('security-activity')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Recent security activity for current user' })
+  async getSecurityActivity(@Request() req) {
+    return this.authService.getSecurityActivity(req.user.id || req.user.sub);
   }
 
   @Post('refresh')
   @UseGuards(RefreshTokenGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
-  @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   async refresh(@Request() req) {
     return this.authService.refreshToken(req.user);
   }
@@ -60,7 +87,6 @@ export class AuthController {
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user.id || req.user.sub);
   }
@@ -77,7 +103,6 @@ export class AuthController {
   @Post('logout')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout user' })
-  @ApiResponse({ status: 200, description: 'Logout successful' })
   async logout(@Request() req) {
     return this.authService.logout(req.user.sub);
   }

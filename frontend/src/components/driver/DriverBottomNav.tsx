@@ -1,13 +1,12 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Siren, MessageSquare, Bell, User } from 'lucide-react'
+import { LayoutGrid, Siren, Bell, User } from 'lucide-react'
 import { useDriverStore } from '@/lib/stores/driverStore'
 
 const navItems = [
   { href: '/driver', icon: LayoutGrid, label: 'Home', match: (p: string) => p === '/driver' || p === '/driver/dashboard' },
   { href: '/driver/missions/active', icon: Siren, label: 'Missions', match: (p: string) => p.startsWith('/driver/missions') },
-  { href: '/driver/communications', icon: MessageSquare, label: 'Chat', match: (p: string) => p.startsWith('/driver/communications') },
   { href: '/driver/notifications', icon: Bell, label: 'Alerts', match: (p: string) => p.startsWith('/driver/notifications'), badge: true },
   { href: '/driver/profile', icon: User, label: 'Profile', match: (p: string) => p.startsWith('/driver/profile') },
 ]

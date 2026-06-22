@@ -8,17 +8,12 @@ import {
 import { getGrantedSidebarModules } from '@/lib/dispatcher/permissionModules'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 
-/** Core modules always visible; granted-only modules injected after tools. */
+/** Core modules in Operations section (Emergency Command items are rendered separately). */
 const CORE_MODULE_IDS = new Set([
-  'dashboard',
-  'emergency',
-  'resources',
   'hospital',
-  'communications',
   'monitoring',
   'alerts',
   'reports',
-  'tools',
   'permissions',
   'profile',
 ])
@@ -32,8 +27,8 @@ export function useDispatcherNavigation() {
       (m) => !CORE_MODULE_IDS.has(m.id),
     )
 
-    const toolsIdx = core.findIndex((m) => m.id === 'tools')
-    const insertAt = toolsIdx >= 0 ? toolsIdx + 1 : core.length - 2
+    const reportsIdx = core.findIndex((m) => m.id === 'reports')
+    const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : core.length - 2
     const before = core.slice(0, insertAt)
     const after = core.slice(insertAt)
 

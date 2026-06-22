@@ -31,13 +31,13 @@ import toast from 'react-hot-toast'
 type Overview = Awaited<ReturnType<typeof dispatcherDashboardApi.getOverview>>
 
 const TOP_STATS = [
-  { key: 'liveEmergencyCases', label: 'Active Emergencies', icon: Siren, color: 'text-red-600', href: '/dispatcher/emergency/active' },
+  { key: 'liveEmergencyCases', label: 'Active Emergencies', icon: Siren, color: 'text-red-600', href: '/dispatcher/emergency-requests/active' },
   { key: 'busyAmbulances', label: 'Active Ambulances', icon: Truck, color: 'text-amber-600', href: '/dispatcher/resources/ambulances' },
   { key: 'availableAmbulances', label: 'Available Ambulances', icon: Truck, color: 'text-emerald-600', href: '/dispatcher/resources/availability' },
-  { key: 'criticalCases', label: 'Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/emergency/critical' },
-  { key: 'pendingDispatches', label: 'Pending Dispatches', icon: Clock, color: 'text-orange-600', href: '/dispatcher/emergency/pending' },
-  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/monitoring/incidents' },
-  { key: 'todayCompletedMissions', label: "Today's Missions", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/emergency/closed' },
+  { key: 'criticalCases', label: 'Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/emergency-requests/critical' },
+  { key: 'pendingDispatches', label: 'Pending Dispatches', icon: Clock, color: 'text-orange-600', href: '/dispatcher/emergency-requests/pending' },
+  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/emergency-requests/escalated' },
+  { key: 'todayCompletedMissions', label: "Today's Missions", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/emergency-requests/completed' },
   { key: 'averageResponseTimeMinutes', label: 'Avg Response Time', icon: Timer, color: 'text-violet-600', suffix: ' min', href: '/dispatcher/reports/performance' },
 ] as const
 
@@ -113,7 +113,7 @@ export default function DispatcherCommandCenter() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Operations Dashboard</h1>
+          <h1 className="text-2xl font-black text-slate-900">Dispatcher Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Operational command center · {profile?.firstName || 'Dispatcher'}
             {o.station && <span className="text-red-600 font-semibold"> · {o.station}</span>}

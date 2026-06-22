@@ -46,10 +46,11 @@ async function main() {
         department: { connect: { id: fieldDept.id } },
         station: { connect: { id: stations[i % stations.length].id } },
         assignedAmbulance: ambulances[i % ambulances.length]?.id ? { connect: { id: ambulances[i % ambulances.length].id } } : undefined,
-        licenseNumber: `SL-2024-${1000 + i}`,
-        licenseType: 'Class C',
-        licenseIssueDate: new Date('2023-01-01'),
-        licenseExpiryDate: i === 3 ? new Date('2024-06-15') : new Date('2026-12-31'), // One expiring soon
+        licenseNumber: `SOM-${2020 + i}-DL-${String(10000 + i).slice(1)}`,
+        licenseClass: i % 3 === 0 ? 'B' : i % 3 === 1 ? 'C' : 'D',
+        licenseType: i % 3 === 0 ? 'Class B' : i % 3 === 1 ? 'Class C' : 'Class D',
+        licenseIssueDate: new Date('2021-06-01'),
+        licenseExpiryDate: i === 3 ? new Date('2024-06-15') : new Date('2026-06-01'),
         licenseStatus: i === 3 ? 'EXPIRING' : 'VALID',
         medicalFitness: 'FIT',
         user: {

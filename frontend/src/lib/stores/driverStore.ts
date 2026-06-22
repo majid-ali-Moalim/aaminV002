@@ -47,6 +47,9 @@ export interface DriverProfile {
   shiftStatus: string
   status: string
   licenseNumber?: string
+  licenseClass?: string
+  licenseExpiryDate?: string
+  nationalId?: string
   defaultShift?: string
   profilePhoto?: string
   emergencyContactName?: string

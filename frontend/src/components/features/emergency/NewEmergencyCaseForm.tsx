@@ -44,7 +44,6 @@ import {
   Priority,
   RequestSource,
   Patient,
-  IncidentCategory,
   Region,
   District,
   Station,
@@ -58,6 +57,11 @@ import {
   phoneDigits,
   MAX_PATIENT_AGE,
 } from '@/lib/emergencyCaseFormValidation'
+import {
+  fetchEmergencyTypesAuthenticated,
+  resolveIncidentCategoryId,
+  type EmergencyTypeOption,
+} from '@/lib/emergency/emergencyTypes'
 
 const STEPS = [
   { id: 'patient', label: 'Patient', icon: User },
@@ -79,7 +83,7 @@ const STEP_FIELDS: Record<StepId, readonly string[]> = {
     'newPatient.age',
     'newPatient.dateOfBirth',
   ],
-  emergency: ['incidentCategoryId', 'patientCondition', 'symptoms', 'priority'],
+  emergency: ['emergencyTypeId', 'patientCondition', 'symptoms', 'priority'],
   location: ['regionId', 'districtId', 'pickupLocation', 'destination', 'destinationHospitalId'],
   dispatch: ['notes', 'manualDispatchNotes'],
 }
@@ -203,9 +207,9 @@ export default function NewEmergencyCaseForm({
   const [sessionStart] = useState(() => Date.now())
 
   const [patients, setPatients] = useState<Patient[]>([])
-  const [categories, setCategories] = useState<IncidentCategory[]>([])
-  const [categoriesLoading, setCategoriesLoading] = useState(false)
-  const [categoriesError, setCategoriesError] = useState<string | null>(null)
+  const [emergencyTypes, setEmergencyTypes] = useState<EmergencyTypeOption[]>([])
+  const [emergencyTypesLoading, setEmergencyTypesLoading] = useState(false)
+  const [emergencyTypesError, setEmergencyTypesError] = useState<string | null>(null)
   const [regions, setRegions] = useState<Region[]>([])
   const [districts, setDistricts] = useState<District[]>([])
   const [stations, setStations] = useState<Station[]>([])
@@ -222,7 +226,7 @@ export default function NewEmergencyCaseForm({
   const [form, setForm] = useState({
     patientId: '',
     priority: Priority.HIGH,
-    incidentCategoryId: '',
+    emergencyTypeId: '',
     requestSource: RequestSource.PHONE_CALL,
     regionId: '',
     districtId: '',
@@ -308,24 +312,23 @@ export default function NewEmergencyCaseForm({
     return () => clearInterval(t)
   }, [sessionStart])
 
-  const loadIncidentCategories = useCallback(async () => {
-    setCategoriesLoading(true)
-    setCategoriesError(null)
+  const loadEmergencyTypes = useCallback(async () => {
+    setEmergencyTypesLoading(true)
+    setEmergencyTypesError(null)
     try {
-      const data = await systemSetupService.getIncidentCategories()
-      const list = Array.isArray(data) ? data.filter((c: IncidentCategory) => c.isActive !== false) : []
-      setCategories(list)
+      const list = await fetchEmergencyTypesAuthenticated()
+      setEmergencyTypes(list)
       if (list.length === 0) {
-        setCategoriesError('No incident categories found. Add categories in System Setup.')
+        setEmergencyTypesError('No emergency types found. Add types in Master Data → Emergency Configuration.')
       }
       return list
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to load incident categories'
-      setCategoriesError(Array.isArray(msg) ? msg.join(', ') : msg)
-      setCategories([])
+      const msg = err?.response?.data?.message || err?.message || 'Failed to load emergency types'
+      setEmergencyTypesError(Array.isArray(msg) ? msg.join(', ') : msg)
+      setEmergencyTypes([])
       return []
     } finally {
-      setCategoriesLoading(false)
+      setEmergencyTypesLoading(false)
     }
   }, [])
 
@@ -371,21 +374,21 @@ export default function NewEmergencyCaseForm({
       setAllAmbulances(Array.isArray(ambulancesRes) ? ambulancesRes : [])
       setAllDrivers(Array.isArray(driversRes) ? driversRes : [])
       setAllNurses(Array.isArray(nursesRes) ? nursesRes : [])
-      await Promise.all([loadIncidentCategories(), loadHospitals()])
+      await Promise.all([loadEmergencyTypes(), loadHospitals()])
     } catch {
       setRegionsError('Failed to load regions from System Setup')
       toast.error('Failed to load dispatch resources')
     } finally {
       setLoading(false)
     }
-  }, [loadIncidentCategories, loadHospitals])
+  }, [loadEmergencyTypes, loadHospitals])
 
   useEffect(() => {
-    if (form.incidentCategoryId && categories.length > 0) {
-      const exists = categories.some((c) => c.id === form.incidentCategoryId)
-      if (!exists) patch({ incidentCategoryId: '' })
+    if (form.emergencyTypeId && emergencyTypes.length > 0) {
+      const exists = emergencyTypes.some((t) => t.id === form.emergencyTypeId)
+      if (!exists) patch({ emergencyTypeId: '' })
     }
-  }, [categories, form.incidentCategoryId])
+  }, [emergencyTypes, form.emergencyTypeId])
 
   useEffect(() => {
     loadResources()
@@ -393,7 +396,7 @@ export default function NewEmergencyCaseForm({
 
   useEffect(() => {
     if (step === 'emergency') {
-      loadIncidentCategories()
+      loadEmergencyTypes()
     }
     if (step === 'location') {
       if (!regions.length) {
@@ -406,21 +409,21 @@ export default function NewEmergencyCaseForm({
         loadHospitals()
       }
     }
-  }, [step, loadIncidentCategories, loadHospitals, form.districtId, form.regionId, regions.length, hospitals.length, loadingHospitals])
+  }, [step, loadEmergencyTypes, loadHospitals, form.districtId, form.regionId, regions.length, hospitals.length, loadingHospitals])
 
-  const selectedCategory = useMemo(
-    () => categories.find((c) => c.id === form.incidentCategoryId),
-    [categories, form.incidentCategoryId]
+  const selectedEmergencyType = useMemo(
+    () => emergencyTypes.find((t) => t.id === form.emergencyTypeId),
+    [emergencyTypes, form.emergencyTypeId]
   )
 
   const compatibleHospitals = useMemo(
     () =>
       filterCompatibleHospitals(hospitals, {
-        incidentCategory: selectedCategory?.name,
+        incidentCategory: selectedEmergencyType?.incidentCategory?.name || selectedEmergencyType?.name,
         patientCondition: form.patientCondition,
         priority: form.priority,
       }),
-    [hospitals, selectedCategory, form.patientCondition, form.priority],
+    [hospitals, selectedEmergencyType, form.patientCondition, form.priority],
   )
 
   const selectedRegion = useMemo(
@@ -561,6 +564,8 @@ export default function NewEmergencyCaseForm({
 
   const buildPayload = () => {
     const pickupLocation = form.pickupLocation.trim()
+    const selectedType = emergencyTypes.find((t) => t.id === form.emergencyTypeId)
+    const incidentCategoryId = resolveIncidentCategoryId(selectedType)
 
     const payload: Record<string, unknown> = {
       priority: form.priority,
@@ -573,8 +578,11 @@ export default function NewEmergencyCaseForm({
       needsStretcher: form.needsStretcher,
     }
 
+    if (incidentCategoryId) {
+      payload.incidentCategoryId = incidentCategoryId
+    }
+
     const optional: (keyof typeof form)[] = [
-      'incidentCategoryId',
       'regionId',
       'districtId',
       'destination',
@@ -583,7 +591,6 @@ export default function NewEmergencyCaseForm({
       'callerPhone',
       'symptoms',
       'patientCondition',
-      'notes',
       'manualDispatchNotes',
       'ambulanceId',
       'driverId',
@@ -593,6 +600,13 @@ export default function NewEmergencyCaseForm({
       const val = form[key]
       if (val !== '' && val != null) payload[key] = val
     })
+
+    if (selectedType?.name) {
+      const typeNote = `Emergency Type: ${selectedType.name}`
+      payload.notes = [form.notes?.trim(), typeNote].filter(Boolean).join('\n')
+    } else if (form.notes?.trim()) {
+      payload.notes = form.notes.trim()
+    }
 
     if (isNewPatient) {
       payload.newPatient = {
@@ -1013,63 +1027,68 @@ export default function NewEmergencyCaseForm({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <FieldLabel required error={fieldErrors.incidentCategoryId}>
-                            Incident Category
+                          <FieldLabel required error={fieldErrors.emergencyTypeId}>
+                            Emergency Type
                           </FieldLabel>
                           <div className="flex items-center gap-2">
-                            {categoriesLoading && (
+                            {emergencyTypesLoading && (
                               <RefreshCw className="w-3.5 h-3.5 text-red-500 animate-spin" />
                             )}
                             <Link
-                              href="/admin/system-setup?tab=categories"
+                              href="/admin/master-data/emergency"
                               className="text-[10px] font-bold uppercase text-red-600 hover:text-red-700 flex items-center gap-1"
                             >
-                              System Setup <ExternalLink className="w-3 h-3" />
+                              Master Data <ExternalLink className="w-3 h-3" />
                             </Link>
                           </div>
                         </div>
                         <select
-                          className={fieldInputClass(fieldErrors.incidentCategoryId)}
-                          value={form.incidentCategoryId}
-                          disabled={categoriesLoading}
-                          onChange={(e) => patch({ incidentCategoryId: e.target.value })}
+                          className={fieldInputClass(fieldErrors.emergencyTypeId)}
+                          value={form.emergencyTypeId}
+                          disabled={emergencyTypesLoading}
+                          onChange={(e) => patch({ emergencyTypeId: e.target.value })}
                         >
                           <option value="">
-                            {categoriesLoading
-                              ? 'Loading categories…'
-                              : categories.length
-                                ? 'Select category from System Setup'
-                                : 'No categories available'}
+                            {emergencyTypesLoading
+                              ? 'Loading emergency types…'
+                              : emergencyTypes.length
+                                ? 'Select emergency type'
+                                : 'No emergency types available'}
                           </option>
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                              {c.description ? ` — ${c.description}` : ''}
+                          {emergencyTypes.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                              {t.incidentCategory?.name ? ` — ${t.incidentCategory.name}` : ''}
                             </option>
                           ))}
                         </select>
-                        {categoriesError && (
+                        {emergencyTypesError && (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <p className="text-[10px] font-bold text-amber-700">{categoriesError}</p>
+                            <p className="text-[10px] font-bold text-amber-700">{emergencyTypesError}</p>
                             <button
                               type="button"
-                              onClick={() => loadIncidentCategories()}
+                              onClick={() => loadEmergencyTypes()}
                               className="text-[10px] font-bold uppercase text-red-600 hover:underline"
                             >
                               Retry
                             </button>
                           </div>
                         )}
-                        {!categoriesError && categories.length > 0 && (
+                        {!emergencyTypesError && emergencyTypes.length > 0 && (
                           <p className="text-[10px] text-slate-500 mt-1.5 font-medium">
-                            {categories.length} categor{categories.length === 1 ? 'y' : 'ies'} loaded from System Setup
+                            {emergencyTypes.length} type{emergencyTypes.length === 1 ? '' : 's'} loaded from Master Data
                           </p>
                         )}
-                        {selectedCategory && (
+                        {selectedEmergencyType && (
                           <div className="mt-3 p-3 rounded-xl bg-red-50 border border-red-100">
-                            <p className="text-xs font-bold text-slate-800">{selectedCategory.name}</p>
-                            {selectedCategory.description && (
-                              <p className="text-[11px] text-slate-600 mt-1">{selectedCategory.description}</p>
+                            <p className="text-xs font-bold text-slate-800">{selectedEmergencyType.name}</p>
+                            {selectedEmergencyType.description && (
+                              <p className="text-[11px] text-slate-600 mt-1">{selectedEmergencyType.description}</p>
+                            )}
+                            {selectedEmergencyType.incidentCategory?.name && (
+                              <p className="text-[10px] text-slate-500 mt-1">
+                                Category: {selectedEmergencyType.incidentCategory.name}
+                              </p>
                             )}
                           </div>
                         )}

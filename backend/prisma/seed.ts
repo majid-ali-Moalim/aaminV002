@@ -76,13 +76,18 @@ async function main() {
   });
 
   // 8. Admin User
+  const adminEmail = 'majidalimoalim@gmail.com';
   const adminPasswordHash = await bcrypt.hash('123321@admin', 10);
   const adminUser = await prisma.user.upsert({
-    where: { username: 'aamin@admin' },
-    update: {},
+    where: { email: adminEmail },
+    update: {
+      username: adminEmail,
+      passwordHash: adminPasswordHash,
+      role: Role.ADMIN,
+    },
     create: {
-      username: 'aamin@admin',
-      email: 'aamin@admin@aamin.so',
+      username: adminEmail,
+      email: adminEmail,
       passwordHash: adminPasswordHash,
       role: Role.ADMIN,
     },
@@ -94,11 +99,18 @@ async function main() {
   
   await prisma.employee.upsert({
     where: { userId: adminUser.id },
-    update: {},
+    update: {
+      firstName: 'Majid',
+      lastName: 'Ali',
+      status: 'ACTIVE',
+      employeeRoleId: adminRole?.id,
+      departmentId: adminDept?.id,
+      stationId: mainStation.id,
+    },
     create: {
       userId: adminUser.id,
-      firstName: 'System',
-      lastName: 'Admin',
+      firstName: 'Majid',
+      lastName: 'Ali',
       status: 'ACTIVE',
       employeeRoleId: adminRole?.id,
       departmentId: adminDept?.id,

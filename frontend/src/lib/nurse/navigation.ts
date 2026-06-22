@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   HeartPulse,
   FileText,
-  MessageSquare,
   ClipboardList,
   Clock,
   Bell,
@@ -25,7 +24,6 @@ export const NURSE_NAV_ITEMS: NurseNavItem[] = [
   { id: 'mission', label: 'Mission Workspace', href: '/nurse/mission', icon: Route },
   { id: 'patient-care', label: 'Patient Care', href: '/nurse/patient-care', icon: HeartPulse },
   { id: 'medical-records', label: 'Medical Records', href: '/nurse/medical-records', icon: FileText },
-  { id: 'communications', label: 'Communication Center', href: '/nurse/communications', icon: MessageSquare },
   { id: 'handover', label: 'Patient Handover', href: '/nurse/handover', icon: ClipboardList },
   { id: 'shifts', label: 'Shift & Attendance', href: '/nurse/shifts', icon: Clock },
   { id: 'notifications', label: 'Notifications', href: '/nurse/notifications', icon: Bell },
@@ -39,6 +37,7 @@ export const NURSE_LEGACY_REDIRECTS: Record<string, string> = {
   '/nurse/treatment': '/nurse/patient-care?tab=treatment',
   '/nurse/schedule': '/nurse/shifts',
   '/nurse/reports': '/nurse/medical-records',
+  '/nurse/communications': '/nurse/dashboard',
 }
 
 export function isNurseNavActive(pathname: string, item: NurseNavItem): boolean {

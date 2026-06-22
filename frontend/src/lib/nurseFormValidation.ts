@@ -97,7 +97,7 @@ const STEP_FIELD_ORDER: Record<NurseFormStep, (keyof NurseFormValues)[]> = {
     'qualification',
     'specialization',
     'licenseNumber',
-    'licenseExpiryDate',
+    'certificationUpload',
     'yearsOfExperience',
     'notes',
   ],
@@ -301,16 +301,8 @@ function validateCredentials(form: NurseFormValues, errors: NurseFormErrors, ctx
     setError(errors, 'licenseNumber', 'License number must be 5–25 characters')
   }
 
-  if (!form.licenseExpiryDate) {
-    setError(errors, 'licenseExpiryDate', 'License expiry date is required')
-  } else {
-    const expiry = parseDateOnly(form.licenseExpiryDate)
-    const today = startOfDay(new Date())
-    if (!expiry) {
-      setError(errors, 'licenseExpiryDate', 'Invalid expiry date')
-    } else if (expiry <= today) {
-      setError(errors, 'licenseExpiryDate', 'License must not be expired')
-    }
+  if (!form.certificationUpload.trim()) {
+    setError(errors, 'certificationUpload', 'Upload nursing certificate (PDF, JPG, or PNG)')
   }
 
   if (form.yearsOfExperience.trim()) {

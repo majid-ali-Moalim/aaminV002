@@ -19,9 +19,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Building2,
-  Radio,
   Shield,
   GraduationCap,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,7 +41,7 @@ import {
   type SelectOption,
 } from '@/lib/dispatcherFormMasterData'
 import { systemSetupService, uploadService, employeesService } from '@/lib/api'
-import { Station, Department, EmployeeRole, Region, District } from '@/types'
+import { Station, Department, Region, District } from '@/types'
 import {
   DispatcherFormErrors,
   DispatcherFormValues,
@@ -81,7 +82,6 @@ const STEP_FIELDS = {
     'address',
     'regionId',
     'districtId',
-    'areaZone',
     'stationId',
     'employeeCode',
     'departmentId',
@@ -185,11 +185,8 @@ export default function AddDispatcherForm() {
   const [districts, setDistricts] = useState<District[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
-  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([])
-  const [dispatcherRoleName, setDispatcherRoleName] = useState('Dispatcher')
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [employmentTypeOptions, setEmploymentTypeOptions] = useState<SelectOption[]>([])
-  const [shiftStatusOptions, setShiftStatusOptions] = useState<SelectOption[]>([])
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
   const [dispatcherRoleId, setDispatcherRoleId] = useState('')
   const [dispatcherCode, setDispatcherCode] = useState('DIS-001')
@@ -197,6 +194,8 @@ export default function AddDispatcherForm() {
   const [loadingStations, setLoadingStations] = useState(false)
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<DispatcherFormErrors>({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [form, setForm] = useState<DispatcherFormValues>({
     profilePhoto: '',
@@ -211,7 +210,6 @@ export default function AddDispatcherForm() {
     address: '',
     regionId: '',
     districtId: '',
-    areaZone: '',
     stationId: '',
     emergencyContactName: '',
     emergencyPhone: '',
@@ -226,7 +224,6 @@ export default function AddDispatcherForm() {
     qualification: '',
     yearsOfExperience: '',
     certificationUpload: '',
-    dispatchConsoleTrained: false,
     email: '',
     username: '',
     password: '',
@@ -258,12 +255,9 @@ export default function AddDispatcherForm() {
   const applyMasterData = useCallback((data: Awaited<ReturnType<typeof fetchDispatcherFormMasterData>>) => {
     setRegions(data.regions)
     setDepartments(data.departments)
-    setEmployeeRoles(data.employeeRoles)
     setDispatcherRoleId(data.dispatcherRoleId)
-    setDispatcherRoleName(data.dispatcherRoleName)
     setGenderOptions(data.genderOptions)
     setEmploymentTypeOptions(data.employmentTypeOptions)
-    setShiftStatusOptions(data.shiftStatusOptions)
     setQualificationOptions(data.qualificationOptions)
 
     const issues = validateDispatcherMasterData(data)
@@ -302,15 +296,6 @@ export default function AddDispatcherForm() {
     loadMasterData()
   }, [loadMasterData])
 
-  const masterDataSummary = useMemo(
-    () => [
-      { label: 'Regions', count: regions.length },
-      { label: 'Departments', count: departments.length },
-      { label: 'Roles', count: employeeRoles.length },
-    ],
-    [regions.length, departments.length, employeeRoles.length],
-  )
-
   const validationContext = useMemo<DispatcherFormContext>(
     () => ({
       departmentIds: departments.map((d) => d.id),
@@ -338,7 +323,7 @@ export default function AddDispatcherForm() {
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = async (regionId: string) => {
-    patch({ regionId, districtId: '', areaZone: '', stationId: '' })
+    patch({ regionId, districtId: '', stationId: '' })
     setDistricts([])
     setStations([])
     if (!regionId) return
@@ -359,7 +344,7 @@ export default function AddDispatcherForm() {
   }
 
   const handleDistrictChange = async (districtId: string) => {
-    patch({ districtId, areaZone: '', stationId: '' })
+    patch({ districtId, stationId: '' })
     setStations([])
     if (!districtId) return
 
@@ -407,12 +392,7 @@ export default function AddDispatcherForm() {
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
-    const addressBase = form.address.trim()
-    const areaZone = form.areaZone.trim()
-    const fullAddress =
-      addressBase && areaZone && !addressBase.includes(areaZone)
-        ? `${addressBase}, ${areaZone}`
-        : addressBase || areaZone || undefined
+    const fullAddress = form.address.trim() || undefined
 
     return {
       role: 'EMPLOYEE' as const,
@@ -526,6 +506,8 @@ export default function AddDispatcherForm() {
     setDistricts([])
     setStations([])
     setFieldErrors({})
+    setShowPassword(false)
+    setShowConfirmPassword(false)
     loadMasterData()
     setForm({
       profilePhoto: '',
@@ -540,7 +522,6 @@ export default function AddDispatcherForm() {
       address: '',
       regionId: '',
       districtId: '',
-      areaZone: '',
       stationId: '',
       emergencyContactName: '',
       emergencyPhone: '',
@@ -555,7 +536,6 @@ export default function AddDispatcherForm() {
       qualification: qualificationOptions[0]?.id || '',
       yearsOfExperience: '',
       certificationUpload: '',
-      dispatchConsoleTrained: false,
       email: '',
       username: '',
       password: '',
@@ -677,7 +657,7 @@ export default function AddDispatcherForm() {
             onUpload={handlePhotoUpload}
           />
 
-          {(selectedDepartment || selectedRegion || selectedDistrict || form.areaZone.trim() || selectedStation) && (
+          {(selectedDepartment || selectedRegion || selectedDistrict || selectedStation) && (
             <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-red-100 space-y-2">
               <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Assignment</p>
               {selectedDepartment && (
@@ -693,11 +673,6 @@ export default function AddDispatcherForm() {
               {selectedDistrict && (
                 <p className="text-xs text-slate-600">
                   <span className="font-bold text-slate-800">District:</span> {selectedDistrict.name}
-                </p>
-              )}
-              {form.areaZone.trim() && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Area / Zone:</span> {form.areaZone.trim()}
                 </p>
               )}
               {selectedStation && (
@@ -721,19 +696,6 @@ export default function AddDispatcherForm() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">
-              {!loading && !masterDataError && (
-                <div className="flex flex-wrap gap-2">
-                  {masterDataSummary.map((item) => (
-                    <span
-                      key={item.label}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-red-100 text-[10px] font-bold text-slate-600 uppercase tracking-wide"
-                    >
-                      {item.label}
-                      <span className="text-red-600">{item.count}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
               {masterDataError && (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                   <div className="flex items-start gap-3 flex-1">
@@ -888,18 +850,12 @@ export default function AddDispatcherForm() {
                       color="red"
                     />
 
-                    {(selectedRegion || selectedDistrict || form.areaZone.trim() || selectedStation) && (
+                    {(selectedRegion || selectedDistrict || selectedStation) && (
                       <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
                         <MapPin className="w-4 h-4 text-red-500 shrink-0" />
                         <span>{selectedRegion?.name || '—'}</span>
                         <ChevronRight className="w-3 h-3 text-red-300" />
                         <span>{selectedDistrict?.name || 'Select district'}</span>
-                        {form.areaZone.trim() && (
-                          <>
-                            <ChevronRight className="w-3 h-3 text-red-300" />
-                            <span>{form.areaZone.trim()}</span>
-                          </>
-                        )}
                         <ChevronRight className="w-3 h-3 text-red-300" />
                         <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
                       </div>
@@ -945,16 +901,6 @@ export default function AddDispatcherForm() {
                               : 'No districts in this region'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-                      <FormInput
-                        label="Area / Zone"
-                        icon={MapPin}
-                        value={form.areaZone}
-                        error={fieldErrors.areaZone}
-                        maxLength={100}
-                        placeholder="e.g. Hodan, Wadajir, Zone 3"
-                        disabled={!form.districtId}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ areaZone: e.target.value })}
                       />
                       <FormSelect
                         label="Dispatch Station"
@@ -1015,12 +961,6 @@ export default function AddDispatcherForm() {
                         min={minJoinDate}
                         max={todayStr}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ joinDate: e.target.value })}
-                      />
-                      <FormSelect
-                        label="Initial Shift Status"
-                        options={shiftStatusOptions}
-                        value={form.shiftStatus}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ shiftStatus: e.target.value })}
                       />
                     </div>
 
@@ -1126,16 +1066,6 @@ export default function AddDispatcherForm() {
                       />
                     </div>
                     <div className="mt-6">
-                      <FormCheckbox
-                        label="Dispatch Console Trained"
-                        description="Completed hands-on training on the Aamin dispatch console"
-                        checked={form.dispatchConsoleTrained}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ dispatchConsoleTrained: e.target.checked })
-                        }
-                      />
-                    </div>
-                    <div className="mt-6">
                       {fieldErrors.certificationUpload && (
                         <p className="text-[9px] font-bold text-red-500 uppercase mb-2">{fieldErrors.certificationUpload}</p>
                       )}
@@ -1191,25 +1121,84 @@ export default function AddDispatcherForm() {
                           patch({ username: e.target.value.replace(/\s/g, '') })
                         }
                       />
-                      <FormInput
-                        label="Password"
-                        required
-                        type="password"
-                        value={form.password}
-                        error={fieldErrors.password}
-                        placeholder="Min 8 chars, letters + numbers"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ password: e.target.value })}
-                      />
-                      <FormInput
-                        label="Confirm Password"
-                        required
-                        type="password"
-                        value={form.confirmPassword}
-                        error={fieldErrors.confirmPassword}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ confirmPassword: e.target.value })
-                        }
-                      />
+                      <div className="space-y-1.5 group">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
+                            Password <span className="text-red-500 ml-1 font-bold">*</span>
+                          </label>
+                          {fieldErrors.password && (
+                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">
+                              {fieldErrors.password}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative group/input">
+                          <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
+                          <div
+                            className={`relative flex items-center h-12 bg-white border ${
+                              fieldErrors.password ? 'border-red-300 shadow-red-50' : 'border-gray-200'
+                            } rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}
+                          >
+                            <Lock className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors" />
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={form.password}
+                              placeholder="Min 8 chars, letters + numbers"
+                              autoComplete="new-password"
+                              className="flex-1 h-full bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 placeholder:text-gray-300 placeholder:font-medium outline-none ml-2 pr-8"
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ password: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((v) => !v)}
+                              className="absolute right-3 text-gray-400 hover:text-red-600 transition-colors"
+                              aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 group">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
+                            Confirm Password <span className="text-red-500 ml-1 font-bold">*</span>
+                          </label>
+                          {fieldErrors.confirmPassword && (
+                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">
+                              {fieldErrors.confirmPassword}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative group/input">
+                          <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
+                          <div
+                            className={`relative flex items-center h-12 bg-white border ${
+                              fieldErrors.confirmPassword ? 'border-red-300 shadow-red-50' : 'border-gray-200'
+                            } rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}
+                          >
+                            <Lock className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors" />
+                            <input
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              value={form.confirmPassword}
+                              placeholder="Re-enter password"
+                              autoComplete="new-password"
+                              className="flex-1 h-full bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 placeholder:text-gray-300 placeholder:font-medium outline-none ml-2 pr-8"
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                patch({ confirmPassword: e.target.value })
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword((v) => !v)}
+                              className="absolute right-3 text-gray-400 hover:text-red-600 transition-colors"
+                              aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-6">
                       <FormCheckbox
@@ -1220,16 +1209,6 @@ export default function AddDispatcherForm() {
                           patch({ accountActive: e.target.checked })
                         }
                       />
-                    </div>
-                    <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
-                      <Radio className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                      <div>
-                        <TacticalBadge label={`Role: ${dispatcherRoleName} (Employee)`} color="red" />
-                        <p className="text-xs text-slate-600 mt-3">
-                          Employee role loaded from System Setup (<strong>{dispatcherRoleName}</strong>). This creates
-                          an <strong>EMPLOYEE</strong> account for emergency dispatch workflows.
-                        </p>
-                      </div>
                     </div>
                   </>
                 )}

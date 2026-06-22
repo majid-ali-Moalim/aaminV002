@@ -1,3 +1,9 @@
+import {
+  SOMALIA_LICENSE_CLASS_IDS,
+  SOMALIA_LICENSE_VALIDITY_YEARS,
+  computeSomaliaLicenseExpiry,
+} from '@/lib/drivers/somaliaDriverLicense'
+
 export const MIN_DRIVER_AGE = 18
 export const MAX_DRIVER_AGE = 65
 export const MIN_PASSWORD_LENGTH = 8
@@ -29,6 +35,7 @@ export type DriverFormValues = {
   assignedAmbulanceId: string
   licenseNumber: string
   licenseClass: string
+  licenseIssueDate: string
   licenseExpiryDate: string
   yearsOfExperience: string
   emergencyDrivingTraining: boolean
@@ -155,9 +162,9 @@ function validatePersonal(form: DriverFormValues, errors: DriverFormErrors) {
 
   const nationalId = form.nationalId.trim()
   if (!nationalId) {
-    setError(errors, 'nationalId', 'National ID is required')
+    setError(errors, 'nationalId', 'National ID is required — needed to apply for or renew a Somali driver\'s license')
   } else if (!NATIONAL_ID_PATTERN.test(nationalId)) {
-    setError(errors, 'nationalId', 'National ID must be 5–20 letters or numbers')
+    setError(errors, 'nationalId', 'National ID must be 5–20 letters or numbers (linked to your license)')
   }
 
   if (!form.phone.trim()) {
@@ -245,13 +252,30 @@ function validateLocation(form: DriverFormValues, errors: DriverFormErrors) {
 function validateProfessional(form: DriverFormValues, errors: DriverFormErrors) {
   const license = form.licenseNumber.trim()
   if (!license) {
-    setError(errors, 'licenseNumber', 'License number is required')
+    setError(errors, 'licenseNumber', 'Somalia license number is required')
   } else if (!LICENSE_PATTERN.test(license)) {
-    setError(errors, 'licenseNumber', 'License number must be 5–25 characters')
+    setError(
+      errors,
+      'licenseNumber',
+      'License number must be 5–25 alphanumeric characters (as printed on your MoTCA license card)',
+    )
   }
 
-  if (!form.licenseClass) {
+  const licenseClass = form.licenseClass.trim().toUpperCase()
+  if (!licenseClass) {
     setError(errors, 'licenseClass', 'License class is required')
+  } else if (!SOMALIA_LICENSE_CLASS_IDS.includes(licenseClass as (typeof SOMALIA_LICENSE_CLASS_IDS)[number])) {
+    setError(errors, 'licenseClass', 'Select a valid Somalia license class (A–E)')
+  }
+
+  if (form.licenseIssueDate) {
+    const issue = parseDateOnly(form.licenseIssueDate)
+    const today = startOfDay(new Date())
+    if (!issue) {
+      setError(errors, 'licenseIssueDate', 'Invalid issue date')
+    } else if (issue > today) {
+      setError(errors, 'licenseIssueDate', 'Issue date cannot be in the future')
+    }
   }
 
   if (!form.licenseExpiryDate) {
@@ -263,6 +287,18 @@ function validateProfessional(form: DriverFormValues, errors: DriverFormErrors) 
       setError(errors, 'licenseExpiryDate', 'Invalid expiry date')
     } else if (expiry <= today) {
       setError(errors, 'licenseExpiryDate', 'License must not be expired')
+    } else if (form.licenseIssueDate) {
+      const issue = parseDateOnly(form.licenseIssueDate)
+      const maxExpiry = parseDateOnly(computeSomaliaLicenseExpiry(form.licenseIssueDate))
+      if (issue && maxExpiry && expiry > maxExpiry) {
+        setError(
+          errors,
+          'licenseExpiryDate',
+          `Somali licenses are valid for ${SOMALIA_LICENSE_VALIDITY_YEARS} years from issue date`,
+        )
+      } else if (issue && expiry <= issue) {
+        setError(errors, 'licenseExpiryDate', 'Expiry must be after the issue date')
+      }
     }
   }
 
@@ -367,6 +403,7 @@ export function validateDriverForm(form: DriverFormValues): {
     relationship: 'location',
     licenseNumber: 'professional',
     licenseClass: 'professional',
+    licenseIssueDate: 'professional',
     licenseExpiryDate: 'professional',
     yearsOfExperience: 'professional',
     notes: 'professional',

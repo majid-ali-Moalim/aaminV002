@@ -118,7 +118,7 @@ export function RecentActivitiesWidget({
 
         {!hideSummary && (
           <div className="grid grid-cols-3 gap-2 mb-3">
-            <SummaryPill label="Today's Activities" value={summary.todayCount} tone="blue" />
+            <SummaryPill label="Activities" value={summary.todayCount} tone="blue" />
             <SummaryPill label="Critical Activities" value={summary.criticalCount} tone="red" />
             <SummaryPill label="Pending Actions" value={summary.pendingCount} tone="amber" />
           </div>

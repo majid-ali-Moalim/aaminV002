@@ -56,8 +56,8 @@ export default function AmbulanceReportsPage() {
   const stats = {
     total: ambulances.length,
     available: ambulances.filter((a) => a.status === 'AVAILABLE').length,
-    onDuty: ambulances.filter((a) => a.status === 'ON_DUTY').length,
-    outOfService: ambulances.filter((a) => ['MAINTENANCE', 'UNAVAILABLE'].includes(a.status)).length,
+    unavailable: ambulances.filter((a) => a.status !== 'AVAILABLE').length,
+    unavailableOnDuty: ambulances.filter((a) => a.status === 'ON_DUTY').length,
     avgReadiness:
       ambulances.length > 0
         ? Math.round(
@@ -92,11 +92,11 @@ export default function AmbulanceReportsPage() {
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">
-              Fleet Analytics
+              Ambulance Analytics
             </p>
             <h1 className="text-3xl font-black tracking-tight">Ambulance Reports</h1>
             <p className="text-red-100/80 mt-2 max-w-xl text-sm">
-              Fleet utilization, readiness, and deployment breakdown across stations and vehicle types.
+              Ambulance utilization, readiness, and deployment breakdown across stations and vehicle types.
             </p>
           </div>
           <div className="flex flex-wrap gap-3 shrink-0">
@@ -132,12 +132,11 @@ export default function AmbulanceReportsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Total Fleet', value: stats.total, icon: Truck, color: 'text-red-600 bg-red-50' },
+              { label: 'Total Ambulance', value: stats.total, icon: Truck, color: 'text-red-600 bg-red-50' },
               { label: 'Available', value: stats.available, icon: Activity, color: 'text-emerald-600 bg-emerald-50' },
-              { label: 'On Mission', value: stats.onDuty, icon: Truck, color: 'text-blue-600 bg-blue-50' },
-              { label: 'Out of Service', value: stats.outOfService, icon: AlertCircle, color: 'text-amber-600 bg-amber-50' },
+              { label: 'Unavailable', value: stats.unavailable, icon: AlertCircle, color: 'text-slate-600 bg-slate-100' },
               { label: 'Avg Readiness', value: `${stats.avgReadiness}%`, icon: Gauge, color: 'text-purple-600 bg-purple-50' },
             ].map((item) => {
               const Icon = item.icon

@@ -491,7 +491,7 @@ export class ReportsService {
     'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
   ];
 
-  private async getDashboardKpiMetrics(todayStart: Date) {
+  private async getDashboardKpiMetrics() {
     const now = new Date();
     const closedStatuses: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
     const openFilter = { status: { notIn: closedStatuses } };
@@ -505,7 +505,8 @@ export class ReportsService {
       pendingCases,
       criticalCases,
       delayedCases,
-      completedCasesToday,
+      completedCases,
+      cancelledCases,
       hospitalsAvailable,
       activeAssignments,
       ambulances,
@@ -533,9 +534,8 @@ export class ReportsService {
           ],
         },
       }),
-      this.prisma.emergencyRequest.count({
-        where: { status: 'COMPLETED', completedAt: { gte: todayStart } },
-      }),
+      this.prisma.emergencyRequest.count({ where: { status: 'COMPLETED' } }),
+      this.prisma.emergencyRequest.count({ where: { status: 'CANCELLED' } }),
       this.prisma.hospital.count({
         where: {
           isActive: true,
@@ -626,16 +626,14 @@ export class ReportsService {
       availableDrivers,
       availableNurses,
       hospitalsAvailable,
-      completedCasesToday,
+      completedCases,
+      cancelledCases,
       averageResponseTimeMinutes,
       delayedCases,
     };
   }
 
   async getUnifiedDashboard() {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
     const openFilter = { status: { notIn: ['COMPLETED', 'CANCELLED'] as ('COMPLETED' | 'CANCELLED')[] } };
 
     const [
@@ -650,11 +648,8 @@ export class ReportsService {
       ambulances,
       employees,
       priorityGroups,
-      todayRequests,
       criticalAlerts,
       highPriorityCount,
-      completedToday,
-      cancelledToday,
       kpiMetrics,
       hospitals,
     ] = await Promise.all([
@@ -690,10 +685,6 @@ export class ReportsService {
         _count: true,
       }),
       this.prisma.emergencyRequest.findMany({
-        where: { createdAt: { gte: todayStart } },
-        select: { createdAt: true },
-      }),
-      this.prisma.emergencyRequest.findMany({
         where: { priority: 'CRITICAL', ...openFilter },
         take: 10,
         include: { patient: true },
@@ -702,13 +693,7 @@ export class ReportsService {
       this.prisma.emergencyRequest.count({
         where: { priority: 'HIGH', ...openFilter },
       }),
-      this.prisma.emergencyRequest.count({
-        where: { status: 'COMPLETED', completedAt: { gte: todayStart } },
-      }),
-      this.prisma.emergencyRequest.count({
-        where: { status: 'CANCELLED', cancelledAt: { gte: todayStart } },
-      }),
-      this.getDashboardKpiMetrics(todayStart),
+      this.getDashboardKpiMetrics(),
       this.prisma.hospital.findMany({
         where: { isActive: true },
         select: {
@@ -725,9 +710,9 @@ export class ReportsService {
       }),
     ]);
 
-    const hourlyChart = Array.from({ length: 18 }, (_, i) => i + 6).map((hour) => ({
-      time: `${hour.toString().padStart(2, '0')}:00`,
-      cases: todayRequests.filter((r) => new Date(r.createdAt).getHours() === hour).length,
+    const hourlyChart = weekly.data.map((row) => ({
+      time: row.day,
+      cases: row.requests,
     }));
 
     const priorityColors: Record<string, string> = {
@@ -764,8 +749,11 @@ export class ReportsService {
       ...kpiMetrics,
       pendingQueue: kpiMetrics.pendingCases,
       highPriority: highPriorityCount,
-      completedToday: kpiMetrics.completedCasesToday,
-      cancelledToday,
+      completedCases: kpiMetrics.completedCases,
+      cancelledCases: kpiMetrics.cancelledCases,
+      completedCasesToday: kpiMetrics.completedCases,
+      completedToday: kpiMetrics.completedCases,
+      cancelledToday: kpiMetrics.cancelledCases,
       openCases: realtime.activeEmergencies,
     };
 
@@ -820,9 +808,9 @@ export class ReportsService {
         format: 'number' as const,
       },
       {
-        key: 'completedCasesToday',
-        label: 'Completed Cases Today',
-        value: kpiMetrics.completedCasesToday,
+        key: 'completedCases',
+        label: 'Completed Cases',
+        value: kpiMetrics.completedCases,
         format: 'number' as const,
       },
       {
@@ -864,9 +852,9 @@ export class ReportsService {
           { name: 'Pending', count: kpiMetrics.pendingCases, fill: '#F59E0B' },
           { name: 'Critical', count: kpiMetrics.criticalCases, fill: '#EF4444' },
           { name: 'High', count: highPriorityCount, fill: '#EA580C' },
-          { name: 'Completed', count: kpiMetrics.completedCasesToday, fill: '#10B981' },
+          { name: 'Completed', count: kpiMetrics.completedCases, fill: '#10B981' },
           { name: 'Delayed', count: kpiMetrics.delayedCases, fill: '#F97316' },
-          { name: 'Cancelled', count: cancelledToday, fill: '#94A3B8' },
+          { name: 'Cancelled', count: kpiMetrics.cancelledCases, fill: '#94A3B8' },
         ],
       },
       recentActivity: dashboard.recentActivity,

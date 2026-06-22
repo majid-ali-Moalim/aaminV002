@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Building2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,11 +42,11 @@ import {
   type SelectOption,
 } from '@/lib/nurseFormMasterData'
 import {
-  systemSetupService,
   uploadService,
   employeesService,
 } from '@/lib/api'
-import { Station, Ambulance, Department, EmployeeRole, Region, District, EquipmentLevel } from '@/types'
+import { Station, Ambulance, Department, Region, District, EquipmentLevel } from '@/types'
+import { mapStaffShiftStatus } from '@/lib/staff/status'
 import {
   NurseFormErrors,
   NurseFormValues,
@@ -95,9 +97,9 @@ const STEP_FIELDS = {
   ],
   credentials: [
     'licenseNumber',
-    'licenseExpiryDate',
     'qualification',
     'specialization',
+    'certificationUpload',
     'yearsOfExperience',
     'notes',
   ],
@@ -164,17 +166,6 @@ function PhotoUploadBlock({
   )
 }
 
-function mapShiftStatus(value: string): string {
-  const known = ['AVAILABLE', 'ON_DUTY', 'OFF_DUTY', 'UNAVAILABLE', 'ON_BREAK', 'TRANSPORTING']
-  if (known.includes(value)) return value
-  const map: Record<string, string> = {
-    'On Duty': 'ON_DUTY',
-    'Off Duty': 'OFF_DUTY',
-    'On Leave': 'UNAVAILABLE',
-  }
-  return map[value] || 'OFF_DUTY'
-}
-
 export default function AddNurseForm() {
   const router = useRouter()
   const [step, setStep] = useState<StepId>('personal')
@@ -184,13 +175,11 @@ export default function AddNurseForm() {
   const [createdNurse, setCreatedNurse] = useState<{ id: string; code: string; name: string } | null>(null)
 
   const [regions, setRegions] = useState<Region[]>([])
-  const [districts, setDistricts] = useState<District[]>([])
-  const [stations, setStations] = useState<Station[]>([])
+  const [allDistricts, setAllDistricts] = useState<District[]>([])
+  const [allStations, setAllStations] = useState<Station[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [equipmentLevels, setEquipmentLevels] = useState<EquipmentLevel[]>([])
-  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([])
-  const [nurseRoleName, setNurseRoleName] = useState('Nurse')
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [bloodGroupOptions, setBloodGroupOptions] = useState<SelectOption[]>([])
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
@@ -199,10 +188,10 @@ export default function AddNurseForm() {
   const [shiftStatusOptions, setShiftStatusOptions] = useState<SelectOption[]>([])
   const [nurseRoleId, setNurseRoleId] = useState('')
   const [nurseCode, setNurseCode] = useState('NUR-001')
-  const [loadingDistricts, setLoadingDistricts] = useState(false)
-  const [loadingStations, setLoadingStations] = useState(false)
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<NurseFormErrors>({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [form, setForm] = useState<NurseFormValues>({
     profilePhoto: '',
@@ -225,7 +214,7 @@ export default function AddNurseForm() {
     departmentId: '',
     employmentType: 'Full-time',
     joinDate: new Date().toISOString().split('T')[0],
-    shiftStatus: 'OFF_DUTY',
+    shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
     licenseNumber: '',
     licenseExpiryDate: '',
@@ -265,12 +254,12 @@ export default function AddNurseForm() {
 
   const applyMasterData = useCallback((data: Awaited<ReturnType<typeof fetchNurseFormMasterData>>) => {
     setRegions(data.regions)
+    setAllDistricts(data.districts)
+    setAllStations(data.stations)
     setDepartments(data.departments)
-    setEmployeeRoles(data.employeeRoles)
     setEquipmentLevels(data.equipmentLevels)
     setAmbulances(data.ambulances)
     setNurseRoleId(data.nurseRoleId)
-    setNurseRoleName(data.nurseRoleName)
     setGenderOptions(data.genderOptions)
     setBloodGroupOptions(data.bloodGroupOptions)
     setQualificationOptions(data.qualifications)
@@ -336,25 +325,6 @@ export default function AddNurseForm() {
     applyMasterData,
   ])
 
-  const masterDataSummary = useMemo(
-    () => [
-      { label: 'Regions', count: regions.length },
-      { label: 'Departments', count: departments.length },
-      { label: 'Roles', count: employeeRoles.length },
-      { label: 'Equipment', count: equipmentLevels.length },
-      { label: 'Ambulances', count: ambulances.length },
-      { label: 'Qualifications', count: qualificationOptions.length },
-    ],
-    [
-      regions.length,
-      departments.length,
-      employeeRoles.length,
-      equipmentLevels.length,
-      ambulances.length,
-      qualificationOptions.length,
-    ]
-  )
-
   const validationContext = useMemo<NurseFormContext>(
     () => ({
       departmentIds: departments.map((d) => d.id),
@@ -365,17 +335,30 @@ export default function AddNurseForm() {
     [departments, qualificationOptions, specializationOptions, employmentTypeOptions]
   )
 
+  const districtsForRegion = useMemo(() => {
+    if (!form.regionId) return []
+    const region = regions.find((r) => r.id === form.regionId)
+    if (region?.districts?.length) {
+      return region.districts.filter((d) => d.isActive !== false)
+    }
+    return allDistricts.filter((d) => d.regionId === form.regionId)
+  }, [form.regionId, regions, allDistricts])
+
+  const stationOptions = useMemo(() => allStations, [allStations])
+
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === form.regionId),
     [regions, form.regionId]
   )
   const selectedDistrict = useMemo(
-    () => districts.find((d) => d.id === form.districtId),
-    [districts, form.districtId]
+    () =>
+      districtsForRegion.find((d) => d.id === form.districtId) ||
+      allDistricts.find((d) => d.id === form.districtId),
+    [districtsForRegion, allDistricts, form.districtId]
   )
   const selectedStation = useMemo(
-    () => stations.find((s) => s.id === form.stationId),
-    [stations, form.stationId]
+    () => allStations.find((s) => s.id === form.stationId),
+    [allStations, form.stationId]
   )
   const selectedDepartment = useMemo(
     () => departments.find((d) => d.id === form.departmentId),
@@ -414,52 +397,28 @@ export default function AddNurseForm() {
 
   const ageLimits = useMemo(() => getNurseAgeLimits(), [])
   const minJoinDate = useMemo(() => getMinJoinDate(form.dateOfBirth), [form.dateOfBirth])
-  const minLicenseExpiry = useMemo(() => {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return formatDateInput(tomorrow)
-  }, [])
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
-  const handleRegionChange = async (regionId: string) => {
-    patch({ regionId, districtId: '', stationId: '', assignedAmbulanceId: '' })
-    setDistricts([])
-    setStations([])
-    if (!regionId) return
-
-    setLoadingDistricts(true)
-    try {
-      const d = await systemSetupService.getDistricts(regionId)
-      setDistricts(Array.isArray(d) ? d.filter((x: District) => x.isActive !== false) : [])
-      if (!Array.isArray(d) || d.length === 0) {
-        toast.error('No districts in this region. Add districts in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load districts')
-      setDistricts([])
-    } finally {
-      setLoadingDistricts(false)
-    }
+  const handleRegionChange = (regionId: string) => {
+    patch({ regionId, districtId: '' })
   }
 
-  const handleDistrictChange = async (districtId: string) => {
-    patch({ districtId, stationId: '', assignedAmbulanceId: '' })
-    setStations([])
-    if (!districtId) return
+  const handleDistrictChange = (districtId: string) => {
+    patch({ districtId })
+  }
 
-    setLoadingStations(true)
-    try {
-      const stationList = await systemSetupService.getStations(districtId)
-      setStations(Array.isArray(stationList) ? stationList.filter((x: Station) => x.isActive !== false) : [])
-      if (!Array.isArray(stationList) || stationList.length === 0) {
-        toast.error('No stations in this district. Add a station in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load stations')
-      setStations([])
-    } finally {
-      setLoadingStations(false)
-    }
+  const handleStationChange = (stationId: string) => {
+    const station = allStations.find((s) => s.id === stationId)
+    patch({
+      stationId,
+      assignedAmbulanceId: '',
+      ...(station
+        ? {
+            regionId: station.regionId || form.regionId,
+            districtId: station.districtId || form.districtId,
+          }
+        : {}),
+    })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -517,7 +476,6 @@ export default function AddNurseForm() {
       address,
       licenseNumber: form.licenseNumber.trim() || undefined,
       licenseType: 'NURSING',
-      licenseExpiryDate: form.licenseExpiryDate || undefined,
       licenseStatus: 'VALID',
       medicalFitness: 'FIT',
       medicalClearanceStatus: 'CLEARED',
@@ -525,7 +483,7 @@ export default function AddNurseForm() {
       employmentDate: form.joinDate || undefined,
       defaultShift: form.employmentType,
       assignedAmbulanceId: form.assignedAmbulanceId || undefined,
-      shiftStatus: mapShiftStatus(form.shiftStatus),
+      shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
       certificationUpload: form.certificationUpload || undefined,
       qualification: form.qualification.trim() || undefined,
@@ -653,7 +611,7 @@ export default function AddNurseForm() {
                     departmentId: form.departmentId,
                     employmentType: 'Full-time',
                     joinDate: new Date().toISOString().split('T')[0],
-                    shiftStatus: 'OFF_DUTY',
+                    shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
                     licenseNumber: '',
                     licenseExpiryDate: '',
@@ -788,19 +746,6 @@ export default function AddNurseForm() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-4">
-              {!loading && !masterDataError && (
-                <div className="flex flex-wrap gap-2">
-                  {masterDataSummary.map((item) => (
-                    <span
-                      key={item.label}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-red-100 text-[10px] font-bold text-slate-600 uppercase tracking-wide"
-                    >
-                      {item.label}
-                      <span className="text-red-600">{item.count}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
               {masterDataError && (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                   <div className="flex items-start gap-3 flex-1">
@@ -972,6 +917,24 @@ export default function AddNurseForm() {
                         />
                       </div>
                       <FormSelect
+                        label="Assigned Station"
+                        required
+                        icon={Building2}
+                        options={stationOptions}
+                        value={form.stationId}
+                        error={fieldErrors.stationId}
+                        disabled={loading}
+                        loading={loading}
+                        emptyHint={
+                          stationOptions.length
+                            ? 'Select Station'
+                            : 'No stations — add in System Setup'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                          handleStationChange(e.target.value)
+                        }
+                      />
+                      <FormSelect
                         label="Region"
                         required
                         icon={MapPin}
@@ -985,39 +948,19 @@ export default function AddNurseForm() {
                         label="District"
                         required
                         icon={MapPin}
-                        options={districts}
+                        options={districtsForRegion}
                         value={form.districtId}
                         error={fieldErrors.districtId}
-                        disabled={!form.regionId}
-                        loading={loadingDistricts}
+                        disabled={!form.regionId || loading}
+                        loading={loading}
                         emptyHint={
                           !form.regionId
                             ? 'Select a region first'
-                            : districts.length
+                            : districtsForRegion.length
                               ? 'Select District'
                               : 'No districts in this region'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="Assigned Station"
-                        required
-                        icon={Building2}
-                        options={stations}
-                        value={form.stationId}
-                        error={fieldErrors.stationId}
-                        disabled={!form.districtId}
-                        loading={loadingStations}
-                        emptyHint={
-                          !form.districtId
-                            ? 'Select a district first'
-                            : stations.length
-                              ? 'Select Station'
-                              : 'No stations — add in System Setup'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                          patch({ stationId: e.target.value, assignedAmbulanceId: '' })
-                        }
                       />
 
                       {selectedStation && (
@@ -1191,17 +1134,6 @@ export default function AddNurseForm() {
                           patch({ licenseNumber: e.target.value.toUpperCase() })
                         }
                       />
-                      <FormInput
-                        label="License Expiry"
-                        required
-                        type="date"
-                        value={form.licenseExpiryDate}
-                        error={fieldErrors.licenseExpiryDate}
-                        min={minLicenseExpiry}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ licenseExpiryDate: e.target.value })
-                        }
-                      />
                       <FormSelect
                         label="Qualification"
                         required
@@ -1265,8 +1197,13 @@ export default function AddNurseForm() {
                       />
                     </div>
                     <div className="mt-6">
+                      {fieldErrors.certificationUpload && (
+                        <p className="text-[9px] font-bold text-red-500 uppercase mb-2">
+                          {fieldErrors.certificationUpload}
+                        </p>
+                      )}
                       <FileUploadCard
-                        label="Nursing Certificate"
+                        label="Nursing Certificate *"
                         icon={Shield}
                         description="Upload license or ministry registration (PDF, JPG, PNG)"
                         accept="image/*,application/pdf"
@@ -1317,25 +1254,84 @@ export default function AddNurseForm() {
                           patch({ username: e.target.value.replace(/\s/g, '') })
                         }
                       />
-                      <FormInput
-                        label="Password"
-                        required
-                        type="password"
-                        value={form.password}
-                        error={fieldErrors.password}
-                        placeholder="Min 8 chars, letters + numbers"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ password: e.target.value })}
-                      />
-                      <FormInput
-                        label="Confirm Password"
-                        required
-                        type="password"
-                        value={form.confirmPassword}
-                        error={fieldErrors.confirmPassword}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ confirmPassword: e.target.value })
-                        }
-                      />
+                      <div className="space-y-1.5 group">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
+                            Password <span className="text-red-500 ml-1 font-bold">*</span>
+                          </label>
+                          {fieldErrors.password && (
+                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">
+                              {fieldErrors.password}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative group/input">
+                          <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
+                          <div
+                            className={`relative flex items-center h-12 bg-white border ${
+                              fieldErrors.password ? 'border-red-300 shadow-red-50' : 'border-gray-200'
+                            } rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}
+                          >
+                            <Lock className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors" />
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={form.password}
+                              placeholder="Min 8 chars, letters + numbers"
+                              autoComplete="new-password"
+                              className="flex-1 h-full bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 placeholder:text-gray-300 placeholder:font-medium outline-none ml-2 pr-8"
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ password: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((v) => !v)}
+                              className="absolute right-3 text-gray-400 hover:text-red-600 transition-colors"
+                              aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 group">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
+                            Confirm Password <span className="text-red-500 ml-1 font-bold">*</span>
+                          </label>
+                          {fieldErrors.confirmPassword && (
+                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-tighter">
+                              {fieldErrors.confirmPassword}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative group/input">
+                          <div className="absolute inset-0 bg-red-600/0 border border-transparent rounded-xl transition-all group-focus-within/input:border-red-500/20 group-focus-within/input:ring-4 group-focus-within/input:ring-red-100/30" />
+                          <div
+                            className={`relative flex items-center h-12 bg-white border ${
+                              fieldErrors.confirmPassword ? 'border-red-300 shadow-red-50' : 'border-gray-200'
+                            } rounded-xl group-focus-within/input:border-red-500/40 group-focus-within/input:shadow-md transition-all px-4 shadow-sm`}
+                          >
+                            <Lock className="w-4 h-4 text-gray-300 group-focus-within:text-red-500 transition-colors" />
+                            <input
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              value={form.confirmPassword}
+                              placeholder="Re-enter password"
+                              autoComplete="new-password"
+                              className="flex-1 h-full bg-transparent border-none focus:ring-0 text-[13px] font-bold text-gray-800 placeholder:text-gray-300 placeholder:font-medium outline-none ml-2 pr-8"
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                patch({ confirmPassword: e.target.value })
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword((v) => !v)}
+                              className="absolute right-3 text-gray-400 hover:text-red-600 transition-colors"
+                              aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-6">
                       <FormCheckbox
@@ -1346,13 +1342,6 @@ export default function AddNurseForm() {
                           patch({ accountActive: e.target.checked })
                         }
                       />
-                    </div>
-                    <div className="mt-6 p-4 rounded-xl bg-red-50 border border-red-100">
-                      <TacticalBadge label={`Role: ${nurseRoleName} (Employee)`} color="red" />
-                      <p className="text-xs text-slate-600 mt-3">
-                        Employee role loaded from System Setup (<strong>{nurseRoleName}</strong>). This creates an{' '}
-                        <strong>EMPLOYEE</strong> account for dispatch and patient care workflows.
-                      </p>
                     </div>
                   </>
                 )}
