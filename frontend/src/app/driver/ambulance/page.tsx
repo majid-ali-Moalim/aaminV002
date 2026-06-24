@@ -46,7 +46,7 @@ export default function DriverAmbulancePage() {
   }
 
   return (
-    <DriverPageLayout title="Ambulance Management" mainClassName="driver-main--split">
+    <DriverPageLayout title="Ambulance" mainClassName="driver-main--split">
       <DriverModuleShell module={getModuleById('ambulance')!} description="View assigned vehicle, report issues, and log pre-trip inspections.">
         {/* Ambulance Details */}
         {ambulance ? (

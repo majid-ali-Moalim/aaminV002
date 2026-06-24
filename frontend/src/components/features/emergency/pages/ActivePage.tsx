@@ -106,9 +106,10 @@ function ActiveMissionsContent() {
 
   useEffect(() => {
     fetchRequests(true)
-    const interval = setInterval(() => fetchRequests(false), 8000)
+    const intervalMs = detailCaseId ? 4000 : 8000
+    const interval = setInterval(() => fetchRequests(false), intervalMs)
     return () => clearInterval(interval)
-  }, [fetchRequests])
+  }, [fetchRequests, detailCaseId])
 
   const phaseCounts = useMemo(() => {
     const counts: Record<MissionPhaseFilter, number> = {

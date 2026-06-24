@@ -64,19 +64,31 @@ export class NotificationsService {
       if (!enabled) continue;
 
       let recipientRedirect = redirectUrl;
-      if (payload.eventKey === 'MISSION_ASSIGNED') {
-        const recipient = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            role: true,
-            employee: { select: { employeeRole: { select: { name: true } } } },
-          },
-        });
-        const roleName = recipient?.employee?.employeeRole?.name?.toLowerCase() ?? '';
+      const caseId = payload.entityId;
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: true,
+          employee: { select: { employeeRole: { select: { name: true } } } },
+        },
+      });
+      const roleName = recipient?.employee?.employeeRole?.name?.toLowerCase() ?? '';
+
+      if (recipient?.role === 'EMPLOYEE' && category === 'MISSION' && caseId) {
+        if (roleName.includes('driver')) {
+          recipientRedirect = `/driver/mission?caseId=${caseId}`;
+        } else if (roleName.includes('nurse')) {
+          recipientRedirect = `/nurse/mission?caseId=${caseId}`;
+        }
+      } else if (payload.eventKey === 'MISSION_ASSIGNED') {
         if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {
-          recipientRedirect = '/driver/missions/active';
+          recipientRedirect = caseId
+            ? `/driver/mission?caseId=${caseId}`
+            : '/driver/mission';
         } else if (recipient?.role === 'EMPLOYEE' && roleName.includes('nurse')) {
-          recipientRedirect = '/nurse/mission';
+          recipientRedirect = caseId
+            ? `/nurse/mission?caseId=${caseId}`
+            : '/nurse/mission';
         }
       }
 

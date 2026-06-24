@@ -65,6 +65,8 @@ export default function CaseDetailModal({ caseId, open, onClose, preview }: Prop
     if (!open || !caseId) return
     setRequest(preview ?? null)
     void load()
+    const interval = setInterval(() => load(), 4000)
+    return () => clearInterval(interval)
   }, [open, caseId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open || !caseId) return null
@@ -72,6 +74,28 @@ export default function CaseDetailModal({ caseId, open, onClose, preview }: Prop
   const logs = [...(request?.statusLogs ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
+
+  const nurseRecords = request?.patientCareRecords ?? []
+
+  function formatLogTitle(log: (typeof logs)[0]) {
+    if (log.notes?.startsWith('[Nurse]')) {
+      return log.notes.replace(/^\[Nurse\]\s*/, '')
+    }
+    if (log.fromStatus === log.toStatus && log.notes) {
+      return log.notes
+    }
+    return log.toStatus?.replace(/_/g, ' ') ?? 'Update'
+  }
+
+  function logActor(log: (typeof logs)[0]) {
+    const emp = log.changedByEmployee
+    if (!emp) return null
+    const role = emp.employeeRole?.name?.toLowerCase() ?? ''
+    const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim()
+    if (role.includes('nurse')) return name ? `Nurse · ${name}` : 'Nurse'
+    if (role.includes('driver')) return name ? `Driver · ${name}` : 'Driver'
+    return name || null
+  }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -214,17 +238,46 @@ export default function CaseDetailModal({ caseId, open, onClose, preview }: Prop
               {logs.length > 0 && (
                 <section className="rounded-2xl border border-slate-100 p-5">
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2 mb-4">
-                    <Activity className="w-4 h-4" /> Status history
+                    <Activity className="w-4 h-4" /> Mission updates
                   </h3>
                   <div className="space-y-3 max-h-48 overflow-y-auto">
                     {logs.map((log) => (
                       <div key={log.id} className="flex gap-3 text-sm">
-                        <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${log.notes?.startsWith('[Nurse]') ? 'bg-rose-500' : 'bg-red-500'}`} />
                         <div>
-                          <p className="font-bold text-slate-800">{log.toStatus}</p>
-                          <p className="text-xs text-slate-500">{format(new Date(log.createdAt), 'PPp')}</p>
-                          {log.notes && <p className="text-xs text-slate-600 mt-0.5 italic">{log.notes}</p>}
+                          <p className="font-bold text-slate-800">{formatLogTitle(log)}</p>
+                          <p className="text-xs text-slate-500">
+                            {format(new Date(log.createdAt), 'PPp')}
+                            {logActor(log) ? ` · ${logActor(log)}` : ''}
+                          </p>
+                          {log.notes && !log.notes.startsWith('[Nurse]') && log.fromStatus !== log.toStatus && (
+                            <p className="text-xs text-slate-600 mt-0.5 italic">{log.notes}</p>
+                          )}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {nurseRecords.length > 0 && (
+                <section className="rounded-2xl border border-rose-100 bg-rose-50/40 p-5">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-rose-700 flex items-center gap-2 mb-4">
+                    <Stethoscope className="w-4 h-4" /> Nurse clinical records
+                  </h3>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {nurseRecords.slice(0, 8).map((record) => (
+                      <div key={record.id} className="text-sm flex justify-between gap-3 border-b border-rose-100/80 pb-2 last:border-0">
+                        <span className="text-slate-700 font-medium truncate">
+                          {record.treatmentGiven
+                            ? `Treatment · ${record.treatmentGiven}`
+                            : record.bloodPressure
+                              ? `Vitals · BP ${record.bloodPressure}`
+                              : 'Clinical note'}
+                        </span>
+                        <span className="text-xs text-slate-500 shrink-0">
+                          {format(new Date(record.createdAt), 'h:mm a')}
+                        </span>
                       </div>
                     ))}
                   </div>

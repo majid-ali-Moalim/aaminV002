@@ -762,6 +762,13 @@ export const nursesService = {
     return await api.get('/api/nurses/assignments')
   },
 
+  getMyCases: async (nurseId: string, status?: string) => {
+    const api = new ApiService()
+    const params = new URLSearchParams({ nurseId })
+    if (status) params.append('status', status)
+    return await api.get(`/api/nurses/me/cases?${params.toString()}`)
+  },
+
   getPerformance: async (id: string) => {
     const api = new ApiService()
     return await api.get(`/api/nurses/${id}/performance`)
@@ -784,6 +791,11 @@ export const nursesService = {
   createPatientCareRecord: async (data: any) => {
     const api = new ApiService()
     return await api.post('/api/nurses/records', data)
+  },
+
+  acceptMission: async (requestId: string, nurseId: string) => {
+    const api = new ApiService()
+    return await api.post(`/api/nurses/missions/${requestId}/accept`, { nurseId })
   },
  
   createIncidentReport: async (data: any) => {

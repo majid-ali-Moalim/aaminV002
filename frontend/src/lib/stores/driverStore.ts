@@ -35,6 +35,8 @@ export interface DriverMission {
   region?: { name: string }
   district?: { name: string }
   dispatcher?: { user?: { username: string } }
+  nurse?: { firstName?: string; lastName?: string }
+  callerName?: string
   statusLogs?: Array<{ toStatus: string; createdAt: string; notes?: string }>
 }
 

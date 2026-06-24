@@ -175,38 +175,13 @@ export function validateStep(
   switch (step) {
     case 'urgency':
       if (!data.requestType) return 'Select request type'
-      if (!isEmergencyRequest(data)) return null
-      if (!data.emergencyType) return 'Select emergency type'
-      {
-        const selectedType = context?.emergencyTypes?.find((t) => t.id === data.emergencyType)
-        if (selectedType && isOtherEmergencyType(selectedType) && !data.emergencyTypeOther.trim()) {
-          return 'Please type the emergency type when you select Others'
-        }
-      }
-      if (!data.consciousStatus) return 'Indicate if patient is conscious'
-      if (!data.breathingStatus) return 'Indicate breathing status'
-      if (!data.conditionDescription.trim()) return 'Describe what happened'
       return null
     case 'identity':
-      if (!data.isPatient) return 'Please confirm if you are the patient'
-      if (data.isPatient === 'NO') {
-        if (!data.callerName.trim()) return 'Caller name is required'
-        if (!data.callerRelationship) return 'Relationship to patient is required'
-      }
-      if (!data.callerPhone.trim()) return 'Phone number is required'
       return null
     case 'patient':
-      if (data.isPatient === 'YES' && !data.patientName.trim()) {
-        return 'Patient name is required when you are the patient'
-      }
-      if (!data.gender) return 'Gender is required'
-      if (!data.dateOfBirth) return 'Date of birth is required'
-      {
+      if (data.dateOfBirth) {
         const age = calculateAgeFromDateOfBirth(data.dateOfBirth)
         if (age === null) return 'Enter a valid date of birth that is not in the future'
-      }
-      if (data.isPatient === 'YES' && !data.maritalStatus) {
-        return 'Marital status is required when you are the patient'
       }
       return null
     case 'location':
@@ -215,22 +190,8 @@ export function validateStep(
           return 'Enter valid GPS coordinates or clear them and use the pickup address'
         }
       }
-      if (!hasPickupLocation(data)) {
-        return 'Provide GPS coordinates or a complete pickup address — at least one is required'
-      }
       return null
     case 'details':
-      if (!data.nationalityType) return 'Select nationality or choose Unknown nationality'
-      if (
-        data.nationalityType === 'INTERNATIONAL' &&
-        !data.nationalityUnknown &&
-        !data.country
-      ) {
-        return 'Select country or tap Unknown nationality if not known'
-      }
-      if (data.isPatient === 'YES' && !data.preferredLanguage) {
-        return 'Select preferred language'
-      }
       return null
     case 'review':
       if (!data.consent) return 'You must confirm this is a genuine request'
@@ -276,7 +237,7 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
 
   return {
     callerName: finalCallerName,
-    callerPhone: normalizePhone(data.callerPhone),
+    callerPhone: data.callerPhone.trim() ? normalizePhone(data.callerPhone) : '',
     callerAltPhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : '',
     callerRelationship: finalRelationship,
     newPatient: {
@@ -288,7 +249,7 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
       maritalStatus: data.maritalStatus || 'UNKNOWN',
       nationalityType: data.nationalityType,
       country: finalCountry,
-      phone: normalizePhone(data.callerPhone),
+      phone: data.callerPhone.trim() ? normalizePhone(data.callerPhone) : undefined,
       alternatePhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : undefined,
     },
     patientCondition:
@@ -303,8 +264,8 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     incidentCategoryId,
     regionId: data.regionId || undefined,
     districtId: data.districtId || undefined,
-    pickupLocation,
-    pickupLandmark,
+    pickupLocation: pickupLocation || 'Location to be confirmed by dispatch',
+    pickupLandmark: pickupLandmark || 'To be confirmed',
     needsOxygen: data.needsOxygen,
     needsStretcher: data.needsStretcher,
     pickupLatitude: gps ? parseFloat(data.latitude) : undefined,

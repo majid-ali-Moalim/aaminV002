@@ -10,13 +10,21 @@ export function resolveNurseNotificationUrl(notification: {
   const raw = notification.redirectUrl || notification.actionUrl || ''
   if (raw.startsWith('/nurse/')) return raw
 
+  if (raw.includes('/driver/missions') || raw.includes('/driver/mission')) {
+    return notification.entityId
+      ? `/nurse/mission?caseId=${notification.entityId}`
+      : '/nurse/mission'
+  }
+
   if (notification.eventKey === 'MISSION_ASSIGNED' || notification.category === 'MISSION') {
     return notification.entityId
       ? `/nurse/mission?caseId=${notification.entityId}`
       : '/nurse/mission'
   }
   if (raw.includes('handover') || notification.eventKey?.includes('HANDOVER')) {
-    return '/nurse/mission'
+    return notification.entityId
+      ? `/nurse/mission?caseId=${notification.entityId}`
+      : '/nurse/mission'
   }
   if (notification.category === 'COMMUNICATION') {
     return '/nurse/notifications'
@@ -25,7 +33,9 @@ export function resolveNurseNotificationUrl(notification: {
     return '/nurse/shifts'
   }
   if (notification.category === 'HOSPITAL') {
-    return '/nurse/handover'
+    return notification.entityId
+      ? `/nurse/mission?caseId=${notification.entityId}`
+      : '/nurse/mission'
   }
   if (raw.includes('emergency') || raw.includes('mission') || notification.entityType?.includes('emergency')) {
     return notification.entityId

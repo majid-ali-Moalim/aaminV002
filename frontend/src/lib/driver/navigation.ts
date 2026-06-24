@@ -3,15 +3,10 @@ import {
   LayoutGrid,
   Siren,
   Truck,
-  HeartHandshake,
   Clock,
   AlertTriangle,
   Bell,
   User,
-  Radio,
-  Zap,
-  ClipboardList,
-  GitBranch,
   History,
   PlusCircle,
   FileText,
@@ -20,9 +15,9 @@ import {
 
 export type DriverModuleId =
   | 'dashboard'
+  | 'mission'
   | 'missions'
   | 'ambulance'
-  | 'transport'
   | 'shifts'
   | 'incidents'
   | 'notifications'
@@ -55,32 +50,27 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     items: [{ slug: 'overview', label: 'Dashboard Overview', icon: LayoutGrid, exact: true }],
   },
   {
-    id: 'missions',
-    label: 'Mission Center',
+    id: 'mission',
+    label: 'Case Workspace',
     icon: Siren,
+    basePath: '/driver/mission',
+    singlePage: true,
+    items: [{ slug: 'workspace', label: 'Case Workspace', icon: Siren, exact: true }],
+  },
+  {
+    id: 'missions',
+    label: 'Mission History',
+    icon: History,
     basePath: '/driver/missions',
-    items: [
-      { slug: 'active', label: 'Active Mission', icon: Zap },
-      { slug: 'assigned', label: 'Assigned Missions', icon: ClipboardList },
-      { slug: 'workflow', label: 'Mission Workflow', icon: GitBranch },
-      { slug: 'history', label: 'Mission History', icon: History },
-    ],
+    items: [{ slug: 'history', label: 'Mission History', icon: History }],
   },
   {
     id: 'ambulance',
-    label: 'Ambulance Management',
+    label: 'Ambulance',
     icon: Truck,
     basePath: '/driver/ambulance',
     singlePage: true,
-    items: [{ slug: 'my-ambulance', label: 'My Ambulance', icon: Truck }],
-  },
-  {
-    id: 'transport',
-    label: 'Patient Transport',
-    icon: HeartHandshake,
-    basePath: '/driver/transport',
-    singlePage: true,
-    items: [{ slug: 'overview', label: 'Patient Transport', icon: HeartHandshake }],
+    items: [{ slug: 'my-ambulance', label: 'Ambulance', icon: Truck }],
   },
   {
     id: 'shifts',
@@ -121,18 +111,19 @@ export const DRIVER_MODULES: DriverNavModule[] = [
 export const MISSION_WORKFLOW_STEPS = [
   { key: 'ASSIGNED', label: 'Assigned' },
   { key: 'ACCEPTED', label: 'Accepted' },
-  { key: 'DISPATCHED', label: 'En Route to Scene' },
-  { key: 'ARRIVED_SCENE', label: 'Arrived at Scene' },
-  { key: 'PATIENT_ASSESSMENT', label: 'Patient Assessment' },
-  { key: 'PATIENT_LOADED', label: 'Patient Loaded' },
-  { key: 'TRANSPORTING', label: 'En Route to Hospital' },
-  { key: 'ARRIVED_HOSPITAL', label: 'Arrived at Hospital' },
-  { key: 'PATIENT_HANDOVER', label: 'Patient Handover' },
+  { key: 'EN_ROUTE_SCENE', label: 'En Route to Scene' },
+  { key: 'ARRIVED_SCENE', label: 'On Scene' },
+  { key: 'EN_ROUTE_HOSPITAL', label: 'Transport to Hospital' },
+  { key: 'ARRIVED_HOSPITAL', label: 'At Hospital' },
   { key: 'COMPLETED', label: 'Mission Completed' },
 ] as const
 
 export const LEGACY_DRIVER_REDIRECTS: Record<string, string> = {
-  '/driver/missions': '/driver/missions/active',
+  '/driver/missions': '/driver/mission',
+  '/driver/missions/active': '/driver/mission',
+  '/driver/missions/assigned': '/driver/mission',
+  '/driver/missions/workflow': '/driver/mission',
+  '/driver/transport': '/driver/mission',
   '/driver/incidents': '/driver/incidents/new',
   '/driver/communications': '/driver',
 }

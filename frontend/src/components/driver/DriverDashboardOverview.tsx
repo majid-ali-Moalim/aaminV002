@@ -96,8 +96,8 @@ export function DriverDashboardOverview({
           <Link href="/driver/shifts" className="driver-action-tile">
             <PlayCircle size={20} /> Start Shift
           </Link>
-          <Link href="/driver/missions/active" className="driver-action-tile">
-            <Siren size={20} /> Active Mission
+          <Link href="/driver/mission" className="driver-action-tile">
+            <Siren size={20} /> Case Workspace
           </Link>
           <a href="tel:+1911" className="driver-action-tile">
             <Phone size={20} /> Contact Dispatcher
@@ -166,7 +166,7 @@ export function DriverDashboardOverview({
               {nextAction.label}
             </button>
           )}
-          <Link href="/driver/missions/active" className="driver-mission-detail-link">
+          <Link href="/driver/mission" className="driver-mission-detail-link">
             Open Mission Center <ArrowRight size={16} />
           </Link>
         </div>

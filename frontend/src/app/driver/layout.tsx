@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import { DriverGuard } from '@/components/guards'
 import { DriverSidebar } from '@/components/driver/DriverSidebar'
+import { DriverNotificationProvider } from '@/components/driver/DriverNotificationProvider'
 import './driver.css'
 
 export default function DriverLayout({ children }: { children: ReactNode }) {
@@ -16,10 +17,12 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
 
   return (
     <DriverGuard>
-      <div className="driver-shell">
-        <DriverSidebar />
-        <div className="driver-viewport">{children}</div>
-      </div>
+      <DriverNotificationProvider>
+        <div className="driver-shell">
+          <DriverSidebar />
+          <div className="driver-viewport">{children}</div>
+        </div>
+      </DriverNotificationProvider>
     </DriverGuard>
   )
 }

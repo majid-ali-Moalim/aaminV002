@@ -316,8 +316,26 @@ export class EmergencyRequestsService {
         incidentCategory: true,
         referrals: true,
         statusLogs: {
-          orderBy: { createdAt: 'desc' }
-        }
+          orderBy: { createdAt: 'desc' },
+          include: {
+            changedByEmployee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeRole: { select: { name: true } },
+              },
+            },
+          },
+        },
+        patientCareRecords: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            nurse: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
     });
   }

@@ -362,7 +362,25 @@ export interface EmergencyRequest {
   region?: Region | null;
   district?: District | null;
   statusLogs?: EmergencyStatusLog[];
+  patientCareRecords?: PatientCareRecord[];
   referrals?: any[]; 
+}
+
+export interface PatientCareRecord {
+  id: string;
+  requestId: string;
+  nurseId: string;
+  patientId: string;
+  bloodPressure?: string | null;
+  heartRate?: number | null;
+  oxygenSaturation?: number | null;
+  temperature?: number | null;
+  respiratoryRate?: number | null;
+  clinicalNotes?: string | null;
+  medications?: string | null;
+  treatmentGiven?: string | null;
+  createdAt: string;
+  nurse?: Employee;
 }
 
 export interface ShiftRecord {

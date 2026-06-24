@@ -5,6 +5,8 @@ import { io, Socket } from 'socket.io-client'
 import toast from 'react-hot-toast'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import type { AppNotification, NotificationStats } from '@/lib/notifications/types'
+import { resolveNurseNotificationUrl } from '@/lib/nurse/nurseNotificationRoutes'
+import { resolveDriverNotificationUrl } from '@/lib/driver/driverNotificationRoutes'
 
 const SOCKET_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -30,6 +32,14 @@ function playAlertSound() {
   }
 }
 
+function resolveLiveNotificationUrl(payload: AppNotification): string {
+  if (typeof window === 'undefined') return '/admin/notifications'
+  const path = window.location.pathname
+  if (path.startsWith('/nurse')) return resolveNurseNotificationUrl(payload)
+  if (path.startsWith('/driver')) return resolveDriverNotificationUrl(payload)
+  return payload.redirectUrl || payload.actionUrl || '/admin/notifications'
+}
+
 export function useNotificationSocket() {
   const { prependNotification, setStats, setConnected } = useNotificationStore()
 
@@ -51,14 +61,21 @@ export function useNotificationSocket() {
 
     const onNotification = (payload: AppNotification) => {
       prependNotification(payload)
+      const href = resolveLiveNotificationUrl(payload)
+      const toastOpts = {
+        duration: payload.priority === 'CRITICAL' ? 8000 : 5000,
+        onClick: () => {
+          window.location.href = href
+        },
+      }
       if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
         playAlertSound()
         toast.error(`${payload.title}: ${payload.message}`, {
-          duration: 8000,
+          ...toastOpts,
           icon: payload.category === 'BROADCAST' ? '📢' : '🚨',
         })
-      } else if (payload.priority === 'HIGH') {
-        toast(payload.title, { icon: '🔔', duration: 5000 })
+      } else if (payload.priority === 'HIGH' || payload.category === 'MISSION') {
+        toast(`${payload.title}: ${payload.message}`, { ...toastOpts, icon: '🔔' })
       }
     }
 

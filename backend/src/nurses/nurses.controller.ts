@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, Patch } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post, Put, Body, Param, Query, Patch } from '@nestjs/common';
 import { NursesService } from './nurses.service';
 
 @Controller('nurses')
@@ -25,6 +25,17 @@ export class NursesController {
     return this.nursesService.getAssignments();
   }
 
+  @Get('me/cases')
+  async getMyCases(
+    @Query('nurseId') nurseId: string,
+    @Query('status') status?: string,
+  ) {
+    if (!nurseId) {
+      throw new BadRequestException('nurseId is required');
+    }
+    return this.nursesService.getMyCases(nurseId, status);
+  }
+
   @Get('reports/patient-care')
   async getPatientCareRecords(@Query('nurseId') nurseId?: string) {
     return this.nursesService.getPatientCareRecords(nurseId);
@@ -38,6 +49,14 @@ export class NursesController {
   @Post('records')
   async createPatientCareRecord(@Body() data: any) {
     return this.nursesService.createPatientCareRecord(data);
+  }
+
+  @Post('missions/:requestId/accept')
+  async acceptMission(
+    @Param('requestId') requestId: string,
+    @Body() body: { nurseId: string },
+  ) {
+    return this.nursesService.acceptMission(requestId, body.nurseId);
   }
 
   @Post('incidents')

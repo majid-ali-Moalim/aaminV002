@@ -574,7 +574,7 @@ export default function HireAmbulanceWizard() {
                     </p>
                   ) : (
                     <>
-                      <FieldLabel required>Emergency Type</FieldLabel>
+                      <FieldLabel>Emergency Type (optional)</FieldLabel>
                       <select
                         {...register('emergencyType', {
                           onChange: (e) => {
@@ -594,12 +594,11 @@ export default function HireAmbulanceWizard() {
                       </select>
                       {showEmergencyTypeOther && (
                         <div className="mt-4">
-                          <FieldLabel required>Specify emergency type</FieldLabel>
+                          <FieldLabel>Specify emergency type (optional)</FieldLabel>
                           <input
-                            {...register('emergencyTypeOther', { required: true })}
+                            {...register('emergencyTypeOther')}
                             className={inputClass}
-                            placeholder="Type the emergency (required when Others is selected)"
-                            required
+                            placeholder="Type the emergency if you selected Others"
                           />
                         </div>
                       )}
@@ -607,10 +606,10 @@ export default function HireAmbulanceWizard() {
                   )}
                 </SectionCard>
 
-                <SectionCard title="Quick Triage" subtitle="Critical info for dispatch prioritization">
+                <SectionCard title="Quick Triage" subtitle="Optional — helps dispatch prioritize your case">
                   <div className="grid sm:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <FieldLabel required>Is the patient conscious?</FieldLabel>
+                      <FieldLabel>Is the patient conscious? (optional)</FieldLabel>
                       <select {...register('consciousStatus')} className={selectClass}>
                         <option value="">Select</option>
                         <option value="CONSCIOUS">Yes — conscious</option>
@@ -618,7 +617,7 @@ export default function HireAmbulanceWizard() {
                       </select>
                     </div>
                     <div>
-                      <FieldLabel required>Breathing status</FieldLabel>
+                      <FieldLabel>Breathing status (optional)</FieldLabel>
                       <select {...register('breathingStatus')} className={selectClass}>
                         <option value="">Select</option>
                         <option value="NORMAL">Normal breathing</option>
@@ -628,7 +627,7 @@ export default function HireAmbulanceWizard() {
                     </div>
                   </div>
                   <div>
-                    <FieldLabel required>What happened?</FieldLabel>
+                    <FieldLabel>What happened? (optional)</FieldLabel>
                     <textarea
                       {...register('conditionDescription')}
                       rows={4}
@@ -677,8 +676,8 @@ export default function HireAmbulanceWizard() {
 
             {/* STEP: Identity */}
             {currentStep === 'identity' && (
-              <SectionCard title="Who is calling?" subtitle="Tell us about yourself">
-                <FieldLabel required>Are you the patient?</FieldLabel>
+              <SectionCard title="Who is calling?" subtitle="All fields optional — phone helps dispatch reach you">
+                <FieldLabel>Are you the patient? (optional)</FieldLabel>
                 <div className="grid sm:grid-cols-2 gap-4 mb-6">
                   {[
                     { value: 'YES', label: 'Yes, I am the patient', desc: 'Requesting for myself' },
@@ -703,11 +702,11 @@ export default function HireAmbulanceWizard() {
                 {values.isPatient === 'NO' && (
                   <div className="grid sm:grid-cols-2 gap-4 mb-6 pb-6 border-b border-slate-100">
                     <div>
-                      <FieldLabel required>Caller name</FieldLabel>
+                      <FieldLabel>Caller name (optional)</FieldLabel>
                       <input {...register('callerName')} className={inputClass} placeholder="Your full name" />
                     </div>
                     <div>
-                      <FieldLabel required>Relationship to patient</FieldLabel>
+                      <FieldLabel>Relationship to patient (optional)</FieldLabel>
                       <select {...register('callerRelationship')} className={selectClass}>
                         <option value="">Select</option>
                         <option value="FAMILY">Family</option>
@@ -721,7 +720,7 @@ export default function HireAmbulanceWizard() {
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <FieldLabel required>Phone number</FieldLabel>
+                    <FieldLabel>Phone number (optional)</FieldLabel>
                     <div className="flex">
                       <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
                         +252
@@ -754,17 +753,14 @@ export default function HireAmbulanceWizard() {
 
             {/* STEP: Patient */}
             {currentStep === 'patient' && (
-              <SectionCard title="Patient Information" subtitle="Medical details for the response team">
+              <SectionCard title="Patient Information" subtitle="All fields optional — add what you know">
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <FieldLabel required={values.isPatient === 'YES'}>
-                      Patient full name
-                      {values.isPatient === 'NO' ? ' (optional if unknown)' : ''}
-                    </FieldLabel>
+                    <FieldLabel>Patient full name (optional)</FieldLabel>
                     <input {...register('patientName')} className={inputClass} placeholder="Patient's full name" />
                   </div>
                   <div>
-                    <FieldLabel required>Date of birth</FieldLabel>
+                    <FieldLabel>Date of birth (optional)</FieldLabel>
                     <input
                       type="date"
                       {...register('dateOfBirth')}
@@ -784,7 +780,7 @@ export default function HireAmbulanceWizard() {
                     <p className="text-xs text-slate-500 mt-1">Calculated automatically from date of birth</p>
                   </div>
                   <div>
-                    <FieldLabel required>Gender</FieldLabel>
+                    <FieldLabel>Gender (optional)</FieldLabel>
                     <select {...register('gender')} className={selectClass}>
                       <option value="">Select</option>
                       <option value="MALE">Male</option>
@@ -792,10 +788,7 @@ export default function HireAmbulanceWizard() {
                     </select>
                   </div>
                   <div>
-                    <FieldLabel required={values.isPatient === 'YES'}>
-                      Marital status
-                      {values.isPatient === 'NO' ? ' (optional if unknown)' : ''}
-                    </FieldLabel>
+                    <FieldLabel>Marital status (optional)</FieldLabel>
                     <select {...register('maritalStatus')} className={selectClass}>
                       <option value="">Select</option>
                       <option value="SINGLE">Single</option>
@@ -820,7 +813,7 @@ export default function HireAmbulanceWizard() {
               <>
                 <SectionCard
                   title="Pickup Location"
-                  subtitle="Provide GPS coordinates or a pickup address — at least one is required"
+                  subtitle="GPS or pickup address — all optional; dispatch can confirm by phone"
                 >
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 mb-6 text-sm text-slate-700">
                     {hasLocation ? (
@@ -830,8 +823,8 @@ export default function HireAmbulanceWizard() {
                       </p>
                     ) : (
                       <p>
-                        Share your GPS location <strong>or</strong> complete the pickup address below. You do not need
-                        both, but at least one is required to dispatch an ambulance.
+                        Share GPS or enter a pickup address if you can. You may continue without location — dispatch
+                        will call you to confirm.
                       </p>
                     )}
                   </div>
@@ -948,11 +941,11 @@ export default function HireAmbulanceWizard() {
 
                 <SectionCard
                   title="Pickup Address"
-                  subtitle={gpsShared ? 'Optional — add street or area details' : 'Required when GPS is not shared'}
+                  subtitle={gpsShared ? 'Optional — add street or area details' : 'Optional when GPS is not shared'}
                 >
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <FieldLabel required={!gpsShared}>Region</FieldLabel>
+                      <FieldLabel>Region (optional)</FieldLabel>
                       <select {...register('regionId')} className={selectClass}>
                         <option value="">Select region</option>
                         {regions.map((r) => (
@@ -961,7 +954,7 @@ export default function HireAmbulanceWizard() {
                       </select>
                     </div>
                     <div>
-                      <FieldLabel required={!gpsShared}>District</FieldLabel>
+                      <FieldLabel>District (optional)</FieldLabel>
                       <select
                         {...register('districtId')}
                         disabled={!values.regionId}
@@ -974,7 +967,7 @@ export default function HireAmbulanceWizard() {
                       </select>
                     </div>
                     <div className="sm:col-span-2">
-                      <FieldLabel required={!gpsShared}>Area / Sub-area</FieldLabel>
+                      <FieldLabel>Area / Sub-area (optional)</FieldLabel>
                       <input {...register('areaName')} className={inputClass} placeholder="e.g. Hodan, Wadajir" />
                     </div>
                     <div className="sm:col-span-2">
@@ -993,10 +986,10 @@ export default function HireAmbulanceWizard() {
 
             {/* STEP: Details */}
             {currentStep === 'details' && (
-              <SectionCard title="Additional Details" subtitle="Language, nationality, and destination">
+              <SectionCard title="Additional Details" subtitle="Language, nationality, and destination — all optional">
                 <div className="space-y-6">
                   <div>
-                    <FieldLabel required>Nationality</FieldLabel>
+                    <FieldLabel>Nationality (optional)</FieldLabel>
                     <div className="grid sm:grid-cols-2 gap-4 mt-2">
                       {[
                         { value: 'LOCAL', label: 'Somali Citizen 🇸🇴' },
@@ -1046,7 +1039,7 @@ export default function HireAmbulanceWizard() {
 
                   {values.nationalityType === 'INTERNATIONAL' && !values.nationalityUnknown && (
                     <div>
-                      <FieldLabel required>Country</FieldLabel>
+                      <FieldLabel>Country (optional)</FieldLabel>
                       <select {...register('country')} className={selectClass}>
                         <option value="">Select country</option>
                         {COUNTRY_NAMES.map((c) => (
@@ -1061,10 +1054,7 @@ export default function HireAmbulanceWizard() {
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <FieldLabel required={values.isPatient === 'YES'}>
-                        Preferred language
-                        {values.isPatient === 'NO' ? ' (optional)' : ''}
-                      </FieldLabel>
+                      <FieldLabel>Preferred language (optional)</FieldLabel>
                       <select {...register('preferredLanguage')} className={selectClass}>
                         <option value="">Select</option>
                         <option value="SOMALI">Somali</option>
