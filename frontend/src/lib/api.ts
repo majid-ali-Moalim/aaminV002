@@ -114,7 +114,12 @@ class ApiService {
 export const authService = {
   login: async (email: string, password: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/login', { email, password })
+    const identifier = email.trim()
+    return await api.post('/api/auth/login', {
+      email: identifier,
+      username: identifier,
+      password,
+    })
   },
 
   getMe: async (token?: string) => {
@@ -542,7 +547,23 @@ export const reportsService = {
     }
     const query = params.toString()
     return await api.get(`/api/reports/admin/${type}${query ? `?${query}` : ''}`)
-  }
+  },
+
+  getAdminReportFilterOptions: async () => {
+    const api = new ApiService()
+    return await api.get<{
+      regions: Array<{ id: string; name: string }>
+      districts: Array<{ id: string; name: string; regionId: string }>
+      incidentCategories: Array<{ id: string; name: string }>
+      ambulances: Array<{ id: string; ambulanceNumber: string; plateNumber: string; vehicleType: string | null; status: string }>
+      hospitals: Array<{ id: string; name: string; status: string }>
+      employeeRoles: Array<{ id: string; name: string }>
+      priorities: Array<{ value: string; label: string }>
+      emergencyStatuses: Array<{ value: string; label: string }>
+      ambulanceStatuses: Array<{ value: string; label: string }>
+      vehicleTypes: Array<{ value: string; label: string }>
+    }>('/api/reports/admin/filter-options')
+  },
 }
 
 export const publicService = {
@@ -1172,6 +1193,22 @@ export const employeeAttendanceService = {
   exportReport: async (body: { type: string; startDate?: string; endDate?: string }) => {
     const api = new ApiService()
     return await api.post('/api/employee-attendance/export', body)
+  },
+  listWorkShifts: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/work-shifts')
+  },
+  createWorkShift: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post('/api/employee-attendance/work-shifts', data)
+  },
+  updateWorkShift: async (id: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/work-shifts/${id}`, data)
+  },
+  deleteWorkShift: async (id: string) => {
+    const api = new ApiService()
+    return await api.delete(`/api/employee-attendance/work-shifts/${id}`)
   },
 }
 

@@ -56,10 +56,10 @@ export function DashboardSection({
   className?: string
 }) {
   return (
-    <section id={id} className={`scroll-mt-20 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden ${className}`}>
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50/60 dark:bg-slate-800/50">
+    <section id={id} className={`scroll-mt-20 admin-card overflow-hidden ${className}`}>
+      <div className="admin-card-header">
         <Icon className="w-4 h-4 text-red-600 shrink-0" />
-        <h2 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">{title}</h2>
+        <h2 className="admin-card-title">{title}</h2>
       </div>
       <div className="p-4">{children}</div>
     </section>

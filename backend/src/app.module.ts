@@ -27,6 +27,7 @@ import { HospitalCoordinationModule } from './hospital-coordination/hospital-coo
 import { EmployeeAttendanceModule } from './employee-attendance/employee-attendance.module';
 import { HospitalAppModule } from './hospital-app/hospital-app.module';
 import { PublicModule } from './public/public.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { PublicModule } from './public/public.module';
       serveRoot: '/uploads',
     }),
     PrismaModule,
+    HealthModule,
     AuthModule,
     EmployeesModule,
     PatientsModule,

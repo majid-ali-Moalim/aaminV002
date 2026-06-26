@@ -9,11 +9,7 @@ import {
   Users,
   UserCheck,
   FileText,
-  HeartHandshake,
-  ClipboardList,
   History,
-  TrendingUp,
-  BarChart2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -41,12 +37,8 @@ type MenuItem = {
 const nurseMenuItems: MenuItem[] = [
   { href: '/admin/nurses', label: 'Nurses', icon: Users, exact: true },
   { href: '/admin/nurses/active', label: 'Active Nurses', icon: UserCheck },
-  { href: '/admin/nurses/records', label: 'Patient Care Records', icon: FileText },
-  { href: '/admin/nurses/care-records', label: 'Medical Assessments', icon: HeartHandshake, accent: 'info' },
-  { href: '/admin/nurses/treatment-records', label: 'Treatment Records', icon: ClipboardList },
+  { href: '/admin/nurses/clinical-records', label: 'Clinical Records', icon: FileText, accent: 'info' },
   { href: '/admin/nurses/mission-history', label: 'Mission History', icon: History },
-  { href: '/admin/nurses/performance', label: 'Performance', icon: TrendingUp },
-  { href: '/admin/nurses/reports', label: 'Reports', icon: BarChart2 },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {

@@ -26,7 +26,7 @@ export function AdminThemeToggle({ compact, onDark }: { compact?: boolean; onDar
       title={isLight ? 'Dark mode' : 'Light mode'}
     >
       {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-      {!compact && <span>{isLight ? 'Dark' : 'Light'}</span>}
+      {!compact && <span>{isLight ? 'Dark mode' : 'Light mode'}</span>}
     </button>
   )
 }

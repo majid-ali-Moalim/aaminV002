@@ -1,3 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-export { default } from '@/app/admin/nurses/records/page'
+export default function NurseMedicalRecordsRedirectPage() {
+  redirect('/admin/nurses/clinical-records?tab=records')
+}

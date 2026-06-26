@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -62,6 +63,43 @@ export class EmployeeAttendanceController {
   @Get('shifts')
   getShifts() {
     return this.service.getShiftManagement();
+  }
+
+  @Get('work-shifts')
+  listWorkShifts() {
+    return this.service.listWorkShifts(false);
+  }
+
+  @Post('work-shifts')
+  createWorkShift(
+    @Body()
+    body: {
+      code: string;
+      name: string;
+      startTime: string;
+      endTime: string;
+      description?: string;
+      gracePeriodMins?: number;
+      breakMinutes?: number;
+      color?: string;
+    },
+    @Request() req: { user: { sub: string } },
+  ) {
+    return this.service.createWorkShift(body, req.user.sub);
+  }
+
+  @Patch('work-shifts/:id')
+  updateWorkShift(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Request() req: { user: { sub: string } },
+  ) {
+    return this.service.updateWorkShift(id, body as any, req.user.sub);
+  }
+
+  @Delete('work-shifts/:id')
+  deleteWorkShift(@Param('id') id: string, @Request() req: { user: { sub: string } }) {
+    return this.service.deleteWorkShift(id, req.user.sub);
   }
 
   @Get('approvals')

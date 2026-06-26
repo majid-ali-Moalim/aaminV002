@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Users,
   Siren,
-  FileText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -36,7 +35,6 @@ type MenuItem = {
 const patientsMenuItems: MenuItem[] = [
   { href: '/admin/patients', label: 'Patients', icon: Users, exact: true },
   { href: '/admin/patients/cases', label: 'Cases', icon: Siren },
-  { href: '/admin/patients/records-reports', label: 'Records & Reports', icon: FileText },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {

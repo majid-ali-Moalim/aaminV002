@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Activity, AlertCircle, TrendingUp } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { notificationsService } from '@/lib/api'
 import Link from 'next/link'
 
@@ -13,7 +13,6 @@ export default function LiveActivityTicker() {
       try {
         const recent = await notificationsService.getRecent()
         if (recent && recent.length > 0) {
-          // Find the most recent EMERGENCY or CRITICAL alert
           const critical = recent.find((n: any) => n.priority === 'CRITICAL' || n.type === 'EMERGENCY')
           setLatestAlert(critical || recent[0])
         }
@@ -23,36 +22,50 @@ export default function LiveActivityTicker() {
     }
 
     fetchLatest()
-    const interval = setInterval(fetchLatest, 15000) // 15s refresh
+    const interval = setInterval(fetchLatest, 15000)
     return () => clearInterval(interval)
   }, [])
 
-  if (!latestAlert) return null
+  if (!latestAlert) {
+    return (
+      <div className="admin-ticker border-dashed">
+        <span className="truncate text-[11px] font-medium text-admin-text-muted">
+          No recent activity
+        </span>
+      </div>
+    )
+  }
+
+  const isCritical = latestAlert.priority === 'CRITICAL'
 
   return (
-    <div className="hidden lg:flex items-center gap-3 bg-gray-50/80 px-4 py-1.5 rounded-full border border-gray-100/50 animate-in fade-in slide-in-from-left duration-700">
-      <div className="relative flex h-2 w-2">
-        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-          latestAlert.priority === 'CRITICAL' ? 'bg-red-400' : 'bg-blue-400'
-        }`}></span>
-        <span className={`relative inline-flex rounded-full h-2 w-2 ${
-          latestAlert.priority === 'CRITICAL' ? 'bg-red-500' : 'bg-blue-500'
-        }`}></span>
+    <div className="admin-ticker">
+      <div className="relative flex h-2 w-2 shrink-0">
+        <span
+          className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${
+            isCritical ? 'bg-red-400' : 'bg-blue-400'
+          }`}
+        />
+        <span
+          className={`relative inline-flex h-2 w-2 rounded-full ${
+            isCritical ? 'bg-red-500' : 'bg-blue-500'
+          }`}
+        />
       </div>
-      
-      <div className="flex items-center gap-2 overflow-hidden max-w-[300px]">
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-          {latestAlert.type}:
-        </span>
-        <Link 
-          href={latestAlert.actionUrl || `/admin/notifications?id=${latestAlert.id}`}
-          className="text-[11px] font-bold text-gray-700 truncate hover:text-red-600 transition-colors"
-        >
-          {latestAlert.title}: {latestAlert.message}
-        </Link>
-      </div>
-      
-      <TrendingUp className="w-3 h-3 text-gray-300 ml-1" />
+
+      <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-admin-text-muted">
+        {latestAlert.type}
+      </span>
+
+      <Link
+        href={latestAlert.actionUrl || `/admin/notifications?id=${latestAlert.id}`}
+        className="min-w-0 flex-1 truncate text-[11px] font-semibold text-admin-text-secondary hover:text-red-600 dark:hover:text-red-400"
+        title={`${latestAlert.title}: ${latestAlert.message}`}
+      >
+        {latestAlert.title}: {latestAlert.message}
+      </Link>
+
+      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-admin-text-muted" />
     </div>
   )
 }

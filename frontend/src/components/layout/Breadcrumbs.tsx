@@ -15,16 +15,14 @@ export default function Breadcrumbs() {
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ')
 
   return (
-    <nav className="flex items-center space-x-2 text-xs font-black uppercase tracking-widest text-ems-text-muted">
+    <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] font-bold uppercase tracking-wide text-admin-text-secondary">
       <Link
         href="/admin/dashboard"
-        className="hover:text-ems-primary transition-colors flex items-center gap-1.5"
+        className="flex shrink-0 items-center gap-1.5 transition-colors hover:text-red-600 dark:hover:text-red-400"
       >
-        <LayoutDashboard className="w-3.5 h-3.5" />
-        Admin
+        <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+        <span className="whitespace-nowrap">Admin</span>
       </Link>
-
-      {pathSegments.length > 0 && <ChevronRight className="w-3 h-3 text-ems-text-muted" />}
 
       {pathSegments.map((segment, index) => {
         const href = `/admin/${pathSegments.slice(0, index + 1).join('/')}`
@@ -32,12 +30,15 @@ export default function Breadcrumbs() {
 
         return (
           <React.Fragment key={href}>
-            {index > 0 && <ChevronRight className="w-3 h-3 text-ems-text-muted" />}
+            <ChevronRight className="h-3 w-3 shrink-0 text-admin-text-muted" />
             <Link
               href={href}
-              className={`transition-colors ${
-                isLast ? 'text-white font-black' : 'hover:text-ems-primary'
+              className={`truncate transition-colors ${
+                isLast
+                  ? 'font-black text-admin-text'
+                  : 'hover:text-red-600 dark:hover:text-red-400'
               }`}
+              title={capitalize(segment)}
             >
               {capitalize(segment)}
             </Link>

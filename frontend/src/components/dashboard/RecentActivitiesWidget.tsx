@@ -90,25 +90,25 @@ export function RecentActivitiesWidget({
       className={`flex flex-col overflow-hidden ${
         bare
           ? 'h-full min-h-0'
-          : `bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm ${isWidget ? 'h-[640px]' : 'min-h-[480px]'}`
+          : `admin-card ${isWidget ? 'h-[640px]' : 'min-h-[480px]'}`
       } ${className}`}
     >
-      <div className={`${bare ? 'pb-2' : 'px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40'}`}>
+      <div className={`${bare ? 'pb-2' : 'admin-card-header flex-col !items-stretch !px-4 !py-4'}`}>
         {!bare && (
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-xs font-black text-slate-500 tracking-widest uppercase flex items-center gap-2">
-            <Activity className="w-4 h-4 text-slate-400" />
+          <h3 className="admin-card-title flex items-center gap-2 !normal-case !tracking-wide">
+            <Activity className="w-4 h-4 text-admin-text-muted" />
             Recent Activities
           </h3>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-[10px] font-bold uppercase tracking-wide">
+            <span className="admin-badge-live !py-1 text-[10px]">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               Live
             </span>
             <button
               type="button"
               onClick={() => mutate()}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-admin-text-muted hover:text-admin-text hover:bg-admin-hover transition-colors"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isValidating ? 'animate-spin' : ''}`} />
@@ -121,7 +121,7 @@ export function RecentActivitiesWidget({
             <button
               type="button"
               onClick={() => mutate()}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-admin-text-muted hover:text-admin-text hover:bg-admin-hover transition-colors"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isValidating ? 'animate-spin' : ''}`} />
@@ -139,13 +139,13 @@ export function RecentActivitiesWidget({
 
         {/* Search */}
         <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-text-muted" />
           <input
             type="text"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search case ID, patient, hospital, driver, nurse…"
-            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 bg-white dark:bg-slate-900 dark:text-slate-100"
+            className="admin-input w-full pl-9"
           />
         </div>
 
@@ -158,8 +158,8 @@ export function RecentActivitiesWidget({
               onClick={() => setFilter(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 filter === tab.id
-                  ? 'bg-slate-900 dark:bg-red-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-admin-surface-muted text-admin-text-secondary hover:bg-admin-hover'
               }`}
             >
               {tab.label}
@@ -171,19 +171,19 @@ export function RecentActivitiesWidget({
       {/* Timeline feed */}
       <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-admin-text-muted">
             <Loader2 className="w-6 h-6 animate-spin" />
             <span className="text-xs font-medium">Loading activities…</span>
           </div>
         ) : activities.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <Clock className="w-10 h-10 text-slate-300 mb-3" />
-            <p className="text-sm font-semibold text-slate-600">No activities found</p>
-            <p className="text-xs text-slate-400 mt-1">Try adjusting filters or search</p>
+            <Clock className="w-10 h-10 text-admin-text-muted mb-3" />
+            <p className="text-sm font-semibold text-admin-text-secondary">No activities found</p>
+            <p className="text-xs text-admin-text-muted mt-1">Try adjusting filters or search</p>
           </div>
         ) : (
           <div className="relative">
-            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-slate-100" aria-hidden />
+            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-admin-border" aria-hidden />
             <ul className="space-y-1">
               {activities.map((item) => (
                 <ActivityRow key={item.id} item={item} />
@@ -195,7 +195,7 @@ export function RecentActivitiesWidget({
 
       {/* Footer — See More (dashboard preview) or View All */}
       {showSeeMore && hasMore && (
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+        <div className="px-4 py-3 border-t border-admin-border bg-admin-surface-muted">
           <Link
             href="/admin/dashboard/activities"
             className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors"
@@ -207,10 +207,10 @@ export function RecentActivitiesWidget({
       )}
 
       {isWidget && !hideViewAll && !showSeeMore && (
-        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+        <div className="px-5 py-3 border-t border-admin-border bg-admin-surface-muted">
           <Link
             href="/admin/dashboard#recent-activities"
-            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors"
           >
             View All Activities
             <ChevronRight className="w-4 h-4" />
@@ -231,9 +231,9 @@ function SummaryPill({
   tone: 'blue' | 'red' | 'amber'
 }) {
   const tones = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-    red: 'bg-red-50 text-red-700 border-red-100',
-    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    blue: 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50',
+    red: 'bg-red-50 text-red-700 border-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50',
   }
   return (
     <div className={`rounded-xl border px-3 py-2 ${tones[tone]}`}>
@@ -252,7 +252,7 @@ function ActivityRow({ item }: { item: import('@/lib/dashboard/operationalActivi
     <li>
       <Link
         href={item.href}
-        className="group flex gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors relative"
+        className="group flex gap-3 p-3 rounded-xl hover:bg-admin-hover transition-colors relative"
       >
         <div
           className={`relative z-10 shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg border ${visual.bg} ${visual.border}`}
@@ -264,27 +264,27 @@ function ActivityRow({ item }: { item: import('@/lib/dashboard/operationalActivi
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h4 className={`text-sm font-bold text-slate-900 dark:text-slate-100 ${visual.text}`}>{item.title}</h4>
+                <h4 className={`text-sm font-bold text-admin-text ${visual.text}`}>{item.title}</h4>
                 {isCritical && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 text-[10px] font-bold uppercase">
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300 text-[10px] font-bold uppercase">
                     <AlertTriangle className="w-3 h-3" />
                     Critical
                   </span>
                 )}
               </div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2">{item.description}</p>
+              <p className="text-sm text-admin-text-secondary mt-0.5 line-clamp-2">{item.description}</p>
             </div>
-            <span className="shrink-0 text-[11px] font-medium text-slate-400 whitespace-nowrap">{timeAgo}</span>
+            <span className="shrink-0 text-[11px] font-medium text-admin-text-muted whitespace-nowrap">{timeAgo}</span>
           </div>
 
           <div className="flex items-center justify-between mt-2 gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs font-semibold text-slate-700 truncate">{item.actorName}</span>
-              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide shrink-0">
+              <span className="text-xs font-semibold text-admin-text-secondary truncate">{item.actorName}</span>
+              <span className="text-[10px] text-admin-text-muted font-medium uppercase tracking-wide shrink-0">
                 {item.actorRole}
               </span>
             </div>
-            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
               {item.actionLabel}
               <ChevronRight className="w-3.5 h-3.5" />
             </span>
