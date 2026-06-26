@@ -13,6 +13,16 @@ export function isApiNetworkError(error: unknown): boolean {
   return isAxiosError(error) && !error.response
 }
 
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string | string[] } | undefined
+    if (Array.isArray(data?.message)) return data.message.join(', ')
+    if (typeof data?.message === 'string' && data.message) return data.message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 class ApiService {
   private api: AxiosInstance
 
@@ -119,17 +129,25 @@ export const authService = {
 
   forgotPassword: async (email: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/forgot-password', { email })
+    const normalizedEmail = email.trim().toLowerCase()
+    return await api.post('/api/auth/forgot-password', { email: normalizedEmail })
   },
 
   resetPassword: async (email: string, password: string, confirmPassword: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/reset-password', { email, password, confirmPassword })
+    return await api.post('/api/auth/reset-password', {
+      email: email.trim().toLowerCase(),
+      password,
+      confirmPassword,
+    })
   },
 
   verifyResetOtp: async (email: string, otp: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/verify-reset-otp', { email, otp })
+    return await api.post('/api/auth/verify-reset-otp', {
+      email: email.trim().toLowerCase(),
+      otp: otp.replace(/\D/g, '').slice(0, 6),
+    })
   },
 
   changePassword: async (data: {
@@ -881,6 +899,12 @@ export const notificationsService = {
     const api = new ApiService()
     return await api.patch('/api/notifications/preferences', { preferences })
   },
+  sendTestEmail: async () => {
+    const api = new ApiService()
+    return await api.post<{ success: boolean; email?: string; message: string }>(
+      '/api/notifications/preferences/test-email',
+    )
+  },
   getAlerts: async (filters?: { status?: string; priority?: string }) => {
     const api = new ApiService()
     return await api.get('/api/notifications/alerts', { params: filters })
@@ -1005,6 +1029,53 @@ export const accessControlService = {
   ) => {
     const api = new ApiService()
     return await api.put(`/api/access-control/users/${userId}/permissions`, payload)
+  },
+  listAllGrants: async (params?: {
+    search?: string
+    duration?: 'all' | 'permanent' | 'temporary'
+    status?: 'all' | 'active' | 'inactive' | 'expired'
+  }) => {
+    const api = new ApiService()
+    const search = new URLSearchParams()
+    if (params?.search) search.append('search', params.search)
+    if (params?.duration && params.duration !== 'all') search.append('duration', params.duration)
+    if (params?.status && params.status !== 'all') search.append('status', params.status)
+    const qs = search.toString() ? `?${search.toString()}` : ''
+    return await api.get<
+      Array<{
+        id: string
+        permissionKey: string
+        grantedAt: string
+        expiresAt: string | null
+        isUnlimited: boolean
+        isActive: boolean
+        isTimeExpired: boolean
+        isExpired: boolean
+        isEffective: boolean
+        status: 'active' | 'inactive' | 'expired'
+        user: {
+          id: string
+          username: string
+          email: string
+          role: string
+          displayName: string
+          employeeRole: string | null
+          department: string | null
+        }
+      }>
+    >(`/api/access-control/grants${qs}`)
+  },
+  activateGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/access-control/grants/${grantId}/activate`, {})
+  },
+  deactivateGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/access-control/grants/${grantId}/deactivate`, {})
+  },
+  deleteGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.delete(`/api/access-control/grants/${grantId}`)
   },
 }
 

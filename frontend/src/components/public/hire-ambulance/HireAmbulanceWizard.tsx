@@ -33,6 +33,7 @@ import {
   DRAFT_KEY,
   EMERGENCY_HOTLINE,
 } from './constants'
+import { PUBLIC_HEADER_OFFSET, PUBLIC_HEADER_TOP } from '@/lib/layout/publicHeader'
 import {
   HireFormValues,
   HireEmergencyTypeOption,
@@ -50,6 +51,7 @@ import {
   syncEstimatedAgeFromDob,
 } from './formHelpers'
 import { fetchHireEmergencyTypes } from '@/lib/hire-ambulance/emergencyTypes'
+import { fetchFleetAvailability } from '@/lib/emergency/emergencyTypes'
 import { COUNTRY_NAMES } from '@/lib/countries'
 import { googleMapsUrl } from '@/lib/pickupGps'
 
@@ -91,6 +93,7 @@ export default function HireAmbulanceWizard() {
   const [fleetStatus, setFleetStatus] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [emergencyTypes, setEmergencyTypes] = useState<HireEmergencyTypeOption[]>([])
   const [loadingEmergencyTypes, setLoadingEmergencyTypes] = useState(true)
+  const [emergencyTypesError, setEmergencyTypesError] = useState(false)
   const [locating, setLocating] = useState(false)
 
   const { register, handleSubmit, watch, setValue, reset, getValues } = useForm<HireFormValues>({
@@ -146,30 +149,38 @@ export default function HireAmbulanceWizard() {
 
   const loadPublicData = useCallback(async () => {
     setFleetStatus('loading')
+    setLoadingEmergencyTypes(true)
+    setEmergencyTypesError(false)
+
     try {
-      const [regionsRes, hospitalsRes, fleetRes, types] = await Promise.all([
+      const [regionsRes, hospitalsRes, fleetInfo, types] = await Promise.all([
         fetch(`${API_BASE}/api/setup/regions`),
         fetch(`${API_BASE}/api/hospitals`),
-        fetch(`${API_BASE}/api/emergency-requests/available/ambulances`),
+        fetchFleetAvailability(),
         fetchHireEmergencyTypes(),
       ])
+
       if (regionsRes.ok) setRegions(await regionsRes.json())
       if (hospitalsRes.ok) setHospitals(await hospitalsRes.json())
+
       setEmergencyTypes(types)
-      if (fleetRes.ok) {
-        const ambulances = await fleetRes.json()
-        const list = Array.isArray(ambulances) ? ambulances : []
-        const available = list.filter((a: any) => a.status === 'AVAILABLE').length
+      setEmergencyTypesError(types.length === 0)
+
+      if (fleetInfo) {
         setFleet({
-          total: list.length,
-          available,
+          total: fleetInfo.total,
+          available: fleetInfo.available,
         })
-        setFleetStatus(available > 0 ? 'available' : 'unavailable')
+        setFleetStatus(fleetInfo.canAcceptRequests ? 'available' : 'unavailable')
       } else {
-        setFleetStatus('available')
+        setFleet({ total: 0, available: 0 })
+        setFleetStatus('unavailable')
       }
     } catch {
-      setFleetStatus('available')
+      setEmergencyTypes([])
+      setEmergencyTypesError(true)
+      setFleet({ total: 0, available: 0 })
+      setFleetStatus('unavailable')
     } finally {
       setLoadingEmergencyTypes(false)
     }
@@ -343,7 +354,7 @@ export default function HireAmbulanceWizard() {
 
   if (fleetStatus === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50 flex items-center justify-center px-4 pt-20">
+      <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50 flex items-center justify-center px-4 ${PUBLIC_HEADER_OFFSET}`}>
         <div className="text-center space-y-4">
           <Loader2 className="w-10 h-10 animate-spin text-red-600 mx-auto" />
           <p className="text-sm font-bold uppercase tracking-wider text-slate-500">Checking ambulance availability…</p>
@@ -354,17 +365,17 @@ export default function HireAmbulanceWizard() {
 
   if (fleetStatus === 'unavailable') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 pt-20 pb-16 px-4">
+      <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 ${PUBLIC_HEADER_OFFSET} pb-16 px-4`}>
         <div className="max-w-2xl mx-auto">
           <div className="rounded-3xl overflow-hidden shadow-2xl border border-slate-200 bg-white">
             <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-8 py-10 text-center text-white">
               <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-4">
                 <Truck className="w-10 h-10" />
               </div>
-              <h1 className="text-2xl font-black tracking-tight">No Ambulances Available Right Now</h1>
+              <h1 className="text-2xl font-black tracking-tight">We Apologize — No Ambulances Available</h1>
               <p className="text-slate-300 text-sm mt-3 max-w-md mx-auto leading-relaxed">
-                We are sorry — all ambulances in our fleet are currently assigned or unavailable. Online requests
-                cannot be accepted at this time.
+                We are sorry — all ambulances in our fleet are currently assigned or unavailable. The online request
+                form cannot accept new bookings at this time.
               </p>
             </div>
             <div className="p-8 space-y-6">
@@ -421,7 +432,7 @@ export default function HireAmbulanceWizard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50/40">
       {/* Sticky emergency bar */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md text-white border-b border-white/10">
+      <div className={`fixed ${PUBLIC_HEADER_TOP} left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md text-white border-b border-white/10`}>
         <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4 text-sm">
           <a
             href={`tel:${EMERGENCY_HOTLINE}`}
@@ -447,7 +458,7 @@ export default function HireAmbulanceWizard() {
       </div>
 
       {/* Hero */}
-      <section className="pt-28 pb-8 px-4">
+      <section className="pt-40 pb-8 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-[1fr_320px] gap-8 items-start">
             <div>
@@ -569,9 +580,21 @@ export default function HireAmbulanceWizard() {
                       <span className="text-sm font-medium">Loading emergency types…</span>
                     </div>
                   ) : emergencyTypes.length === 0 ? (
-                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                      Emergency types are not available right now. Please call {EMERGENCY_HOTLINE} directly.
-                    </p>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                      <p className="text-sm text-amber-900">
+                        {emergencyTypesError
+                          ? 'Could not load emergency types from the server. Please retry or call the hotline if this is urgent.'
+                          : `No emergency types are configured yet. Please call ${EMERGENCY_HOTLINE} directly.`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void loadPublicData()}
+                        className="inline-flex items-center gap-2 text-sm font-bold text-red-700 hover:text-red-800"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Retry loading types
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <FieldLabel>Emergency Type (optional)</FieldLabel>

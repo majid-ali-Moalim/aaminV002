@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+import { API_BASE_URL } from '@/lib/api'
 
 /** Same records as Admin → Master Data → Emergency Configuration → Emergency Types */
 export type EmergencyTypeOption = {
@@ -35,13 +35,29 @@ export function sortEmergencyTypes(types: EmergencyTypeOption[]): EmergencyTypeO
   })
 }
 
-/** Public endpoint — mirrors active rows in master-data/emergency (Emergency Types tab). */
+/** Public endpoints — active rows in master-data/emergency (Emergency Types tab). */
 export async function fetchEmergencyTypes(): Promise<EmergencyTypeOption[]> {
-  const res = await fetch(`${API_BASE}/api/setup/emergency-types`, { cache: 'no-store' })
-  if (!res.ok) return []
-  const data = await res.json()
-  const list = Array.isArray(data) ? (data as EmergencyTypeOption[]) : []
-  return sortEmergencyTypes(list.filter((t) => t.isActive !== false))
+  const endpoints = [
+    `${API_BASE_URL}/api/public/emergency-types`,
+    `${API_BASE_URL}/api/setup/emergency-types`,
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) continue
+      const data = await res.json()
+      const list = Array.isArray(data) ? (data as EmergencyTypeOption[]) : []
+      const active = list.filter((t) => t.isActive !== false)
+      if (active.length > 0) {
+        return sortEmergencyTypes(active)
+      }
+    } catch {
+      /* try next endpoint */
+    }
+  }
+
+  return []
 }
 
 export async function fetchEmergencyTypesAuthenticated(): Promise<EmergencyTypeOption[]> {
@@ -54,4 +70,48 @@ export async function fetchEmergencyTypesAuthenticated(): Promise<EmergencyTypeO
 export function resolveIncidentCategoryId(type: EmergencyTypeOption | undefined): string | undefined {
   if (!type) return undefined
   return type.incidentCategoryId || type.incidentCategory?.id || undefined
+}
+
+export type FleetAvailability = {
+  available: number
+  total: number
+  canAcceptRequests: boolean
+}
+
+export async function fetchFleetAvailability(): Promise<FleetAvailability | null> {
+  const endpoints = [
+    `${API_BASE_URL}/api/public/fleet/availability`,
+    `${API_BASE_URL}/api/emergency-requests/available/ambulances`,
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) continue
+
+      if (url.includes('fleet/availability')) {
+        const data = await res.json()
+        if (typeof data?.available === 'number') {
+          return {
+            available: data.available,
+            total: data.total ?? data.available,
+            canAcceptRequests: Boolean(data.canAcceptRequests ?? data.available > 0),
+          }
+        }
+      }
+
+      const ambulances = await res.json()
+      const list = Array.isArray(ambulances) ? ambulances : []
+      const available = list.filter((a: { status?: string }) => a.status === 'AVAILABLE').length
+      return {
+        available,
+        total: list.length,
+        canAcceptRequests: available > 0,
+      }
+    } catch {
+      /* try next */
+    }
+  }
+
+  return null
 }

@@ -1,12 +1,12 @@
 'use client'
 
 import { NursePageLayout } from '@/components/nurse/NursePageLayout'
-import NursePermissionsView from '@/components/nurse/views/NursePermissionsView'
+import PortalPermissionsView from '@/components/permissions/PortalPermissionsView'
 
 export default function Page() {
   return (
-    <NursePageLayout title="My Permissions" subtitle="Built-in nurse access and administrator grants">
-      <NursePermissionsView />
+    <NursePageLayout title="My Permissions" subtitle="Administrator-granted access for your account">
+      <PortalPermissionsView portal="nurse" />
     </NursePageLayout>
   )
 }

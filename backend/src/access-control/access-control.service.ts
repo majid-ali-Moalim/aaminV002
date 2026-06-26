@@ -45,18 +45,26 @@ export class AccessControlService {
   }
 
   private mapGrant(row: {
+    id: string;
     permissionKey: string;
     grantedAt: Date;
     expiresAt: Date | null;
+    isActive?: boolean | null;
   }) {
     const now = new Date();
-    const isExpired = row.expiresAt ? row.expiresAt <= now : false;
+    const isActive = row.isActive ?? true;
+    const isTimeExpired = row.expiresAt ? row.expiresAt <= now : false;
+    const isEffective = isActive && !isTimeExpired;
     return {
+      id: row.id,
       permissionKey: row.permissionKey,
       grantedAt: row.grantedAt.toISOString(),
       expiresAt: row.expiresAt?.toISOString() ?? null,
       isUnlimited: row.expiresAt === null,
-      isExpired,
+      isActive,
+      isTimeExpired,
+      isExpired: isTimeExpired,
+      isEffective,
     };
   }
 
@@ -100,7 +108,7 @@ export class AccessControlService {
       ...this.mapGrant(p),
       source: 'granted' as const,
     }));
-    const activeGrants = grants.filter((g) => !g.isExpired);
+    const activeGrants = grants.filter((g) => g.isEffective);
     const activeGrantedKeys = activeGrants.map((g) => g.permissionKey);
     const activePermissionKeys = [...new Set([...baseline, ...activeGrantedKeys])];
     const grantablePermissionKeys = ALL_PERMISSION_KEYS.filter(
@@ -181,6 +189,7 @@ export class AccessControlService {
             permissionKey,
             grantedById,
             expiresAt,
+            isActive: true,
           })),
         });
       }
@@ -253,6 +262,7 @@ export class AccessControlService {
     const rows = await this.prisma.userPermission.findMany({
       where: {
         userId,
+        isActive: true,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
       select: { permissionKey: true },
@@ -260,5 +270,147 @@ export class AccessControlService {
 
     const granted = rows.map((r) => r.permissionKey);
     return [...new Set([...baseline, ...granted])];
+  }
+
+  async listAllGrants(filters?: {
+    search?: string;
+    duration?: 'all' | 'permanent' | 'temporary';
+    status?: 'all' | 'active' | 'inactive' | 'expired';
+  }) {
+    const now = new Date();
+    const search = filters?.search?.trim().toLowerCase() ?? '';
+    const duration = filters?.duration ?? 'all';
+    const status = filters?.status ?? 'all';
+
+    const rows = await this.prisma.userPermission.findMany({
+      where: {
+        user: { role: { not: 'PATIENT' } },
+        ...(duration === 'permanent' ? { expiresAt: null } : {}),
+        ...(duration === 'temporary' ? { expiresAt: { not: null } } : {}),
+      },
+      include: {
+        user: {
+          include: {
+            employee: { include: { employeeRole: true, department: true } },
+          },
+        },
+      },
+      orderBy: [{ grantedAt: 'desc' }],
+    });
+
+    const mapped = rows.map((row) => {
+      const grant = this.mapGrant(row);
+      const emp = row.user.employee;
+      const displayName =
+        emp?.firstName || emp?.lastName
+          ? [emp.firstName, emp.lastName].filter(Boolean).join(' ')
+          : row.user.username;
+
+      let grantStatus: 'active' | 'inactive' | 'expired';
+      if (!(row.isActive ?? true)) grantStatus = 'inactive';
+      else if (grant.isTimeExpired) grantStatus = 'expired';
+      else grantStatus = 'active';
+
+      return {
+        ...grant,
+        status: grantStatus,
+        user: {
+          id: row.user.id,
+          username: row.user.username,
+          email: row.user.email,
+          role: row.user.role,
+          displayName,
+          employeeRole: emp?.employeeRole?.name ?? null,
+          department: emp?.department?.name ?? null,
+        },
+      };
+    });
+
+    return mapped.filter((g) => {
+      if (status === 'active' && g.status !== 'active') return false;
+      if (status === 'inactive' && g.status !== 'inactive') return false;
+      if (status === 'expired' && g.status !== 'expired') return false;
+
+      if (!search) return true;
+      return (
+        g.permissionKey.toLowerCase().includes(search) ||
+        g.user.displayName.toLowerCase().includes(search) ||
+        g.user.username.toLowerCase().includes(search) ||
+        g.user.email.toLowerCase().includes(search) ||
+        (g.user.employeeRole ?? '').toLowerCase().includes(search)
+      );
+    });
+  }
+
+  private async findGrantOrThrow(grantId: string) {
+    const grant = await this.prisma.userPermission.findUnique({
+      where: { id: grantId },
+      include: {
+        user: { include: { employee: { include: { employeeRole: true } } } },
+      },
+    });
+    if (!grant) throw new NotFoundException('Permission grant not found');
+    if (grant.user.role === 'ADMIN') {
+      throw new ForbiddenException('Administrator permissions cannot be modified here');
+    }
+    return grant;
+  }
+
+  async setGrantActive(grantId: string, isActive: boolean, actorId: string) {
+    const grant = await this.findGrantOrThrow(grantId);
+    const updated = await this.prisma.userPermission.update({
+      where: { id: grantId },
+      data: { isActive },
+    });
+
+    try {
+      const auditUserId = await this.resolveAuditUserId(actorId);
+      await this.prisma.activityLog.create({
+        data: {
+          userId: auditUserId,
+          action: isActive
+            ? `Activated permission ${grant.permissionKey} for ${grant.user.username}`
+            : `Deactivated permission ${grant.permissionKey} for ${grant.user.username}`,
+          entityType: 'UserPermission',
+          entityId: grant.userId,
+          metadata: {
+            grantId,
+            permissionKey: grant.permissionKey,
+            targetUsername: grant.user.username,
+            isActive,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[AccessControlService] Audit log failed:', err);
+    }
+
+    return this.mapGrant(updated);
+  }
+
+  async deleteGrant(grantId: string, actorId: string) {
+    const grant = await this.findGrantOrThrow(grantId);
+    await this.prisma.userPermission.delete({ where: { id: grantId } });
+
+    try {
+      const auditUserId = await this.resolveAuditUserId(actorId);
+      await this.prisma.activityLog.create({
+        data: {
+          userId: auditUserId,
+          action: `Deleted permission ${grant.permissionKey} for ${grant.user.username}`,
+          entityType: 'UserPermission',
+          entityId: grant.userId,
+          metadata: {
+            grantId,
+            permissionKey: grant.permissionKey,
+            targetUsername: grant.user.username,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[AccessControlService] Audit log failed:', err);
+    }
+
+    return { deleted: true, grantId };
   }
 }

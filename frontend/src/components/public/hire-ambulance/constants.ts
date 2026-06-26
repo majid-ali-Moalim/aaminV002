@@ -8,7 +8,9 @@ import {
   Clock,
 } from 'lucide-react'
 
-export const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+import { API_BASE_URL } from '@/lib/api'
+
+export const API_BASE = API_BASE_URL
 
 export const STEPS = [
   { id: 'urgency', label: 'Urgency', icon: Siren },

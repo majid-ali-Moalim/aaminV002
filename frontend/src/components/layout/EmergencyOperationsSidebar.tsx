@@ -10,9 +10,6 @@ import {
   PlusCircle,
   Clock,
   AlertTriangle,
-  LayoutGrid,
-  Truck,
-  Building2,
   HeartHandshake,
   CheckCircle2,
   AlertCircle,
@@ -63,7 +60,6 @@ const emergencySections: MenuSection[] = [
   {
     title: 'Dispatch & Missions',
     items: [
-      { href: '/admin/dashboard/live', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info' },
       { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
     ],
   },
@@ -71,9 +67,6 @@ const emergencySections: MenuSection[] = [
     title: '',
     workflow: true,
     items: [
-      { href: '/admin/emergency-requests/en-route', label: 'En Route to Scene', icon: Truck, accent: 'info' },
-      { href: '/admin/emergency-requests/transporting', label: 'Transporting to Hospital', icon: Truck, accent: 'info' },
-      { href: '/admin/emergency-requests/at-hospital', label: 'Arrived at Hospital', icon: Building2 },
       { href: '/admin/emergency-requests/handover', label: 'Patient Handover', icon: HeartHandshake },
       { href: '/admin/emergency-requests/completed', label: 'Mission Completed', icon: CheckCircle2, accent: 'success' },
     ],

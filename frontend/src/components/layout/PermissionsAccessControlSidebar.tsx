@@ -6,13 +6,9 @@ import {
   Lock,
   ChevronDown,
   ChevronRight,
-  Shield,
   Key,
-  Users,
-  UserCog,
   Clock,
   ScrollText,
-  Settings,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -34,13 +30,9 @@ type MenuItem = {
 }
 
 const accessControlMenuItems: MenuItem[] = [
-  { href: '/admin/access-control/roles', label: 'Roles', icon: Shield },
-  { href: '/admin/access-control/permissions', label: 'Permissions', icon: Key },
-  { href: '/admin/access-control/user-access', label: 'User Access', icon: Users, exact: true },
-  { href: '/admin/access-control/delegated-access', label: 'Delegated Access', icon: UserCog },
-  { href: '/admin/access-control/temporary-access', label: 'Temporary Access', icon: Clock },
+  { href: '/admin/access-control/permissions', label: 'Permissions', icon: Key, exact: true },
+  { href: '/admin/access-control/access-management', label: 'Access Management', icon: Clock },
   { href: '/admin/access-control/audit-logs', label: 'Audit Logs', icon: ScrollText },
-  { href: '/admin/access-control/security-settings', label: 'Security Settings', icon: Settings },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {

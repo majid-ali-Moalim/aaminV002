@@ -324,11 +324,13 @@ model UserPermission {
   grantedAt     DateTime  @default(now())
   grantedById   String?
   expiresAt     DateTime?
+  isActive      Boolean   @default(true)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, permissionKey])
   @@index([userId])
   @@index([expiresAt])
+  @@index([isActive])
   @@map("user_permissions")
 }
 

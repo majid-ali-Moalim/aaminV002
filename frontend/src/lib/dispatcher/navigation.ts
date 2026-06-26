@@ -162,12 +162,10 @@ export const DISPATCHER_MODULES: NavModule[] = [
     label: 'My Permissions',
     icon: Lock,
     basePath: '/dispatcher/permissions',
-    description: 'Capabilities granted by your administrator',
+    description: 'Administrator-granted capabilities',
     defaultSlug: 'overview',
-    items: [
-      { slug: 'overview', label: 'All Capabilities', icon: Lock, exact: true },
-      { slug: 'granted', label: 'Admin Granted', icon: Shield, exact: true },
-    ],
+    standalone: true,
+    items: [{ slug: 'overview', label: 'My Permissions', icon: Lock, exact: true }],
   },
   {
     id: 'profile',
@@ -190,8 +188,8 @@ export function getModuleByPath(pathname: string): NavModule | undefined {
   }
   if (pathname === '/dispatcher/profile') return getModuleById('profile')
   if (pathname.startsWith('/dispatcher/patients')) return undefined
-  if (pathname.startsWith('/dispatcher/add-driver')) return getModuleById('driver-registration')
-  if (pathname.startsWith('/dispatcher/add-nurse')) return getModuleById('nurse-registration')
+  if (pathname.startsWith('/dispatcher/resources/drivers')) return getModuleById('resources')
+  if (pathname.startsWith('/dispatcher/resources/nurses')) return getModuleById('resources')
   return DISPATCHER_MODULES.find(
     (m) => m.id !== 'dashboard' && m.id !== 'profile' && pathname.startsWith(m.basePath),
   )

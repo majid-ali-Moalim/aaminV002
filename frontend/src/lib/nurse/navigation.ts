@@ -40,6 +40,9 @@ export const NURSE_LEGACY_REDIRECTS: Record<string, string> = {
 }
 
 export function isNurseNavActive(pathname: string, item: NurseNavItem): boolean {
+  if (item.id === 'permissions') {
+    return pathname === item.href || pathname.startsWith(`${item.href}/`)
+  }
   if (item.exact) return pathname === item.href
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }

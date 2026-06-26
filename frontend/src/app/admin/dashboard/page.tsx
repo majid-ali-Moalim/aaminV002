@@ -42,7 +42,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen -m-6 p-5 sm:p-6 bg-slate-50/80">
+    <div className="min-h-screen -m-6 p-5 sm:p-6 bg-slate-50/80 dark:bg-slate-950">
       <UnifiedAdminDashboard data={data} isRefreshing={isValidating} onRefresh={handleRefresh} />
     </div>
   )

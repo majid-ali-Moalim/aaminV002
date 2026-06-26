@@ -85,6 +85,7 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     label: 'Incident Reports',
     icon: AlertTriangle,
     basePath: '/driver/incidents',
+    singlePage: true,
     items: [
       { slug: 'new', label: 'New Incident', icon: PlusCircle },
       { slug: 'submitted', label: 'Submitted Reports', icon: FileText },
@@ -124,7 +125,8 @@ export const LEGACY_DRIVER_REDIRECTS: Record<string, string> = {
   '/driver/missions/assigned': '/driver/mission',
   '/driver/missions/workflow': '/driver/mission',
   '/driver/transport': '/driver/mission',
-  '/driver/incidents': '/driver/incidents/new',
+  '/driver/incidents/new': '/driver/incidents',
+  '/driver/incidents/submitted': '/driver/incidents?tab=submitted',
   '/driver/communications': '/driver',
 }
 

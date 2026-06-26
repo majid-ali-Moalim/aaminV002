@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronRight,
   Clock,
+  FileText,
   History,
   Loader2,
   MapPin,
@@ -135,6 +136,19 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     ? 100
     : Math.round(((timelineIndex + 1) / DRIVER_TIMELINE_STEPS.length) * 100)
   const onDuty = profile?.shiftStatus === 'ON_DUTY'
+
+  const stickyPrimary = useMemo(() => {
+    const actions = currentStep.actions.filter((a) => a.id !== 'submit_report')
+    return actions.find((a) => a.variant === 'primary') ?? actions[0] ?? null
+  }, [currentStep.actions])
+
+  const stickyPrimaryDisabled =
+    stickyPrimary &&
+    ((stickyPrimary.id === 'accept' && !caseReviewed) ||
+      (!onDuty &&
+        ['accept', 'mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
+          stickyPrimary.id,
+        )))
 
   const refresh = async () => {
     setRefreshing(true)
@@ -503,6 +517,27 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
               {c.trackingCode}
             </button>
           ))}
+        </div>
+      )}
+
+      {!readOnly && stickyPrimary && (
+        <div className="dcw-sticky-action">
+          <button
+            type="button"
+            className="dcw-sticky-btn secondary"
+            onClick={() => handleAction('view_details')}
+            aria-label="View case details"
+          >
+            <FileText size={18} />
+          </button>
+          <button
+            type="button"
+            className="dcw-sticky-btn primary"
+            disabled={Boolean(stickyPrimaryDisabled)}
+            onClick={() => handleAction(stickyPrimary.id)}
+          >
+            {stickyPrimary.label}
+          </button>
         </div>
       )}
 

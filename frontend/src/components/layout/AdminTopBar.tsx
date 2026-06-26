@@ -6,6 +6,7 @@ import { Search, User } from 'lucide-react'
 import NotificationBell from '../notifications/NotificationBell'
 import Breadcrumbs from './Breadcrumbs'
 import LiveActivityTicker from '../notifications/LiveActivityTicker'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import { useAuth } from '@/context/AuthContext'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
 
@@ -25,7 +26,7 @@ export default function AdminTopBar() {
   }, [user?.employee?.profilePhoto])
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 h-16 sticky top-0 z-40 backdrop-blur-md bg-white/80">
+    <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-gray-200 dark:border-slate-800 h-16 sticky top-0 z-40 backdrop-blur-md bg-white/80 dark:bg-slate-900/90">
       <div className="flex items-center justify-between h-full px-6 gap-8">
         <div className="flex items-center gap-8 min-w-0">
           <Breadcrumbs />
@@ -46,14 +47,16 @@ export default function AdminTopBar() {
             <input
               type="text"
               placeholder="Search..."
-              className="w-48 xl:w-64 pl-9 pr-4 py-1.5 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-red-500/10 focus:bg-white transition-all text-xs font-bold text-gray-900"
+              className="w-48 xl:w-64 pl-9 pr-4 py-1.5 bg-gray-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-red-500/10 focus:bg-white dark:focus:bg-slate-900 transition-all text-xs font-bold text-gray-900 dark:text-slate-100"
             />
           </div>
 
           <NotificationBell />
 
+          <AdminThemeToggle compact />
+
           <div className="hidden sm:block text-right min-w-0 max-w-[160px]">
-            <p className="text-[11px] font-black tracking-widest uppercase text-gray-900 leading-none mb-0.5 truncate">
+            <p className="text-[11px] font-black tracking-widest uppercase text-gray-900 dark:text-slate-100 leading-none mb-0.5 truncate">
               {fullName}
             </p>
             <p className="text-[9px] font-black uppercase tracking-widest text-red-600 truncate">{roleLabel}</p>

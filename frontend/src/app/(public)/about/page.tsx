@@ -1,13 +1,11 @@
 import Link from 'next/link'
 import { Phone, MapPin, Clock, Shield, Activity, Truck, Target } from 'lucide-react'
-import { PublicStatsGrid } from '@/components/public/PublicStatsGrid'
-import { fetchPublicStats } from '@/lib/public/stats'
+import { PUBLIC_HEADER_OFFSET } from '@/lib/layout/publicHeader'
+import { PublicStatsLoader } from '@/components/public/PublicStatsLoader'
 
-export default async function AboutPage() {
-  const stats = await fetchPublicStats()
-
+export default function AboutPage() {
   return (
-    <div className="pt-16 pb-12">
+    <div className={`${PUBLIC_HEADER_OFFSET} pb-12`}>
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-red-50 to-white py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -171,7 +169,7 @@ export default async function AboutPage() {
             </p>
           </div>
 
-          <PublicStatsGrid stats={stats} variant="about" />
+          <PublicStatsLoader variant="about" />
         </div>
       </section>
 

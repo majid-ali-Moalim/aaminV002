@@ -115,3 +115,172 @@
     @apply bg-ems-panel border border-ems-border rounded-2xl p-4 hover:border-ems-primary/30 hover:-translate-y-0.5 transition-all duration-300;
   }
 }
+
+@keyframes site-header-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes site-top-bar-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes site-nav-enter {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.site-header-marquee {
+  animation: site-header-marquee 28s linear infinite;
+}
+
+.site-header-marquee:hover {
+  animation-play-state: paused;
+}
+
+.site-top-bar-enter {
+  animation: site-top-bar-enter 0.55s ease-out both;
+}
+
+.site-nav-enter {
+  animation: site-nav-enter 0.6s ease-out 0.12s both;
+}
+
+/* Shared My Permissions module (all portals) */
+.perm-module-loading {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.perm-module-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.perm-module-refresh {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.perm-module-refresh:hover {
+  text-decoration: underline;
+}
+
+.perm-module-card {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+}
+
+.dark .perm-module-card,
+.nurse-shell .perm-module-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.perm-module-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.perm-module-alert {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 13px;
+}
+
+.perm-module-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.perm-module-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.perm-module-item:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.perm-module-item.static {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.perm-module-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.perm-module-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.perm-module-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.perm-module-back:hover {
+  text-decoration: underline;
+}
+
+.perm-module-embed {
+  border-radius: 12px;
+  overflow: hidden;
+}

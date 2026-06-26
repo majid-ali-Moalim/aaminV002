@@ -14,4 +14,18 @@ export class PublicController {
   getStats() {
     return this.publicService.getPublicStats();
   }
+
+  @Public()
+  @Get('emergency-types')
+  @ApiOperation({ summary: 'Active emergency types for public hire-ambulance form' })
+  getEmergencyTypes() {
+    return this.publicService.getEmergencyTypes();
+  }
+
+  @Public()
+  @Get('fleet/availability')
+  @ApiOperation({ summary: 'Ambulance fleet availability for public hire form' })
+  getFleetAvailability() {
+    return this.publicService.getFleetAvailability();
+  }
 }

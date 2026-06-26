@@ -188,13 +188,17 @@ const FORM_ROUTES: Record<
 export default function NewEmergencyCaseForm({
   context = 'admin',
   operatorName,
+  returnPath,
 }: {
   context?: EmergencyFormContext
   operatorName?: string
+  /** When opened from a portal permissions module, navigate here instead of admin/dispatcher defaults */
+  returnPath?: string
 }) {
   const router = useRouter()
   const { user } = useAuth()
   const routes = FORM_ROUTES[context]
+  const backPath = returnPath ?? routes.back
   const displayName = operatorName || user?.username || routes.portalLabel
   const [step, setStep] = useState<StepId>('patient')
   const [loading, setLoading] = useState(true)
@@ -726,7 +730,7 @@ export default function NewEmergencyCaseForm({
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => router.push(routes.back)}
+              onClick={() => router.push(backPath)}
               className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition"
               aria-label="Back"
             >

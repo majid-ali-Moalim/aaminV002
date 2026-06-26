@@ -1,9 +1,9 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { EmployeesModule } from './employees/employees.module';
 import { PatientsModule } from './patients/patients.module';
 import { AmbulancesModule } from './ambulances/ambulances.module';
@@ -32,6 +32,7 @@ import { PublicModule } from './public/public.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: join(process.cwd(), '.env'),
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),

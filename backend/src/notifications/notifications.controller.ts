@@ -108,6 +108,11 @@ export class NotificationsController {
     return this.notificationsService.updatePreferences(user.id, body.preferences ?? []);
   }
 
+  @Post('preferences/test-email')
+  sendTestEmail(@CurrentUser() user: any) {
+    return this.notificationsService.sendTestNotificationEmail(user.id);
+  }
+
   @Get('alerts')
   getAlerts(
     @Query('status') status?: string,

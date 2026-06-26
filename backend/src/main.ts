@@ -3,7 +3,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { config as loadEnv } from 'dotenv';
 import { AppModule } from './app.module';
+
+loadEnv({ path: join(process.cwd(), '.env') });
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);

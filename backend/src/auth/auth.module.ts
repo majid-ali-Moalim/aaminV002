@@ -10,11 +10,13 @@ import { RolesGuard } from './guards/roles.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { MailService } from './mail.service';
 import { AccessControlModule } from '../access-control/access-control.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     PassportModule,
     AccessControlModule,
+    MailModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '15m' },
@@ -23,13 +25,12 @@ import { AccessControlModule } from '../access-control/access-control.module';
   controllers: [AuthController],
   providers: [
     AuthService,
-    MailService,
     JwtStrategy,
     LocalStrategy,
     RefreshTokenStrategy,
     RolesGuard,
     PermissionsGuard,
   ],
-  exports: [AuthService, PermissionsGuard, AccessControlModule],
+  exports: [AuthService, MailModule, PermissionsGuard, AccessControlModule],
 })
 export class AuthModule {}

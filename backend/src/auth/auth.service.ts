@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
@@ -11,7 +11,9 @@ import { MailService } from './mail.service';
 import {
   assertPasswordMeetsPolicy,
   generateOtpCode,
+  hashOtpForStorage,
   passwordsMatch,
+  verifyStoredOtp,
 } from './password-policy';
 
 @Injectable()
@@ -160,6 +162,9 @@ export class AuthService {
         employee: user.employee
           ? {
               id: user.employee.id,
+              firstName: user.employee.firstName,
+              lastName: user.employee.lastName,
+              profilePhoto: user.employee.profilePhoto,
               employeeCode: user.employee.employeeCode,
               status: user.employee.status,
               shiftStatus: user.employee.shiftStatus,
@@ -482,7 +487,7 @@ export class AuthService {
 
     if (user) {
       const otp = generateOtpCode();
-      const otpHash = await bcrypt.hash(otp, 10);
+      const otpHash = hashOtpForStorage(otp);
       const expires = new Date(Date.now() + 10 * 60 * 1000);
 
       await this.prisma.user.update({
@@ -497,8 +502,15 @@ export class AuthService {
         },
       });
 
-      await this.mailService.sendPasswordResetOtpEmail(user.email, otp);
-      this.log(`[AuthService] Password reset OTP sent to ${user.email}`);
+      const delivered = await this.mailService.sendPasswordResetOtpEmail(user.email, otp);
+      if (delivered) {
+        this.log(`[AuthService] Password reset OTP sent to ${user.email}`);
+      } else {
+        this.log(`[AuthService] Password reset OTP NOT delivered (check SMTP) for ${user.email}`);
+        throw new ServiceUnavailableException(
+          'Unable to send verification email right now. Please contact support at info@aaminambulance.com or try again later.',
+        );
+      }
     }
 
     return {
@@ -522,18 +534,18 @@ export class AuthService {
       throw new BadRequestException('Verification code has expired. Request a new code.');
     }
 
-    if ((user.passwordResetOtpAttempts ?? 0) >= 3) {
+    if ((user.passwordResetOtpAttempts ?? 0) >= 5) {
       throw new BadRequestException('Too many failed attempts. Request a new verification code.');
     }
 
-    const otpValid = await bcrypt.compare(otp.trim(), user.passwordResetOtpHash);
+    const otpValid = await verifyStoredOtp(otp, user.passwordResetOtpHash);
     if (!otpValid) {
       const attempts = (user.passwordResetOtpAttempts ?? 0) + 1;
       await this.prisma.user.update({
         where: { id: user.id },
         data: { passwordResetOtpAttempts: attempts },
       });
-      const remaining = Math.max(0, 3 - attempts);
+      const remaining = Math.max(0, 5 - attempts);
       throw new BadRequestException(
         remaining > 0
           ? `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`

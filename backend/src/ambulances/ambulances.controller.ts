@@ -32,7 +32,7 @@ export class AmbulancesController {
   }
 
   @Get()
-  @Roles('ADMIN', 'DISPATCHER')
+  @Roles('ADMIN', 'DISPATCHER', 'NURSE')
   @ApiOperation({ summary: 'Get all ambulances' })
   findAll() {
     return this.ambulancesService.findAll();

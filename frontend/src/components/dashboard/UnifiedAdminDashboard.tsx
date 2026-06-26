@@ -153,11 +153,14 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
         </div>
       )}
 
-      {/* TOP — KPI Cards */}
+      {/* TOP — KPI Cards (4 per row, two rows) */}
       <section id="summary-kpis" className="scroll-mt-20">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {kpiCards.map((kpi) => (
-            <div key={kpi.key} className="bg-white rounded-lg border border-slate-100 px-2.5 py-2 shadow-sm">
+            <div
+              key={kpi.key}
+              className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 px-2.5 py-2 shadow-sm"
+            >
               <div className="flex items-center justify-between gap-1">
                 <div className={`w-7 h-7 rounded-md ${kpi.tone.bg} flex items-center justify-center`}>
                   <kpi.icon className={`w-3.5 h-3.5 ${kpi.tone.accent}`} />
@@ -166,8 +169,8 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
                   <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded-full">Live</span>
                 )}
               </div>
-              <p className="text-lg font-black text-slate-900 mt-1.5 leading-none">{kpi.displayValue}</p>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mt-1 leading-tight line-clamp-2">
+              <p className="text-lg font-black text-slate-900 dark:text-white mt-1.5 leading-none">{kpi.displayValue}</p>
+              <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mt-1 leading-tight line-clamp-2">
                 {kpi.label}
               </p>
             </div>
@@ -203,13 +206,21 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
           </DashboardSection>
 
           <DashboardSection id="recent-activities" icon={ClipboardList} title="Recent Activities">
-            <RecentActivitiesWidget variant="widget" hideSummary hideViewAll bare className="h-[440px]" />
+            <RecentActivitiesWidget
+              variant="widget"
+              hideSummary
+              hideViewAll
+              bare
+              previewLimit={5}
+              showSeeMore
+              className="h-[360px]"
+            />
           </DashboardSection>
         </div>
       </div>
 
-      {/* BOTTOM — Resource / Hospital / Staff / Quick Actions / Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      {/* BOTTOM — Row 1: Resource / Hospital / Staff */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <DashboardSection icon={Truck} title="Resource Status">
           <DashboardResourceStatus charts={charts} ambulances={operational.ambulances} />
         </DashboardSection>
@@ -221,7 +232,10 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
         <DashboardSection icon={Users} title="Staff Status">
           <DashboardStaffStatus employees={operational.employees} summary={summary} />
         </DashboardSection>
+      </div>
 
+      {/* BOTTOM — Row 2: Quick Actions / Operations Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <DashboardSection icon={Zap} title="Quick Actions">
           <DashboardQuickActions summary={summary} />
         </DashboardSection>

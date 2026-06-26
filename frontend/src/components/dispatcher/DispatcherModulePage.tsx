@@ -27,7 +27,7 @@ import DispatcherModuleShell, {
   PlaceholderView,
 } from '@/components/dispatcher/DispatcherModuleShell'
 import AssignModal from '@/components/features/emergency/AssignModal'
-import DispatcherPermissionsPanel from '@/components/dispatcher/DispatcherPermissionsPanel'
+import PortalPermissionsView from '@/components/permissions/PortalPermissionsView'
 import toast from 'react-hot-toast'
 
 async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
@@ -136,8 +136,8 @@ export default function DispatcherModulePage({
   const renderContent = () => {
     if (moduleId === 'permissions') {
       return (
-        <DispatcherPanel title={navItem.label}>
-          <DispatcherPermissionsPanel view={view} />
+        <DispatcherPanel title="My Permissions">
+          <PortalPermissionsView portal="dispatcher" />
         </DispatcherPanel>
       )
     }

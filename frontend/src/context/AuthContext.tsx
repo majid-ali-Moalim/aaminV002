@@ -9,7 +9,6 @@ import {
   persistAuthToken,
   syncRoleStores,
   clearAllAuthSessions,
-  CENTRAL_LOGIN_PATH,
 } from '@/lib/authRedirect'
 
 interface User {
@@ -176,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setToken(null)
     void clearAllAuthSessions()
-    router.replace(CENTRAL_LOGIN_PATH)
+    router.replace('/')
   }
 
   return (

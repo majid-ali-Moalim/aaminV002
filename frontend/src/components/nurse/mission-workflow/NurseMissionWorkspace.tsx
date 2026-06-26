@@ -188,6 +188,15 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     return currentStep.actions
   }, [currentStepId, currentStep.actions, missionAccepted, onScene])
 
+  const stickyPrimary = useMemo(() => {
+    return stageActions.find((a) => a.variant === 'primary') ?? stageActions[0] ?? null
+  }, [stageActions])
+
+  const stickyPrimaryDisabled =
+    stickyPrimary &&
+    ((stickyPrimary.id === 'accept' && !caseReviewed) ||
+      (stickyPrimary.id === 'begin_care' && !onScene))
+
   const visibleTaskChips = useMemo((): [NurseTaskId, string, typeof Stethoscope][] => {
     if (!mission || !missionAccepted) return []
     const status = mission.status
@@ -863,6 +872,27 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               {c.trackingCode}
             </button>
           ))}
+        </div>
+      )}
+
+      {!readOnly && stickyPrimary && (
+        <div className="nmw-sticky-action">
+          <button
+            type="button"
+            className="nmw-sticky-btn secondary"
+            onClick={() => handleTask('review_emergency')}
+            aria-label="Review case details"
+          >
+            <ClipboardList size={18} />
+          </button>
+          <button
+            type="button"
+            className="nmw-sticky-btn primary"
+            disabled={Boolean(stickyPrimaryDisabled)}
+            onClick={() => handleTask(stickyPrimary.id)}
+          >
+            {stickyPrimary.label}
+          </button>
         </div>
       )}
     </div>

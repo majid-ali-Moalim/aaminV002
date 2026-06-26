@@ -148,7 +148,7 @@ export default function DriverProfilePage() {
 
   if (loading) {
     return (
-      <DriverPageLayout title="Profile" lightTheme>
+      <DriverPageLayout title="Profile">
         <div className="flex justify-center py-24">
           <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
         </div>
@@ -160,7 +160,7 @@ export default function DriverProfilePage() {
   const displayName = `${form.firstName} ${form.lastName}`.trim() || username || 'Driver'
 
   return (
-    <DriverPageLayout title="Profile" lightTheme>
+    <DriverPageLayout title="Profile">
       <div className="space-y-6 pb-20 max-w-2xl mx-auto w-full">
         <div>
           <h1 className="text-2xl font-black text-slate-900">My Profile</h1>

@@ -25,7 +25,7 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Post()
-  @Roles('ADMIN', 'DISPATCHER')
+  @Roles('ADMIN', 'DISPATCHER', 'NURSE')
   @ApiOperation({ summary: 'Create a new employee' })
   create(@Body() createEmployeeDto: any, @CurrentUser() user: any) {
     return this.employeesService.create(createEmployeeDto, user?.id ?? user?.sub, user);

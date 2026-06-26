@@ -27,6 +27,10 @@ interface RecentActivitiesWidgetProps {
   hideSummary?: boolean
   hideViewAll?: boolean
   bare?: boolean
+  /** Dashboard preview — show only first N items */
+  previewLimit?: number
+  /** Show "See More" link when preview is truncated */
+  showSeeMore?: boolean
 }
 
 const fetchOperational = async (
@@ -48,13 +52,15 @@ export function RecentActivitiesWidget({
   hideSummary = false,
   hideViewAll = false,
   bare = false,
+  previewLimit,
+  showSeeMore = false,
 }: RecentActivitiesWidgetProps) {
   const [filter, setFilter] = useState<ActivityFilterTab>('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const limit = variant === 'page' ? 50 : bare ? 20 : 12
+  const limit = variant === 'page' ? 50 : previewLimit ? previewLimit + 1 : bare ? 20 : 12
   const apiCategory = ACTIVITY_FILTER_TABS.find((t) => t.id === filter)?.apiCategory
 
   const handleSearchChange = useCallback((value: string) => {
@@ -70,17 +76,24 @@ export function RecentActivitiesWidget({
   )
 
   const summary = data?.summary ?? { todayCount: 0, criticalCount: 0, pendingCount: 0 }
-  const activities = data?.activities ?? []
+  const allActivities = data?.activities ?? []
+  const hasMore = Boolean(
+    previewLimit &&
+      (allActivities.length > previewLimit || summary.todayCount > previewLimit),
+  )
+  const activities = previewLimit ? allActivities.slice(0, previewLimit) : allActivities
 
   const isWidget = variant === 'widget'
 
   return (
     <div
       className={`flex flex-col overflow-hidden ${
-        bare ? 'h-full min-h-0' : `bg-white rounded-2xl border border-slate-100 shadow-sm ${isWidget ? 'h-[640px]' : 'min-h-[480px]'}`
+        bare
+          ? 'h-full min-h-0'
+          : `bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm ${isWidget ? 'h-[640px]' : 'min-h-[480px]'}`
       } ${className}`}
     >
-      <div className={`${bare ? 'pb-2' : 'px-4 pt-4 pb-3 border-b border-slate-100 bg-slate-50/50'}`}>
+      <div className={`${bare ? 'pb-2' : 'px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40'}`}>
         {!bare && (
         <div className="flex items-center justify-between gap-3 mb-3">
           <h3 className="text-xs font-black text-slate-500 tracking-widest uppercase flex items-center gap-2">
@@ -132,7 +145,7 @@ export function RecentActivitiesWidget({
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search case ID, patient, hospital, driver, nurse…"
-            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-white"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 bg-white dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
 
@@ -145,8 +158,8 @@ export function RecentActivitiesWidget({
               onClick={() => setFilter(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 filter === tab.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-slate-900 dark:bg-red-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               {tab.label}
@@ -180,8 +193,20 @@ export function RecentActivitiesWidget({
         )}
       </div>
 
-      {/* Footer */}
-      {isWidget && !hideViewAll && (
+      {/* Footer — See More (dashboard preview) or View All */}
+      {showSeeMore && hasMore && (
+        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+          <Link
+            href="/admin/dashboard/activities"
+            className="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors"
+          >
+            See More
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+
+      {isWidget && !hideViewAll && !showSeeMore && (
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
           <Link
             href="/admin/dashboard#recent-activities"
@@ -227,7 +252,7 @@ function ActivityRow({ item }: { item: import('@/lib/dashboard/operationalActivi
     <li>
       <Link
         href={item.href}
-        className="group flex gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors relative"
+        className="group flex gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors relative"
       >
         <div
           className={`relative z-10 shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg border ${visual.bg} ${visual.border}`}
@@ -239,7 +264,7 @@ function ActivityRow({ item }: { item: import('@/lib/dashboard/operationalActivi
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h4 className={`text-sm font-bold text-slate-900 ${visual.text}`}>{item.title}</h4>
+                <h4 className={`text-sm font-bold text-slate-900 dark:text-slate-100 ${visual.text}`}>{item.title}</h4>
                 {isCritical && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 text-[10px] font-bold uppercase">
                     <AlertTriangle className="w-3 h-3" />
@@ -247,7 +272,7 @@ function ActivityRow({ item }: { item: import('@/lib/dashboard/operationalActivi
                   </span>
                 )}
               </div>
-              <p className="text-sm text-slate-600 mt-0.5 line-clamp-2">{item.description}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2">{item.description}</p>
             </div>
             <span className="shrink-0 text-[11px] font-medium text-slate-400 whitespace-nowrap">{timeAgo}</span>
           </div>

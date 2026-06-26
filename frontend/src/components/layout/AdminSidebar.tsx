@@ -11,8 +11,8 @@ import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/compone
 import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
 import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
-import DispatcherDashboardSidebar, { isDispatcherDashboardPath } from '@/components/layout/DispatcherDashboardSidebar'
 import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import {
   LayoutGrid,
   Users,
@@ -144,7 +144,6 @@ export default function AdminSidebar() {
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = isPatientsCaseRecordsPath(pathname)
-  const isDispatcherDashboardActive = isDispatcherDashboardPath(pathname)
   const isDispatchResourcesActive =
     pathname.startsWith('/admin/ambulances/availability') ||
     pathname.startsWith('/admin/drivers/availability') ||
@@ -171,7 +170,6 @@ export default function AdminSidebar() {
 
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
-  const [dispatcherDashboardOpen, setDispatcherDashboardOpen] = useState(isDispatcherDashboardActive)
   const [dispatchResourcesOpen, setDispatchResourcesOpen] = useState(isDispatchResourcesActive)
   const [dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen] = useState(isDispatchCenterOperationsActive)
   const [dispatcherManagementOpen, setDispatcherManagementOpen] = useState(isDispatcherManagementActive)
@@ -342,12 +340,6 @@ export default function AdminSidebar() {
         <div className="px-0.5">
           <PatientsCaseRecordsSidebar isOpen={patientsOpen} setOpen={setPatientsOpen} />
         </div>
-        <div className="px-0.5">
-          <DispatcherDashboardSidebar
-            isOpen={dispatcherDashboardOpen}
-            setOpen={setDispatcherDashboardOpen}
-          />
-        </div>
         {renderCollapsible(
           'Dispatch Resources',
           Warehouse,
@@ -431,12 +423,15 @@ export default function AdminSidebar() {
       </nav>
 
       <div
-        className="p-2.5 shrink-0"
+        className="p-2.5 shrink-0 space-y-2"
         style={{
           borderTop: `1px solid ${SIDEBAR.border}`,
           backgroundColor: 'rgba(17,24,39,0.5)',
         }}
       >
+        <div className="px-0.5">
+          <AdminThemeToggle onDark />
+        </div>
         <button
           type="button"
           onClick={() => logout()}
