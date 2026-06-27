@@ -15,15 +15,17 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
 import AssignModal from '@/components/features/emergency/AssignModal'
+import { useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function TriageQueuePage() {
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -33,8 +35,10 @@ export default function TriageQueuePage() {
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
-      const unassigned = Array.isArray(data) ? data.filter((r) => r.status === 'PENDING') : []
+      const data = await fetchEmergencyRequests(portal, portal === 'dispatcher' ? 'pending' : undefined)
+      const unassigned = Array.isArray(data)
+        ? data.filter((r) => r.status === 'PENDING' || r.status === 'REVIEWING')
+        : []
       setRequests(unassigned)
 
       setSelectedRequest((prev) => {
@@ -50,7 +54,7 @@ export default function TriageQueuePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [portal])
 
   useEffect(() => {
     fetchRequests(true)

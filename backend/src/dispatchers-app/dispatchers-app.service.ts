@@ -5,7 +5,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
-import { EmergencyRequestStatus } from '@prisma/client';
+import { EmergencyRequestStatus, NotificationCategory, NotificationType, Prisma } from '@prisma/client';
+import {
+  DispatcherScope,
+  myCasesWhere,
+  myActiveCasesWhere,
+  regionalCasesWhere,
+  regionalPendingCasesWhere,
+  regionalEmployeeWhere,
+  regionalAmbulanceWhere,
+  regionalHospitalWhere,
+} from './dispatcher-scope.util';
 
 const ACTIVE_MISSION_STATUSES: EmergencyRequestStatus[] = [
   'REVIEWING',
@@ -60,6 +70,17 @@ export class DispatchersAppService {
     return employee;
   }
 
+  private async resolveScope(userId: string): Promise<DispatcherScope> {
+    const dispatcher = await this.getDispatcherByUserId(userId);
+    return {
+      dispatcherId: dispatcher.id,
+      regionId: dispatcher.station?.regionId ?? null,
+      districtId: dispatcher.station?.districtId ?? null,
+      stationId: dispatcher.stationId ?? null,
+      regionName: dispatcher.station?.region?.name ?? null,
+    };
+  }
+
   async getProfile(userId: string) {
     const employee = await this.getDispatcherByUserId(userId);
     const permData = await this.accessControl.getUserPermissions(userId);
@@ -95,39 +116,42 @@ export class DispatchersAppService {
   }
 
   async getDashboardStats(userId: string) {
-    const dispatcher = await this.getDispatcherByUserId(userId);
+    const scope = await this.resolveScope(userId);
+    const caseBase = myCasesWhere(scope);
+    const regionalEmp = regionalEmployeeWhere(scope);
 
     const [pending, active, myCases, ambulances, drivers, nurses] = await Promise.all([
-      this.prisma.emergencyRequest.count({ where: { status: 'PENDING' } }),
       this.prisma.emergencyRequest.count({
-        where: {
-          status: {
-            notIn: ['COMPLETED', 'CANCELLED', 'PENDING'],
-          },
-        },
+        where: regionalPendingCasesWhere(scope),
       }),
       this.prisma.emergencyRequest.count({
-        where: {
-          dispatcherId: dispatcher.id,
-          status: { notIn: ['COMPLETED', 'CANCELLED'] },
-        },
+        where: myCasesWhere(scope, {
+          status: { notIn: ['COMPLETED', 'CANCELLED', 'PENDING'] },
+        }),
       }),
-      this.prisma.ambulance.count({ where: { status: 'AVAILABLE' } }),
+      this.prisma.emergencyRequest.count({
+        where: myCasesWhere(scope, { status: { notIn: ['COMPLETED', 'CANCELLED'] } }),
+      }),
+      this.prisma.ambulance.count({
+        where: { ...regionalAmbulanceWhere(scope), status: 'AVAILABLE' },
+      }),
       this.prisma.employee.count({
         where: {
+          ...regionalEmp,
           employeeRole: { name: 'Driver' },
-          status: 'ACTIVE',
           shiftStatus: { in: ['AVAILABLE', 'ON_DUTY'] },
         },
       }),
       this.prisma.employee.count({
         where: {
+          ...regionalEmp,
           employeeRole: { name: 'Nurse' },
-          status: 'ACTIVE',
           shiftStatus: { in: ['AVAILABLE', 'ON_DUTY'] },
         },
       }),
     ]);
+
+    const dispatcher = await this.getDispatcherByUserId(userId);
 
     return {
       pending,
@@ -138,16 +162,27 @@ export class DispatchersAppService {
       availableNurses: nurses,
       shiftStatus: dispatcher.shiftStatus,
       station: dispatcher.station?.name ?? null,
+      region: scope.regionName,
+      scopedToRegion: Boolean(scope.regionId),
     };
   }
 
   async getDashboardOverview(userId: string) {
-    await this.getDispatcherByUserId(userId);
+    const scope = await this.resolveScope(userId);
+    const caseWhere = myCasesWhere(scope);
 
     const todayStart = startOfToday();
     const now = new Date();
     const pendingDelayCutoff = new Date(now.getTime() - 30 * 60 * 1000);
     const missionDelayCutoff = new Date(now.getTime() - 45 * 60 * 1000);
+
+    const caseInclude = {
+      patient: { select: { id: true, fullName: true, phone: true } },
+      ambulance: { select: { id: true, ambulanceNumber: true, plateNumber: true, status: true } },
+      driver: { select: { id: true, firstName: true, lastName: true } },
+      nurse: { select: { id: true, firstName: true, lastName: true } },
+      destinationHospital: { select: { id: true, name: true } },
+    };
 
     const [
       liveCasesCount,
@@ -167,56 +202,50 @@ export class DispatchersAppService {
       activityLogs,
     ] = await Promise.all([
       this.prisma.emergencyRequest.count({
-        where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        where: { ...caseWhere, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
       }),
       this.prisma.emergencyRequest.count({
-        where: { status: { in: ACTIVE_MISSION_STATUSES } },
+        where: { ...caseWhere, status: { in: ACTIVE_MISSION_STATUSES } },
       }),
-      this.prisma.emergencyRequest.count({ where: { status: 'PENDING' } }),
+      this.prisma.emergencyRequest.count({ where: regionalPendingCasesWhere(scope) }),
       this.prisma.emergencyRequest.count({
-        where: { priority: 'CRITICAL', status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        where: {
+          ...caseWhere,
+          priority: 'CRITICAL',
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
       }),
       this.prisma.emergencyRequest.count({
         where: {
+          ...caseWhere,
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
           OR: [
             { status: 'PENDING', createdAt: { lt: pendingDelayCutoff } },
-            {
-              status: { in: [...ACTIVE_MISSION_STATUSES] },
-              updatedAt: { lt: missionDelayCutoff },
-            },
+            { status: { in: [...ACTIVE_MISSION_STATUSES] }, updatedAt: { lt: missionDelayCutoff } },
           ],
         },
       }),
       this.prisma.emergencyRequest.findMany({
-        where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
-        include: {
-          patient: { select: { id: true, fullName: true, phone: true } },
-          ambulance: { select: { id: true, ambulanceNumber: true, plateNumber: true } },
-          driver: { select: { id: true, firstName: true, lastName: true } },
-        },
+        where: { ...caseWhere, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        include: caseInclude,
         orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
         take: 12,
       }),
       this.prisma.emergencyRequest.findMany({
-        where: { status: { in: ACTIVE_MISSION_STATUSES } },
-        include: {
-          patient: { select: { id: true, fullName: true } },
-          ambulance: { select: { id: true, ambulanceNumber: true, status: true } },
-          driver: { select: { id: true, firstName: true, lastName: true } },
-          destinationHospital: { select: { id: true, name: true } },
-        },
+        where: { ...caseWhere, status: { in: ACTIVE_MISSION_STATUSES } },
+        include: caseInclude,
         orderBy: { updatedAt: 'desc' },
         take: 12,
       }),
       this.prisma.emergencyRequest.findMany({
-        where: { status: 'PENDING' },
+        where: regionalPendingCasesWhere(scope),
         include: { patient: { select: { id: true, fullName: true } } },
         orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
         take: 10,
       }),
       this.prisma.emergencyRequest.findMany({
         where: {
+          ...caseWhere,
           priority: 'CRITICAL',
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
@@ -225,10 +254,7 @@ export class DispatchersAppService {
         take: 10,
       }),
       this.prisma.emergencyRequest.findMany({
-        where: {
-          status: 'COMPLETED',
-          completedAt: { gte: todayStart },
-        },
+        where: { ...caseWhere, status: 'COMPLETED', completedAt: { gte: todayStart } },
         select: {
           id: true,
           trackingCode: true,
@@ -240,13 +266,11 @@ export class DispatchersAppService {
       }),
       this.prisma.emergencyRequest.findMany({
         where: {
+          ...caseWhere,
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
           OR: [
             { status: 'PENDING', createdAt: { lt: pendingDelayCutoff } },
-            {
-              status: { in: [...ACTIVE_MISSION_STATUSES] },
-              updatedAt: { lt: missionDelayCutoff },
-            },
+            { status: { in: [...ACTIVE_MISSION_STATUSES] }, updatedAt: { lt: missionDelayCutoff } },
           ],
         },
         include: { patient: { select: { id: true, fullName: true } } },
@@ -254,11 +278,11 @@ export class DispatchersAppService {
         take: 10,
       }),
       this.prisma.ambulance.findMany({
-        where: { isActive: true },
+        where: regionalAmbulanceWhere(scope),
         select: { id: true, ambulanceNumber: true, plateNumber: true, status: true, location: true },
       }),
       this.prisma.hospital.findMany({
-        where: { isActive: true },
+        where: regionalHospitalWhere(scope),
         select: {
           id: true,
           name: true,
@@ -272,6 +296,7 @@ export class DispatchersAppService {
         take: 12,
       }),
       this.prisma.emergencyStatusLog.findMany({
+        where: { emergencyRequest: caseWhere },
         take: 20,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -281,12 +306,8 @@ export class DispatchersAppService {
       }),
       this.prisma.activityLog.findMany({
         where: {
-          OR: [
-            { entityType: 'EmergencyRequest' },
-            { entityType: 'Ambulance' },
-            { entityType: 'Employee' },
-            { action: { contains: 'dispatch', mode: 'insensitive' } },
-          ],
+          entityType: 'EmergencyRequest',
+          entityId: { in: await this.myCaseIds(scope) },
         },
         take: 15,
         orderBy: { createdAt: 'desc' },
@@ -354,9 +375,14 @@ export class DispatchersAppService {
       .slice(0, 25);
 
     const stats = await this.getDashboardStats(userId);
-    const staff = await this.getStaffOverview();
+    const staff = await this.getStaffOverview(userId);
 
     return {
+      scope: {
+        region: scope.regionName,
+        station: stats.station,
+        myCasesOnly: true,
+      },
       kpis: {
         liveEmergencyCases: liveCasesCount,
         activeMissions: activeMissionsCount,
@@ -467,12 +493,21 @@ export class DispatchersAppService {
     return { shiftStatus };
   }
 
-  async getMyCases(userId: string, status?: string) {
-    const dispatcher = await this.getDispatcherByUserId(userId);
+  private async myCaseIds(scope: DispatcherScope): Promise<string[]> {
+    const rows = await this.prisma.emergencyRequest.findMany({
+      where: myCasesWhere(scope),
+      select: { id: true },
+      take: 500,
+    });
+    return rows.map((r) => r.id);
+  }
 
-    const where: Record<string, unknown> = { dispatcherId: dispatcher.id };
+  async getMyCases(userId: string, status?: string) {
+    const scope = await this.resolveScope(userId);
+
+    const where: Prisma.EmergencyRequestWhereInput = myCasesWhere(scope);
     if (status) {
-      where.status = status;
+      where.status = status as EmergencyRequestStatus;
     }
 
     return this.prisma.emergencyRequest.findMany({
@@ -488,21 +523,19 @@ export class DispatchersAppService {
     });
   }
 
-  async getPendingQueue() {
+  async getPendingQueue(userId: string) {
+    const scope = await this.resolveScope(userId);
     return this.prisma.emergencyRequest.findMany({
-      where: { status: 'PENDING' },
+      where: regionalPendingCasesWhere(scope),
       include: { patient: true },
       orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
-  async getActiveMissions() {
+  async getActiveMissions(userId: string) {
+    const scope = await this.resolveScope(userId);
     return this.prisma.emergencyRequest.findMany({
-      where: {
-        status: {
-          notIn: ['COMPLETED', 'CANCELLED', 'PENDING'],
-        },
-      },
+      where: myActiveCasesWhere(scope),
       include: {
         patient: true,
         ambulance: true,
@@ -514,11 +547,14 @@ export class DispatchersAppService {
     });
   }
 
-  async getFleetOverview() {
+  async getFleetOverview(userId: string) {
+    const scope = await this.resolveScope(userId);
     return this.prisma.ambulance.findMany({
+      where: regionalAmbulanceWhere(scope),
       include: {
         station: true,
         equipmentLevel: true,
+        region: true,
         employees: {
           where: { employeeRole: { name: 'Driver' } },
           take: 1,
@@ -528,29 +564,37 @@ export class DispatchersAppService {
     });
   }
 
-  async getStaffOverview() {
+  async getStaffOverview(userId: string) {
+    const scope = await this.resolveScope(userId);
+    const regional = regionalEmployeeWhere(scope);
+
     const [drivers, nurses, dispatchers] = await Promise.all([
       this.prisma.employee.findMany({
-        where: { employeeRole: { name: 'Driver' }, status: 'ACTIVE' },
-        include: { station: true, assignedAmbulance: true },
+        where: { ...regional, employeeRole: { name: 'Driver' } },
+        include: { station: true, assignedAmbulance: true, employeeRole: true },
         orderBy: { firstName: 'asc' },
       }),
       this.prisma.employee.findMany({
-        where: { employeeRole: { name: 'Nurse' }, status: 'ACTIVE' },
-        include: { station: true },
+        where: { ...regional, employeeRole: { name: 'Nurse' } },
+        include: { station: true, employeeRole: true },
         orderBy: { firstName: 'asc' },
       }),
       this.prisma.employee.findMany({
-        where: { employeeRole: { name: 'Dispatcher' }, status: 'ACTIVE' },
-        include: { station: true },
+        where: {
+          employeeRole: { name: 'Dispatcher' },
+          status: 'ACTIVE',
+          ...(scope.regionId ? { station: { regionId: scope.regionId } } : { id: scope.dispatcherId }),
+        },
+        include: { station: true, employeeRole: true },
         orderBy: { firstName: 'asc' },
       }),
     ]);
 
-    return { drivers, nurses, dispatchers };
+    return { drivers, nurses, dispatchers, region: scope.regionName };
   }
 
-  async getEmergenciesByView(view: string) {
+  async getEmergenciesByView(userId: string, view: string) {
+    const scope = await this.resolveScope(userId);
     const include = {
       patient: { select: { id: true, fullName: true, phone: true } },
       ambulance: { select: { id: true, ambulanceNumber: true, plateNumber: true, status: true } },
@@ -587,7 +631,42 @@ export class DispatchersAppService {
       directory: {},
     };
 
-    const where = filters[view] ?? filters['all-cases'];
+    const pendingViews = new Set([
+      'pending-dispatch',
+      'dispatch-board',
+      'triage',
+      'directory',
+    ]);
+    const myCaseViews = new Set([
+      'active-missions',
+      'en-route',
+      'at-patient',
+      'transporting',
+      'arrived-hospital',
+      'handover',
+      'incoming',
+      'timeline',
+      'closed',
+      'cancelled',
+      'decisions',
+    ]);
+
+    const scopeWhere = pendingViews.has(view)
+      ? regionalPendingCasesWhere(scope, filters[view] ?? {})
+      : myCaseViews.has(view)
+        ? myCasesWhere(scope, filters[view] ?? {})
+        : view === 'critical' || view === 'escalated'
+          ? {
+              OR: [
+                regionalPendingCasesWhere(scope, filters[view] ?? {}),
+                myCasesWhere(scope, filters[view] ?? {}),
+              ],
+            }
+          : view === 'all-cases'
+            ? regionalPendingCasesWhere(scope)
+            : { ...regionalCasesWhere(scope), ...(filters[view] ?? filters['all-cases']) };
+
+    const where = scopeWhere;
 
     const [items, statusLogs] = await Promise.all([
       this.prisma.emergencyRequest.findMany({
@@ -598,6 +677,7 @@ export class DispatchersAppService {
       }),
       view === 'timeline'
         ? this.prisma.emergencyStatusLog.findMany({
+            where: { emergencyRequest: myCasesWhere(scope) },
             take: 50,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -608,11 +688,11 @@ export class DispatchersAppService {
         : Promise.resolve([]),
     ]);
 
-    return { view, items, statusLogs, total: items.length };
+    return { view, items, statusLogs, total: items.length, region: scope.regionName };
   }
 
-  async getAmbulancesByView(view: string) {
-    const all = await this.getFleetOverview();
+  async getAmbulancesByView(userId: string, view: string) {
+    const all = await this.getFleetOverview(userId);
     let items = all;
 
     switch (view) {
@@ -638,15 +718,16 @@ export class DispatchersAppService {
         break;
     }
 
-    return { view, items, total: items.length };
+    return { view, items, total: items.length, region: (await this.resolveScope(userId)).regionName };
   }
 
-  async getCrewByView(view: string) {
-    const staff = await this.getStaffOverview();
+  async getCrewByView(userId: string, view: string) {
+    const scope = await this.resolveScope(userId);
+    const staff = await this.getStaffOverview(userId);
     const onMissionIds = new Set<string>();
 
     const active = await this.prisma.emergencyRequest.findMany({
-      where: { status: { in: ACTIVE_MISSION_STATUSES } },
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }),
       select: { driverId: true, nurseId: true },
     });
     active.forEach((m) => {
@@ -662,6 +743,14 @@ export class DispatchersAppService {
           return staff.nurses;
         case 'paramedics':
           return staff.nurses;
+        case 'drivers-available':
+          return staff.drivers.filter(
+            (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
+          );
+        case 'nurses-available':
+          return staff.nurses.filter(
+            (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
+          );
         case 'available':
           return [...staff.drivers, ...staff.nurses].filter(
             (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
@@ -676,12 +765,13 @@ export class DispatchersAppService {
     };
 
     const items = filterEmployees(staff.drivers);
-    return { view, items, staff, onMissionCount: onMissionIds.size };
+    return { view, items, staff, onMissionCount: onMissionIds.size, region: scope.regionName };
   }
 
-  async getHospitalsByView(view: string) {
+  async getHospitalsByView(userId: string, view: string) {
+    const scope = await this.resolveScope(userId);
     const hospitals = await this.prisma.hospital.findMany({
-      where: { isActive: true },
+      where: regionalHospitalWhere(scope),
       include: { district: { select: { name: true } }, region: { select: { name: true } } },
       orderBy: { name: 'asc' },
     });
@@ -697,22 +787,29 @@ export class DispatchersAppService {
       items = hospitals.filter((h) => (h.icuTotalBeds ?? 0) > 0);
     }
 
-    return { view, items, total: items.length };
+    return { view, items, total: items.length, region: scope.regionName };
   }
 
-  async getAlertsByView(view: string) {
+  async getAlertsByView(userId: string, view: string) {
+    const scope = await this.resolveScope(userId);
+    const regional = regionalCasesWhere(scope);
     const now = new Date();
     const pendingDelay = new Date(now.getTime() - 30 * 60 * 1000);
 
     const [critical, delayed, unassigned, maintenanceAmbulances, hospitalsFull] =
       await Promise.all([
         this.prisma.emergencyRequest.findMany({
-          where: { priority: 'CRITICAL', status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+          where: {
+            ...regional,
+            priority: 'CRITICAL',
+            status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          },
           include: { patient: { select: { fullName: true } } },
           take: 20,
         }),
         this.prisma.emergencyRequest.findMany({
           where: {
+            ...regional,
             status: { notIn: ['COMPLETED', 'CANCELLED'] },
             OR: [
               { status: 'PENDING', createdAt: { lt: pendingDelay } },
@@ -722,15 +819,18 @@ export class DispatchersAppService {
           take: 20,
         }),
         this.prisma.emergencyRequest.findMany({
-          where: { status: 'PENDING' },
+          where: { ...regional, status: 'PENDING' },
           take: 20,
         }),
         this.prisma.ambulance.findMany({
-          where: { status: 'MAINTENANCE' },
+          where: { ...regionalAmbulanceWhere(scope), status: 'MAINTENANCE' },
           take: 20,
         }),
         this.prisma.hospital.findMany({
-          where: { status: { in: ['Full', 'Overcapacity'] } },
+          where: {
+            ...regionalHospitalWhere(scope),
+            status: { in: ['Full', 'Overcapacity'] },
+          },
           take: 20,
         }),
       ]);
@@ -767,6 +867,250 @@ export class DispatchersAppService {
         maintenance: maintenanceAmbulances.length,
         overcapacity: hospitalsFull.length,
       },
+      region: scope.regionName,
+    };
+  }
+
+  async getReports(userId: string, reportType = 'emergency') {
+    const scope = await this.resolveScope(userId);
+    const caseWhere = myCasesWhere(scope);
+    const todayStart = startOfToday();
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const [cases, completedToday, completedMonth, attendance, statusBreakdown] =
+      await Promise.all([
+        this.prisma.emergencyRequest.findMany({
+          where: caseWhere,
+          include: {
+            patient: { select: { fullName: true, phone: true } },
+            driver: { select: { firstName: true, lastName: true, employeeCode: true } },
+            nurse: { select: { firstName: true, lastName: true, employeeCode: true } },
+            ambulance: { select: { ambulanceNumber: true, plateNumber: true } },
+            destinationHospital: { select: { name: true } },
+            region: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        }),
+        this.prisma.emergencyRequest.count({
+          where: { ...caseWhere, status: 'COMPLETED', completedAt: { gte: todayStart } },
+        }),
+        this.prisma.emergencyRequest.count({
+          where: { ...caseWhere, status: 'COMPLETED', completedAt: { gte: monthStart } },
+        }),
+        this.prisma.attendanceRecord.findMany({
+          where: {
+            employee: regionalEmployeeWhere(scope),
+            date: { gte: monthStart },
+          },
+          include: {
+            employee: {
+              select: {
+                firstName: true,
+                lastName: true,
+                employeeCode: true,
+                employeeRole: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { date: 'desc' },
+          take: 200,
+        }),
+        this.prisma.emergencyRequest.groupBy({
+          by: ['status'],
+          where: caseWhere,
+          _count: { id: true },
+        }),
+      ]);
+
+    const responseTimes = cases
+      .filter((c) => c.responseMinutes != null)
+      .map((c) => c.responseMinutes as number);
+    const avgResponse =
+      responseTimes.length > 0
+        ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+        : null;
+
+    return {
+      reportType,
+      region: scope.regionName,
+      scope: 'my_cases',
+      summary: {
+        totalCases: cases.length,
+        completedToday,
+        completedMonth,
+        avgResponseMinutes: avgResponse,
+        criticalOpen: cases.filter(
+          (c) => c.priority === 'CRITICAL' && !['COMPLETED', 'CANCELLED'].includes(c.status),
+        ).length,
+        activeCases: cases.filter(
+          (c) => !['COMPLETED', 'CANCELLED', 'PENDING'].includes(c.status),
+        ).length,
+      },
+      statusBreakdown: statusBreakdown.map((s) => ({
+        status: s.status,
+        count: s._count.id,
+      })),
+      cases,
+      attendance,
+    };
+  }
+
+  async getAssignableResources(userId: string) {
+    const scope = await this.resolveScope(userId);
+
+    const busy = await this.prisma.emergencyRequest.findMany({
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }),
+      select: { driverId: true, nurseId: true, ambulanceId: true },
+    });
+    const busyDriverIds = busy.map((b) => b.driverId).filter(Boolean) as string[];
+    const busyNurseIds = busy.map((b) => b.nurseId).filter(Boolean) as string[];
+    const busyAmbulanceIds = busy.map((b) => b.ambulanceId).filter(Boolean) as string[];
+
+    const driverRole = await this.prisma.employeeRole.findFirst({
+      where: { name: { contains: 'Driver', mode: 'insensitive' } },
+    });
+    const nurseRole = await this.prisma.employeeRole.findFirst({
+      where: { name: { contains: 'Nurse', mode: 'insensitive' } },
+    });
+
+    const [ambulances, drivers, nurses] = await Promise.all([
+      this.prisma.ambulance.findMany({
+        where: {
+          ...regionalAmbulanceWhere(scope),
+          status: 'AVAILABLE',
+          id: { notIn: busyAmbulanceIds },
+        },
+      }),
+      driverRole
+        ? this.prisma.employee.findMany({
+            where: {
+              ...regionalEmployeeWhere(scope),
+              employeeRoleId: driverRole.id,
+              status: 'ACTIVE',
+              shiftStatus: 'AVAILABLE',
+              assignedAmbulanceId: { not: null },
+              id: { notIn: busyDriverIds },
+            },
+            include: { assignedAmbulance: true },
+          })
+        : [],
+      nurseRole
+        ? this.prisma.employee.findMany({
+            where: {
+              ...regionalEmployeeWhere(scope),
+              employeeRoleId: nurseRole.id,
+              status: 'ACTIVE',
+              shiftStatus: 'AVAILABLE',
+              id: { notIn: busyNurseIds },
+            },
+          })
+        : [],
+    ]);
+
+    return { ambulances, drivers, nurses, region: scope.regionName };
+  }
+
+  async getCaseNotifications(userId: string, view = 'all') {
+    const scope = await this.resolveScope(userId);
+
+    const caseInclude = {
+      patient: { select: { id: true, fullName: true, phone: true } },
+      ambulance: {
+        select: { id: true, ambulanceNumber: true, plateNumber: true, status: true },
+      },
+      driver: { select: { id: true, firstName: true, lastName: true, phone: true } },
+      nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
+      region: { select: { id: true, name: true } },
+      destinationHospital: { select: { id: true, name: true } },
+    };
+
+    const [notifications, regionalCases] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      view === 'emergency' || view === 'all'
+        ? this.prisma.emergencyRequest.findMany({
+            where: {
+              OR: [
+                regionalPendingCasesWhere(scope),
+                myCasesWhere(scope, {
+                  status: { notIn: ['COMPLETED', 'CANCELLED'] },
+                }),
+              ],
+            },
+            include: caseInclude,
+            orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
+            take: 50,
+          })
+        : Promise.resolve([]),
+    ]);
+
+    let filtered = notifications;
+    if (view === 'emergency') {
+      filtered = notifications.filter(
+        (n) =>
+          n.type === NotificationType.EMERGENCY ||
+          n.category === NotificationCategory.MISSION ||
+          n.category === NotificationCategory.INCIDENT ||
+          n.priority === 'CRITICAL',
+      );
+    } else if (view === 'hospital') {
+      filtered = notifications.filter((n) =>
+        /hospital|handover|accept/i.test(`${n.title} ${n.message}`),
+      );
+    } else if (view === 'resource') {
+      filtered = notifications.filter((n) =>
+        /driver|nurse|ambulance|crew|transport|en route|dispatched/i.test(
+          `${n.title} ${n.message}`,
+        ),
+      );
+    }
+
+    const caseMap = new Map(regionalCases.map((c) => [c.id, c]));
+    const missingCaseIds = [
+      ...new Set(
+        filtered
+          .filter((n) => n.entityType === 'EmergencyRequest' && n.entityId)
+          .map((n) => n.entityId as string)
+          .filter((id) => !caseMap.has(id)),
+      ),
+    ];
+
+    if (missingCaseIds.length) {
+      const extraCases = await this.prisma.emergencyRequest.findMany({
+        where: {
+          id: { in: missingCaseIds },
+          ...(scope.regionId
+            ? { regionId: scope.regionId }
+            : { dispatcherId: scope.dispatcherId }),
+        },
+        include: caseInclude,
+      });
+      for (const c of extraCases) {
+        caseMap.set(c.id, c);
+      }
+    }
+
+    const items = filtered.map((n) => ({
+      ...n,
+      emergencyCase:
+        n.entityType === 'EmergencyRequest' && n.entityId
+          ? caseMap.get(n.entityId) ?? null
+          : null,
+    }));
+
+    return {
+      view,
+      items,
+      cases: regionalCases,
+      total: items.length,
+      unread: items.filter((n) => n.status === 'UNREAD').length,
+      region: scope.regionName,
     };
   }
 }

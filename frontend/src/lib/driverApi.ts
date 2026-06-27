@@ -129,6 +129,10 @@ export const driverMissionsApi = {
     const res = await createDriverApi().patch(`/driver-app/missions/${id}/status`, { status, notes })
     return res.data
   },
+  reject: async (id: string, reason?: string) => {
+    const res = await createDriverApi().post(`/driver-app/missions/${id}/reject`, { reason })
+    return res.data
+  },
 }
 
 // ─── AMBULANCE ─────────────────────────────────────────────────────────────

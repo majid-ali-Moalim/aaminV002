@@ -15,7 +15,6 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
@@ -24,11 +23,13 @@ import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar
 import AssignModal from '@/components/features/emergency/AssignModal'
 import StatusUpdateModal from '@/components/features/emergency/StatusUpdateModal'
 import { computeEmergencyStats, isTodayCriticalCase } from '@/lib/emergency/dateFilters'
-import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
+import { useEmergencyPaths, useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function CriticalCasesPage() {
   const router = useRouter()
   const paths = useEmergencyPaths()
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -38,14 +39,30 @@ export default function CriticalCasesPage() {
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
-      setRequests(Array.isArray(data) ? data.filter(isTodayCriticalCase) : [])
+      if (portal === 'dispatcher') {
+        const [pending, active] = await Promise.all([
+          fetchEmergencyRequests('dispatcher', 'pending'),
+          fetchEmergencyRequests('dispatcher', 'my-active'),
+        ])
+        const merged = [...pending, ...active]
+        const seen = new Set<string>()
+        setRequests(
+          merged.filter((r) => {
+            if (seen.has(r.id)) return false
+            seen.add(r.id)
+            return isTodayCriticalCase(r)
+          }),
+        )
+      } else {
+        const data = await fetchEmergencyRequests('admin')
+        setRequests(Array.isArray(data) ? data.filter(isTodayCriticalCase) : [])
+      }
     } catch (err) {
       console.error('Failed to fetch critical requests:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [portal])
 
   useEffect(() => {
     fetchRequests(true)

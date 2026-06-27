@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { notificationsService } from '@/lib/api'
+import LiveNotificationAlert from '@/components/notifications/LiveNotificationAlert'
 
 /** Connects nurse panel to real-time notification socket + initial inbox sync. */
 export function NurseNotificationProvider({ children }: { children: React.ReactNode }) {
@@ -23,5 +24,10 @@ export function NurseNotificationProvider({ children }: { children: React.ReactN
       .catch(() => {})
   }, [setRecent, setStats])
 
-  return <>{children}</>
+  return (
+    <>
+      {children}
+      <LiveNotificationAlert />
+    </>
+  )
 }

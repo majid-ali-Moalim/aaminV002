@@ -40,6 +40,7 @@ import {
   emergencyRequestsService,
 } from '@/lib/api'
 import { Station, Ambulance, Department, EmployeeRole, Region, District } from '@/types'
+import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
 import {
   DriverFormErrors,
   getDriverAgeLimits,
@@ -985,12 +986,10 @@ export default function AddDriverForm({
                       <FormInput
                         label="Employee Code"
                         required
-                        value={form.employeeCode}
+                        readOnly
+                        value={form.employeeCode || driverCode}
                         error={fieldErrors.employeeCode}
-                        placeholder="DR-001"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ employeeCode: e.target.value.toUpperCase() })
-                        }
+                        className="bg-slate-100 cursor-not-allowed font-mono font-bold"
                       />
                       <FormSelect
                         label="Department"
@@ -1040,14 +1039,14 @@ export default function AddDriverForm({
                             patch({ emergencyContactName: e.target.value })
                           }
                         />
-                        <FormInput
+                        <FormSelect
                           label="Relationship"
                           required
+                          options={EMERGENCY_CONTACT_RELATIONSHIPS.map((r) => ({ id: r.id, label: r.label }))}
                           value={form.relationship}
                           error={fieldErrors.relationship}
-                          maxLength={30}
-                          placeholder="e.g. Spouse, Parent"
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          emptyHint="Select relationship"
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                             patch({ relationship: e.target.value })
                           }
                         />

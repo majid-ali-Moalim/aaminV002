@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
 import { driverNotificationsApi } from '@/lib/driverApi'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import LiveNotificationAlert from '@/components/notifications/LiveNotificationAlert'
 
 /** Real-time mission alerts for drivers (shared notification socket). */
 export function DriverNotificationProvider({ children }: { children: React.ReactNode }) {
@@ -19,5 +20,10 @@ export function DriverNotificationProvider({ children }: { children: React.React
       .catch(() => {})
   }, [setUnreadCount])
 
-  return <>{children}</>
+  return (
+    <>
+      {children}
+      <LiveNotificationAlert />
+    </>
+  )
 }

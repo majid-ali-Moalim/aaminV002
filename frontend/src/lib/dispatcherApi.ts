@@ -119,4 +119,32 @@ export const dispatcherDashboardApi = {
     const res = await createDispatcherApi().get('/dispatcher-app/alerts/feed', { params: { view } })
     return res.data
   },
+  getNotifications: async (view: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/notifications', { params: { view } })
+    return res.data
+  },
+  getNotificationStats: async () => {
+    const res = await createDispatcherApi().get('/notifications/stats')
+    return res.data
+  },
+  markNotificationRead: async (id: string) => {
+    const res = await createDispatcherApi().patch(`/notifications/${id}/read`)
+    return res.data
+  },
+  markAllNotificationsRead: async () => {
+    const res = await createDispatcherApi().post('/notifications/mark-all-read')
+    return res.data
+  },
+  getReports: async (type: string) => {
+    const res = await createDispatcherApi().get(`/dispatcher-app/reports/${type}`)
+    return res.data
+  },
+  getRegionalEmergencies: async () => {
+    const res = await createDispatcherApi().get('/dispatcher-app/emergencies', { params: { view: 'all-cases' } })
+    return res.data?.items ?? res.data
+  },
+  getAssignableResources: async () => {
+    const res = await createDispatcherApi().get('/dispatcher-app/available/assign')
+    return res.data
+  },
 }

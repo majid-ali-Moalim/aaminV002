@@ -5,6 +5,7 @@ export type NurseWorkflowStepId =
   | 'PATIENT_ASSESSMENT'
   | 'VITAL_SIGNS'
   | 'MEDICAL_NOTES'
+  | 'PATIENT_LOADED'
   | 'TREATMENT'
   | 'PATIENT_MONITORING'
   | 'HOSPITAL_HANDOVER'
@@ -19,6 +20,7 @@ export type NurseTaskId =
   | 'assessment'
   | 'vitals'
   | 'notes'
+  | 'load_patient'
   | 'treatment'
   | 'monitoring'
   | 'handover'
@@ -63,8 +65,8 @@ export const NURSE_TIMELINE_STEPS: NurseTimelineStep[] = [
     id: 'PATIENT_CARE',
     label: 'Patient Care',
     shortLabel: 'Care',
-    description: 'Assessment, vital signs, and medical notes at the scene.',
-    stepIds: ['PATIENT_ASSESSMENT', 'VITAL_SIGNS', 'MEDICAL_NOTES'],
+    description: 'Assessment, vital signs, medical notes, and patient loading at the scene.',
+    stepIds: ['PATIENT_ASSESSMENT', 'VITAL_SIGNS', 'MEDICAL_NOTES', 'PATIENT_LOADED'],
   },
   {
     id: 'TREATMENT',
@@ -128,10 +130,19 @@ export const NURSE_WORKFLOW_STEPS: NurseWorkflowStep[] = [
     actions: [{ id: 'notes', label: 'Add Medical Notes', variant: 'primary' }],
   },
   {
+    id: 'PATIENT_LOADED',
+    label: 'Patient Loaded',
+    shortLabel: 'Loaded',
+    description: 'Confirm the patient is loaded and ready for transport.',
+    backendStatus: ['ARRIVED_SCENE', 'PATIENT_STABILIZED'],
+    primaryTask: 'load_patient',
+    actions: [{ id: 'load_patient', label: 'Confirm Patient Loaded', variant: 'primary' }],
+  },
+  {
     id: 'TREATMENT',
-    label: 'Treatment',
+    label: 'Treatment & Monitoring',
     shortLabel: 'Treatment',
-    description: 'Oxygen, IV, medication, bandaging, and other interventions.',
+    description: 'Interventions, medication, medical notes, and monitoring during transport.',
     primaryTask: 'treatment',
     actions: [{ id: 'treatment', label: 'Record Treatment', variant: 'primary' }],
   },
@@ -252,6 +263,7 @@ const CLINICAL_STEPS: NurseWorkflowStepId[] = [
   'PATIENT_ASSESSMENT',
   'VITAL_SIGNS',
   'MEDICAL_NOTES',
+  'PATIENT_LOADED',
   'TREATMENT',
   'PATIENT_MONITORING',
   'HOSPITAL_HANDOVER',
@@ -267,7 +279,7 @@ export function getMaxStepForMissionStatus(status: string): NurseWorkflowStepId 
   if (status === 'COMPLETED' || status === 'CANCELLED') return 'MISSION_CLOSED'
   if (status === 'ARRIVED_HOSPITAL') return 'COMPLETE_DOCUMENTATION'
   if (status === 'TRANSPORTING') return 'PATIENT_MONITORING'
-  if (ON_SCENE_STATUSES.includes(status)) return 'MEDICAL_NOTES'
+  if (ON_SCENE_STATUSES.includes(status)) return 'PATIENT_LOADED'
   return 'MISSION_ASSIGNED'
 }
 
@@ -318,7 +330,7 @@ export function getNurseTransportPhaseMessage(status: string): string | null {
 }
 
 export function getNurseTaskBlockReason(taskId: string, status: string): string | null {
-  if (['assessment', 'vitals', 'notes', 'begin_care'].includes(taskId) && !canDoPatientCareTasks(status)) {
+  if (['assessment', 'vitals', 'notes', 'load_patient', 'begin_care'].includes(taskId) && !canDoPatientCareTasks(status)) {
     return 'Patient care requires the driver to be on scene (Arrived at Scene).'
   }
   if (['treatment', 'monitoring'].includes(taskId) && !canDoTreatmentMonitoring(status)) {
@@ -351,7 +363,7 @@ export function resolveNurseWorkflowStep(mission: { id: string; status: string }
     if (stored && ['TREATMENT', 'PATIENT_MONITORING'].includes(stored)) resolved = stored
     else resolved = 'TREATMENT'
   } else if (ON_SCENE_STATUSES.includes(status)) {
-    if (stored && ['PATIENT_ASSESSMENT', 'VITAL_SIGNS', 'MEDICAL_NOTES'].includes(stored)) resolved = stored
+    if (stored && ['PATIENT_ASSESSMENT', 'VITAL_SIGNS', 'MEDICAL_NOTES', 'PATIENT_LOADED'].includes(stored)) resolved = stored
     else if (meta.acceptedAt) resolved = 'PATIENT_ASSESSMENT'
     else resolved = 'MISSION_ASSIGNED'
   } else if (PRE_SCENE_STATUSES.includes(status) || status === 'ASSIGNED') {

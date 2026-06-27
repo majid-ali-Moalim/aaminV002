@@ -216,6 +216,20 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     }
   }
 
+  const rejectAssignment = async (id: string) => {
+    const reason = window.prompt('Reason for rejecting this assignment (optional):') ?? ''
+    if (reason === null) return
+    try {
+      await driverMissionsApi.reject(id, reason.trim() || undefined)
+      setAssignedList((prev) => prev.filter((m) => m.id !== id))
+      if (mission?.id === id) setMissionId(null)
+      toast.success('Assignment rejected — dispatch has been notified')
+      refresh()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not reject assignment')
+    }
+  }
+
   const handleAction = async (actionId: WorkflowActionId) => {
     if (!mission || readOnly) return
 
@@ -278,7 +292,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     patchWorkflowMeta(mission.id, {
       fuel: reportDraft.fuel || meta.fuel,
       mileage: reportDraft.mileage || meta.mileage,
-      notes: { ...meta.notes, MISSION_COMPLETED: reportDraft.notes || meta.notes?.MISSION_COMPLETED },
+      notes: { ...meta.notes, ARRIVED_HOSPITAL: reportDraft.notes || meta.notes?.ARRIVED_HOSPITAL },
     })
     syncWorkflow()
     setReportOpen(false)
@@ -339,6 +353,13 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
                   onClick={() => acceptAssignment(m.id)}
                 >
                   Accept Assignment
+                </button>
+                <button
+                  type="button"
+                  className="driver-btn-sm ghost text-red-500 border-red-200"
+                  onClick={() => rejectAssignment(m.id)}
+                >
+                  Reject
                 </button>
               </div>
             </article>

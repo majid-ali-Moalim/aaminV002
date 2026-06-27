@@ -13,6 +13,7 @@ import {
   AlertTriangle, Star, TrendingUp, TrendingDown
 } from 'lucide-react'
 import { driversService, systemSetupService, ambulancesService, employeesService, uploadService } from '@/lib/api'
+import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -96,6 +97,7 @@ export default function DriversPage() {
   const [stats, setStats] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [stations, setStations] = useState<Station[]>([])
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null)
@@ -192,15 +194,14 @@ export default function DriversPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [stationsData, ambulancesData, rolesData, regionsData, districtsData] = await Promise.all([
+      const [stationsData, ambulancesData, departmentsData] = await Promise.all([
         systemSetupService.getStations(),
         ambulancesService.getAll(),
-        systemSetupService.getRoles(),
-        systemSetupService.getRegions(),
-        systemSetupService.getDistricts()
+        systemSetupService.getDepartments(),
       ])
       setStations(stationsData)
       setAmbulances(ambulancesData)
+      setDepartments(departmentsData ?? [])
     } catch (err) {
       console.error('Failed to fetch master data:', err)
       toast.error('Failed to load master data')
@@ -324,19 +325,30 @@ export default function DriversPage() {
         const updatePayload = {
           firstName: formData.firstName,
           lastName: formData.lastName,
-          gender: formData.gender,
+          gender: formData.gender || undefined,
           phone: formData.phone,
           alternatePhone: formData.alternativePhone,
           address: formData.residentialAddress,
           nationalId: formData.nationalIdNumber,
-          employeeCode: formData.employeeCode,
-          departmentId: formData.departmentId,
-          status: formData.employmentStatus,
+          departmentId: formData.departmentId || undefined,
+          stationId: formData.stationId || undefined,
+          regionId: formData.regionId || undefined,
+          districtId: formData.districtId || undefined,
+          emergencyContactName: formData.emergencyContactName || undefined,
+          emergencyPhone: formData.emergencyContactPhone || undefined,
+          relationship: formData.emergencyContactRelationship || undefined,
+          employmentType: formData.employmentType || undefined,
+          employmentDate: formData.joinDate || undefined,
+          assignedAmbulanceId: formData.assignedAmbulanceId || undefined,
+          status: formData.employmentStatus || undefined,
           shiftStatus: formData.shiftStatus,
           licenseNumber: formData.drivingLicenseNumber,
           licenseClass: formData.licenseClass,
           licenseType: `Class ${formData.licenseClass}`,
           licenseExpiryDate: formData.licenseExpiryDate || undefined,
+          yearsOfExperience: formData.yearsOfExperience
+            ? Number(formData.yearsOfExperience)
+            : undefined,
         }
         await employeesService.update(editingDriver.id, updatePayload)
         toast.success('Driver updated successfully')
@@ -1239,13 +1251,16 @@ export default function DriversPage() {
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                       Relationship
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Spouse, Parent, Sibling"
+                    <select
                       value={formData.emergencyContactRelationship}
                       onChange={(e) => setFormData({ ...formData, emergencyContactRelationship: e.target.value })}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
-                    />
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                    >
+                      <option value="">Select relationship</option>
+                      {EMERGENCY_CONTACT_RELATIONSHIPS.map((r) => (
+                        <option key={r.id} value={r.id}>{r.label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1264,10 +1279,9 @@ export default function DriversPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g., DRV-001"
+                      readOnly
                       value={formData.employeeCode}
-                      onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value.toUpperCase() })}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-mono font-bold tracking-widest bg-slate-50 text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400 uppercase"
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-mono font-bold tracking-widest bg-slate-100 text-slate-600 outline-none cursor-not-allowed uppercase"
                     />
                   </div>
 
@@ -1281,7 +1295,23 @@ export default function DriversPage() {
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     >
                       <option value="">Select Department</option>
-                      {stations.map(s => (
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Station
+                    </label>
+                    <select
+                      value={formData.stationId}
+                      onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                    >
+                      <option value="">Select Station</option>
+                      {stations.map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>

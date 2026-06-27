@@ -96,7 +96,10 @@ export const DISPATCHER_MODULES: NavModule[] = [
       { slug: 'ambulances', label: 'Ambulances', icon: Truck },
       { slug: 'drivers', label: 'Drivers', icon: Users },
       { slug: 'nurses', label: 'Nurses', icon: Stethoscope },
-      { slug: 'availability', label: 'Availability Board', icon: Activity },
+      { slug: 'ambulance-availability', label: 'Ambulance Availability', icon: Activity },
+      { slug: 'driver-availability', label: 'Driver Availability', icon: Users },
+      { slug: 'nurse-availability', label: 'Nurse Availability', icon: Stethoscope },
+      { slug: 'hospital-availability', label: 'Hospital Availability', icon: Building2 },
     ],
   },
   {
@@ -226,10 +229,10 @@ export function isViewActive(pathname: string, module: NavModule, slug: string):
 
 /** Map new tab slugs to existing dispatcher-app API views */
 export const EMERGENCY_VIEW_API: Record<string, string> = {
-  all: 'all-cases',
+  all: 'pending-dispatch',
   new: 'pending-dispatch',
   active: 'active-missions',
-  pending: 'dispatch-board',
+  pending: 'pending-dispatch',
   critical: 'critical',
   closed: 'closed',
 }
@@ -247,6 +250,10 @@ export const RESOURCE_VIEW_API: Record<string, string> = {
   drivers: 'drivers',
   nurses: 'nurses',
   availability: 'available',
+  'ambulance-availability': 'available',
+  'driver-availability': 'drivers-available',
+  'nurse-availability': 'nurses-available',
+  'hospital-availability': 'capacity',
 }
 
 export const MONITORING_VIEW_API: Record<string, string> = {

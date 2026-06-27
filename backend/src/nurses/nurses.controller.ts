@@ -59,6 +59,14 @@ export class NursesController {
     return this.nursesService.acceptMission(requestId, body.nurseId);
   }
 
+  @Post('missions/:requestId/reject')
+  async rejectMission(
+    @Param('requestId') requestId: string,
+    @Body() body: { nurseId: string; reason?: string },
+  ) {
+    return this.nursesService.rejectMission(requestId, body.nurseId, body.reason);
+  }
+
   @Post('incidents')
   async createIncidentReport(@Body() data: any) {
     return this.nursesService.createIncidentReport(data);

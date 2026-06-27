@@ -29,7 +29,6 @@ import {
   FileText,
   Eye,
   User,
-  Stethoscope,
   X,
   Loader2,
   AlertCircle,
@@ -54,13 +53,11 @@ const STATUS_TABS: { id: StatusFilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'available', label: 'Available' },
   { id: 'unavailable', label: 'Unavailable' },
-  { id: 'on_case', label: 'On Case' },
 ]
 
 const DB_STATUS_FOR_OPERATIONAL: Record<OperationalAmbulanceStatus, string> = {
   available: 'AVAILABLE',
   unavailable: 'UNAVAILABLE',
-  on_case: 'ON_DUTY',
 }
 
 export default function AmbulanceAvailabilityView() {
@@ -76,9 +73,7 @@ export default function AmbulanceAvailabilityView() {
 
   const [statusModal, setStatusModal] = useState<Pick<AmbulanceAvailabilityRow, 'id' | 'ambulanceNumber'> | null>(null)
   const [assignDriverModal, setAssignDriverModal] = useState<Pick<AmbulanceAvailabilityRow, 'id' | 'ambulanceNumber'> | null>(null)
-  const [assignNurseModal, setAssignNurseModal] = useState<Pick<AmbulanceAvailabilityRow, 'id' | 'ambulanceNumber'> | null>(null)
   const [drivers, setDrivers] = useState<Employee[]>([])
-  const [nurses, setNurses] = useState<Employee[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const { data, isLoading, isValidating, mutate, error } = useSWR<AmbulanceAvailabilityOverview>(
@@ -91,13 +86,8 @@ export default function AmbulanceAvailabilityView() {
     try {
       const roles = await systemSetupService.getRoles()
       const driverRole = roles.find((r: EmployeeRole) => r.name.toUpperCase().includes('DRIVER'))
-      const nurseRole = roles.find((r: EmployeeRole) => r.name.toUpperCase().includes('NURSE'))
-      const [driverList, nurseList] = await Promise.all([
-        driverRole ? employeesService.getAll(driverRole.id) : Promise.resolve([]),
-        nurseRole ? employeesService.getAll(nurseRole.id) : Promise.resolve([]),
-      ])
+      const driverList = driverRole ? await employeesService.getAll(driverRole.id) : []
       setDrivers(driverList)
-      setNurses(nurseList)
     } catch {
       /* optional */
     }
@@ -145,22 +135,8 @@ export default function AmbulanceAvailabilityView() {
       setAssignDriverModal(null)
       mutate()
       fetchCrew()
-    } catch {
-      alert('Failed to assign driver')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleAssignNurse = async (ambulanceId: string, nurseId: string) => {
-    try {
-      setSubmitting(true)
-      await ambulancesService.assignNurse(ambulanceId, nurseId)
-      setAssignNurseModal(null)
-      mutate()
-      fetchCrew()
-    } catch {
-      alert('Failed to assign nurse')
+    } catch (error: any) {
+      alert(error?.response?.data?.message || error?.message || 'Failed to assign driver')
     } finally {
       setSubmitting(false)
     }
@@ -180,14 +156,13 @@ export default function AmbulanceAvailabilityView() {
         row.plateNumber,
         row.fleetNumber ?? '',
         row.driver?.name ?? '',
-        row.nurse?.name ?? '',
         row.currentCase?.trackingCode ?? '',
       ].join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [data?.ambulances, search, statusFilter, regionFilter, districtFilter, typeFilter])
 
-  const summary = data?.summary ?? { total: 0, available: 0, unavailable: 0, onCase: 0, activeToday: 0 }
+  const summary = data?.summary ?? { total: 0, available: 0, unavailable: 0, activeToday: 0 }
 
   const exportRows = filteredRows.map((r) => ({
     'Ambulance ID': r.ambulanceNumber,
@@ -195,7 +170,6 @@ export default function AmbulanceAvailabilityView() {
     Type: r.vehicleType,
     Status: OPERATIONAL_STATUS_CONFIG[r.operationalStatus].label,
     Driver: r.driver?.name ?? '—',
-    Nurse: r.nurse?.name ?? '—',
     'Current Case': r.currentCase?.trackingCode ?? '—',
     Region: r.region?.name ?? '—',
     District: r.district?.name ?? '—',
@@ -269,24 +243,25 @@ export default function AmbulanceAvailabilityView() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Ambulances" value={summary.total} icon={Truck} tone="slate" />
         <KpiCard label="Available" value={summary.available} icon={Truck} tone="emerald" />
         <KpiCard label="Unavailable" value={summary.unavailable} icon={AlertCircle} tone="red" />
-        <KpiCard label="On Case" value={summary.onCase} icon={Activity} tone="blue" />
         <KpiCard label="Active Today" value={summary.activeToday} icon={Clock} tone="violet" />
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 gap-4">
         {(Object.keys(OPERATIONAL_STATUS_CONFIG) as OperationalAmbulanceStatus[]).map((key) => {
           const cfg = OPERATIONAL_STATUS_CONFIG[key]
           const count = data?.statusCounts[key] ?? 0
-          const desc = key === 'available' ? 'Can be assigned immediately.' : key === 'unavailable' ? 'Cannot receive new assignments.' : 'Currently handling an emergency case.'
+          const desc = key === 'available'
+            ? 'Assigned to a driver and not handling a case.'
+            : 'No driver assigned, out of service, or already assigned to a case.'
           return (
             <div key={key} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between">
                 <span className="text-2xl">{cfg.emoji}</span>
-                <span className={`text-3xl font-black ${key === 'available' ? 'text-emerald-600' : key === 'unavailable' ? 'text-red-600' : 'text-blue-600'}`}>{count}</span>
+                <span className={`text-3xl font-black ${key === 'available' ? 'text-emerald-600' : 'text-red-600'}`}>{count}</span>
               </div>
               <h3 className="text-sm font-black text-slate-800 mt-3">{cfg.label}</h3>
               <p className="text-xs text-slate-500 mt-1">{desc}</p>
@@ -297,9 +272,8 @@ export default function AmbulanceAvailabilityView() {
 
       <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 print:hidden">
         <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Live Ambulance Board</h2>
-        <div className="grid lg:grid-cols-4 gap-4">
+        <div className="grid lg:grid-cols-3 gap-4">
           <LiveBoardColumn title="Available" rows={data?.liveBoard.available ?? []} status="available" onSelect={openDetail} />
-          <LiveBoardColumn title="On Case" rows={data?.liveBoard.onCase ?? []} status="on_case" onSelect={openDetail} />
           <LiveBoardColumn title="Unavailable" rows={data?.liveBoard.unavailable ?? []} status="unavailable" onSelect={openDetail} />
           <LiveBoardColumn title="Recently Updated" rows={data?.liveBoard.recentlyUpdated ?? []} status={null} onSelect={openDetail} showTime />
         </div>
@@ -309,7 +283,7 @@ export default function AmbulanceAvailabilityView() {
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ambulance ID, vehicle number, driver, nurse…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ambulance ID, vehicle number, driver, case…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
           </div>
           <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="lg:w-44 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
             <option value="">All Regions</option>
@@ -348,7 +322,6 @@ export default function AmbulanceAvailabilityView() {
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Driver</th>
-                  <th className="px-4 py-3">Nurse</th>
                   <th className="px-4 py-3">Current Case</th>
                   <th className="px-4 py-3">Region</th>
                   <th className="px-4 py-3">District</th>
@@ -358,7 +331,7 @@ export default function AmbulanceAvailabilityView() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.length === 0 ? (
-                  <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-500">No ambulances match your filters</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-500">No ambulances match your filters</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/80">
                     <td className="px-4 py-3 font-bold">{row.ambulanceNumber}</td>
@@ -366,7 +339,6 @@ export default function AmbulanceAvailabilityView() {
                     <td className="px-4 py-3">{row.vehicleType}</td>
                     <td className="px-4 py-3"><StatusBadge status={row.operationalStatus} /></td>
                     <td className="px-4 py-3">{row.driver?.name ?? '—'}</td>
-                    <td className="px-4 py-3">{row.nurse?.name ?? '—'}</td>
                     <td className="px-4 py-3">
                       {row.currentCase ? (
                         <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link>
@@ -434,7 +406,7 @@ export default function AmbulanceAvailabilityView() {
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>
-            <ChartCard title="Available vs On Case vs Unavailable">
+            <ChartCard title="Available vs Unavailable">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={data.analytics.statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`}>
@@ -472,7 +444,6 @@ export default function AmbulanceAvailabilityView() {
                 <InfoField label="Region" value={detailData.ambulance.region?.name ?? '—'} />
                 <InfoField label="District" value={detailData.ambulance.district?.name ?? '—'} />
                 <InfoField label="Driver" value={detailData.driver ? `${detailData.driver.firstName} ${detailData.driver.lastName}` : '—'} />
-                <InfoField label="Nurse" value={detailData.nurse ? `${detailData.nurse.firstName} ${detailData.nurse.lastName}` : '—'} />
               </div>
               {detailData.currentCase && (
                 <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
@@ -503,7 +474,6 @@ export default function AmbulanceAvailabilityView() {
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setStatusModal({ id: detailData.ambulance.id, ambulanceNumber: detailData.ambulance.ambulanceNumber })}>Change Status</Button>
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignDriverModal({ id: detailData.ambulance.id, ambulanceNumber: detailData.ambulance.ambulanceNumber })}><User className="w-4 h-4 mr-1" /> Assign Driver</Button>
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignNurseModal({ id: detailData.ambulance.id, ambulanceNumber: detailData.ambulance.ambulanceNumber })}><Stethoscope className="w-4 h-4 mr-1" /> Assign Nurse</Button>
                 {detailData.currentCase && (
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}>
                     <Button size="sm" className="rounded-xl bg-red-600 hover:bg-red-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button>
@@ -535,9 +505,6 @@ export default function AmbulanceAvailabilityView() {
         <CrewAssignModal title="Assign Driver" unit={assignDriverModal.ambulanceNumber} crew={drivers.filter((d) => !d.assignedAmbulanceId || d.assignedAmbulanceId === assignDriverModal.id)} onClose={() => setAssignDriverModal(null)} onSelect={(id) => handleAssignDriver(assignDriverModal.id, id)} submitting={submitting} icon={User} />
       )}
 
-      {assignNurseModal && (
-        <CrewAssignModal title="Assign Nurse" unit={assignNurseModal.ambulanceNumber} crew={nurses.filter((n) => !n.assignedAmbulanceId || n.assignedAmbulanceId === assignNurseModal.id)} onClose={() => setAssignNurseModal(null)} onSelect={(id) => handleAssignNurse(assignNurseModal.id, id)} submitting={submitting} icon={Stethoscope} />
-      )}
     </div>
   )
 }
@@ -558,7 +525,7 @@ function StatusBadge({ status }: { status: OperationalAmbulanceStatus }) {
 }
 
 function LiveBoardColumn({ title, rows, status, onSelect, showTime }: { title: string; rows: AmbulanceAvailabilityRow[]; status: OperationalAmbulanceStatus | null; onSelect: (id: string) => void; showTime?: boolean }) {
-  const border = status === 'available' ? 'border-emerald-200' : status === 'on_case' ? 'border-blue-200' : status === 'unavailable' ? 'border-red-200' : 'border-slate-200'
+  const border = status === 'available' ? 'border-emerald-200' : status === 'unavailable' ? 'border-red-200' : 'border-slate-200'
   return (
     <div className={`rounded-xl border ${border} bg-slate-50/50 p-3 min-h-[140px]`}>
       <p className="text-[10px] font-black text-slate-500 uppercase mb-2">{title} ({rows.length})</p>

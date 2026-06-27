@@ -13,11 +13,6 @@ export interface NurseAvailabilityRow {
   medicalClearanceStatus?: string | null
   operationalStatus: OperationalNurseStatus
   unavailableReason?: string | null
-  assignedAmbulance: {
-    id: string
-    ambulanceNumber: string
-    plateNumber: string
-  } | null
   station: { id: string; name: string } | null
   region: { id: string; name: string } | null
   district: { id: string; name: string } | null

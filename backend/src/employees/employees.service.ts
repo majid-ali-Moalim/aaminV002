@@ -70,6 +70,40 @@ export class EmployeesService {
     return isNaN(date.getTime()) ? undefined : date;
   }
 
+  private isDriverRoleName(roleName?: string | null): boolean {
+    return Boolean(roleName?.toUpperCase().includes('DRIVER'));
+  }
+
+  private async assertAmbulanceAssignableToDriver(
+    ambulanceId: string | null | undefined,
+    driverId?: string,
+  ) {
+    if (!ambulanceId) return;
+    const assignedDriver = await this.prisma.employee.findFirst({
+      where: {
+        ...(driverId ? { id: { not: driverId } } : {}),
+        assignedAmbulanceId: ambulanceId,
+        employeeRole: { name: { contains: 'Driver', mode: 'insensitive' } },
+      },
+      select: { firstName: true, lastName: true, employeeCode: true },
+    });
+    if (assignedDriver) {
+      const name =
+        [assignedDriver.firstName, assignedDriver.lastName].filter(Boolean).join(' ') ||
+        assignedDriver.employeeCode ||
+        'another driver';
+      throw new ConflictException(`This ambulance is already assigned to ${name}. Change that driver's ambulance first.`);
+    }
+
+    const ambulance = await this.prisma.ambulance.findUnique({
+      where: { id: ambulanceId },
+      select: { status: true },
+    });
+    if (ambulance?.status === 'MAINTENANCE') {
+      throw new ConflictException('This ambulance is under maintenance and cannot be assigned to a driver.');
+    }
+  }
+
   private async assertCanCreateEmployee(
     actor: { role?: string; sub?: string; id?: string; employeeRole?: string | null } | undefined,
     employeeRoleId?: string,
@@ -174,6 +208,18 @@ export class EmployeesService {
 
     await this.assertCanCreateEmployee(actor, data.employeeRoleId);
 
+    const employeeRole = data.employeeRoleId
+      ? await this.prisma.employeeRole.findUnique({
+          where: { id: data.employeeRoleId },
+          select: { name: true },
+        })
+      : null;
+    const isDriverEmployee = this.isDriverRoleName(employeeRole?.name);
+
+    if (data.assignedAmbulanceId && isDriverEmployee) {
+      await this.assertAmbulanceAssignableToDriver(data.assignedAmbulanceId);
+    }
+
     try {
       const passwordHash = await bcrypt.hash(data.password, 10);
 
@@ -207,7 +253,7 @@ export class EmployeesService {
           typicalStartTime: data.typicalStartTime,
           typicalEndTime: data.typicalEndTime,
           defaultShift: data.defaultShift,
-          assignedAmbulance: data.assignedAmbulanceId?.trim() ? { connect: { id: data.assignedAmbulanceId } } : undefined,
+          assignedAmbulance: isDriverEmployee && data.assignedAmbulanceId?.trim() ? { connect: { id: data.assignedAmbulanceId } } : undefined,
           shiftStatus: data.shiftStatus || 'AVAILABLE',
 
           // Nurse & Professional Med
@@ -319,10 +365,21 @@ export class EmployeesService {
   }
 
   async update(id: string, data: Record<string, unknown>, createdById?: string) {
-    const existing = await this.prisma.employee.findUnique({ where: { id } });
+    const existing = await this.prisma.employee.findUnique({
+      where: { id },
+      include: { employeeRole: true },
+    });
     if (!existing) throw new NotFoundException('Employee not found');
 
     const normalized = this.normalizeUpdateData(data);
+    if (typeof data.assignedAmbulanceId === 'string') {
+      if (this.isDriverRoleName(existing.employeeRole?.name)) {
+        await this.assertAmbulanceAssignableToDriver(data.assignedAmbulanceId, id);
+      } else {
+        delete (normalized as Record<string, unknown>).assignedAmbulanceId;
+        (normalized as Record<string, unknown>).assignedAmbulance = { disconnect: true };
+      }
+    }
     const statusChanged =
       typeof normalized.status === 'string' && normalized.status !== existing.status;
     const shiftChanged =

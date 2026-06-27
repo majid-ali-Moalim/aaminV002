@@ -1,4 +1,4 @@
-export type OperationalAmbulanceStatus = 'available' | 'unavailable' | 'on_case'
+export type OperationalAmbulanceStatus = 'available' | 'unavailable'
 
 export interface AmbulanceAvailabilityRow {
   id: string
@@ -9,7 +9,6 @@ export interface AmbulanceAvailabilityRow {
   dbStatus: string
   operationalStatus: OperationalAmbulanceStatus
   driver: { id: string; name: string } | null
-  nurse: { id: string; name: string } | null
   currentCase: {
     id: string
     trackingCode: string
@@ -28,13 +27,11 @@ export interface AmbulanceAvailabilityOverview {
     total: number
     available: number
     unavailable: number
-    onCase: number
     activeToday: number
   }
   statusCounts: {
     available: number
     unavailable: number
-    onCase: number
   }
   ambulances: AmbulanceAvailabilityRow[]
   recentChanges: {
@@ -58,7 +55,6 @@ export interface AmbulanceAvailabilityOverview {
   }
   liveBoard: {
     available: AmbulanceAvailabilityRow[]
-    onCase: AmbulanceAvailabilityRow[]
     unavailable: AmbulanceAvailabilityRow[]
     recentlyUpdated: AmbulanceAvailabilityRow[]
   }
@@ -79,12 +75,6 @@ export const OPERATIONAL_STATUS_CONFIG: Record<
     emoji: '🔴',
     badge: 'bg-red-100 text-red-800 border-red-200',
     dot: 'bg-red-500',
-  },
-  on_case: {
-    label: 'On Case',
-    emoji: '🔵',
-    badge: 'bg-blue-100 text-blue-800 border-blue-200',
-    dot: 'bg-blue-500',
   },
 }
 

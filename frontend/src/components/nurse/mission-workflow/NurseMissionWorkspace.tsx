@@ -205,6 +205,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       chips.push(['assessment', 'Assessment', Stethoscope])
       chips.push(['vitals', 'Vital Signs', Activity])
       chips.push(['notes', 'Medical Notes', ClipboardList])
+      chips.push(['load_patient', 'Load Patient', Truck])
     }
     if (canDoTreatmentMonitoring(status)) {
       chips.push(['treatment', 'Treatment', HeartPulse])
@@ -291,6 +292,20 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
   }
 
+  const rejectMission = async (id: string) => {
+    if (!nurseId) return
+    const reason = window.prompt('Reason for rejecting this mission (optional):') ?? ''
+    if (reason === null) return
+    try {
+      await nursesService.rejectMission(id, nurseId, reason.trim() || undefined)
+      toast.success('Mission rejected — dispatch has been notified')
+      if (missionId === id) setMissionId(null)
+      refresh()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Could not reject mission')
+    }
+  }
+
   const handleTask = async (taskId: NurseTaskId) => {
     if (!mission || readOnly) return
 
@@ -331,6 +346,16 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       case 'notes':
         if (!guardTask('notes')) return
         setActiveTask('notes')
+        break
+      case 'load_patient':
+        if (!guardTask('load_patient')) return
+        await saveRecord(
+          { clinicalNotes: 'Patient loaded into ambulance and ready for transport.' },
+          'PATIENT_LOADED',
+          'Patient loaded into ambulance',
+        )
+        advanceTo('PATIENT_LOADED', 'Patient loaded and ready for transport')
+        setActiveTask(null)
         break
       case 'treatment':
         if (!guardTask('treatment')) return
@@ -385,6 +410,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         PATIENT_ASSESSMENT: 'assessment',
         VITAL_SIGNS: 'vitals',
         MEDICAL_NOTES: 'notes',
+        PATIENT_LOADED: 'load_patient',
         TREATMENT: 'treatment',
         PATIENT_MONITORING: 'monitoring',
         HOSPITAL_HANDOVER: 'handover',
@@ -452,6 +478,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       return
     }
     await saveRecord({ clinicalNotes: text }, 'MEDICAL_NOTES', 'Medical notes added')
+    advanceTo('PATIENT_LOADED')
     setNotesForm({ observations: '', condition: '', progress: '' })
   }
 
@@ -466,6 +493,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       'TREATMENT',
       `Treatment recorded: ${treatmentForm.treatmentType}`,
     )
+    advanceTo('PATIENT_MONITORING')
+    setActiveTask('monitoring')
     setTreatmentForm({ treatmentType: TREATMENT_TYPES[0], medication: '', notes: '' })
   }
 
@@ -573,6 +602,13 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                   onClick={() => acceptMission(m.id)}
                 >
                   Accept Mission
+                </button>
+                <button
+                  type="button"
+                  className="nurse-btn ghost border-red-200 text-red-600"
+                  onClick={() => rejectMission(m.id)}
+                >
+                  Reject
                 </button>
               </div>
             </article>
@@ -717,6 +753,15 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 {action.label}
               </button>
             ))}
+            {currentStepId === 'MISSION_ASSIGNED' && !missionAccepted && mission && (
+              <button
+                type="button"
+                className="nmw-action-btn border-red-200 text-red-500"
+                onClick={() => rejectMission(mission.id)}
+              >
+                Reject Mission
+              </button>
+            )}
           </div>
           )}
 
