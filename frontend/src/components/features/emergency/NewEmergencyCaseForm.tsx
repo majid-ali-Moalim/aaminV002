@@ -458,17 +458,8 @@ export default function NewEmergencyCaseForm({
     return list
   }, [allAmbulances, form.nearestStationId, form.districtId, form.regionId])
 
-  const filteredDrivers = useMemo(() => {
-    if (!form.nearestStationId) return allDrivers
-    const atStation = allDrivers.filter((d) => d.stationId === form.nearestStationId)
-    return atStation.length ? atStation : allDrivers
-  }, [allDrivers, form.nearestStationId])
-
-  const filteredNurses = useMemo(() => {
-    if (!form.nearestStationId) return allNurses
-    const atStation = allNurses.filter((n) => n.stationId === form.nearestStationId)
-    return atStation.length ? atStation : allNurses
-  }, [allNurses, form.nearestStationId])
+  const filteredDrivers = useMemo(() => allDrivers, [allDrivers])
+  const filteredNurses = useMemo(() => allNurses, [allNurses])
 
   const handleRegionChange = async (regionId: string) => {
     patch({
@@ -1265,45 +1256,7 @@ export default function NewEmergencyCaseForm({
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <FieldLabel>Nearest Station {loadingStations && '…'}</FieldLabel>
-                        <select
-                          className={fieldInputClass(undefined)}
-                          value={form.nearestStationId}
-                          disabled={!form.districtId || loadingStations}
-                          onChange={(e) => handleStationChange(e.target.value)}
-                        >
-                          <option value="">
-                            {!form.districtId
-                              ? 'Select district first'
-                              : loadingStations
-                                ? 'Loading stations…'
-                                : stations.length
-                                  ? 'Select station (optional)'
-                                  : 'No stations in district'}
-                          </option>
-                          {stations.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                              {s.address ? ` · ${s.address}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
-
-                    {selectedStation && (
-                      <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                        <p className="font-bold text-slate-800">{selectedStation.name}</p>
-                        {selectedStation.address && (
-                          <p className="text-slate-600 mt-1">{selectedStation.address}</p>
-                        )}
-                        {selectedStation.phone && <p className="text-slate-500 mt-1">Tel: {selectedStation.phone}</p>}
-                        <p className="text-[10px] text-indigo-600 font-bold uppercase mt-2">
-                          Dispatch resources filtered to this station
-                        </p>
-                      </div>
-                    )}
 
                     <div className="space-y-4">
                       <div>
@@ -1425,18 +1378,15 @@ export default function NewEmergencyCaseForm({
                     badge={
                       <span className="text-[10px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded-full">
                         {filteredAmbulances.length} available
-                        {form.nearestStationId && selectedStation ? ` · ${selectedStation.name}` : ''}
                       </span>
                     }
                   >
                     {(form.regionId || form.districtId) && (
                       <p className="text-[10px] text-slate-500 font-medium mb-3">
                         Fleet filtered by{' '}
-                        {form.nearestStationId
-                          ? `station ${selectedStation?.name}`
-                          : form.districtId
-                            ? `district ${selectedDistrict?.name}`
-                            : `region ${selectedRegion?.name}`}
+                        {form.districtId
+                          ? `district ${selectedDistrict?.name}`
+                          : `region ${selectedRegion?.name}`}
                       </p>
                     )}
                     <FieldLabel>Ambulance Unit</FieldLabel>

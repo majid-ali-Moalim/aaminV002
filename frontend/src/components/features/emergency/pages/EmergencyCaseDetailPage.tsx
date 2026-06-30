@@ -24,73 +24,6 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
-import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
-
-function nurseName(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  return [record.nurse?.firstName, record.nurse?.lastName].filter(Boolean).join(' ') || 'Nurse'
-}
-
-function clinicalRecordTitle(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  if (parseClinicalRecord(record.clinicalNotes)) return 'Patient Assessment'
-  if (parseMonitoring(record.clinicalNotes)) return 'Treatment & Monitoring'
-  if (parseHandover(record.clinicalNotes)) return 'Hospital Handover'
-  if (record.treatmentGiven) return `Treatment · ${record.treatmentGiven}`
-  if (record.bloodPressure || record.heartRate || record.temperature || record.oxygenSaturation || record.respiratoryRate) {
-    return 'Vital Signs'
-  }
-  if (record.clinicalNotes?.toLowerCase().includes('patient loaded')) return 'Patient Loaded'
-  return 'Medical Note'
-}
-
-function clinicalRecordLines(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  const assessment = parseClinicalRecord(record.clinicalNotes)
-  if (assessment) {
-    return [
-      ['Chief complaint', assessment.chiefComplaint],
-      ['Symptoms', assessment.symptoms],
-      ['Consciousness', assessment.consciousnessLevel],
-      ['Pain level', assessment.painLevel],
-      ['Breathing', assessment.breathingStatus],
-      ['Injury', assessment.injuryDescription],
-      ['Assessment notes', assessment.assessmentNotes],
-    ]
-  }
-
-  const monitoring = parseMonitoring(record.clinicalNotes)
-  if (monitoring) {
-    return [
-      ['Blood pressure', monitoring.bloodPressure],
-      ['Heart rate', monitoring.heartRate],
-      ['Temperature', monitoring.temperature],
-      ['Oxygen saturation', monitoring.oxygenSaturation],
-      ['Respiratory rate', monitoring.respiratoryRate],
-      ['Condition', monitoring.condition],
-      ['Monitoring notes', monitoring.notes],
-    ]
-  }
-
-  const handover = parseHandover(record.clinicalNotes)
-  if (handover) {
-    return [
-      ['Patient condition', handover.patientCondition],
-      ['Treatment given', handover.treatmentGiven],
-      ['Receiving staff', handover.receivingStaff],
-      ['Handover notes', handover.notes],
-      ['Signature', handover.signature],
-    ]
-  }
-
-  return [
-    ['Blood pressure', record.bloodPressure],
-    ['Heart rate', record.heartRate?.toString()],
-    ['Temperature', record.temperature?.toString()],
-    ['Oxygen saturation', record.oxygenSaturation?.toString()],
-    ['Respiratory rate', record.respiratoryRate?.toString()],
-    ['Medication', record.medications],
-    ['Treatment', record.treatmentGiven],
-    ['Medical notes', record.clinicalNotes],
-  ]
-}
 
 export default function EmergencyCaseDetailPage() {
   const params = useParams()
@@ -156,7 +89,7 @@ export default function EmergencyCaseDetailPage() {
   const logs = [...(request.statusLogs ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
-  const nurseRecords = request.patientCareRecords ?? []
+  const driverReports = logs.filter((log) => log.notes?.includes('[Driver Report]'))
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">
@@ -223,39 +156,6 @@ export default function EmergencyCaseDetailPage() {
               </div>
             </div>
           </div>
-
-          {nurseRecords.length > 0 && (
-            <div className="bg-white rounded-2xl border border-rose-100 shadow-sm p-6">
-              <h2 className="text-sm font-black uppercase tracking-wider text-rose-700 mb-4 flex items-center gap-2">
-                <Stethoscope className="w-4 h-4" />
-                Nurse clinical documents & notes
-              </h2>
-              <div className="space-y-4">
-                {nurseRecords.map((record) => (
-                  <article key={record.id} className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                      <div>
-                        <p className="text-sm font-black text-slate-800">{clinicalRecordTitle(record)}</p>
-                        <p className="text-xs text-slate-500">
-                          {nurseName(record)} · {format(new Date(record.createdAt), 'PPp')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      {clinicalRecordLines(record)
-                        .filter(([, value]) => value)
-                        .map(([label, value]) => (
-                          <div key={label} className="rounded-lg bg-white/80 border border-rose-100 p-3">
-                            <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{label}</p>
-                            <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{value}</p>
-                          </div>
-                        ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
@@ -373,6 +273,25 @@ export default function EmergencyCaseDetailPage() {
               Mission status is updated by the assigned driver in the field.
             </p>
           </div>
+
+          {driverReports.length > 0 && (
+            <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6">
+              <h2 className="text-sm font-black uppercase tracking-wider text-amber-700 mb-4 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Driver run report
+              </h2>
+              <div className="space-y-3">
+                {driverReports.map((log) => (
+                  <div key={log.id} className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+                    <p className="text-xs text-slate-500 mb-1">{format(new Date(log.createdAt), 'PPp')}</p>
+                    <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                      {log.notes?.replace('[Driver Report]', '').trim()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="lg:col-span-1">

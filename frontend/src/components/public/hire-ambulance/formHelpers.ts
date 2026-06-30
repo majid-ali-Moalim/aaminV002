@@ -1,11 +1,4 @@
 import { StepId } from './constants'
-import {
-  AGE_GROUPS,
-  HOSPITAL_TRANSPORT_TYPES,
-  TRANSPORT_TYPES,
-  type TransportTypeValue,
-} from './constants'
-import type { HireTranslations } from './translations'
 
 export type HireEmergencyTypeOption = {
   id: string
@@ -31,18 +24,6 @@ export function isOtherEmergencyType(
   )
 }
 
-export function isOtherTransportType(transportType: string): boolean {
-  return transportType === 'OTHER'
-}
-
-export function isFuneralTransport(transportType: string): boolean {
-  return transportType === 'FUNERAL'
-}
-
-export function isHospitalTransport(transportType: string): boolean {
-  return HOSPITAL_TRANSPORT_TYPES.includes(transportType as TransportTypeValue)
-}
-
 export type HireFormValues = {
   isPatient: string
   callerName: string
@@ -51,7 +32,6 @@ export type HireFormValues = {
   callerRelationship: string
   patientName: string
   gender: string
-  ageGroup: string
   estimatedAge: string
   dateOfBirth: string
   bloodGroup: string
@@ -60,12 +40,9 @@ export type HireFormValues = {
   country: string
   emergencyType: string
   emergencyTypeOther: string
-  transportType: string
-  transportTypeOther: string
   conditionDescription: string
   consciousStatus: string
   breathingStatus: string
-  bleedingStatus: string
   regionId: string
   districtId: string
   areaName: string
@@ -78,31 +55,31 @@ export type HireFormValues = {
   maritalStatus: string
   needsOxygen: boolean
   needsStretcher: boolean
+  latitude: string
+  longitude: string
+  gpsLocationDescription: string
+  nationalityUnknown: boolean
 }
 
 export const defaultFormValues: HireFormValues = {
-  isPatient: 'NO',
+  isPatient: '',
   callerName: '',
   callerPhone: '',
   callerAltPhone: '',
   callerRelationship: '',
   patientName: '',
   gender: '',
-  ageGroup: '',
   estimatedAge: '',
   dateOfBirth: '',
   bloodGroup: '',
   destinationHospital: '',
-  nationalityType: 'LOCAL',
-  country: 'Somalia',
+  nationalityType: '',
+  country: '',
   emergencyType: '',
   emergencyTypeOther: '',
-  transportType: '',
-  transportTypeOther: '',
   conditionDescription: '',
   consciousStatus: '',
   breathingStatus: '',
-  bleedingStatus: '',
   regionId: '',
   districtId: '',
   areaName: '',
@@ -115,28 +92,18 @@ export const defaultFormValues: HireFormValues = {
   maritalStatus: '',
   needsOxygen: false,
   needsStretcher: false,
-}
-
-export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): boolean {
-  return data.requestType === 'EMERGENCY'
+  latitude: '',
+  longitude: '',
+  gpsLocationDescription: '',
+  nationalityUnknown: false,
 }
 
 export function computePriority(data: HireFormValues): 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' {
   if (!isEmergencyRequest(data)) return 'LOW'
-  if (
-    data.breathingStatus === 'NOT_BREATHING' ||
-    data.consciousStatus === 'UNCONSCIOUS' ||
-    data.bleedingStatus === 'HEAVY_UNCONTROLLED'
-  ) {
+  if (data.breathingStatus === 'NOT_BREATHING' || data.consciousStatus === 'UNCONSCIOUS') {
     return 'CRITICAL'
   }
-  if (
-    data.breathingStatus === 'DIFFICULTY' ||
-    data.bleedingStatus === 'SEVERE' ||
-    data.bleedingStatus === 'MINOR'
-  ) {
-    return 'HIGH'
-  }
+  if (data.breathingStatus === 'DIFFICULTY') return 'HIGH'
   return 'HIGH'
 }
 
@@ -155,16 +122,9 @@ export function calculateAgeFromDateOfBirth(dateOfBirth: string): number | null 
   return age
 }
 
-export function ageFromGroup(ageGroup: string): number | null {
-  const row = AGE_GROUPS.find((g) => g.value === ageGroup)
-  return row ? row.age : null
-}
-
-export function resolvePatientAge(data: HireFormValues): number {
-  if (data.isPatient === 'YES') {
-    return calculateAgeFromDateOfBirth(data.dateOfBirth) ?? 0
-  }
-  return ageFromGroup(data.ageGroup) ?? 0
+export function syncEstimatedAgeFromDob(dateOfBirth: string): string {
+  const age = calculateAgeFromDateOfBirth(dateOfBirth)
+  return age !== null ? String(age) : ''
 }
 
 export function formatSomaliaPhone(raw: string): string {
@@ -181,9 +141,18 @@ export function normalizePhone(raw: string): string {
   return digits
 }
 
-export function isValidSomaliaPhone(raw: string): boolean {
-  const digits = raw.replace(/\D/g, '').replace(/^252/, '')
-  return digits.length === 9 && /^[67]/.test(digits)
+export function hasGpsLocation(data: HireFormValues): boolean {
+  if (!data.latitude?.trim() || !data.longitude?.trim()) return false
+  const lat = parseFloat(data.latitude)
+  const lng = parseFloat(data.longitude)
+  return (
+    !Number.isNaN(lat) &&
+    !Number.isNaN(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  )
 }
 
 export function hasManualLocation(data: HireFormValues): boolean {
@@ -191,113 +160,88 @@ export function hasManualLocation(data: HireFormValues): boolean {
 }
 
 export function hasPickupLocation(data: HireFormValues): boolean {
-  return hasManualLocation(data)
+  return hasGpsLocation(data) || hasManualLocation(data)
 }
 
-export type ValidationContext = {
-  emergencyTypes?: HireEmergencyTypeOption[]
-  t: HireTranslations
+export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): boolean {
+  return data.requestType === 'EMERGENCY'
 }
 
 export function validateStep(
   step: StepId,
   data: HireFormValues,
-  context: ValidationContext,
+  context?: { emergencyTypes?: HireEmergencyTypeOption[] },
 ): string | null {
-  const { t } = context
-  const emergency = isEmergencyRequest(data)
-
   switch (step) {
-    case 'urgency': {
-      if (!data.requestType) return t.validation.requestType
-      if (!emergency) {
-        if (!data.transportType) return t.validation.transportType
-        if (isOtherTransportType(data.transportType) && !data.transportTypeOther.trim()) {
-          return t.validation.transportTypeOther
+    case 'urgency':
+      if (!data.requestType) return 'Select request type'
+      if (!isEmergencyRequest(data)) return null
+      if (!data.emergencyType) return 'Select emergency type'
+      {
+        const selectedType = context?.emergencyTypes?.find((t) => t.id === data.emergencyType)
+        if (selectedType && isOtherEmergencyType(selectedType) && !data.emergencyTypeOther.trim()) {
+          return 'Please type the emergency type when you select Others'
         }
-      } else {
-        const selected = context.emergencyTypes?.find((et) => et.id === data.emergencyType)
-        if (selected && isOtherEmergencyType(selected) && !data.emergencyTypeOther.trim()) {
-          return t.validation.emergencyTypeOther
-        }
-        if (!data.bleedingStatus) return t.validation.bleeding
-        if (!data.consciousStatus) return t.validation.conscious
-        if (!data.breathingStatus) return t.validation.breathing
       }
+      if (!data.consciousStatus) return 'Indicate if patient is conscious'
+      if (!data.breathingStatus) return 'Indicate breathing status'
+      if (!data.conditionDescription.trim()) return 'Describe what happened'
       return null
-    }
-    case 'identity': {
-      if (!data.isPatient) return t.validation.isPatient
+    case 'identity':
+      if (!data.isPatient) return 'Please confirm if you are the patient'
       if (data.isPatient === 'NO') {
-        if (!data.callerName.trim()) return t.validation.callerName
-        if (!data.callerRelationship) return t.validation.relationship
+        if (!data.callerName.trim()) return 'Caller name is required'
+        if (!data.callerRelationship) return 'Relationship to patient is required'
       }
-      if (!data.callerPhone.trim()) return t.validation.phone
-      if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
+      if (!data.callerPhone.trim()) return 'Phone number is required'
       return null
-    }
-    case 'patient': {
-      if (data.isPatient === 'YES' && !data.patientName.trim()) return t.validation.patientName
-      if (data.isPatient === 'YES') {
-        if (!data.dateOfBirth) return t.validation.dob
+    case 'patient':
+      if (data.isPatient === 'YES' && !data.patientName.trim()) {
+        return 'Patient name is required when you are the patient'
+      }
+      if (!data.gender) return 'Gender is required'
+      if (!data.dateOfBirth) return 'Date of birth is required'
+      {
         const age = calculateAgeFromDateOfBirth(data.dateOfBirth)
-        if (age === null) return t.validation.dobInvalid
-      } else if (!data.ageGroup) {
-        return t.validation.ageGroup
+        if (age === null) return 'Enter a valid date of birth that is not in the future'
+      }
+      if (data.isPatient === 'YES' && !data.maritalStatus) {
+        return 'Marital status is required when you are the patient'
       }
       return null
-    }
-    case 'location': {
-      if (!data.regionId) return t.validation.region
-      if (!data.districtId) return t.validation.district
-      if (!data.areaName.trim()) return t.validation.area
-      if (!emergency && isFuneralTransport(data.transportType)) {
-        if (!data.destinationHospital.trim()) {
-          return t.validation.destination
+    case 'location':
+      if (data.latitude?.trim() || data.longitude?.trim()) {
+        if (!hasGpsLocation(data)) {
+          return 'Enter valid GPS coordinates or clear them and use the pickup address'
         }
       }
-      return null
-    }
-    case 'details': {
-      if (
-        !isEmergencyRequest(data) &&
-        isHospitalTransport(data.transportType) &&
-        !data.destinationHospital.trim()
-      ) {
-        return t.validation.destinationHospital
+      if (!hasPickupLocation(data)) {
+        return 'Provide GPS coordinates or a complete pickup address — at least one is required'
       }
       return null
-    }
+    case 'details':
+      if (!data.nationalityType) return 'Select nationality or choose Unknown nationality'
+      if (
+        data.nationalityType === 'INTERNATIONAL' &&
+        !data.nationalityUnknown &&
+        !data.country
+      ) {
+        return 'Select country or tap Unknown nationality if not known'
+      }
+      if (data.isPatient === 'YES' && !data.preferredLanguage) {
+        return 'Select preferred language'
+      }
+      return null
     case 'review':
-      if (!data.consent) return t.validation.consent
+      if (!data.consent) return 'You must confirm this is a genuine request'
       return null
     default:
       return null
   }
 }
 
-export function validateAllSteps(
-  data: HireFormValues,
-  context: ValidationContext,
-): { step: StepId; message: string } | null {
-  const steps: StepId[] = ['urgency', 'identity', 'patient', 'location', 'details', 'review']
-  for (const step of steps) {
-    const err = validateStep(step, data, context)
-    if (err) return { step, message: err }
-  }
-  return null
-}
-
-export function transportTypeLabel(data: HireFormValues, t: HireTranslations): string {
-  if (isOtherTransportType(data.transportType)) {
-    return data.transportTypeOther.trim()
-  }
-  const key = data.transportType as keyof typeof t.transportTypes
-  return t.transportTypes[key] ?? data.transportType
-}
-
 export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergencyTypeOption[]) {
-  const selectedType = emergencyTypes?.find((et) => et.id === data.emergencyType)
+  const selectedType = emergencyTypes?.find((t) => t.id === data.emergencyType)
   const emergencyTypeLabel = selectedType
     ? isOtherEmergencyType(selectedType)
       ? data.emergencyTypeOther.trim()
@@ -307,63 +251,77 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     selectedType?.incidentCategoryId || selectedType?.incidentCategory?.id || undefined
 
   const finalCallerName =
-    data.isPatient === 'YES' ? data.patientName.trim() : data.callerName.trim()
+    data.isPatient === 'YES' ? data.patientName : data.callerName || 'Unknown Caller'
   const finalRelationship = data.isPatient === 'YES' ? 'SELF' : data.callerRelationship || 'OTHER'
-  const finalAge = resolvePatientAge(data)
+  const finalAge = calculateAgeFromDateOfBirth(data.dateOfBirth) ?? 0
   const finalCountry =
-    data.nationalityType === 'LOCAL' ? 'Somalia' : data.country.trim() || 'Somalia'
+    data.nationalityType === 'UNKNOWN' || data.nationalityUnknown
+      ? 'Unknown'
+      : data.nationalityType === 'LOCAL'
+        ? 'Somalia'
+        : data.country || 'Unknown'
 
-  const pickupParts = [data.areaName.trim(), data.landmarkDescription.trim()].filter(Boolean)
+  const gps = hasGpsLocation(data)
+  const manual = hasManualLocation(data)
 
-  const transportLabel = !isEmergencyRequest(data)
-    ? TRANSPORT_TYPES.find((tt) => tt.value === data.transportType)?.label ??
-      (isOtherTransportType(data.transportType) ? data.transportTypeOther.trim() : '')
-    : ''
+  const gpsLabel = gps ? `GPS: ${data.latitude}, ${data.longitude}` : ''
+  const manualLabel = manual ? data.areaName.trim() : ''
+
+  const gpsDetail = data.gpsLocationDescription.trim()
+  const pickupLocation = [manualLabel, gpsLabel, gpsDetail ? `Place: ${gpsDetail}` : '']
+    .filter(Boolean)
+    .join(' | ') || gpsLabel
+  const pickupLandmark =
+    data.areaName.trim() || gpsDetail || data.additionalDirections.trim() || gpsLabel
 
   return {
-    callerName: finalCallerName || 'Unknown Caller',
+    callerName: finalCallerName,
     callerPhone: normalizePhone(data.callerPhone),
-    callerAltPhone: data.callerAltPhone.trim() ? normalizePhone(data.callerAltPhone) : '',
+    callerAltPhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : '',
     callerRelationship: finalRelationship,
     newPatient: {
-      fullName: data.patientName.trim() || (data.isPatient === 'YES' ? 'Unknown Patient' : 'Patient'),
+      fullName: data.patientName.trim() || (data.isPatient === 'NO' ? 'Unknown Patient' : ''),
       gender: data.gender || 'UNKNOWN',
       age: finalAge,
-      dateOfBirth: data.isPatient === 'YES' ? data.dateOfBirth : undefined,
-      bloodType: data.bloodGroup && data.bloodGroup !== 'UNKNOWN' ? data.bloodGroup : undefined,
+      dateOfBirth: data.dateOfBirth || undefined,
+      bloodType: data.bloodGroup || undefined,
       maritalStatus: data.maritalStatus || 'UNKNOWN',
-      nationalityType: data.nationalityType || 'LOCAL',
+      nationalityType: data.nationalityType,
       country: finalCountry,
       phone: normalizePhone(data.callerPhone),
-      alternatePhone: data.callerAltPhone.trim() ? normalizePhone(data.callerAltPhone) : undefined,
+      alternatePhone: data.callerAltPhone ? normalizePhone(data.callerAltPhone) : undefined,
     },
     patientCondition:
       data.conditionDescription.trim() ||
       (isEmergencyRequest(data)
         ? 'Emergency transport request'
-        : `Non-emergency transport: ${transportLabel}`),
+        : 'Non-emergency transport — details to be confirmed by dispatch'),
     consciousStatus: data.consciousStatus || undefined,
     breathingStatus: data.breathingStatus || undefined,
-    bleedingStatus: data.bleedingStatus || undefined,
-    destination: data.destinationHospital.trim() || undefined,
+    destination: data.destinationHospital || undefined,
     priority: computePriority(data),
     incidentCategoryId,
-    regionId: data.regionId,
-    districtId: data.districtId,
-    pickupLocation: pickupParts.join(', ') || 'Location pending confirmation',
-    pickupLandmark: data.landmarkDescription.trim() || undefined,
+    regionId: data.regionId || undefined,
+    districtId: data.districtId || undefined,
+    pickupLocation,
+    pickupLandmark,
     needsOxygen: data.needsOxygen,
     needsStretcher: data.needsStretcher,
+    pickupLatitude: gps ? parseFloat(data.latitude) : undefined,
+    pickupLongitude: gps ? parseFloat(data.longitude) : undefined,
     notes: [
       isEmergencyRequest(data) && emergencyTypeLabel ? `Emergency Type: ${emergencyTypeLabel}` : '',
-      !isEmergencyRequest(data) && transportLabel ? `Transport Type: ${transportLabel}` : '',
-      !isEmergencyRequest(data) && isOtherTransportType(data.transportType)
-        ? `Transport Detail: ${data.transportTypeOther.trim()}`
+      isEmergencyRequest(data) && selectedType?.code && !isOtherEmergencyType(selectedType)
+        ? `Type Code: ${selectedType.code}`
         : '',
-      data.ageGroup && data.isPatient === 'NO' ? `Age Group: ${data.ageGroup}` : '',
+      `Directions: ${data.additionalDirections || 'N/A'}`,
       `Language: ${data.preferredLanguage || 'Not specified'}`,
-      `Special Instructions: ${data.specialInstructions.trim() || 'None'}`,
-      `Request Type: ${isEmergencyRequest(data) ? 'Emergency' : 'Non-Emergency'}`,
+      `Special Instructions: ${data.specialInstructions || 'None'}`,
+      `Request Type: ${data.requestType === 'EMERGENCY' ? 'Emergency' : 'Non-Emergency'}`,
+      !isEmergencyRequest(data) ? 'Triage: To be completed by dispatch if needed' : '',
+      gps ? `Coordinates: ${data.latitude}, ${data.longitude}` : '',
+      gps && gpsDetail ? `Patient location details: ${gpsDetail}` : '',
+      gps ? `Maps: https://www.google.com/maps?q=${data.latitude},${data.longitude}` : '',
     ]
       .filter(Boolean)
       .join('\n'),

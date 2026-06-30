@@ -79,6 +79,13 @@ export const DRIVER_TIMELINE_STEPS: DriverTimelineStep[] = [
     description: 'Drive to the receiving facility and confirm hospital arrival.',
     stepIds: ['EN_ROUTE_HOSPITAL', 'ARRIVED_HOSPITAL'],
   },
+  {
+    id: 'COMPLETE',
+    label: 'Mission Complete',
+    shortLabel: 'Done',
+    description: 'Nurse completes handover and closes the case.',
+    stepIds: ['MISSION_COMPLETED'],
+  },
 ]
 
 export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [

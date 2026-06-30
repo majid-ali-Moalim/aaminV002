@@ -23,7 +23,6 @@ import { EmergencyRequest } from '@/types'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
-import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
 
 type Props = {
   caseId: string | null
@@ -41,52 +40,6 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
       <p className="text-sm font-semibold text-slate-800 mt-1 whitespace-pre-wrap">{value}</p>
     </div>
   )
-}
-
-function clinicalRecordTitle(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  if (parseClinicalRecord(record.clinicalNotes)) return 'Patient Assessment'
-  if (parseMonitoring(record.clinicalNotes)) return 'Treatment & Monitoring'
-  if (parseHandover(record.clinicalNotes)) return 'Hospital Handover'
-  if (record.treatmentGiven) return `Treatment · ${record.treatmentGiven}`
-  if (record.bloodPressure || record.heartRate || record.temperature) return 'Vital Signs'
-  if (record.clinicalNotes?.toLowerCase().includes('patient loaded')) return 'Patient Loaded'
-  return 'Medical Note'
-}
-
-function clinicalRecordSummary(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  const assessment = parseClinicalRecord(record.clinicalNotes)
-  if (assessment) {
-    return [
-      assessment.chiefComplaint && `Chief complaint: ${assessment.chiefComplaint}`,
-      assessment.symptoms && `Symptoms: ${assessment.symptoms}`,
-      assessment.assessmentNotes && `Notes: ${assessment.assessmentNotes}`,
-    ].filter(Boolean).join('\n')
-  }
-  const monitoring = parseMonitoring(record.clinicalNotes)
-  if (monitoring) {
-    return [
-      monitoring.condition && `Condition: ${monitoring.condition}`,
-      monitoring.notes && `Notes: ${monitoring.notes}`,
-      monitoring.bloodPressure && `BP: ${monitoring.bloodPressure}`,
-      monitoring.heartRate && `HR: ${monitoring.heartRate}`,
-    ].filter(Boolean).join('\n')
-  }
-  const handover = parseHandover(record.clinicalNotes)
-  if (handover) {
-    return [
-      handover.patientCondition && `Condition: ${handover.patientCondition}`,
-      handover.treatmentGiven && `Treatment: ${handover.treatmentGiven}`,
-      handover.receivingStaff && `Receiving staff: ${handover.receivingStaff}`,
-      handover.notes && `Notes: ${handover.notes}`,
-    ].filter(Boolean).join('\n')
-  }
-  return [
-    record.treatmentGiven && `Treatment: ${record.treatmentGiven}`,
-    record.medications && `Medication: ${record.medications}`,
-    record.clinicalNotes,
-    record.bloodPressure && `BP: ${record.bloodPressure}`,
-    record.heartRate && `HR: ${record.heartRate}`,
-  ].filter(Boolean).join('\n')
 }
 
 export default function CaseDetailModal({ caseId, open, onClose, preview }: Props) {
@@ -312,20 +265,19 @@ export default function CaseDetailModal({ caseId, open, onClose, preview }: Prop
                   <h3 className="text-xs font-black uppercase tracking-wider text-rose-700 flex items-center gap-2 mb-4">
                     <Stethoscope className="w-4 h-4" /> Nurse clinical records
                   </h3>
-                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
                     {nurseRecords.slice(0, 8).map((record) => (
-                      <div key={record.id} className="text-sm rounded-xl bg-white/80 border border-rose-100 p-3">
-                        <div className="flex justify-between gap-3">
-                          <span className="text-slate-800 font-bold">{clinicalRecordTitle(record)}</span>
-                          <span className="text-xs text-slate-500 shrink-0">
-                            {format(new Date(record.createdAt), 'h:mm a')}
-                          </span>
-                        </div>
-                        {clinicalRecordSummary(record) && (
-                          <p className="text-xs text-slate-600 mt-2 whitespace-pre-wrap">
-                            {clinicalRecordSummary(record)}
-                          </p>
-                        )}
+                      <div key={record.id} className="text-sm flex justify-between gap-3 border-b border-rose-100/80 pb-2 last:border-0">
+                        <span className="text-slate-700 font-medium truncate">
+                          {record.treatmentGiven
+                            ? `Treatment · ${record.treatmentGiven}`
+                            : record.bloodPressure
+                              ? `Vitals · BP ${record.bloodPressure}`
+                              : 'Clinical note'}
+                        </span>
+                        <span className="text-xs text-slate-500 shrink-0">
+                          {format(new Date(record.createdAt), 'h:mm a')}
+                        </span>
                       </div>
                     ))}
                   </div>

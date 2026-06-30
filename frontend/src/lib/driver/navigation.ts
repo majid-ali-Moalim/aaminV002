@@ -11,7 +11,6 @@ import {
   PlusCircle,
   FileText,
   LogIn,
-  Shield,
 } from 'lucide-react'
 
 export type DriverModuleId =
@@ -22,7 +21,6 @@ export type DriverModuleId =
   | 'shifts'
   | 'incidents'
   | 'notifications'
-  | 'permissions'
   | 'profile'
 
 export type DriverNavItem = {
@@ -100,14 +98,6 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     basePath: '/driver/notifications',
     singlePage: true,
     items: [{ slug: 'feed', label: 'Notifications', icon: Bell }],
-  },
-  {
-    id: 'permissions',
-    label: 'My Permissions',
-    icon: Shield,
-    basePath: '/driver/permissions',
-    singlePage: true,
-    items: [{ slug: 'access', label: 'My Permissions', icon: Shield }],
   },
   {
     id: 'profile',

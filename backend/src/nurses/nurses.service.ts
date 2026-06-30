@@ -296,7 +296,6 @@ export class NursesService {
       context: {
         createdById: nurse?.userId,
         assignedUserIds: notifyIds,
-        regionId: request.regionId,
       },
     });
 

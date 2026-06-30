@@ -98,9 +98,7 @@ export default function MissionExecutionDashboard({
   const currentStepId = resolveWorkflowStep(mission)
   const currentStep = getCurrentStep(mission)
   const stepIndex = getStepIndex(currentStepId)
-  const driverVisibleSteps = MISSION_EXECUTION_STEPS.filter((step) => step.id !== 'MISSION_COMPLETED')
-  const visibleStepIndex = Math.min(stepIndex, driverVisibleSteps.length - 1)
-  const progressPct = Math.round(((visibleStepIndex + 1) / driverVisibleSteps.length) * 100)
+  const progressPct = Math.round(((stepIndex + 1) / MISSION_EXECUTION_STEPS.length) * 100)
   const meta = mission ? getWorkflowMeta(mission.id) : null
   const pickupGps = mission ? resolvePickupGps(mission) : null
   const onDuty = profile?.shiftStatus === 'ON_DUTY'
@@ -165,23 +163,6 @@ export default function MissionExecutionDashboard({
     await driverMissionsApi.updateStatus(mission.id, status, notes)
     emitMissionStatus(mission.id, status, notes)
     await refreshMission(mission.id)
-  }
-
-  const rejectAssignment = async (id: string) => {
-    const reason = window.prompt('Reason for rejecting this assignment (optional):') ?? ''
-    try {
-      await driverMissionsApi.reject(id, reason.trim() || undefined)
-      if (mission?.id === id) {
-        clearStoredPhase(id)
-        setActiveMission(null)
-      }
-      setAssignedList((prev) => prev.filter((m) => m.id !== id))
-      setDetailId(null)
-      await load()
-      toast.success('Assignment rejected — dispatch has been notified')
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Could not reject assignment')
-    }
   }
 
   const advanceStep = async (nextStep: WorkflowStepId, backendStatus?: string, note?: string) => {
@@ -307,6 +288,12 @@ export default function MissionExecutionDashboard({
       case 'record_mileage':
         setPanel('report')
         break
+      case 'mark_available':
+        await advanceStep('MISSION_COMPLETED', 'COMPLETED', 'Mission completed')
+        clearStoredPhase(mission.id)
+        toast.success('Mission completed — you are available for new assignments')
+        load()
+        break
       default:
         break
     }
@@ -334,9 +321,11 @@ export default function MissionExecutionDashboard({
         signature: formDraft.signature,
         notes: { ...meta?.notes, PATIENT_HANDOVER: formDraft.handoverNotes },
       })
-      logActivity('Driver handover note saved. Nurse closes the case after clinical handover.')
-      toast.success('Handover note saved — nurse will complete the case')
+      logActivity('Handover documentation completed')
+      await advanceStep('MISSION_COMPLETED', 'COMPLETED', 'Patient handover complete')
+      clearStoredPhase(mission.id)
       setPanel(null)
+      load()
     } else if (panel === 'report') {
       patchWorkflowMeta(mission.id, { fuel: formDraft.fuel, mileage: formDraft.mileage })
       logActivity('Mission report submitted')
@@ -393,7 +382,6 @@ export default function MissionExecutionDashboard({
                 await refreshMission(m.id)
                 toast.success('Assignment accepted — workflow started')
               }}
-              onReject={() => rejectAssignment(m.id)}
               onDetails={() => setDetailId(m.id)}
             />
           ))}
@@ -403,7 +391,6 @@ export default function MissionExecutionDashboard({
           open={Boolean(detailId)}
           onClose={() => setDetailId(null)}
           showAccept
-          onReject={rejectAssignment}
           onAccept={async (id) => {
             const m = assignedList.find((x) => x.id === id)
             if (m) {
@@ -537,7 +524,7 @@ export default function MissionExecutionDashboard({
             <Activity size={16} /> Live Mission Timeline
           </h2>
           <ol className="mew-timeline">
-            {driverVisibleSteps.map((step, idx) => {
+            {MISSION_EXECUTION_STEPS.map((step, idx) => {
               const done = idx < stepIndex
               const active = idx === stepIndex
               const ts = getStepTimestamp(mission, step.id)
@@ -583,15 +570,6 @@ export default function MissionExecutionDashboard({
                   {action.label}
                 </button>
               ))}
-              {currentStepId === 'ASSIGNED' && (
-                <button
-                  type="button"
-                  className="mew-action-btn danger"
-                  onClick={() => rejectAssignment(mission.id)}
-                >
-                  Reject Assignment
-                </button>
-              )}
             </div>
             {!onDuty && (
               <p className="driver-warning-text mt-3">Clock in to execute workflow actions.</p>
@@ -705,18 +683,18 @@ export default function MissionExecutionDashboard({
             </ul>
           </section>
 
-          {/* Nurse-led completion summary */}
-          {stepIndex >= getStepIndex('ARRIVED_HOSPITAL') && (
+          {/* Completion summary */}
+          {stepIndex >= getStepIndex('MISSION_COMPLETED') - 1 && (
             <section className="mew-card mew-span-2 mew-completion">
               <h2 className="mew-card-title">
-                <Stethoscope size={16} /> Nurse Completion Pending
+                <Stethoscope size={16} /> Mission Completion Summary
               </h2>
               <InfoGrid
                 rows={[
                   { label: 'Fuel usage', value: meta?.fuel || '—' },
                   { label: 'Mileage', value: meta?.mileage || '—' },
-                  { label: 'Driver status', value: 'Arrived at hospital' },
-                  { label: 'Case closure', value: 'Nurse completes clinical handover and closes the case' },
+                  { label: 'Handover signature', value: meta?.signature || '—' },
+                  { label: 'Completed', value: mission.completedAt ? format(new Date(mission.completedAt), 'MMM d, h:mm a') : 'In progress' },
                 ]}
               />
             </section>
@@ -840,12 +818,10 @@ export default function MissionExecutionDashboard({
 function AssignedMissionCard({
   mission,
   onAccept,
-  onReject,
   onDetails,
 }: {
   mission: DriverMission
   onAccept: () => void
-  onReject: () => void
   onDetails: () => void
 }) {
   return (
@@ -873,9 +849,6 @@ function AssignedMissionCard({
       <div className="driver-assigned-actions">
         <button type="button" className="driver-btn-sm primary" onClick={onAccept}>
           Accept Assignment
-        </button>
-        <button type="button" className="driver-btn-sm ghost text-red-500 border-red-200" onClick={onReject}>
-          Reject
         </button>
         <button type="button" className="driver-btn-sm ghost" onClick={onDetails}>
           View Details <ChevronRight size={14} />

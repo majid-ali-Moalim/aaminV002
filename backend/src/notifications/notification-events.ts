@@ -26,8 +26,6 @@ export type DispatchContext = {
   assignedUserIds?: string[];
   includeEmployeeRoles?: string[];
   directOnly?: boolean;
-  /** When set, Dispatcher role recipients are limited to this region. */
-  regionId?: string | null;
 };
 
 export type DispatchPayload = {

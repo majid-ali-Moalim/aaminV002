@@ -83,8 +83,6 @@ export class NotificationsService {
           recipientRedirect = `/driver/mission?caseId=${caseId}`;
         } else if (roleName.includes('nurse')) {
           recipientRedirect = `/nurse/mission?caseId=${caseId}`;
-        } else if (roleName.includes('dispatch')) {
-          recipientRedirect = `/dispatcher/emergency/active?id=${caseId}`;
         }
       } else if (payload.eventKey === 'MISSION_ASSIGNED') {
         if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {

@@ -6,28 +6,30 @@ import { DispatcherGuard } from '@/components/guards'
 import DispatcherSidebarSections from '@/components/dispatcher/DispatcherSidebar'
 import DispatcherTopBar from '@/components/dispatcher/DispatcherTopBar'
 import { DispatcherNotificationProvider } from '@/components/dispatcher/DispatcherNotificationProvider'
+import { DispatcherThemeInit } from '@/components/dispatcher/DispatcherThemeInit'
+import { DispatcherThemeProvider } from '@/components/dispatcher/DispatcherThemeProvider'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { OptimisticNavProvider } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
+import './dispatcher.css'
 
 function DispatcherShell({ children }: { children: ReactNode }) {
-  const { stats } = useDispatcherAccess()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <OptimisticNavProvider>
       <DispatcherGuard>
         <DispatcherNotificationProvider>
-        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-        <DispatcherSidebarSections
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-        <div className="lg:ml-72 flex flex-col min-h-screen">
-            <DispatcherTopBar onMenuClick={() => setSidebarOpen(true)} />
-            <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">{children}</main>
+          <div className="dispatcher-shell min-h-screen font-sans">
+            <DispatcherSidebarSections
+              open={sidebarOpen}
+              onClose={() => setSidebarOpen(false)}
+            />
+            <div className="lg:ml-72 flex flex-col min-h-screen">
+              <DispatcherTopBar onMenuClick={() => setSidebarOpen(true)} />
+              <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">{children}</main>
+            </div>
           </div>
-        </div>
         </DispatcherNotificationProvider>
       </DispatcherGuard>
     </OptimisticNavProvider>
@@ -43,15 +45,22 @@ export default function DispatcherLayout({ children }: { children: ReactNode }) 
     return <>{children}</>
   }
 
+  const themed = (inner: ReactNode) => (
+    <>
+      <DispatcherThemeInit />
+      <DispatcherThemeProvider>{inner}</DispatcherThemeProvider>
+    </>
+  )
+
   if (isFullScreen) {
-    return (
+    return themed(
       <DispatcherGuard>
         <EmergencyPortalProvider portal="dispatcher">
-          <div className="min-h-screen">{children}</div>
+          <div className="dispatcher-shell min-h-screen">{children}</div>
         </EmergencyPortalProvider>
-      </DispatcherGuard>
+      </DispatcherGuard>,
     )
   }
 
-  return <DispatcherShell>{children}</DispatcherShell>
+  return themed(<DispatcherShell>{children}</DispatcherShell>)
 }

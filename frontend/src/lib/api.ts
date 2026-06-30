@@ -323,9 +323,9 @@ export const patientsService = {
 
 // Emergency requests service
 export const emergencyRequestsService = {
-  getAll: async (params?: { queue?: 'pending' | 'my-active' | 'my-cases' | 'regional' }) => {
+  getAll: async () => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests', { params })
+    return await api.get('/api/emergency-requests')
   },
 
   getById: async (id: string) => {
@@ -835,11 +835,6 @@ export const nursesService = {
   acceptMission: async (requestId: string, nurseId: string) => {
     const api = new ApiService()
     return await api.post(`/api/nurses/missions/${requestId}/accept`, { nurseId })
-  },
-
-  rejectMission: async (requestId: string, nurseId: string, reason?: string) => {
-    const api = new ApiService()
-    return await api.post(`/api/nurses/missions/${requestId}/reject`, { nurseId, reason })
   },
  
   createIncidentReport: async (data: any) => {

@@ -1703,6 +1703,55 @@
   max-width: 640px;
 }
 
+.nmw-task-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fafafa;
+}
+
+.nmw-task-form label input,
+.nmw-task-form label select,
+.nmw-task-form label textarea {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #fafafa;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.nmw-task-form .nmw-form-section {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: #fafafa;
+}
+
+.nurse-app--light .nmw-task-form label,
+.nurse-app--light .nmw-task-form .nmw-form-section {
+  color: #0a0a0a;
+}
+
+.nurse-app--light .nmw-task-form label input,
+.nurse-app--light .nmw-task-form label select,
+.nurse-app--light .nmw-task-form label textarea {
+  color: #0a0a0a;
+  background: #ffffff;
+  border-color: #d1d5db;
+}
+
+.nmw-care-checks label.nmw-care-check {
+  color: #fafafa;
+  font-weight: 600;
+}
+
+.nurse-app--light .nmw-care-checks label.nmw-care-check {
+  color: #0a0a0a;
+}
+
 .nmw-task-head h4 {
   font-size: 16px;
   font-weight: 800;

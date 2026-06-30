@@ -1,0 +1,60 @@
+/* Dispatcher portal light / dark tokens */
+.dispatcher-shell {
+  --dsb-bg: 210 40% 98%;
+  --dsb-surface: 0 0% 100%;
+  --dsb-border: 214 32% 91%;
+  --dsb-text: 222 47% 11%;
+  --dsb-text-secondary: 215 16% 47%;
+  --dsb-topbar: 0 0% 100%;
+  color-scheme: light;
+}
+
+.dispatcher-dark .dispatcher-shell {
+  --dsb-bg: 222 47% 7%;
+  --dsb-surface: 217 33% 12%;
+  --dsb-border: 217 25% 22%;
+  --dsb-text: 210 40% 98%;
+  --dsb-text-secondary: 215 20% 72%;
+  --dsb-topbar: 217 33% 10%;
+  color-scheme: dark;
+}
+
+.dispatcher-shell {
+  background-color: hsl(var(--dsb-bg));
+  color: hsl(var(--dsb-text));
+}
+
+.dispatcher-topbar {
+  background-color: hsl(var(--dsb-topbar) / 0.92);
+  border-color: hsl(var(--dsb-border));
+  color: hsl(var(--dsb-text));
+}
+
+.dispatcher-dark .dispatcher-topbar {
+  background-color: hsl(var(--dsb-topbar) / 0.95);
+}
+
+.dispatcher-dark .bg-white,
+.dispatcher-dark .bg-white\/80 {
+  background-color: hsl(var(--dsb-surface)) !important;
+}
+
+.dispatcher-dark .text-gray-900,
+.dispatcher-dark .text-gray-800,
+.dispatcher-dark .text-gray-700 {
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .text-gray-500,
+.dispatcher-dark .text-gray-600 {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .border-gray-200,
+.dispatcher-dark .border-gray-100 {
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .bg-gray-50 {
+  background-color: hsl(var(--dsb-bg)) !important;
+}
