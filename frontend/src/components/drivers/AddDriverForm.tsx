@@ -20,7 +20,6 @@ import {
   Briefcase,
   CheckCircle2,
   AlertCircle,
-  Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,14 +31,18 @@ import {
   FileUploadCard,
 } from '@/components/drivers/DriverFormSections'
 import {
-  driversService,
   systemSetupService,
   ambulancesService,
   uploadService,
   employeesService,
   emergencyRequestsService,
 } from '@/lib/api'
-import { Station, Ambulance, Department, EmployeeRole, Region, District } from '@/types'
+import { Ambulance, Department, EmployeeRole, Region } from '@/types'
+import {
+  suggestEmployeeCode,
+  departmentsForRole,
+  defaultUsernameFromFirstName,
+} from '@/lib/staffEmployeeCode'
 import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
 import {
   DriverFormErrors,
@@ -88,8 +91,6 @@ const STEP_FIELDS = {
   location: [
     'address',
     'regionId',
-    'districtId',
-    'stationId',
     'employeeCode',
     'departmentId',
     'joinDate',
@@ -98,7 +99,7 @@ const STEP_FIELDS = {
     'emergencyPhone',
   ],
   professional: ['licenseNumber', 'licenseClass', 'licenseIssueDate', 'licenseExpiryDate', 'yearsOfExperience', 'notes'],
-  account: ['email', 'username', 'password', 'confirmPassword'],
+  account: ['email', 'password', 'confirmPassword'],
 } as const satisfies Record<StepId, readonly (keyof DriverFormErrors)[]>
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -197,8 +198,6 @@ export default function AddDriverForm({
   const [createdDriver, setCreatedDriver] = useState<{ id: string; code: string; name: string } | null>(null)
 
   const [regions, setRegions] = useState<Region[]>([])
-  const [allDistricts, setAllDistricts] = useState<District[]>([])
-  const [allStations, setAllStations] = useState<Station[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [driverRoleId, setDriverRoleId] = useState('')
@@ -218,8 +217,6 @@ export default function AddDriverForm({
     nationalId: '',
     address: '',
     regionId: '',
-    districtId: '',
-    stationId: '',
     emergencyContactName: '',
     emergencyPhone: '',
     relationship: '',
@@ -280,43 +277,26 @@ export default function AddDriverForm({
     setLoading(true)
     setMasterDataError(null)
     try {
-      const [regs, dists, stns, depts, roles, ambs, stats] = await Promise.all([
+      const [regs, depts, roles, ambs] = await Promise.all([
         systemSetupService.getRegions(),
-        systemSetupService.getDistricts().catch(() => []),
-        systemSetupService.getStations().catch(() => []),
         systemSetupService.getDepartments(),
         systemSetupService.getRoles(),
         ambulancesService.getAll().catch(() => emergencyRequestsService.getAvailableAmbulances()),
-        driversService.getStats().catch(() => ({ total: 0 })),
       ])
 
       const regionsList = Array.isArray(regs) ? regs : []
       const deptList = Array.isArray(depts) ? depts : []
       const rolesList = Array.isArray(roles) ? roles : []
-      let districtList = Array.isArray(dists) ? dists : []
-      if (!districtList.length) {
-        districtList = regionsList.flatMap((r) =>
-          Array.isArray(r.districts) ? r.districts.filter((d) => d.isActive !== false) : [],
-        )
-      }
-      const stationList = Array.isArray(stns) ? stns : []
 
       if (!regionsList.length) {
         setMasterDataError('No regions found. Add regions in System Setup first.')
-      }
-      if (!districtList.length) {
-        setMasterDataError((prev) =>
-          prev ? `${prev} Also add districts in System Setup.` : 'No districts found. Add districts in System Setup.',
-        )
       }
       if (!rolesList.length) {
         setMasterDataError('Employee roles not loaded. Check your connection or System Setup.')
       }
 
       setRegions(regionsList)
-      setAllDistricts(districtList.filter((d) => d.isActive !== false))
-      setAllStations(stationList.filter((s) => s.isActive !== false))
-      setDepartments(deptList)
+      setDepartments(departmentsForRole(deptList, 'driver'))
 
       const driverRole = rolesList.find((r: EmployeeRole) => r.name === 'Driver')
       if (!driverRole?.id) {
@@ -324,13 +304,10 @@ export default function AddDriverForm({
       }
       setDriverRoleId(driverRole?.id || '')
 
-      const opsDept =
-        deptList.find((d: Department) => d.name === 'Field Emergency') ||
-        deptList.find((d: Department) => d.name === 'Dispatch Operations') ||
-        deptList[0]
+      const roleDepts = departmentsForRole(deptList, 'driver')
+      const defaultDept = roleDepts[0]
 
-      const nextNum = String((stats?.total ?? 0) + 1).padStart(3, '0')
-      const code = `DR-${nextNum}`
+      const code = await suggestEmployeeCode('DR', driverRole?.id)
       setDriverCode(code)
 
       setAmbulances(
@@ -346,7 +323,7 @@ export default function AddDriverForm({
       if (!skipFormInit) {
         patch({
           employeeCode: code,
-          departmentId: opsDept?.id || '',
+          departmentId: defaultDept?.id || '',
         })
       } else {
         try {
@@ -368,38 +345,6 @@ export default function AddDriverForm({
     loadMasterData()
   }, [loadMasterData])
 
-  const districtsForRegion = useMemo(() => {
-    if (!form.regionId) return []
-    const region = regions.find((r) => r.id === form.regionId)
-    if (region?.districts?.length) {
-      return region.districts.filter((d) => d.isActive !== false)
-    }
-    return allDistricts.filter((d) => d.regionId === form.regionId)
-  }, [form.regionId, regions, allDistricts])
-
-  const stationOptions = useMemo(() => allStations, [allStations])
-
-  const selectedRegion = useMemo(
-    () => regions.find((r) => r.id === form.regionId),
-    [regions, form.regionId]
-  )
-  const selectedDistrict = useMemo(
-    () =>
-      districtsForRegion.find((d) => d.id === form.districtId) ||
-      allDistricts.find((d) => d.id === form.districtId),
-    [districtsForRegion, allDistricts, form.districtId]
-  )
-  const selectedStation = useMemo(
-    () => allStations.find((s) => s.id === form.stationId),
-    [allStations, form.stationId]
-  )
-
-  const filteredAmbulances = useMemo(() => {
-    if (!form.stationId) return ambulances
-    const atStation = ambulances.filter((a) => a.stationId === form.stationId)
-    return atStation.length ? atStation : ambulances
-  }, [ambulances, form.stationId])
-
   const ageLimits = useMemo(() => getDriverAgeLimits(), [])
   const minJoinDate = useMemo(() => getMinJoinDate(form.dateOfBirth), [form.dateOfBirth])
   const minLicenseExpiry = useMemo(() => {
@@ -410,25 +355,7 @@ export default function AddDriverForm({
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = (regionId: string) => {
-    patch({ regionId, districtId: '' })
-  }
-
-  const handleDistrictChange = (districtId: string) => {
-    patch({ districtId })
-  }
-
-  const handleStationChange = (stationId: string) => {
-    const station = allStations.find((s) => s.id === stationId)
-    patch({
-      stationId,
-      assignedAmbulanceId: '',
-      ...(station
-        ? {
-            regionId: station.regionId || form.regionId,
-            districtId: station.districtId || form.districtId,
-          }
-        : {}),
-    })
+    patch({ regionId })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -468,19 +395,20 @@ export default function AddDriverForm({
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
+    const username = defaultUsernameFromFirstName(form.firstName, form.phone)
+
     return {
       role: 'EMPLOYEE' as const,
-      username: form.username.trim(),
+      username,
       email: form.email.trim(),
       password: form.password,
       employeeRoleId: driverRoleId,
       departmentId: form.departmentId || undefined,
-      stationId: form.stationId || undefined,
       firstName,
       lastName: form.lastName.trim(),
       phone: form.phone.trim(),
       alternatePhone: form.alternatePhone.trim() || undefined,
-      status: form.accountActive ? 'ACTIVE' : 'INACTIVE',
+      status: 'ACTIVE' as const,
       employeeCode: form.employeeCode.trim() || driverCode,
       gender: form.gender || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
@@ -509,7 +437,11 @@ export default function AddDriverForm({
   }
 
   const validateStep = (s: StepId): boolean => {
-    const result = validateDriverFormStep(s, form)
+    const formForStep =
+      s === 'account'
+        ? { ...form, username: form.username || defaultUsernameFromFirstName(form.firstName, form.phone) }
+        : form
+    const result = validateDriverFormStep(s, formForStep)
     setFieldErrors((prev) => {
       const next = { ...prev }
       for (const field of STEP_FIELDS[s]) {
@@ -528,8 +460,8 @@ export default function AddDriverForm({
     const idx = STEPS.findIndex((s) => s.id === step)
     if (idx < STEPS.length - 1) {
       const next = STEPS[idx + 1].id
-      if (next === 'account' && !form.username && form.phone) {
-        patch({ username: phoneDigits(form.phone) })
+      if (next === 'account') {
+        patch({ username: defaultUsernameFromFirstName(form.firstName, form.phone) })
       }
       setStep(next)
     }
@@ -546,7 +478,12 @@ export default function AddDriverForm({
       return
     }
 
-    const result = validateDriverForm(form)
+    const accountForm = {
+      ...form,
+      username: form.username || defaultUsernameFromFirstName(form.firstName, form.phone),
+    }
+
+    const result = validateDriverForm(accountForm)
     setFieldErrors(result.errors)
     if (!result.valid) {
       if (result.firstMessage) toast.error(result.firstMessage)
@@ -617,8 +554,6 @@ export default function AddDriverForm({
                     nationalId: '',
                     address: '',
                     regionId: '',
-                    districtId: '',
-                    stationId: '',
                     emergencyContactName: '',
                     emergencyPhone: '',
                     relationship: '',
@@ -723,27 +658,6 @@ export default function AddDriverForm({
             uploadingPhoto={uploadingPhoto}
             onUpload={handlePhotoUpload}
           />
-
-          {(selectedRegion || selectedDistrict || selectedStation) && (
-            <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-red-100 space-y-2">
-              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Assignment</p>
-              {selectedRegion && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Region:</span> {selectedRegion.name}
-                </p>
-              )}
-              {selectedDistrict && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">District:</span> {selectedDistrict.name}
-                </p>
-              )}
-              {selectedStation && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Station:</span> {selectedStation.name}
-                </p>
-              )}
-            </div>
-          )}
 
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-relaxed mt-6">
             Complete all steps to register a driver with system login and optional ambulance assignment.
@@ -895,18 +809,7 @@ export default function AddDriverForm({
 
                 {step === 'location' && (
                   <>
-                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Station assignment" color="red" />
-
-                    {(selectedRegion || selectedDistrict || selectedStation) && (
-                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
-                        <MapPin className="w-4 h-4 text-red-500 shrink-0" />
-                        <span>{selectedRegion?.name || '—'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span>{selectedDistrict?.name || 'Select district'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
-                      </div>
-                    )}
+                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Region and department" color="red" />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2">
@@ -922,24 +825,6 @@ export default function AddDriverForm({
                         />
                       </div>
                       <FormSelect
-                        label="Assigned Station"
-                        required
-                        icon={Building2}
-                        options={stationOptions}
-                        value={form.stationId}
-                        error={fieldErrors.stationId}
-                        disabled={loading}
-                        loading={loading}
-                        emptyHint={
-                          stationOptions.length
-                            ? 'Select Station'
-                            : 'No stations — add in System Setup'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                          handleStationChange(e.target.value)
-                        }
-                      />
-                      <FormSelect
                         label="Region"
                         required
                         icon={MapPin}
@@ -949,40 +834,6 @@ export default function AddDriverForm({
                         emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
                       />
-                      <FormSelect
-                        label="District"
-                        required
-                        icon={MapPin}
-                        options={districtsForRegion}
-                        value={form.districtId}
-                        error={fieldErrors.districtId}
-                        disabled={!form.regionId || loading}
-                        loading={loading}
-                        emptyHint={
-                          !form.regionId
-                            ? 'Select a region first'
-                            : districtsForRegion.length
-                              ? 'Select District'
-                              : 'No districts in this region'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-
-                      {selectedStation && (
-                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
-                            Selected Station
-                          </p>
-                          <p className="text-sm font-bold text-slate-800">{selectedStation.name}</p>
-                          {selectedStation.address && (
-                            <p className="text-xs text-slate-600 mt-1">{selectedStation.address}</p>
-                          )}
-                          {selectedStation.phone && (
-                            <p className="text-xs text-slate-500 mt-1">Tel: {selectedStation.phone}</p>
-                          )}
-                        </div>
-                      )}
-
                       <FormInput
                         label="Employee Code"
                         required
@@ -1080,25 +931,17 @@ export default function AddDriverForm({
                         <FormSelect
                           label="Assigned Ambulance"
                           icon={Truck}
-                          options={filteredAmbulances}
+                          options={ambulances}
                           value={form.assignedAmbulanceId}
                           emptyHint={
-                            form.stationId && filteredAmbulances.length === 0
-                              ? 'No ambulances at this station'
-                              : form.stationId
-                                ? 'Optional — select ambulance'
-                                : 'Select station to filter ambulances'
+                            ambulances.length
+                              ? 'Optional — select ambulance'
+                              : 'No ambulances available'
                           }
                           onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                             patch({ assignedAmbulanceId: e.target.value })
                           }
                         />
-                        {form.stationId && filteredAmbulances.length > 0 && (
-                          <p className="md:col-span-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                            Showing {filteredAmbulances.length} ambulance
-                            {filteredAmbulances.length !== 1 ? 's' : ''} for selected station
-                          </p>
-                        )}
                       </div>
                     </div>
                   </>
@@ -1243,17 +1086,6 @@ export default function AddDriverForm({
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ email: e.target.value.trim() })}
                       />
                       <FormInput
-                        label="Username"
-                        required
-                        value={form.username}
-                        error={fieldErrors.username}
-                        maxLength={30}
-                        placeholder="Letters, numbers, underscore"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ username: e.target.value.replace(/\s/g, '') })
-                        }
-                      />
-                      <FormInput
                         label="Password"
                         required
                         type="password"
@@ -1270,16 +1102,6 @@ export default function AddDriverForm({
                         error={fieldErrors.confirmPassword}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           patch({ confirmPassword: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="mt-6">
-                      <FormCheckbox
-                        label="Account Active"
-                        description="Driver can log in to the driver portal immediately"
-                        checked={form.accountActive}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ accountActive: e.target.checked })
                         }
                       />
                     </div>

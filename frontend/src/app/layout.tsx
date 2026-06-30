@@ -1,7 +1,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
-import Navbar from '@/components/layout/Navbar'
+import Navbar, { PUBLIC_HEADER_OFFSET } from '@/components/layout/Navbar'
 import { Toaster } from 'react-hot-toast'
 
 const inter = Inter({ subsets: ['latin'] })

@@ -18,6 +18,7 @@ import {
   Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
@@ -32,8 +33,6 @@ import {
   type MissionPhaseFilter,
 } from '@/components/features/emergency/missionStatusOptions'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
-import { useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
-import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 const PROGRESS_STEPS = [
   { ids: ['ASSIGNED'], icon: Siren, label: 'Assigned' },
@@ -73,7 +72,6 @@ export default function ActiveMissionsPage() {
 function ActiveMissionsContent() {
   const router = useRouter()
   const paths = useEmergencyPaths()
-  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -97,17 +95,14 @@ function ActiveMissionsContent() {
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await fetchEmergencyRequests(
-        portal,
-        portal === 'dispatcher' ? 'my-active' : undefined,
-      )
+      const data = await emergencyRequestsService.getAll()
       setRequests(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Failed to fetch active missions:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [portal])
+  }, [])
 
   useEffect(() => {
     fetchRequests(true)
@@ -168,9 +163,7 @@ function ActiveMissionsContent() {
             </p>
             <h1 className="text-3xl font-black tracking-tight">Active Missions</h1>
             <p className="text-red-100/80 mt-2 max-w-2xl">
-              {portal === 'dispatcher'
-                ? 'Cases you assigned and are monitoring — driver and nurse update status in the field.'
-                : 'Live deployment grid — filter by mission phase. Status updates are handled by drivers.'}
+              Live deployment grid — filter by mission phase. Status updates are handled by drivers.
             </p>
           </div>
           <Button

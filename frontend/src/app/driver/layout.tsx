@@ -17,7 +17,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
     return <>{children}</>
   }
 
-  const shellClass = theme === 'light' ? 'driver-shell driver-shell--light' : 'driver-shell'
+  const shellClass = `driver-shell driver-shell--light${theme === 'dark' ? ' driver-shell--dark-content' : ''}`
 
   return (
     <DriverGuard>

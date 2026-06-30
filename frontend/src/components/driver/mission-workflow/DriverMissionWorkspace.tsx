@@ -56,6 +56,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportDraft, setReportDraft] = useState({ fuel: '', mileage: '', notes: '' })
+  const [savingReport, setSavingReport] = useState(false)
   const [fetchedCase, setFetchedCase] = useState<DriverMission | null>(null)
 
   useEffect(() => {
@@ -126,6 +127,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const missionClosed = currentStepId === 'MISSION_COMPLETED' || (mission ? CLOSED.includes(mission.status) : false)
   const readOnly = missionClosed
   const caseReviewed = Boolean(meta.reviewedAt)
+  const runReportSubmitted = Boolean(meta.runReportSubmitted)
   const enRouteStartedAt =
     meta.enRouteStartedAt || meta.timestamps.EN_ROUTE_SCENE || null
   const enRouteElapsed = useElapsedTimer(
@@ -216,20 +218,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     }
   }
 
-  const rejectAssignment = async (id: string) => {
-    const reason = window.prompt('Reason for rejecting this assignment (optional):') ?? ''
-    if (reason === null) return
-    try {
-      await driverMissionsApi.reject(id, reason.trim() || undefined)
-      setAssignedList((prev) => prev.filter((m) => m.id !== id))
-      if (mission?.id === id) setMissionId(null)
-      toast.success('Assignment rejected — dispatch has been notified')
-      refresh()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Could not reject assignment')
-    }
-  }
-
   const handleAction = async (actionId: WorkflowActionId) => {
     if (!mission || readOnly) return
 
@@ -288,15 +276,31 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   }
 
   const submitReport = async () => {
-    if (!mission) return
-    patchWorkflowMeta(mission.id, {
-      fuel: reportDraft.fuel || meta.fuel,
-      mileage: reportDraft.mileage || meta.mileage,
-      notes: { ...meta.notes, ARRIVED_HOSPITAL: reportDraft.notes || meta.notes?.ARRIVED_HOSPITAL },
-    })
-    syncWorkflow()
-    setReportOpen(false)
-    toast.success('Run report saved')
+    if (!mission || savingReport) return
+    setSavingReport(true)
+    try {
+      const fuel = reportDraft.fuel || meta.fuel || ''
+      const mileage = reportDraft.mileage || meta.mileage || ''
+      const notes = reportDraft.notes || meta.notes?.ARRIVED_HOSPITAL || ''
+      const reportNote = `[Driver Report] Fuel: ${fuel || '—'} · Mileage: ${mileage || '—'} km${notes ? ` · ${notes}` : ''}`
+
+      patchWorkflowMeta(mission.id, {
+        fuel: reportDraft.fuel || meta.fuel,
+        mileage: reportDraft.mileage || meta.mileage,
+        notes: { ...meta.notes, ARRIVED_HOSPITAL: notes },
+        runReportSubmitted: true,
+      })
+
+      await driverMissionsApi.updateStatus(mission.id, mission.status, reportNote)
+
+      syncWorkflow()
+      setReportOpen(false)
+      toast.success(runReportSubmitted ? 'Run report updated' : 'Run report saved')
+    } catch {
+      toast.error('Could not save report to dispatch')
+    } finally {
+      setSavingReport(false)
+    }
   }
 
   const activityLog = useMemo(() => {
@@ -353,13 +357,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
                   onClick={() => acceptAssignment(m.id)}
                 >
                   Accept Assignment
-                </button>
-                <button
-                  type="button"
-                  className="driver-btn-sm ghost text-red-500 border-red-200"
-                  onClick={() => rejectAssignment(m.id)}
-                >
-                  Reject
                 </button>
               </div>
             </article>

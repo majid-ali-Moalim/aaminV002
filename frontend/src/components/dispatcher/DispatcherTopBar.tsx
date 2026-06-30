@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import useSWR from 'swr'
 import { Search, Menu, Bell, Plus, User } from 'lucide-react'
+import { DispatcherThemeToggle } from '@/components/dispatcher/DispatcherThemeToggle'
 import { format } from 'date-fns'
 import { getModuleByPath, getNavItem, LEGACY_DISPATCHER_REDIRECTS } from '@/lib/dispatcher/navigation'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
@@ -63,7 +64,7 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
   }, [profile?.profilePhoto])
 
   return (
-    <header className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200 sticky top-0 z-30">
+    <header className="dispatcher-topbar bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200 sticky top-0 z-30">
       <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 gap-3 sm:gap-6">
         <div className="flex items-center gap-3 sm:gap-6 flex-1 min-w-0">
           <button
@@ -107,6 +108,9 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
             </span>
             <span className="text-gray-400 text-[10px] font-medium mt-0.5">{format(time, 'EEE, dd MMM')}</span>
           </div>
+
+          {/* Theme */}
+          <DispatcherThemeToggle compact />
 
           {/* 1. Notifications */}
           <Link

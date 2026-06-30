@@ -50,14 +50,17 @@ export default function AdminLayout({
     return null
   }
 
-  // Immersive full-screen mode — sidebar & topbar hidden
+  // Immersive full-screen mode — sidebar & topbar hidden (theme still applies)
   if (isFullScreen) {
     return (
       <EmergencyPortalProvider portal="admin">
-        <div className="min-h-screen bg-[#F3F4F6]">
-          <LiveToastContainer />
-          {children}
-        </div>
+        <AdminThemeInit />
+        <AdminThemeProvider>
+          <div className="admin-shell min-h-screen bg-admin-bg text-admin-text">
+            <LiveToastContainer />
+            {children}
+          </div>
+        </AdminThemeProvider>
       </EmergencyPortalProvider>
     )
   }

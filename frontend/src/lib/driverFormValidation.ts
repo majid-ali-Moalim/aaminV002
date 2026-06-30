@@ -191,8 +191,6 @@ function validateLocation(form: DriverFormValues, errors: DriverFormErrors) {
   }
 
   if (!form.regionId) setError(errors, 'regionId', 'Region is required')
-  if (!form.districtId) setError(errors, 'districtId', 'District is required')
-  if (!form.stationId) setError(errors, 'stationId', 'Assigned station is required')
   if (!form.departmentId) setError(errors, 'departmentId', 'Department is required')
 
   const code = form.employeeCode.trim()

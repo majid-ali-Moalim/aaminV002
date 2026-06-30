@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   EmergencyRequestStatus,
   Prisma,
@@ -10,20 +16,11 @@ import { TrackingService } from '../tracking/tracking.service';
 import { AuditLogService } from '../tracking/audit-log.service';
 import {
   DispatcherScope,
-  myCasesWhere,
   myActiveCasesWhere,
+  myCasesWhere,
   regionalCasesWhere,
   regionalPendingCasesWhere,
 } from '../dispatchers-app/dispatcher-scope.util';
-
-type AuthUser = {
-  sub?: string;
-  role?: string;
-  employeeId?: string;
-  employeeRole?: string;
-};
-
-type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional';
 
 @Injectable()
 export class EmergencyRequestsService {
@@ -42,91 +39,6 @@ export class EmergencyRequestsService {
     });
     if (!req) return [];
     return [req.driver?.userId, req.nurse?.userId].filter(Boolean) as string[];
-  }
-
-  private isDispatcherUser(user?: AuthUser): boolean {
-    return (
-      user?.role === 'EMPLOYEE' &&
-      String(user.employeeRole || '').toUpperCase().includes('DISPATCH')
-    );
-  }
-
-  private async resolveDispatcherScope(userId: string): Promise<DispatcherScope | null> {
-    const employee = await this.prisma.employee.findFirst({
-      where: {
-        userId,
-        employeeRole: { name: { contains: 'Dispatcher', mode: 'insensitive' } },
-      },
-      include: { station: { include: { region: true } } },
-    });
-    if (!employee) return null;
-    return {
-      dispatcherId: employee.id,
-      regionId: employee.station?.regionId ?? null,
-      districtId: employee.station?.districtId ?? null,
-      stationId: employee.stationId ?? null,
-      regionName: employee.station?.region?.name ?? null,
-    };
-  }
-
-  private async dispatcherWhereForQueue(
-    user: AuthUser,
-    queue?: string,
-  ): Promise<Prisma.EmergencyRequestWhereInput> {
-    const scope = await this.resolveDispatcherScope(user.sub!);
-    if (!scope) {
-      return { id: { in: [] } };
-    }
-
-    const q = (queue || 'regional') as EmergencyQueue;
-    switch (q) {
-      case 'pending':
-        return regionalPendingCasesWhere(scope);
-      case 'my-active':
-        return myActiveCasesWhere(scope);
-      case 'my-cases':
-        return myCasesWhere(scope);
-      case 'regional':
-      default:
-        return regionalCasesWhere(scope);
-    }
-  }
-
-  async assertDispatcherCanAccessCase(
-    user: AuthUser | undefined,
-    caseRow: { id: string; dispatcherId: string | null; regionId: string | null; status: string },
-    action: 'read' | 'assign' | 'mutate' = 'read',
-  ) {
-    if (!this.isDispatcherUser(user) || !user?.sub) return;
-
-    const scope = await this.resolveDispatcherScope(user.sub);
-    if (!scope) {
-      throw new ForbiddenException('Dispatcher profile not found');
-    }
-
-    const isMine = caseRow.dispatcherId === scope.dispatcherId;
-    const isRegionalPending =
-      !caseRow.dispatcherId &&
-      ['PENDING', 'REVIEWING'].includes(caseRow.status) &&
-      (!scope.regionId || caseRow.regionId === scope.regionId);
-
-    if (action === 'assign') {
-      if (caseRow.dispatcherId && caseRow.dispatcherId !== scope.dispatcherId) {
-        throw new ForbiddenException('This case is assigned to another dispatcher');
-      }
-      if (!isMine && !isRegionalPending) {
-        throw new ForbiddenException('You can only assign cases in your region pending queue');
-      }
-      return;
-    }
-
-    if (action === 'mutate' && !isMine) {
-      throw new ForbiddenException('You can only update cases assigned to you');
-    }
-
-    if (!isMine && !isRegionalPending) {
-      throw new ForbiddenException('Case is outside your dispatch scope');
-    }
   }
 
   async create(data: any) {
@@ -330,10 +242,9 @@ export class EmergencyRequestsService {
         priority: request.priority as any,
         entityType: 'EmergencyRequest',
         entityId: request.id,
-        redirectUrl: `/dispatcher/emergency/pending?id=${request.id}`,
+        redirectUrl: `/admin/emergency-requests/pending?id=${request.id}`,
         context: {
           createdById: data.createdByUserId ?? data.dispatcherUserId,
-          regionId: request.regionId ?? data.regionId ?? null,
           assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
           includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
         },
@@ -350,55 +261,131 @@ export class EmergencyRequestsService {
     }
   }
 
-  findAll(user?: AuthUser, queue?: string) {
-    return this.findAllForUser(user, queue);
-  }
-
-  async findAllForUser(user?: AuthUser, queue?: string) {
-    let where: Prisma.EmergencyRequestWhereInput = {};
-
-    if (this.isDispatcherUser(user)) {
-      where = await this.dispatcherWhereForQueue(user!, queue);
-    }
-
-    return this.prisma.emergencyRequest.findMany({
-      where,
+  private listInclude = {
+    patient: {
       include: {
-        patient: {
-          include: {
-            user: true,
-          },
-        },
-        dispatcher: {
-          include: {
-            user: true,
-          },
-        },
-        driver: {
-          include: {
-            user: true,
-          },
-        },
-        nurse: {
-          include: {
-            user: true,
-          },
-        },
-        ambulance: true,
-        region: true,
-        district: true,
-        destinationHospital: true,
-        incidentCategory: true,
-        referrals: true,
-        statusLogs: {
-          orderBy: { createdAt: 'desc' }
-        }
+        user: true,
       },
+    },
+    dispatcher: {
+      include: {
+        user: true,
+      },
+    },
+    driver: {
+      include: {
+        user: true,
+      },
+    },
+    nurse: {
+      include: {
+        user: true,
+      },
+    },
+    ambulance: true,
+    region: true,
+    district: true,
+    destinationHospital: true,
+    incidentCategory: true,
+    referrals: true,
+    statusLogs: {
+      orderBy: { createdAt: 'desc' as const },
+    },
+  };
+
+  findAll() {
+    return this.prisma.emergencyRequest.findMany({
+      include: this.listInclude,
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string, user?: AuthUser) {
+  private async resolveDispatcherScope(user: {
+    employeeId?: string;
+    sub?: string;
+  }): Promise<DispatcherScope | null> {
+    if (!user.employeeId) return null;
+    const dispatcher = await this.prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      include: { station: { include: { region: true } } },
+    });
+    if (!dispatcher) return null;
+    return {
+      dispatcherId: dispatcher.id,
+      regionId: dispatcher.station?.regionId ?? null,
+      districtId: dispatcher.station?.districtId ?? null,
+      stationId: dispatcher.stationId ?? null,
+      regionName: dispatcher.station?.region?.name ?? null,
+    };
+  }
+
+  async findAllForUser(
+    user: { role?: string; employeeId?: string; sub?: string },
+    queue?: string,
+  ) {
+    if (user?.role === 'ADMIN') {
+      return this.findAll();
+    }
+
+    if (user?.role === 'EMPLOYEE' && user.employeeId) {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: user.employeeId },
+        include: { employeeRole: true },
+      });
+      const roleName = employee?.employeeRole?.name;
+
+      if (roleName === 'Dispatcher') {
+        const scope = await this.resolveDispatcherScope(user);
+        if (!scope) return [];
+
+        let where: Prisma.EmergencyRequestWhereInput;
+        switch (queue) {
+          case 'pending':
+            where = regionalPendingCasesWhere(scope);
+            break;
+          case 'my-active':
+            where = myActiveCasesWhere(scope);
+            break;
+          case 'my-cases':
+            where = myCasesWhere(scope);
+            break;
+          case 'regional':
+          default:
+            where = regionalCasesWhere(scope);
+            break;
+        }
+
+        return this.prisma.emergencyRequest.findMany({
+          where,
+          include: this.listInclude,
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (roleName === 'Driver') {
+        return this.prisma.emergencyRequest.findMany({
+          where: { driverId: user.employeeId },
+          include: this.listInclude,
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (roleName === 'Nurse') {
+        return this.prisma.emergencyRequest.findMany({
+          where: { nurseId: user.employeeId },
+          include: this.listInclude,
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+    }
+
+    return this.findAll();
+  }
+
+  async findOne(
+    id: string,
+    user?: { role?: string; employeeId?: string; sub?: string },
+  ) {
     const emergencyRequest = await this.prisma.emergencyRequest.findUnique({
       where: { id },
       include: {
@@ -456,7 +443,29 @@ export class EmergencyRequestsService {
       throw new NotFoundException('Emergency request not found');
     }
 
-    await this.assertDispatcherCanAccessCase(user, emergencyRequest, 'read');
+    if (user?.role === 'EMPLOYEE' && user.employeeId) {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: user.employeeId },
+        include: { employeeRole: true },
+      });
+      const roleName = employee?.employeeRole?.name;
+
+      if (roleName === 'Driver' && emergencyRequest.driverId !== user.employeeId) {
+        throw new ForbiddenException('Access denied to this case');
+      }
+      if (roleName === 'Nurse' && emergencyRequest.nurseId !== user.employeeId) {
+        throw new ForbiddenException('Access denied to this case');
+      }
+      if (roleName === 'Dispatcher') {
+        const scope = await this.resolveDispatcherScope(user);
+        const inRegion =
+          scope?.regionId && emergencyRequest.regionId === scope.regionId;
+        const isMine = emergencyRequest.dispatcherId === user.employeeId;
+        if (!isMine && !inRegion) {
+          throw new ForbiddenException('Access denied to this case');
+        }
+      }
+    }
 
     return emergencyRequest;
   }
@@ -532,31 +541,13 @@ export class EmergencyRequestsService {
       ambulanceId?: string;
       status?: EmergencyRequestStatus;
     },
-    user?: AuthUser,
+    _user?: { role?: string; employeeId?: string; sub?: string },
   ) {
     const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Emergency request not found');
 
-    await this.assertDispatcherCanAccessCase(user, existing, 'assign');
-
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-
-    if (!data.driverId || !data.nurseId) {
-      throw new BadRequestException('Both a driver and a nurse must be assigned before dispatch');
-    }
-
-    if (data.nurseId) {
-      const busyNurse = await this.prisma.emergencyRequest.findFirst({
-        where: {
-          nurseId: data.nurseId,
-          status: { in: activeStatuses as any },
-          id: { not: id },
-        },
-      });
-      if (busyNurse) throw new ConflictException('Nurse is already assigned to another active emergency');
-    }
-
     // Logic: Prevent assigning a driver/ambulance already on another active request
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
     
     if (data.driverId) {
       const busyDriver = await this.prisma.emergencyRequest.findFirst({
@@ -611,24 +602,20 @@ export class EmergencyRequestsService {
 
     const assignedIds = [result.driver?.userId, result.nurse?.userId].filter(Boolean) as string[];
 
-    const gpsNote =
-      result.pickupLatitude != null && result.pickupLongitude != null
-        ? ` GPS: ${result.pickupLatitude}, ${result.pickupLongitude}`
-        : '';
+    const driverName = [result.driver?.firstName, result.driver?.lastName].filter(Boolean).join(' ').trim() || 'driver';
+    const nurseName = result.nurse
+      ? [result.nurse.firstName, result.nurse.lastName].filter(Boolean).join(' ').trim() || 'nurse'
+      : '';
+    const patientName = result.patient?.fullName?.trim() || 'the patient';
 
-    const dispatcherUserId = data.dispatcherId
-      ? (
-          await this.prisma.employee.findUnique({
-            where: { id: data.dispatcherId },
-            select: { userId: true },
-          })
-        )?.userId
-      : undefined;
+    const assignmentMessage = nurseName
+      ? `Assigned ${patientName} to driver ${driverName} and nurse ${nurseName}.`
+      : `Assigned ${patientName} to driver ${driverName}.`;
 
     await this.notifications.dispatchEvent({
       eventKey: 'MISSION_ASSIGNED',
-      title: 'Mission Assigned',
-      message: `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`,
+      title: existing.driverId || existing.nurseId ? 'Mission Reassigned' : 'Mission Assigned',
+      message: assignmentMessage,
       type: 'EMERGENCY',
       category: 'MISSION',
       priority: result.priority as any,
@@ -637,9 +624,8 @@ export class EmergencyRequestsService {
       redirectUrl: `/dispatcher/emergency/active?id=${result.id}`,
       context: {
         createdById: (data as any).createdByUserId,
-        regionId: result.regionId ?? existing.regionId ?? null,
-        assignedUserIds: [...assignedIds, dispatcherUserId].filter(Boolean) as string[],
-        includeEmployeeRoles: ['Driver', 'Nurse'],
+        assignedUserIds: assignedIds,
+        directOnly: true,
       },
     });
 
@@ -668,12 +654,10 @@ export class EmergencyRequestsService {
     id: string,
     status: EmergencyRequestStatus,
     employeeId?: string,
-    user?: AuthUser,
+    _user?: { role?: string; employeeId?: string; sub?: string },
   ) {
     const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Emergency request not found');
-
-    await this.assertDispatcherCanAccessCase(user, existing, 'mutate');
 
     const updateData: any = { status };
     if (status === 'DISPATCHED') updateData.dispatchedAt = new Date();
@@ -702,32 +686,7 @@ export class EmergencyRequestsService {
       }
     });
 
-    if (status === 'COMPLETED') {
-      const crewIds = [existing.driverId, existing.nurseId].filter(Boolean) as string[];
-      if (crewIds.length) {
-        await this.prisma.employee.updateMany({
-          where: { id: { in: crewIds } },
-          data: { shiftStatus: 'AVAILABLE' },
-        });
-      }
-      if (existing.ambulanceId) {
-        await this.prisma.ambulance.update({
-          where: { id: existing.ambulanceId },
-          data: { status: 'AVAILABLE' },
-        });
-      }
-    }
-
     const assignedIds = await this.teamUserIds(existing.id);
-    const dispatcherUserId = existing.dispatcherId
-      ? (
-          await this.prisma.employee.findUnique({
-            where: { id: existing.dispatcherId },
-            select: { userId: true },
-          })
-        )?.userId
-      : undefined;
-    const notifyTeamIds = [...assignedIds, dispatcherUserId].filter(Boolean) as string[];
     const actorUserId = employeeId
       ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
       : undefined;
@@ -742,8 +701,8 @@ export class EmergencyRequestsService {
         priority: existing.priority as any,
         entityType: 'EmergencyRequest',
         entityId: existing.id,
-        redirectUrl: `/dispatcher/emergency-requests/${existing.id}`,
-        context: { createdById: actorUserId, assignedUserIds: notifyTeamIds },
+        redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+        context: { createdById: actorUserId },
       });
     } else {
       await this.notifications.dispatchEvent({
@@ -755,8 +714,8 @@ export class EmergencyRequestsService {
         priority: existing.priority as any,
         entityType: 'EmergencyRequest',
         entityId: existing.id,
-        redirectUrl: `/dispatcher/emergency-requests/${existing.id}`,
-        context: { createdById: actorUserId, assignedUserIds: notifyTeamIds },
+        redirectUrl: `/admin/emergency-requests/active?id=${existing.id}`,
+        context: { createdById: actorUserId, assignedUserIds: assignedIds },
       });
     }
 
@@ -827,11 +786,14 @@ export class EmergencyRequestsService {
     return updated;
   }
 
-  async cancelRequest(id: string, reason: string, employeeId?: string, user?: AuthUser) {
+  async cancelRequest(
+    id: string,
+    reason: string,
+    employeeId?: string,
+    _user?: { role?: string; employeeId?: string; sub?: string },
+  ) {
     const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Emergency request not found');
-
-    await this.assertDispatcherCanAccessCase(user, existing, 'mutate');
 
     const updated = await this.prisma.emergencyRequest.update({
       where: { id },

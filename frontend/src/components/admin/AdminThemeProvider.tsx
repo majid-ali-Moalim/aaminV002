@@ -1,18 +1,14 @@
 'use client'
 
-import { useLayoutEffect } from 'react'
+import { useEffect } from 'react'
 import { useAdminUiStore } from '@/lib/stores/adminUiStore'
+import { applyAdminTheme } from '@/components/admin/adminTheme'
 
 export function AdminThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useAdminUiStore((s) => s.theme)
 
-  useLayoutEffect(() => {
-    const root = document.documentElement
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
+  useEffect(() => {
+    applyAdminTheme(theme)
   }, [theme])
 
   return <>{children}</>

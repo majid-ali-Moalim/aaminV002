@@ -18,7 +18,6 @@ import {
   Briefcase,
   CheckCircle2,
   AlertCircle,
-  Building2,
   Shield,
   GraduationCap,
   Eye,
@@ -30,18 +29,19 @@ import {
   TacticalBadge,
   FormInput,
   FormSelect,
-  FormCheckbox,
-  FileUploadCard,
 } from '@/components/nurses/NurseFormSections'
 import {
   fetchDispatcherFormMasterData,
   validateDispatcherMasterData,
-  suggestDispatcherDepartment,
-  nextDispatcherCode,
   type SelectOption,
 } from '@/lib/dispatcherFormMasterData'
-import { systemSetupService, uploadService, employeesService } from '@/lib/api'
-import { Station, Department, Region, District } from '@/types'
+import { uploadService, employeesService } from '@/lib/api'
+import { Department, Region } from '@/types'
+import {
+  suggestEmployeeCode,
+  departmentsForRole,
+  defaultUsernameFromFirstName,
+} from '@/lib/staffEmployeeCode'
 import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
 import {
   DispatcherFormErrors,
@@ -82,8 +82,6 @@ const STEP_FIELDS = {
   location: [
     'address',
     'regionId',
-    'districtId',
-    'stationId',
     'employeeCode',
     'departmentId',
     'employmentType',
@@ -92,15 +90,8 @@ const STEP_FIELDS = {
     'relationship',
     'emergencyPhone',
   ],
-  credentials: [
-    'licenseNumber',
-    'licenseExpiryDate',
-    'qualification',
-    'yearsOfExperience',
-    'certificationUpload',
-    'notes',
-  ],
-  account: ['email', 'username', 'password', 'confirmPassword'],
+  credentials: ['qualification', 'yearsOfExperience', 'notes'],
+  account: ['email', 'password', 'confirmPassword'],
 } as const satisfies Record<StepId, readonly (keyof DispatcherFormErrors)[]>
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -183,16 +174,12 @@ export default function AddDispatcherForm() {
   } | null>(null)
 
   const [regions, setRegions] = useState<Region[]>([])
-  const [districts, setDistricts] = useState<District[]>([])
-  const [stations, setStations] = useState<Station[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [employmentTypeOptions, setEmploymentTypeOptions] = useState<SelectOption[]>([])
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
   const [dispatcherRoleId, setDispatcherRoleId] = useState('')
   const [dispatcherCode, setDispatcherCode] = useState('DIS-001')
-  const [loadingDistricts, setLoadingDistricts] = useState(false)
-  const [loadingStations, setLoadingStations] = useState(false)
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<DispatcherFormErrors>({})
   const [showPassword, setShowPassword] = useState(false)
@@ -210,8 +197,6 @@ export default function AddDispatcherForm() {
     nationalId: '',
     address: '',
     regionId: '',
-    districtId: '',
-    stationId: '',
     emergencyContactName: '',
     emergencyPhone: '',
     relationship: '',
@@ -255,7 +240,7 @@ export default function AddDispatcherForm() {
 
   const applyMasterData = useCallback((data: Awaited<ReturnType<typeof fetchDispatcherFormMasterData>>) => {
     setRegions(data.regions)
-    setDepartments(data.departments)
+    setDepartments(departmentsForRole(data.departments, 'dispatcher'))
     setDispatcherRoleId(data.dispatcherRoleId)
     setGenderOptions(data.genderOptions)
     setEmploymentTypeOptions(data.employmentTypeOptions)
@@ -274,14 +259,15 @@ export default function AddDispatcherForm() {
     setMasterDataError(null)
     try {
       const data = applyMasterData(await fetchDispatcherFormMasterData())
-      const code = nextDispatcherCode(data.dispatcherStatsTotal)
+      const code = await suggestEmployeeCode('DIS', data.dispatcherRoleId)
       setDispatcherCode(code)
-      const opsDept = suggestDispatcherDepartment(data.departments)
+      const roleDepts = departmentsForRole(data.departments, 'dispatcher')
+      const defaultDept = roleDepts[0]
 
       setForm((f) => ({
         ...f,
         employeeCode: code,
-        departmentId: f.departmentId || opsDept?.id || '',
+        departmentId: f.departmentId || defaultDept?.id || '',
         employmentType: f.employmentType || data.employmentTypeOptions[0]?.id || 'Full-time',
         qualification: f.qualification || data.qualificationOptions[0]?.id || '',
       }))
@@ -306,62 +292,13 @@ export default function AddDispatcherForm() {
     [departments, employmentTypeOptions, qualificationOptions],
   )
 
-  const selectedRegion = useMemo(() => regions.find((r) => r.id === form.regionId), [regions, form.regionId])
-  const selectedDistrict = useMemo(() => districts.find((d) => d.id === form.districtId), [districts, form.districtId])
-  const selectedStation = useMemo(() => stations.find((s) => s.id === form.stationId), [stations, form.stationId])
-  const selectedDepartment = useMemo(
-    () => departments.find((d) => d.id === form.departmentId),
-    [departments, form.departmentId],
-  )
 
   const ageLimits = useMemo(() => getDispatcherAgeLimits(), [])
   const minJoinDate = useMemo(() => getMinJoinDate(form.dateOfBirth), [form.dateOfBirth])
-  const minLicenseExpiry = useMemo(() => {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return formatDateInput(tomorrow)
-  }, [])
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
-  const handleRegionChange = async (regionId: string) => {
-    patch({ regionId, districtId: '', stationId: '' })
-    setDistricts([])
-    setStations([])
-    if (!regionId) return
-
-    setLoadingDistricts(true)
-    try {
-      const d = await systemSetupService.getDistricts(regionId)
-      setDistricts(Array.isArray(d) ? d.filter((x: District) => x.isActive !== false) : [])
-      if (!Array.isArray(d) || d.length === 0) {
-        toast.error('No districts in this region. Add districts in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load districts')
-      setDistricts([])
-    } finally {
-      setLoadingDistricts(false)
-    }
-  }
-
-  const handleDistrictChange = async (districtId: string) => {
-    patch({ districtId, stationId: '' })
-    setStations([])
-    if (!districtId) return
-
-    setLoadingStations(true)
-    try {
-      const stationList = await systemSetupService.getStations(districtId)
-      setStations(Array.isArray(stationList) ? stationList.filter((x: Station) => x.isActive !== false) : [])
-      if (!Array.isArray(stationList) || stationList.length === 0) {
-        toast.error('No stations in this district. Add a station in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load stations')
-      setStations([])
-    } finally {
-      setLoadingStations(false)
-    }
+  const handleRegionChange = (regionId: string) => {
+    patch({ regionId })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -395,19 +332,20 @@ export default function AddDispatcherForm() {
 
     const fullAddress = form.address.trim() || undefined
 
+    const username = defaultUsernameFromFirstName(form.firstName, form.phone)
+
     return {
       role: 'EMPLOYEE' as const,
-      username: form.username.trim(),
+      username,
       email: form.email.trim(),
       password: form.password,
       employeeRoleId: dispatcherRoleId,
       departmentId: form.departmentId || undefined,
-      stationId: form.stationId || undefined,
       firstName,
       lastName: form.lastName.trim(),
       phone: form.phone.trim(),
       alternatePhone: form.alternatePhone.trim() || undefined,
-      status: form.accountActive ? 'ACTIVE' : 'INACTIVE',
+      status: 'ACTIVE' as const,
       employeeCode: form.employeeCode.trim() || dispatcherCode,
       gender: form.gender || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
@@ -420,13 +358,8 @@ export default function AddDispatcherForm() {
       employmentDate: form.joinDate || undefined,
       defaultShift: form.employmentType,
       shiftStatus: mapShiftStatus(form.shiftStatus),
-      licenseNumber: form.licenseNumber.trim() || undefined,
-      licenseType: 'DISPATCH',
-      licenseExpiryDate: form.licenseExpiryDate || undefined,
-      licenseStatus: 'VALID',
       qualification: form.qualification.trim() || undefined,
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
-      certificationUpload: form.certificationUpload || undefined,
       notes: form.notes.trim() || undefined,
     }
   }
@@ -453,11 +386,7 @@ export default function AddDispatcherForm() {
     if (!validateStep(step)) return
     const idx = STEPS.findIndex((s) => s.id === step)
     if (idx < STEPS.length - 1) {
-      const next = STEPS[idx + 1].id
-      if (next === 'account' && !form.username && form.phone) {
-        patch({ username: phoneDigits(form.phone) })
-      }
-      setStep(next)
+      setStep(STEPS[idx + 1].id)
     }
   }
 
@@ -486,11 +415,12 @@ export default function AddDispatcherForm() {
     try {
       const created = await employeesService.create(buildPayload())
       const name = `${created.firstName || form.firstName} ${created.lastName || form.lastName}`.trim()
+      const username = defaultUsernameFromFirstName(form.firstName, form.phone)
       setCreatedDispatcher({
         id: created.id,
         code: created.employeeCode || form.employeeCode,
         name,
-        username: form.username.trim(),
+        username,
       })
       toast.success('Dispatcher registered successfully')
     } catch (err: any) {
@@ -504,8 +434,6 @@ export default function AddDispatcherForm() {
   const resetForm = () => {
     setCreatedDispatcher(null)
     setStep('personal')
-    setDistricts([])
-    setStations([])
     setFieldErrors({})
     setShowPassword(false)
     setShowConfirmPassword(false)
@@ -522,8 +450,6 @@ export default function AddDispatcherForm() {
       nationalId: '',
       address: '',
       regionId: '',
-      districtId: '',
-      stationId: '',
       emergencyContactName: '',
       emergencyPhone: '',
       relationship: '',
@@ -657,32 +583,6 @@ export default function AddDispatcherForm() {
             uploadingPhoto={uploadingPhoto}
             onUpload={handlePhotoUpload}
           />
-
-          {(selectedDepartment || selectedRegion || selectedDistrict || selectedStation) && (
-            <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-red-100 space-y-2">
-              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Assignment</p>
-              {selectedDepartment && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Department:</span> {selectedDepartment.name}
-                </p>
-              )}
-              {selectedRegion && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Region:</span> {selectedRegion.name}
-                </p>
-              )}
-              {selectedDistrict && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">District:</span> {selectedDistrict.name}
-                </p>
-              )}
-              {selectedStation && (
-                <p className="text-xs text-slate-600">
-                  <span className="font-bold text-slate-800">Station:</span> {selectedStation.name}
-                </p>
-              )}
-            </div>
-          )}
 
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-relaxed mt-6">
             Complete all steps to register a dispatcher with system login for the command center.
@@ -847,20 +747,9 @@ export default function AddDispatcherForm() {
                     <SectionHeader
                       icon={MapPin}
                       title="Location & Employment"
-                      subtitle="Dispatch station assignment"
+                      subtitle="Region and department assignment"
                       color="red"
                     />
-
-                    {(selectedRegion || selectedDistrict || selectedStation) && (
-                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
-                        <MapPin className="w-4 h-4 text-red-500 shrink-0" />
-                        <span>{selectedRegion?.name || '—'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span>{selectedDistrict?.name || 'Select district'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
-                      </div>
-                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2">
@@ -884,42 +773,6 @@ export default function AddDispatcherForm() {
                         error={fieldErrors.regionId}
                         emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="District"
-                        required
-                        icon={MapPin}
-                        options={districts}
-                        value={form.districtId}
-                        error={fieldErrors.districtId}
-                        disabled={!form.regionId}
-                        loading={loadingDistricts}
-                        emptyHint={
-                          !form.regionId
-                            ? 'Select a region first'
-                            : districts.length
-                              ? 'Select District'
-                              : 'No districts in this region'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="Dispatch Station"
-                        required
-                        icon={Building2}
-                        options={stations}
-                        value={form.stationId}
-                        error={fieldErrors.stationId}
-                        disabled={!form.districtId}
-                        loading={loadingStations}
-                        emptyHint={
-                          !form.districtId
-                            ? 'Select a district first'
-                            : stations.length
-                              ? 'Select Station'
-                              : 'No stations — add in System Setup'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ stationId: e.target.value })}
                       />
                       <FormInput
                         label="Employee Code"
@@ -1008,36 +861,12 @@ export default function AddDispatcherForm() {
                     <SectionHeader
                       icon={Shield}
                       title="Dispatch Credentials"
-                      subtitle="Certification & training"
+                      subtitle="Qualification & experience"
                       color="red"
                     />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormInput
-                        label="Certification / Training ID"
-                        required
-                        icon={Shield}
-                        value={form.licenseNumber}
-                        error={fieldErrors.licenseNumber}
-                        maxLength={25}
-                        placeholder="e.g. DIS-CERT-2024-001"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ licenseNumber: e.target.value.toUpperCase() })
-                        }
-                      />
-                      <FormInput
-                        label="Certificate Expiry"
-                        required
-                        type="date"
-                        value={form.licenseExpiryDate}
-                        error={fieldErrors.licenseExpiryDate}
-                        min={minLicenseExpiry}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ licenseExpiryDate: e.target.value })
-                        }
-                      />
                       <FormSelect
                         label="Qualification"
-                        required
                         icon={GraduationCap}
                         options={qualificationOptions}
                         value={form.qualification}
@@ -1065,26 +894,13 @@ export default function AddDispatcherForm() {
                       />
                     </div>
                     <div className="mt-6">
-                      {fieldErrors.certificationUpload && (
-                        <p className="text-[9px] font-bold text-red-500 uppercase mb-2">{fieldErrors.certificationUpload}</p>
-                      )}
-                      <FileUploadCard
-                        label="Dispatch Certificate *"
-                        icon={Shield}
-                        description="Upload dispatch certification or training document (PDF, JPG, PNG)"
-                        accept="image/*,application/pdf"
-                        value={form.certificationUpload}
-                        onChange={(url: string) => patch({ certificationUpload: url })}
-                      />
-                    </div>
-                    <div className="mt-6">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Notes</label>
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Notes</label>
                       {fieldErrors.notes && (
                         <span className="ml-2 text-[9px] font-bold text-red-500 uppercase">{fieldErrors.notes}</span>
                       )}
                       <textarea
-                        className={`mt-2 w-full h-24 p-4 bg-slate-50 border rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 ${
-                          fieldErrors.notes ? 'border-red-300' : 'border-red-100'
+                        className={`mt-2 w-full h-24 p-4 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 ${
+                          fieldErrors.notes ? 'border-red-300' : ''
                         }`}
                         placeholder="Shift preferences, languages spoken, console experience…"
                         maxLength={500}
@@ -1108,17 +924,6 @@ export default function AddDispatcherForm() {
                         error={fieldErrors.email}
                         placeholder="dispatcher@example.com"
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ email: e.target.value.trim() })}
-                      />
-                      <FormInput
-                        label="Username"
-                        required
-                        value={form.username}
-                        error={fieldErrors.username}
-                        maxLength={30}
-                        placeholder="Letters, numbers, underscore"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ username: e.target.value.replace(/\s/g, '') })
-                        }
                       />
                       <div className="space-y-1.5 group">
                         <div className="flex items-center justify-between">
@@ -1198,16 +1003,6 @@ export default function AddDispatcherForm() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="mt-6">
-                      <FormCheckbox
-                        label="Account Active"
-                        description="Dispatcher can log in to the dispatch console immediately"
-                        checked={form.accountActive}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ accountActive: e.target.checked })
-                        }
-                      />
                     </div>
                   </>
                 )}
