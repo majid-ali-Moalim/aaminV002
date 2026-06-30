@@ -6,9 +6,12 @@ import { useAuth } from '@/context/AuthContext'
 import { getPostLoginPath, isAdminUser } from '@/lib/authRedirect'
 import AdminSidebar from '@/components/layout/AdminSidebar'
 import AdminTopBar from '@/components/layout/AdminTopBar'
+import { AdminThemeProvider } from '@/components/admin/AdminThemeProvider'
+import { AdminThemeInit } from '@/components/admin/AdminThemeInit'
 import LiveToastContainer from '@/components/notifications/LiveToastContainer'
 import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
+import './admin.css'
 
 export default function AdminLayout({
   children,
@@ -34,10 +37,10 @@ export default function AdminLayout({
 
   if (loading && !user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="admin-shell min-h-screen bg-admin-bg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-admin-text-secondary">Loading...</p>
         </div>
       </div>
     )
@@ -61,8 +64,10 @@ export default function AdminLayout({
 
   return (
     <EmergencyPortalProvider portal="admin">
+      <AdminThemeInit />
+      <AdminThemeProvider>
       <OptimisticNavProvider>
-        <div className="min-h-screen bg-gray-50">
+        <div className="admin-shell min-h-screen bg-admin-bg text-admin-text">
           <LiveToastContainer />
           <NavigationProgressBar />
           <AdminSidebar />
@@ -72,6 +77,7 @@ export default function AdminLayout({
           </div>
         </div>
       </OptimisticNavProvider>
+      </AdminThemeProvider>
     </EmergencyPortalProvider>
   )
 }

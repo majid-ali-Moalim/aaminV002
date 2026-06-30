@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DriversAppService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   // ─────────────────────────────────────────
   // PROFILE
@@ -263,6 +267,123 @@ export class DriversAppService {
         district: true,
         incidentCategory: true,
         statusLogs: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    const dispatcherUserId = mission.dispatcherId
+      ? (
+          await this.prisma.employee.findUnique({
+            where: { id: mission.dispatcherId },
+            select: { userId: true },
+          })
+        )?.userId
+      : undefined;
+    const nurseUserId = mission.nurseId
+      ? (
+          await this.prisma.employee.findUnique({
+            where: { id: mission.nurseId },
+            select: { userId: true },
+          })
+        )?.userId
+      : undefined;
+    const notifyTeamIds = [employee.userId, nurseUserId, dispatcherUserId].filter(
+      Boolean,
+    ) as string[];
+
+    const statusLabels: Record<string, { title: string; message: string }> = {
+      DISPATCHED: {
+        title: 'Ambulance Dispatched',
+        message: `Case ${mission.trackingCode} — ambulance is en route to the scene`,
+      },
+      ARRIVED_SCENE: {
+        title: 'Arrived at Scene',
+        message: `Case ${mission.trackingCode} — crew has arrived at the scene`,
+      },
+      TRANSPORTING: {
+        title: 'Transporting Patient',
+        message: `Case ${mission.trackingCode} — patient is being transported to hospital`,
+      },
+      ARRIVED_HOSPITAL: {
+        title: 'Arrived at Hospital',
+        message: `Case ${mission.trackingCode} — ambulance arrived at the hospital`,
+      },
+      COMPLETED: {
+        title: 'Mission Completed',
+        message: `Case ${mission.trackingCode} has been completed successfully`,
+      },
+    };
+    const copy = statusLabels[status] ?? {
+      title: 'Mission Updated',
+      message: `Case ${mission.trackingCode} status changed to ${status.replace(/_/g, ' ')}`,
+    };
+
+    await this.notifications.dispatchEvent({
+      eventKey: status === 'COMPLETED' ? 'MISSION_COMPLETED' : 'MISSION_UPDATED',
+      title: copy.title,
+      message: copy.message,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: mission.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: mission.id,
+      redirectUrl: `/dispatcher/emergency-requests/${mission.id}`,
+      context: { createdById: employee.userId, assignedUserIds: notifyTeamIds },
+    });
+
+    return updated;
+  }
+
+  async rejectMissionAssignment(userId: string, missionId: string, reason?: string) {
+    const employee = await this.prisma.employee.findFirst({ where: { userId } });
+    if (!employee) throw new NotFoundException('Driver profile not found');
+
+    const mission = await this.prisma.emergencyRequest.findUnique({
+      where: { id: missionId },
+      include: { dispatcher: { select: { userId: true } } },
+    });
+    if (!mission) throw new NotFoundException('Mission not found');
+    if (mission.driverId !== employee.id) {
+      throw new ForbiddenException('Access denied to this mission');
+    }
+    if (mission.status !== 'ASSIGNED') {
+      throw new BadRequestException('Assignment can only be rejected before dispatch begins');
+    }
+
+    const note = reason?.trim() || 'Driver rejected the assignment';
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id: missionId },
+      data: {
+        driverId: null,
+        nurseId: null,
+        ambulanceId: null,
+        status: 'REVIEWING',
+        statusLogs: {
+          create: {
+            fromStatus: mission.status as any,
+            toStatus: 'REVIEWING',
+            changedByEmployeeId: employee.id,
+            notes: note,
+          },
+        },
+      },
+      include: { patient: true, region: true },
+    });
+
+    const notifyIds = [mission.dispatcher?.userId, employee.userId].filter(Boolean) as string[];
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_UPDATED',
+      title: 'Assignment Rejected',
+      message: `Driver declined case ${mission.trackingCode}. ${note}`,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: mission.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: mission.id,
+      redirectUrl: `/dispatcher/emergency-requests/${mission.id}`,
+      context: {
+        createdById: employee.userId,
+        assignedUserIds: notifyIds,
+        regionId: mission.regionId,
       },
     });
 

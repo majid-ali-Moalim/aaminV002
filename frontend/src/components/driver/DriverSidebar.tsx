@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { ChevronDown, ChevronRight, Radio } from 'lucide-react'
 import {
@@ -12,6 +13,8 @@ import {
   type DriverNavModule,
 } from '@/lib/driver/navigation'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
+import { DriverThemeToggle } from '@/components/driver/DriverThemeToggle'
 
 function NavSection({ module }: { module: DriverNavModule }) {
   const pathname = usePathname()
@@ -20,12 +23,11 @@ function NavSection({ module }: { module: DriverNavModule }) {
   const [open, setOpen] = useState(isActive || module.id === 'dashboard')
   const Icon = module.icon
   const isDashboard = module.id === 'dashboard'
-  const isSingle = module.singlePage && module.items.length === 1
+  const isSingle = module.singlePage
 
   if (isDashboard || isSingle) {
-    const item = module.items[0]
-    const href = moduleHref(module, item.slug)
-    const active = isViewActive(pathname, module, item.slug)
+    const href = isDashboard ? moduleHref(module, module.items[0].slug) : module.basePath
+    const active = isModulePathActive(pathname, module)
     const showBadge = module.id === 'notifications' && unreadCount > 0
     return (
       <Link href={href} className={`driver-sidebar-link driver-sidebar-link--top${active ? ' active' : ''}`}>
@@ -76,6 +78,8 @@ function NavSection({ module }: { module: DriverNavModule }) {
 
 export function DriverSidebar() {
   const { profile } = useDriverStore()
+  const photoSrc = profilePhotoUrl(profile?.profilePhoto)
+  const initials = getEmployeeInitials(profile?.firstName, profile?.lastName)
 
   return (
     <aside className="driver-sidebar" aria-label="Driver panel navigation">
@@ -84,16 +88,26 @@ export function DriverSidebar() {
           <Radio className="driver-sidebar-logo-icon" size={20} />
         </div>
         <div className="driver-sidebar-brand-text">
-          <span className="driver-sidebar-title">🚑 Driver Panel</span>
+          <span className="driver-sidebar-title">Driver Panel</span>
           <span className="driver-sidebar-sub">EADS · Field Ops</span>
         </div>
       </div>
 
       {profile && (
-        <div className="driver-sidebar-user">
+        <Link href="/driver/profile" className="driver-sidebar-user">
           <div className="driver-sidebar-avatar">
-            {profile.firstName?.[0]}
-            {profile.lastName?.[0]}
+            {photoSrc ? (
+              <Image
+                src={photoSrc}
+                alt={`${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || 'Driver'}
+                width={40}
+                height={40}
+                className="driver-sidebar-avatar-img"
+                unoptimized
+              />
+            ) : (
+              initials
+            )}
           </div>
           <div className="driver-sidebar-user-info">
             <p className="driver-sidebar-user-name">
@@ -103,7 +117,7 @@ export function DriverSidebar() {
               {profile.employeeCode || 'Driver'} · {profile.shiftStatus?.replace(/_/g, ' ') || 'OFF DUTY'}
             </p>
           </div>
-        </div>
+        </Link>
       )}
 
       <nav className="driver-sidebar-nav">
@@ -111,6 +125,10 @@ export function DriverSidebar() {
           <NavSection key={mod.id} module={mod} />
         ))}
       </nav>
+
+      <div className="driver-sidebar-footer">
+        <DriverThemeToggle />
+      </div>
     </aside>
   )
 }

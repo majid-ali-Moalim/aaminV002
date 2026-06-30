@@ -13,7 +13,6 @@ import {
   Lock,
   Stethoscope,
   Save,
-  Truck,
   RefreshCw,
   ChevronRight,
   ChevronLeft,
@@ -41,11 +40,12 @@ import {
   nextNurseCode,
   type SelectOption,
 } from '@/lib/nurseFormMasterData'
+import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
 import {
   uploadService,
   employeesService,
 } from '@/lib/api'
-import { Station, Ambulance, Department, Region, District, EquipmentLevel } from '@/types'
+import { Station, Department, Region, District } from '@/types'
 import { mapStaffShiftStatus } from '@/lib/staff/status'
 import {
   NurseFormErrors,
@@ -177,9 +177,7 @@ export default function AddNurseForm() {
   const [regions, setRegions] = useState<Region[]>([])
   const [allDistricts, setAllDistricts] = useState<District[]>([])
   const [allStations, setAllStations] = useState<Station[]>([])
-  const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
-  const [equipmentLevels, setEquipmentLevels] = useState<EquipmentLevel[]>([])
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [bloodGroupOptions, setBloodGroupOptions] = useState<SelectOption[]>([])
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
@@ -257,8 +255,6 @@ export default function AddNurseForm() {
     setAllDistricts(data.districts)
     setAllStations(data.stations)
     setDepartments(data.departments)
-    setEquipmentLevels(data.equipmentLevels)
-    setAmbulances(data.ambulances)
     setNurseRoleId(data.nurseRoleId)
     setGenderOptions(data.genderOptions)
     setBloodGroupOptions(data.bloodGroupOptions)
@@ -365,36 +361,6 @@ export default function AddNurseForm() {
     [departments, form.departmentId]
   )
 
-  const filteredAmbulances = useMemo(() => {
-    let list = ambulances
-    if (form.stationId) {
-      const atStation = list.filter((a) => a.stationId === form.stationId)
-      if (atStation.length) list = atStation
-    } else if (form.districtId) {
-      const inDistrict = list.filter((a) => a.districtId === form.districtId)
-      if (inDistrict.length) list = inDistrict
-    } else if (form.regionId) {
-      const inRegion = list.filter((a) => a.regionId === form.regionId)
-      if (inRegion.length) list = inRegion
-    }
-    return list
-  }, [ambulances, form.stationId, form.districtId, form.regionId])
-
-  const ambulanceOptions = useMemo(
-    () =>
-      filteredAmbulances.map((a) => {
-        const levelName =
-          a.equipmentLevel?.name ||
-          equipmentLevels.find((l) => l.id === a.equipmentLevelId)?.name ||
-          ''
-        return {
-          id: a.id,
-          name: `${a.ambulanceNumber}${a.plateNumber ? ` · ${a.plateNumber}` : ''}${levelName ? ` · ${levelName}` : ''}`,
-        }
-      }),
-    [filteredAmbulances, equipmentLevels]
-  )
-
   const ageLimits = useMemo(() => getNurseAgeLimits(), [])
   const minJoinDate = useMemo(() => getMinJoinDate(form.dateOfBirth), [form.dateOfBirth])
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
@@ -482,7 +448,6 @@ export default function AddNurseForm() {
       bloodGroup: form.bloodGroup || undefined,
       employmentDate: form.joinDate || undefined,
       defaultShift: form.employmentType,
-      assignedAmbulanceId: form.assignedAmbulanceId || undefined,
       shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
       certificationUpload: form.certificationUpload || undefined,
@@ -981,12 +946,10 @@ export default function AddNurseForm() {
                       <FormInput
                         label="Employee Code"
                         required
-                        value={form.employeeCode}
+                        readOnly
+                        value={form.employeeCode || nurseCode}
                         error={fieldErrors.employeeCode}
-                        placeholder="NUR-001"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          patch({ employeeCode: e.target.value.toUpperCase() })
-                        }
+                        className="bg-slate-100 cursor-not-allowed font-mono font-bold"
                       />
                       <FormSelect
                         label="Department"
@@ -1052,14 +1015,14 @@ export default function AddNurseForm() {
                             patch({ emergencyContactName: e.target.value })
                           }
                         />
-                        <FormInput
+                        <FormSelect
                           label="Relationship"
                           required
+                          options={EMERGENCY_CONTACT_RELATIONSHIPS.map((r) => ({ id: r.id, label: r.label }))}
                           value={form.relationship}
                           error={fieldErrors.relationship}
-                          maxLength={30}
-                          placeholder="e.g. Spouse, Parent"
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          emptyHint="Select relationship"
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                             patch({ relationship: e.target.value })
                           }
                         />
@@ -1080,7 +1043,7 @@ export default function AddNurseForm() {
                     </div>
 
                     <div className="mt-8 pt-8 border-t border-red-50">
-                      <SectionHeader icon={Truck} title="Operational" subtitle="Shift & ambulance" color="red" />
+                      <SectionHeader icon={Stethoscope} title="Operational" subtitle="Shift availability" color="red" />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormSelect
                           label="Initial Shift Status"
@@ -1090,30 +1053,6 @@ export default function AddNurseForm() {
                             patch({ shiftStatus: e.target.value })
                           }
                         />
-                        <FormSelect
-                          label="Assigned Ambulance"
-                          icon={Truck}
-                          options={ambulanceOptions}
-                          value={form.assignedAmbulanceId}
-                          emptyHint={
-                            !form.regionId
-                              ? 'Select location to filter ambulances'
-                              : form.stationId && filteredAmbulances.length === 0
-                                ? 'No ambulances at this station'
-                                : filteredAmbulances.length
-                                  ? 'Optional — select ambulance'
-                                  : 'No ambulances in this area'
-                          }
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                            patch({ assignedAmbulanceId: e.target.value })
-                          }
-                        />
-                        {form.regionId && filteredAmbulances.length > 0 && (
-                          <p className="md:col-span-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                            {filteredAmbulances.length} ambulance{filteredAmbulances.length !== 1 ? 's' : ''} from fleet
-                            {form.stationId ? ' at selected station' : form.districtId ? ' in district' : ' in region'}
-                          </p>
-                        )}
                       </div>
                     </div>
                   </>

@@ -25,13 +25,11 @@ export type FieldOpsItem = {
 
 export const DISPATCHER_DRIVER_ITEMS: FieldOpsItem[] = [
   { href: '/dispatcher/resources/drivers', label: 'All Drivers', icon: Users, exact: true },
-  { href: '/dispatcher/add-driver', label: 'Register Driver', icon: UserPlus },
   { href: '/dispatcher/resources/availability', label: 'Availability Board', icon: Calendar, accent: 'info' },
 ]
 
 export const DISPATCHER_NURSE_ITEMS: FieldOpsItem[] = [
   { href: '/dispatcher/resources/nurses', label: 'All Nurses', icon: Users, exact: true },
-  { href: '/dispatcher/add-nurse', label: 'Register Nurse', icon: UserPlus },
   { href: '/dispatcher/resources/availability', label: 'Availability Board', icon: Activity, accent: 'info' },
 ]
 

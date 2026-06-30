@@ -7,12 +7,7 @@ import DriverModuleShell from '@/components/driver/DriverModuleShell'
 import { DriverPageLayout } from '@/components/driver/DriverPageLayout'
 import { resolvePageTitle } from '@/lib/driver/navigation'
 import { usePathname } from 'next/navigation'
-import MissionsActiveView from '@/components/driver/views/MissionsActiveView'
-import MissionsAssignedView from '@/components/driver/views/MissionsAssignedView'
-import MissionsWorkflowView from '@/components/driver/views/MissionsWorkflowView'
 import MissionsHistoryView from '@/components/driver/views/MissionsHistoryView'
-import IncidentsNewView from '@/components/driver/views/IncidentsNewView'
-import IncidentsSubmittedView from '@/components/driver/views/IncidentsSubmittedView'
 
 const DESCRIPTIONS: Partial<Record<DriverModuleId, string>> = {
   missions: 'Mission execution — accept, progress, and complete emergency assignments.',
@@ -48,12 +43,6 @@ export default function DriverModulePage({ moduleId, view }: Props) {
   const content = (() => {
     if (moduleId === 'missions') {
       switch (view) {
-        case 'active':
-          return <MissionsActiveView />
-        case 'assigned':
-          return <MissionsAssignedView />
-        case 'workflow':
-          return <MissionsWorkflowView />
         case 'history':
           return <MissionsHistoryView />
         default:
@@ -61,14 +50,7 @@ export default function DriverModulePage({ moduleId, view }: Props) {
       }
     }
     if (moduleId === 'incidents') {
-      switch (view) {
-        case 'new':
-          return <IncidentsNewView />
-        case 'submitted':
-          return <IncidentsSubmittedView />
-        default:
-          return null
-      }
+      return null
     }
     return null
   })()

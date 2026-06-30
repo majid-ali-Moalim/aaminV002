@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SystemSetupService } from '../system-setup/system-setup.service';
 
 @Injectable()
 export class PublicService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private setupService: SystemSetupService,
+  ) {}
 
   async getPublicStats() {
     const responseWindowStart = new Date();
@@ -69,6 +73,43 @@ export class PublicService {
       completedCases,
       avgResponseTimeMinutes,
       updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /** Active emergency types from Master Data → Emergency Configuration */
+  getEmergencyTypes() {
+    return this.setupService.getEmergencyTypes();
+  }
+
+  /** Fleet availability for public hire-ambulance form */
+  async getFleetAvailability() {
+    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
+
+    const busyAmbulanceIds = (
+      await this.prisma.emergencyRequest.findMany({
+        where: { status: { in: activeStatuses as any } },
+        select: { ambulanceId: true },
+      })
+    )
+      .map((r) => r.ambulanceId)
+      .filter(Boolean) as string[];
+
+    const [availableList, totalActive] = await Promise.all([
+      this.prisma.ambulance.findMany({
+        where: {
+          isActive: true,
+          status: 'AVAILABLE',
+          id: { notIn: busyAmbulanceIds },
+        },
+        select: { id: true, ambulanceNumber: true, status: true },
+      }),
+      this.prisma.ambulance.count({ where: { isActive: true } }),
+    ]);
+
+    return {
+      available: availableList.length,
+      total: totalActive,
+      canAcceptRequests: availableList.length > 0,
     };
   }
 }

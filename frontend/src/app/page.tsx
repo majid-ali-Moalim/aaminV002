@@ -1,13 +1,12 @@
 import Link from 'next/link'
 import { Phone, MapPin, Shield, Users, Activity } from 'lucide-react'
-import { PublicStatsGrid } from '@/components/public/PublicStatsGrid'
-import { fetchPublicStats } from '@/lib/public/stats'
+import { PUBLIC_HEADER_OFFSET } from '@/lib/layout/publicHeader'
+import { PublicStatsLoader } from '@/components/public/PublicStatsLoader'
+import { HeroAmbulanceSummary, HeroFleetSummary } from '@/components/public/HeroFleetSummary'
 
-export default async function Home() {
-  const stats = await fetchPublicStats()
-
+export default function Home() {
   return (
-    <div className="pt-16">
+    <div className={PUBLIC_HEADER_OFFSET}>
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-red-50 to-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -59,13 +58,13 @@ export default async function Home() {
                     <Users className="w-8 h-8 text-red-600 mb-3" />
                     <h3 className="font-semibold text-gray-900 mb-1">Field Crew</h3>
                     <p className="text-sm text-gray-600">
-                      {stats.drivers.toLocaleString()} drivers · {stats.nurses.toLocaleString()} nurses
+                      <HeroFleetSummary />
                     </p>
                   </div>
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <Shield className="w-8 h-8 text-red-600 mb-3" />
                     <h3 className="font-semibold text-gray-900 mb-1">Fully Equipped</h3>
-                    <p className="text-sm text-gray-600">{stats.ambulances.toLocaleString()} active ambulances</p>
+                    <p className="text-sm text-gray-600"><HeroAmbulanceSummary /></p>
                   </div>
                   <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <MapPin className="w-8 h-8 text-red-600 mb-3" />
@@ -168,7 +167,7 @@ export default async function Home() {
             </p>
           </div>
 
-          <PublicStatsGrid stats={stats} variant="home" />
+          <PublicStatsLoader variant="home" />
         </div>
       </section>
 

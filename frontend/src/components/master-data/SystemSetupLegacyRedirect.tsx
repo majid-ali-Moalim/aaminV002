@@ -7,7 +7,7 @@ const REDIRECTS: Record<string, string> = {
   regions: '/admin/master-data/locations',
   districts: '/admin/master-data/locations',
   categories: '/admin/master-data/emergency',
-  settings: '/admin/master-data/settings',
+  settings: '/admin/system-settings',
 }
 
 export default function SystemSetupLegacyRedirect({ segment }: { segment?: string }) {

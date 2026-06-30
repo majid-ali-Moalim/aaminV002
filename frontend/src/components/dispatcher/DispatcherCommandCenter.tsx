@@ -31,14 +31,14 @@ import toast from 'react-hot-toast'
 type Overview = Awaited<ReturnType<typeof dispatcherDashboardApi.getOverview>>
 
 const TOP_STATS = [
-  { key: 'liveEmergencyCases', label: 'Active Emergencies', icon: Siren, color: 'text-red-600', href: '/dispatcher/emergency-requests/active' },
-  { key: 'busyAmbulances', label: 'Active Ambulances', icon: Truck, color: 'text-amber-600', href: '/dispatcher/resources/ambulances' },
-  { key: 'availableAmbulances', label: 'Available Ambulances', icon: Truck, color: 'text-emerald-600', href: '/dispatcher/resources/availability' },
-  { key: 'criticalCases', label: 'Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/emergency-requests/critical' },
-  { key: 'pendingDispatches', label: 'Pending Dispatches', icon: Clock, color: 'text-orange-600', href: '/dispatcher/emergency-requests/pending' },
-  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/emergency-requests/escalated' },
-  { key: 'todayCompletedMissions', label: "Today's Missions", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/emergency-requests/completed' },
-  { key: 'averageResponseTimeMinutes', label: 'Avg Response Time', icon: Timer, color: 'text-violet-600', suffix: ' min', href: '/dispatcher/reports/performance' },
+  { key: 'liveEmergencyCases', label: 'My Active Cases', icon: Siren, color: 'text-red-600', href: '/dispatcher/emergency/active' },
+  { key: 'busyAmbulances', label: 'Busy Ambulances', icon: Truck, color: 'text-amber-600', href: '/dispatcher/resources/ambulance-availability' },
+  { key: 'availableAmbulances', label: 'Available Ambulances', icon: Truck, color: 'text-emerald-600', href: '/dispatcher/resources/ambulance-availability' },
+  { key: 'criticalCases', label: 'My Critical Cases', icon: AlertTriangle, color: 'text-red-700', href: '/dispatcher/emergency/critical' },
+  { key: 'pendingDispatches', label: 'Regional Pending', icon: Clock, color: 'text-orange-600', href: '/dispatcher/emergency-requests/pending' },
+  { key: 'delayedMissions', label: 'Delayed Missions', icon: AlertTriangle, color: 'text-amber-700', href: '/dispatcher/emergency/active' },
+  { key: 'todayCompletedMissions', label: "Completed Today", icon: CheckCircle2, color: 'text-emerald-700', href: '/dispatcher/emergency/closed' },
+  { key: 'averageResponseTimeMinutes', label: 'Avg Response Time', icon: Timer, color: 'text-violet-600', suffix: ' min', href: '/dispatcher/reports/emergency' },
 ] as const
 
 function MiniCase({ item }: { item: any }) {
@@ -115,8 +115,11 @@ export default function DispatcherCommandCenter() {
         <div>
           <h1 className="text-2xl font-black text-slate-900">Dispatcher Dashboard</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Operational command center · {profile?.firstName || 'Dispatcher'}
+            Your cases only · {profile?.firstName || 'Dispatcher'}
             {o.station && <span className="text-red-600 font-semibold"> · {o.station}</span>}
+            {(o as any).scope?.region && (
+              <span className="text-slate-600 font-semibold"> · {(o as any).scope.region}</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -167,7 +170,7 @@ export default function DispatcherCommandCenter() {
                 <Radio className="w-4 h-4 text-red-600" />
                 Live Dispatch Board
               </h2>
-              <Link href="/dispatcher/emergency/pending" className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
+              <Link href="/dispatcher/emergency-requests/pending" className="text-[10px] font-bold text-red-600 flex items-center gap-0.5">
                 Full board <ChevronRight className="w-3 h-3" />
               </Link>
             </div>

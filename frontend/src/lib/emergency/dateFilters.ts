@@ -77,14 +77,47 @@ export function filterRequestsByDateRange(
 /** Closed cases belong in patient case records — not the live dispatch board */
 export const CLOSED_EMERGENCY_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED'] as const
 
+/** Archived patient cases — completed or cancelled only */
+export const ARCHIVED_PATIENT_CASE_STATUSES = ['COMPLETED', 'CANCELLED'] as const
+
+export function isArchivedPatientCase(request: EmergencyRequest): boolean {
+  return ARCHIVED_PATIENT_CASE_STATUSES.includes(
+    request.status as (typeof ARCHIVED_PATIENT_CASE_STATUSES)[number],
+  )
+}
+
+export function filterArchivedPatientCases(requests: EmergencyRequest[]): EmergencyRequest[] {
+  return requests.filter(isArchivedPatientCase)
+}
+
 export function isOperationalEmergencyCase(request: EmergencyRequest): boolean {
   return !CLOSED_EMERGENCY_STATUSES.includes(
     request.status as (typeof CLOSED_EMERGENCY_STATUSES)[number],
   )
 }
 
+/** Live dispatch board — assigned resources or in-progress; excludes unassigned pending */
+export function isLiveDispatchCase(request: EmergencyRequest): boolean {
+  if (['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status)) return false
+  if (request.status === 'PENDING') {
+    return Boolean(
+      request.ambulanceId ||
+        request.driverId ||
+        request.nurseId ||
+        request.ambulance ||
+        request.driver ||
+        request.nurse,
+    )
+  }
+  return true
+}
+
 export function filterOperationalCases(requests: EmergencyRequest[]): EmergencyRequest[] {
   return requests.filter(isOperationalEmergencyCase)
+}
+
+export function filterLiveDispatchCases(requests: EmergencyRequest[]): EmergencyRequest[] {
+  return requests.filter(isLiveDispatchCase)
 }
 
 export function computeEmergencyStats(requests: EmergencyRequest[]) {

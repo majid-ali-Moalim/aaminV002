@@ -34,7 +34,7 @@ import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 import EmergencyDateFilter from '@/components/features/emergency/EmergencyDateFilter'
 import {
   computeEmergencyStats,
-  filterOperationalCases,
+  filterLiveDispatchCases,
   filterRequestsByDateRange,
   getDateRange,
   type DateFilterPreset,
@@ -94,7 +94,7 @@ export default function EmergencyRequestsPage() {
   )
 
   const operationalRequests = useMemo(
-    () => filterOperationalCases(requests),
+    () => filterLiveDispatchCases(requests),
     [requests],
   )
 
@@ -129,7 +129,7 @@ export default function EmergencyRequestsPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Emergency Requests</h1>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Live dispatch — pending &amp; active cases only
+              Live dispatch — assigned &amp; in-progress cases
             </p>
           </div>
         </div>
@@ -279,7 +279,7 @@ export default function EmergencyRequestsPage() {
                    ) : filteredRequests.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-20 text-center">
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No active cases in this period</p>
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No assigned or in-progress cases in this period</p>
                         <p className="text-xs text-slate-400 mt-2">
                           Completed cases are in{' '}
                           <Link href={paths.patientsCases} className="text-red-600 font-bold hover:underline">

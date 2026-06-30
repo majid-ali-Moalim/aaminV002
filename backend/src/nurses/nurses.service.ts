@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, NotificationType } from '@prisma/client';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Prisma, NotificationType, EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -193,6 +193,14 @@ export class NursesService {
   }
 
   async createPatientCareRecord(data: any) {
+    const activityLabel =
+      data.activityLabel ||
+      (data.treatmentGiven
+        ? 'Treatment recorded'
+        : data.bloodPressure || data.heartRate
+          ? 'Vital signs recorded'
+          : 'Clinical record saved');
+
     const result = await this.prisma.patientCareRecord.create({
       data: {
         emergencyRequest: { connect: { id: data.emergencyRequestId } },
@@ -214,17 +222,184 @@ export class NursesService {
       },
     });
 
-    await this.notifications.create({
-      title: 'New Patient Care Record',
-      message: `New clinical record added for patient in request ${result.emergencyRequest.trackingCode}`,
-      type: 'PATIENT_CARE',
-      priority: 'LOW',
-      relatedModule: 'EmergencyRequest',
-      relatedId: result.requestId,
-      actionUrl: `/admin/emergency-requests?id=${result.requestId}`,
-    });
+    await this.logNurseCaseActivity(
+      data.emergencyRequestId,
+      data.nurseId,
+      activityLabel,
+    );
 
     return result;
+  }
+
+  async acceptMission(requestId: string, nurseId: string) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, nurseId: true, trackingCode: true },
+    });
+    if (!request) throw new NotFoundException('Emergency request not found');
+    if (request.nurseId !== nurseId) {
+      throw new ForbiddenException('This mission is not assigned to you');
+    }
+
+    await this.logNurseCaseActivity(requestId, nurseId, 'Mission accepted');
+    return { ok: true, trackingCode: request.trackingCode };
+  }
+
+  async rejectMission(requestId: string, nurseId: string, reason?: string) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      include: { dispatcher: { select: { userId: true } } },
+    });
+    if (!request) throw new NotFoundException('Emergency request not found');
+    if (request.nurseId !== nurseId) {
+      throw new ForbiddenException('This mission is not assigned to you');
+    }
+    if (request.status !== 'ASSIGNED') {
+      throw new BadRequestException('Assignment can only be rejected before dispatch begins');
+    }
+
+    const nurse = await this.prisma.employee.findUnique({
+      where: { id: nurseId },
+      select: { userId: true },
+    });
+    const note = reason?.trim() || 'Nurse rejected the assignment';
+
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id: requestId },
+      data: {
+        driverId: null,
+        nurseId: null,
+        ambulanceId: null,
+        status: 'REVIEWING',
+        statusLogs: {
+          create: {
+            fromStatus: request.status,
+            toStatus: 'REVIEWING',
+            changedByEmployeeId: nurseId,
+            notes: note,
+          },
+        },
+      },
+    });
+
+    const notifyIds = [request.dispatcher?.userId, nurse?.userId].filter(Boolean) as string[];
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_UPDATED',
+      title: 'Assignment Rejected',
+      message: `Nurse declined case ${request.trackingCode}. ${note}`,
+      type: NotificationType.EMERGENCY,
+      category: 'MISSION',
+      priority: request.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: request.id,
+      redirectUrl: `/dispatcher/emergency-requests/${request.id}`,
+      context: {
+        createdById: nurse?.userId,
+        assignedUserIds: notifyIds,
+        regionId: request.regionId,
+      },
+    });
+
+    await this.logNurseCaseActivity(requestId, nurseId, `Mission rejected: ${note}`);
+    return { ok: true, trackingCode: request.trackingCode, request: updated };
+  }
+
+  async getMyCases(nurseId: string, status?: string) {
+    const where: Prisma.EmergencyRequestWhereInput = { nurseId };
+    if (status) {
+      where.status = status as EmergencyRequestStatus;
+    }
+
+    return this.prisma.emergencyRequest.findMany({
+      where,
+      include: {
+        patient: {
+          include: { user: true },
+        },
+        driver: {
+          include: { user: true },
+        },
+        nurse: {
+          include: { user: true },
+        },
+        ambulance: true,
+        destinationHospital: true,
+        region: true,
+        district: true,
+        statusLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  private async logNurseCaseActivity(
+    requestId: string,
+    nurseEmployeeId: string,
+    label: string,
+    detail?: string,
+  ) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        dispatcher: { select: { userId: true } },
+      },
+    });
+    if (!request) return;
+
+    const note = detail ? `[Nurse] ${label}: ${detail}` : `[Nurse] ${label}`;
+
+    await this.prisma.emergencyStatusLog.create({
+      data: {
+        emergencyRequestId: requestId,
+        fromStatus: request.status,
+        toStatus: request.status,
+        changedByEmployeeId: nurseEmployeeId,
+        notes: note,
+      },
+    });
+
+    await this.prisma.emergencyRequest.update({
+      where: { id: requestId },
+      data: { updatedAt: new Date() },
+    });
+
+    const nurse = await this.prisma.employee.findUnique({
+      where: { id: nurseEmployeeId },
+      select: { userId: true, firstName: true, lastName: true },
+    });
+
+    const adminUsers = await this.prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    const recipientUserIds = [
+      request.dispatcher?.userId,
+      ...adminUsers.map((u) => u.id),
+    ].filter(Boolean) as string[];
+
+    if (!recipientUserIds.length) return;
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'SYSTEM_ALERT',
+      title: 'Nurse update',
+      message: `${request.trackingCode}: ${label}${detail ? ` — ${detail}` : ''}`,
+      type: 'PATIENT_CARE',
+      category: 'MISSION',
+      priority: 'MEDIUM',
+      senderName: nurse ? `${nurse.firstName} ${nurse.lastName}`.trim() : 'Nurse',
+      entityType: 'EmergencyRequest',
+      entityId: requestId,
+      redirectUrl: `/admin/emergency-requests/active?id=${requestId}`,
+      context: {
+        createdById: nurse?.userId,
+        directOnly: true,
+        recipientUserIds,
+      },
+    });
   }
 
   async createIncidentReport(data: any) {
@@ -306,10 +481,9 @@ export class NursesService {
   }
 
   async assignAmbulance(id: string, ambulanceId: string | null) {
-    return this.prisma.employee.update({
-      where: { id },
-      data: { assignedAmbulanceId: ambulanceId },
-    });
+    void id;
+    void ambulanceId;
+    throw new BadRequestException('Nurses are assigned to emergency cases, not directly to ambulances.');
   }
 
   private readonly ACTIVE_CASE_STATUSES = [
@@ -346,7 +520,7 @@ export class NursesService {
     hasActiveCase: boolean,
     medicalClearanceStatus?: string | null,
   ): string | null {
-    if (hasActiveCase) return 'On case';
+    if (hasActiveCase) return 'Assigned to active case';
     if (medicalClearanceStatus === 'PENDING') return 'Pending clearance';
     if (employmentStatus !== 'ACTIVE') return 'Inactive';
     switch (shiftStatus) {
@@ -377,7 +551,6 @@ export class NursesService {
             user: { select: { username: true, email: true } },
             employeeRole: true,
             station: { include: { region: true, district: true } },
-            assignedAmbulance: { select: { id: true, ambulanceNumber: true, plateNumber: true } },
             nurseRequests: {
               where: { status: { in: [...this.ACTIVE_CASE_STATUSES] } },
               select: {
@@ -462,13 +635,6 @@ export class NursesService {
         medicalClearanceStatus: nurse.medicalClearanceStatus,
         operationalStatus,
         unavailableReason,
-        assignedAmbulance: nurse.assignedAmbulance
-          ? {
-              id: nurse.assignedAmbulance.id,
-              ambulanceNumber: nurse.assignedAmbulance.ambulanceNumber,
-              plateNumber: nurse.assignedAmbulance.plateNumber,
-            }
-          : null,
         station: nurse.station ? { id: nurse.station.id, name: nurse.station.name } : null,
         region: nurse.station?.region
           ? { id: nurse.station.region.id, name: nurse.station.region.name }
@@ -594,7 +760,6 @@ export class NursesService {
         user: { select: { username: true, email: true } },
         employeeRole: true,
         station: { include: { region: true, district: true } },
-        assignedAmbulance: true,
         nurseRequests: {
           orderBy: { createdAt: 'desc' },
           take: 20,
@@ -658,7 +823,6 @@ export class NursesService {
         district: nurse.station?.district ?? null,
         updatedAt: nurse.updatedAt.toISOString(),
       },
-      assignedAmbulance: nurse.assignedAmbulance,
       currentCase: activeCase ?? null,
       caseHistory: nurse.nurseRequests,
       shiftHistory: nurse.shiftRecords.map((s) => ({

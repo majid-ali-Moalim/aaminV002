@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -152,11 +152,39 @@ export class DriversService {
   }
 
   async assignAmbulance(id: string, ambulanceId: string | null) {
-    return this.prisma.employee.update({
-      where: { id },
-      data: {
-        assignedAmbulanceId: ambulanceId,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (ambulanceId) {
+        const existingDriver = await tx.employee.findFirst({
+          where: {
+            id: { not: id },
+            assignedAmbulanceId: ambulanceId,
+            employeeRole: { name: { contains: 'Driver', mode: 'insensitive' } },
+          },
+          select: { firstName: true, lastName: true, employeeCode: true },
+        });
+        if (existingDriver) {
+          const name =
+            [existingDriver.firstName, existingDriver.lastName].filter(Boolean).join(' ') ||
+            existingDriver.employeeCode ||
+            'another driver';
+          throw new ConflictException(`This ambulance is already assigned to ${name}. Change that driver's ambulance first.`);
+        }
+
+        const ambulance = await tx.ambulance.findUnique({
+          where: { id: ambulanceId },
+          select: { status: true },
+        });
+        if (ambulance?.status === 'MAINTENANCE') {
+          throw new ConflictException('This ambulance is under maintenance and cannot be assigned to a driver.');
+        }
+      }
+
+      return tx.employee.update({
+        where: { id },
+        data: {
+          assignedAmbulanceId: ambulanceId,
+        },
+      });
     });
   }
 
@@ -299,12 +327,10 @@ export class DriversService {
     shiftStatus: string,
     employmentStatus: string,
     hasActiveCase: boolean,
+    hasAssignedAmbulance: boolean,
   ): 'available' | 'unavailable' {
-    if (
-      employmentStatus === 'ACTIVE' &&
-      shiftStatus === 'AVAILABLE' &&
-      !hasActiveCase
-    ) {
+    void shiftStatus;
+    if (employmentStatus === 'ACTIVE' && hasAssignedAmbulance && !hasActiveCase) {
       return 'available';
     }
     return 'unavailable';
@@ -314,21 +340,13 @@ export class DriversService {
     shiftStatus: string,
     employmentStatus: string,
     hasActiveCase: boolean,
+    hasAssignedAmbulance: boolean,
   ): string | null {
-    if (hasActiveCase) return 'On case';
+    void shiftStatus;
+    if (hasActiveCase) return 'Assigned to active case';
+    if (!hasAssignedAmbulance) return 'No ambulance assigned';
     if (employmentStatus !== 'ACTIVE') return 'Inactive';
-    switch (shiftStatus) {
-      case 'ON_DUTY':
-        return 'On duty';
-      case 'ON_BREAK':
-        return 'On break';
-      case 'UNAVAILABLE':
-        return 'Unavailable';
-      case 'OFF_DUTY':
-        return 'Off duty';
-      default:
-        return shiftStatus !== 'AVAILABLE' ? shiftStatus.replace(/_/g, ' ') : null;
-    }
+    return null;
   }
 
   async getAvailabilityOverview() {
@@ -400,14 +418,16 @@ export class DriversService {
     const rows = drivers.map((driver) => {
       const activeCase =
         driver.drivenRequests?.[0] ?? activeCaseByDriver.get(driver.id) ?? null;
+      const hasAssignedAmbulance = Boolean(driver.assignedAmbulance);
       const operationalStatus = this.resolveOperationalStatus(
         driver.shiftStatus,
         driver.status,
         !!activeCase,
+        hasAssignedAmbulance,
       );
       const unavailableReason =
         operationalStatus === 'unavailable'
-          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase)
+          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase, hasAssignedAmbulance)
           : null;
 
       return {
@@ -595,9 +615,10 @@ export class DriversService {
           driver.shiftStatus,
           driver.status,
           !!activeCase,
+          Boolean(driver.assignedAmbulance),
         ),
-        unavailableReason: activeCase || driver.shiftStatus !== 'AVAILABLE' || driver.status !== 'ACTIVE'
-          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase)
+        unavailableReason: activeCase || !driver.assignedAmbulance || driver.status !== 'ACTIVE'
+          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase, Boolean(driver.assignedAmbulance))
           : null,
         licenseNumber: driver.licenseNumber,
         licenseStatus: driver.licenseStatus,

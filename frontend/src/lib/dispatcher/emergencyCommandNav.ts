@@ -40,11 +40,10 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
   {
     title: 'Case Management',
     items: [
-      { href: '/dispatcher/emergency-requests', label: 'All Emergency Cases', icon: ClipboardList, exact: true },
+      { href: '/dispatcher/emergency-requests/pending', label: 'Pending Queue', icon: ClipboardList, exact: true },
       { href: '/dispatcher/emergency-requests/new', label: 'New Emergency Case', icon: PlusCircle },
       { href: '/dispatcher/emergency-requests/critical', label: 'Critical Cases', icon: AlertCircle, accent: 'critical' },
       { href: '/dispatcher/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle, accent: 'warning' },
-      { href: '/dispatcher/emergency-requests/pending', label: 'Pending Cases', icon: Clock, accent: 'warning' },
       { href: '/dispatcher/emergency-requests/triage', label: 'Triage Queue', icon: AlertTriangle, accent: 'warning' },
     ],
   },
@@ -52,7 +51,7 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
     title: 'Dispatch & Missions',
     items: [
       { href: '/dispatcher/emergency-requests/pending', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info' },
-      { href: '/dispatcher/emergency-requests/active', label: 'Active Missions', icon: Siren },
+      { href: '/dispatcher/emergency-requests/active', label: 'My Active Missions', icon: Siren },
     ],
   },
   {

@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
+import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -36,6 +37,7 @@ function patientPaths(portal: PatientPortal) {
 
 export interface PatientCaseRecordsViewProps {
   activeOnly?: boolean
+  closedOnly?: boolean
   portal?: PatientPortal
 }
 
@@ -54,6 +56,7 @@ function completedDate(req: EmergencyRequest): string | null {
 
 export default function PatientCaseRecordsView({
   activeOnly = false,
+  closedOnly = false,
   portal = 'admin',
 }: PatientCaseRecordsViewProps) {
   const paths = patientPaths(portal)
@@ -80,9 +83,12 @@ export default function PatientCaseRecordsView({
   }, [])
 
   const scopedRequests = useMemo(() => {
-    if (!activeOnly) return requests
-    return requests.filter((r) => !CLOSED_STATUSES.includes(r.status))
-  }, [requests, activeOnly])
+    if (closedOnly) {
+      return requests.filter((r) => ARCHIVED_PATIENT_CASE_STATUSES.includes(r.status as typeof ARCHIVED_PATIENT_CASE_STATUSES[number]))
+    }
+    if (activeOnly) return requests.filter((r) => !CLOSED_STATUSES.includes(r.status))
+    return requests
+  }, [requests, activeOnly, closedOnly])
 
   const filteredRequests = useMemo(() => {
     return scopedRequests
@@ -124,11 +130,12 @@ export default function PatientCaseRecordsView({
               Emergency Mission Archive
             </p>
             <h1 className="text-3xl font-black tracking-tight">
-              {activeOnly ? 'Active Cases' : 'Patient Cases'}
+              {closedOnly ? 'Closed Cases' : activeOnly ? 'Active Cases' : 'Patient Cases'}
             </h1>
             <p className="text-red-100/80 mt-2 max-w-2xl text-sm leading-relaxed">
-              Every ambulance emergency request and mission. One patient can have many cases — e.g.
-              Ahmed Ali may have CASE-001 through CASE-005 over several years.
+              {closedOnly
+                ? 'Completed and cancelled emergency missions — full case history for each patient.'
+                : 'Every ambulance emergency request and mission. One patient can have many cases — e.g. Ahmed Ali may have CASE-001 through CASE-005 over several years.'}
             </p>
           </div>
           <Link href={paths.patients}>
@@ -145,10 +152,12 @@ export default function PatientCaseRecordsView({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: activeOnly ? 'Active Cases' : 'Total Cases', value: stats.total, icon: FileText },
+          { label: closedOnly ? 'Closed Cases' : activeOnly ? 'Active Cases' : 'Total Cases', value: stats.total, icon: FileText },
           { label: 'Completed', value: stats.completed, icon: CheckCircle2 },
           { label: 'Cancelled', value: stats.cancelled, icon: XCircle },
-          { label: 'In Progress', value: stats.active, icon: Activity },
+          ...(closedOnly
+            ? []
+            : [{ label: 'In Progress', value: stats.active, icon: Activity }]),
         ].map((item) => {
           const Icon = item.icon
           return (
@@ -181,21 +190,28 @@ export default function PatientCaseRecordsView({
             className="w-full pl-10 pr-4 h-11 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500"
           />
         </div>
-        {!activeOnly && (
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700"
-          >
-            <option value="">All statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="ASSIGNED">Assigned</option>
-            <option value="DISPATCHED">Dispatched</option>
-            <option value="TRANSPORTING">Transporting</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-        )}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700"
+        >
+          <option value="">All statuses</option>
+          {closedOnly ? (
+            <>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </>
+          ) : (
+            <>
+              <option value="PENDING">Pending</option>
+              <option value="ASSIGNED">Assigned</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="TRANSPORTING">Transporting</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </>
+          )}
+        </select>
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}

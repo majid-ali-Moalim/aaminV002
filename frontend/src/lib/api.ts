@@ -13,6 +13,16 @@ export function isApiNetworkError(error: unknown): boolean {
   return isAxiosError(error) && !error.response
 }
 
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { message?: string | string[] } | undefined
+    if (Array.isArray(data?.message)) return data.message.join(', ')
+    if (typeof data?.message === 'string' && data.message) return data.message
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 class ApiService {
   private api: AxiosInstance
 
@@ -104,7 +114,12 @@ class ApiService {
 export const authService = {
   login: async (email: string, password: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/login', { email, password })
+    const identifier = email.trim()
+    return await api.post('/api/auth/login', {
+      email: identifier,
+      username: identifier,
+      password,
+    })
   },
 
   getMe: async (token?: string) => {
@@ -119,17 +134,25 @@ export const authService = {
 
   forgotPassword: async (email: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/forgot-password', { email })
+    const normalizedEmail = email.trim().toLowerCase()
+    return await api.post('/api/auth/forgot-password', { email: normalizedEmail })
   },
 
   resetPassword: async (email: string, password: string, confirmPassword: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/reset-password', { email, password, confirmPassword })
+    return await api.post('/api/auth/reset-password', {
+      email: email.trim().toLowerCase(),
+      password,
+      confirmPassword,
+    })
   },
 
   verifyResetOtp: async (email: string, otp: string) => {
     const api = new ApiService()
-    return await api.post('/api/auth/verify-reset-otp', { email, otp })
+    return await api.post('/api/auth/verify-reset-otp', {
+      email: email.trim().toLowerCase(),
+      otp: otp.replace(/\D/g, '').slice(0, 6),
+    })
   },
 
   changePassword: async (data: {
@@ -300,9 +323,9 @@ export const patientsService = {
 
 // Emergency requests service
 export const emergencyRequestsService = {
-  getAll: async () => {
+  getAll: async (params?: { queue?: 'pending' | 'my-active' | 'my-cases' | 'regional' }) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests')
+    return await api.get('/api/emergency-requests', { params })
   },
 
   getById: async (id: string) => {
@@ -524,7 +547,23 @@ export const reportsService = {
     }
     const query = params.toString()
     return await api.get(`/api/reports/admin/${type}${query ? `?${query}` : ''}`)
-  }
+  },
+
+  getAdminReportFilterOptions: async () => {
+    const api = new ApiService()
+    return await api.get<{
+      regions: Array<{ id: string; name: string }>
+      districts: Array<{ id: string; name: string; regionId: string }>
+      incidentCategories: Array<{ id: string; name: string }>
+      ambulances: Array<{ id: string; ambulanceNumber: string; plateNumber: string; vehicleType: string | null; status: string }>
+      hospitals: Array<{ id: string; name: string; status: string }>
+      employeeRoles: Array<{ id: string; name: string }>
+      priorities: Array<{ value: string; label: string }>
+      emergencyStatuses: Array<{ value: string; label: string }>
+      ambulanceStatuses: Array<{ value: string; label: string }>
+      vehicleTypes: Array<{ value: string; label: string }>
+    }>('/api/reports/admin/filter-options')
+  },
 }
 
 export const publicService = {
@@ -762,6 +801,13 @@ export const nursesService = {
     return await api.get('/api/nurses/assignments')
   },
 
+  getMyCases: async (nurseId: string, status?: string) => {
+    const api = new ApiService()
+    const params = new URLSearchParams({ nurseId })
+    if (status) params.append('status', status)
+    return await api.get(`/api/nurses/me/cases?${params.toString()}`)
+  },
+
   getPerformance: async (id: string) => {
     const api = new ApiService()
     return await api.get(`/api/nurses/${id}/performance`)
@@ -784,6 +830,16 @@ export const nursesService = {
   createPatientCareRecord: async (data: any) => {
     const api = new ApiService()
     return await api.post('/api/nurses/records', data)
+  },
+
+  acceptMission: async (requestId: string, nurseId: string) => {
+    const api = new ApiService()
+    return await api.post(`/api/nurses/missions/${requestId}/accept`, { nurseId })
+  },
+
+  rejectMission: async (requestId: string, nurseId: string, reason?: string) => {
+    const api = new ApiService()
+    return await api.post(`/api/nurses/missions/${requestId}/reject`, { nurseId, reason })
   },
  
   createIncidentReport: async (data: any) => {
@@ -868,6 +924,12 @@ export const notificationsService = {
   updatePreferences: async (preferences: { category: string; channel: string; enabled: boolean }[]) => {
     const api = new ApiService()
     return await api.patch('/api/notifications/preferences', { preferences })
+  },
+  sendTestEmail: async () => {
+    const api = new ApiService()
+    return await api.post<{ success: boolean; email?: string; message: string }>(
+      '/api/notifications/preferences/test-email',
+    )
   },
   getAlerts: async (filters?: { status?: string; priority?: string }) => {
     const api = new ApiService()
@@ -994,6 +1056,53 @@ export const accessControlService = {
     const api = new ApiService()
     return await api.put(`/api/access-control/users/${userId}/permissions`, payload)
   },
+  listAllGrants: async (params?: {
+    search?: string
+    duration?: 'all' | 'permanent' | 'temporary'
+    status?: 'all' | 'active' | 'inactive' | 'expired'
+  }) => {
+    const api = new ApiService()
+    const search = new URLSearchParams()
+    if (params?.search) search.append('search', params.search)
+    if (params?.duration && params.duration !== 'all') search.append('duration', params.duration)
+    if (params?.status && params.status !== 'all') search.append('status', params.status)
+    const qs = search.toString() ? `?${search.toString()}` : ''
+    return await api.get<
+      Array<{
+        id: string
+        permissionKey: string
+        grantedAt: string
+        expiresAt: string | null
+        isUnlimited: boolean
+        isActive: boolean
+        isTimeExpired: boolean
+        isExpired: boolean
+        isEffective: boolean
+        status: 'active' | 'inactive' | 'expired'
+        user: {
+          id: string
+          username: string
+          email: string
+          role: string
+          displayName: string
+          employeeRole: string | null
+          department: string | null
+        }
+      }>
+    >(`/api/access-control/grants${qs}`)
+  },
+  activateGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/access-control/grants/${grantId}/activate`, {})
+  },
+  deactivateGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/access-control/grants/${grantId}/deactivate`, {})
+  },
+  deleteGrant: async (grantId: string) => {
+    const api = new ApiService()
+    return await api.delete(`/api/access-control/grants/${grantId}`)
+  },
 }
 
 // Activity logs service
@@ -1089,6 +1198,22 @@ export const employeeAttendanceService = {
   exportReport: async (body: { type: string; startDate?: string; endDate?: string }) => {
     const api = new ApiService()
     return await api.post('/api/employee-attendance/export', body)
+  },
+  listWorkShifts: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/work-shifts')
+  },
+  createWorkShift: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post('/api/employee-attendance/work-shifts', data)
+  },
+  updateWorkShift: async (id: string, data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.patch(`/api/employee-attendance/work-shifts/${id}`, data)
+  },
+  deleteWorkShift: async (id: string) => {
+    const api = new ApiService()
+    return await api.delete(`/api/employee-attendance/work-shifts/${id}`)
   },
 }
 

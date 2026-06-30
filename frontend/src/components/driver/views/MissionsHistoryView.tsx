@@ -51,7 +51,7 @@ export default function MissionsHistoryView() {
       ) : (
         <div className="driver-list-stack">
           {history.map((m) => (
-            <Link key={m.id} href={`/driver/missions/active`} className="driver-mission-list-card">
+            <Link key={m.id} href={`/driver/mission?caseId=${m.id}`} className="driver-mission-list-card">
               <div className="driver-mlc-top">
                 <span className="driver-mlc-code">{m.trackingCode}</span>
                 <div className="driver-mlc-badges">

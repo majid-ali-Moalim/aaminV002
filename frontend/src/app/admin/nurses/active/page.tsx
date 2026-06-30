@@ -193,7 +193,7 @@ export default function ActiveNursesPage() {
                     <Stethoscope className="w-4 h-4 text-red-500 shrink-0" />
                     {nurse.assignedAmbulance?.ambulanceNumber || 'No unit assigned'}
                   </div>
-                  <Link href="/admin/nurses/patient-care">
+                  <Link href="/admin/nurses/clinical-records?tab=assessments">
                     <Button variant="outline" size="sm" className="w-full rounded-xl mt-2">
                       View Patient Care
                     </Button>

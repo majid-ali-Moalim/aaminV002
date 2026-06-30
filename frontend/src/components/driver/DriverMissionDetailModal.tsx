@@ -25,6 +25,7 @@ type Props = {
   open: boolean
   onClose: () => void
   onAccept?: (missionId: string) => void
+  onReject?: (missionId: string) => void
   showAccept?: boolean
 }
 
@@ -43,6 +44,7 @@ export default function DriverMissionDetailModal({
   open,
   onClose,
   onAccept,
+  onReject,
   showAccept = false,
 }: Props) {
   const [mission, setMission] = useState<DriverMission | null>(null)
@@ -174,6 +176,15 @@ export default function DriverMissionDetailModal({
             >
               Close
             </button>
+            {onReject && (
+              <button
+                type="button"
+                className="driver-btn-sm ghost flex-1 text-red-500 border-red-200"
+                onClick={() => onReject(mission.id)}
+              >
+                Reject
+              </button>
+            )}
             <button
               type="button"
               className="driver-btn-sm primary flex-1"

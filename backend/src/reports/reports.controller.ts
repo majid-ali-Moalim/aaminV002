@@ -68,6 +68,13 @@ export class ReportsController {
   }
 
   // ─── Admin Analytics & Reports pages ───
+  @Get('admin/filter-options')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('report.view')
+  getAdminReportFilterOptions() {
+    return this.reportsService.getAdminReportFilterOptions();
+  }
+
   @Get('admin/:type')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('report.view')

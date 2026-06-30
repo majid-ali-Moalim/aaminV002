@@ -12,7 +12,7 @@ import {
   Activity,
   Loader2,
 } from 'lucide-react'
-import { emergencyRequestsService } from '@/lib/api'
+import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 
@@ -33,7 +33,7 @@ export default function NurseMissionCasesView({ mode }: Props) {
     if (!nurseId) return
     try {
       if (showLoader) setLoading(true)
-      const data = await emergencyRequestsService.getAll()
+      const data = await nursesService.getMyCases(nurseId)
       setRequests(Array.isArray(data) ? data : [])
     } finally {
       setLoading(false)

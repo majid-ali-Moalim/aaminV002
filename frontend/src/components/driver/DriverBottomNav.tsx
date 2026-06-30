@@ -6,7 +6,7 @@ import { useDriverStore } from '@/lib/stores/driverStore'
 
 const navItems = [
   { href: '/driver', icon: LayoutGrid, label: 'Home', match: (p: string) => p === '/driver' || p === '/driver/dashboard' },
-  { href: '/driver/missions/active', icon: Siren, label: 'Missions', match: (p: string) => p.startsWith('/driver/missions') },
+  { href: '/driver/mission', icon: Siren, label: 'Cases', match: (p: string) => p.startsWith('/driver/mission') || p.startsWith('/driver/missions') },
   { href: '/driver/notifications', icon: Bell, label: 'Alerts', match: (p: string) => p.startsWith('/driver/notifications'), badge: true },
   { href: '/driver/profile', icon: User, label: 'Profile', match: (p: string) => p.startsWith('/driver/profile') },
 ]

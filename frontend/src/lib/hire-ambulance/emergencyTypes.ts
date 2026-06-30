@@ -1,9 +1,5 @@
 import type { HireEmergencyTypeOption } from '@/components/public/hire-ambulance/formHelpers'
-import {
-  fetchEmergencyTypes,
-  sortEmergencyTypes,
-  type EmergencyTypeOption,
-} from '@/lib/emergency/emergencyTypes'
+import { fetchEmergencyTypes, sortEmergencyTypes, type EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
 
 export type { HireEmergencyTypeOption }
 

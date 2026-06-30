@@ -42,15 +42,18 @@ export class RolesGuard implements CanActivate {
   }
 
   private userHasRole(user: { role?: string; employeeRole?: string | null }, required: string): boolean {
-    if (user.role === required) return true;
-    if (user.role !== 'EMPLOYEE' || !user.employeeRole) return false;
+    const want = required.toUpperCase()
+    if (user.role?.toUpperCase() === want) return true
+    if (want === 'EMPLOYEE' && user.role === 'EMPLOYEE') return true
 
-    const name = String(user.employeeRole).toUpperCase();
-    const want = required.toUpperCase();
+    if (user.role !== 'EMPLOYEE' || !user.employeeRole) return false
 
-    if (want === 'DISPATCHER') return name.includes('DISPATCH');
-    if (want === 'DRIVER') return name.includes('DRIVER');
-    if (want === 'NURSE') return name.includes('NURSE');
-    return name === want;
+    const name = String(user.employeeRole).toUpperCase()
+
+    if (want === 'DISPATCHER') return name.includes('DISPATCH')
+    if (want === 'DRIVER') return name.includes('DRIVER')
+    if (want === 'NURSE') return name.includes('NURSE') || name.includes('PARAMEDIC')
+    if (want === 'HOSPITAL') return name.includes('HOSPITAL')
+    return name === want
   }
 }

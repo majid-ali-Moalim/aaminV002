@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { emergencyRequestsService } from '@/lib/api'
+import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 
 export function useNurseCases(pollMs = 15000) {
@@ -17,9 +17,8 @@ export function useNurseCases(pollMs = 15000) {
       }
       try {
         if (showLoader) setLoading(true)
-        const data = await emergencyRequestsService.getAll()
-        const list = (Array.isArray(data) ? data : []).filter((r) => r.nurseId === nurseId)
-        setCases(list)
+        const data = await nursesService.getMyCases(nurseId)
+        setCases(Array.isArray(data) ? data : [])
       } finally {
         setLoading(false)
       }

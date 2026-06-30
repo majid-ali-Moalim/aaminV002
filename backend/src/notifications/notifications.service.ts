@@ -8,6 +8,7 @@ import {
   Role,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../auth/mail.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationDispatchService } from './notification-dispatch.service';
 import { DispatchPayload, NotificationEventKey } from './notification-events';
@@ -33,6 +34,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private dispatch: NotificationDispatchService,
+    private mailService: MailService,
     @Optional() private gateway?: NotificationsGateway,
   ) {}
 
@@ -60,29 +62,46 @@ export class NotificationsService {
 
     const created = [];
     for (const userId of recipientIds) {
-      const enabled = await this.dispatch.isChannelEnabled(userId, category, 'IN_APP');
-      if (!enabled) continue;
+      const inAppEnabled = await this.dispatch.isChannelEnabled(userId, category, 'IN_APP');
+      const emailEnabled = await this.dispatch.isChannelEnabled(userId, category, 'EMAIL');
+      if (!inAppEnabled && !emailEnabled) continue;
 
       let recipientRedirect = redirectUrl;
-      if (payload.eventKey === 'MISSION_ASSIGNED') {
-        const recipient = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            role: true,
-            employee: { select: { employeeRole: { select: { name: true } } } },
-          },
-        });
-        const roleName = recipient?.employee?.employeeRole?.name?.toLowerCase() ?? '';
+      const caseId = payload.entityId;
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          role: true,
+          email: true,
+          employee: { select: { employeeRole: { select: { name: true } } } },
+        },
+      });
+      const roleName = recipient?.employee?.employeeRole?.name?.toLowerCase() ?? '';
+
+      if (recipient?.role === 'EMPLOYEE' && category === 'MISSION' && caseId) {
+        if (roleName.includes('driver')) {
+          recipientRedirect = `/driver/mission?caseId=${caseId}`;
+        } else if (roleName.includes('nurse')) {
+          recipientRedirect = `/nurse/mission?caseId=${caseId}`;
+        } else if (roleName.includes('dispatch')) {
+          recipientRedirect = `/dispatcher/emergency/active?id=${caseId}`;
+        }
+      } else if (payload.eventKey === 'MISSION_ASSIGNED') {
         if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {
-          recipientRedirect = '/driver/missions/active';
+          recipientRedirect = caseId
+            ? `/driver/mission?caseId=${caseId}`
+            : '/driver/mission';
         } else if (recipient?.role === 'EMPLOYEE' && roleName.includes('nurse')) {
-          recipientRedirect = '/nurse/mission';
+          recipientRedirect = caseId
+            ? `/nurse/mission?caseId=${caseId}`
+            : '/nurse/mission';
         }
       }
 
       try {
-        const row = await this.createForRecipient({
+        const row = await this.deliverToRecipient({
           userId,
+          recipientEmail: recipient?.email,
           createdById: createdById ?? undefined,
           title: payload.title,
           message: payload.message,
@@ -94,6 +113,8 @@ export class NotificationsService {
           entityType: payload.entityType,
           entityId: payload.entityId,
           redirectUrl: recipientRedirect,
+          inAppEnabled,
+          emailEnabled,
         });
         if (row) created.push(row);
       } catch (err) {
@@ -129,7 +150,98 @@ export class NotificationsService {
     return user?.id ?? null;
   }
 
-  private async createForRecipient(data: {
+  private async deliverToRecipient(data: {
+    userId: string;
+    recipientEmail?: string | null;
+    createdById?: string;
+    title: string;
+    message: string;
+    type: NotificationType;
+    category: NotificationCategory;
+    priority: NotificationPriority;
+    senderName?: string;
+    eventKey?: string;
+    entityType?: string;
+    entityId?: string;
+    redirectUrl?: string;
+    inAppEnabled: boolean;
+    emailEnabled: boolean;
+  }) {
+    if (data.createdById && data.createdById === data.userId) {
+      return null;
+    }
+
+    let notification: Awaited<ReturnType<typeof this.createNotificationRecord>> | null = null;
+
+    if (data.inAppEnabled) {
+      notification = await this.createNotificationRecord(data);
+      await this.prisma.notificationDeliveryLog.create({
+        data: {
+          notificationId: notification.id,
+          recipientId: data.userId,
+          channel: 'IN_APP',
+          status: 'DELIVERED',
+          deliveredAt: new Date(),
+        },
+      });
+
+      const enriched = enrichNotification(notification);
+      this.gateway?.emitNotification(data.userId, enriched);
+      const stats = await this.getInboxStats(data.userId);
+      this.gateway?.emitStats(data.userId, stats);
+    }
+
+    if (data.emailEnabled) {
+      if (!notification) {
+        notification = await this.createNotificationRecord(data);
+      }
+
+      const email = data.recipientEmail?.trim();
+      if (!email) {
+        await this.prisma.notificationDeliveryLog.create({
+          data: {
+            notificationId: notification.id,
+            recipientId: data.userId,
+            channel: 'EMAIL',
+            status: 'FAILED',
+          },
+        });
+      } else {
+        try {
+          const sent = await this.mailService.sendNotificationEmail(email, {
+            title: data.title,
+            message: data.message,
+            priority: data.priority,
+            actionUrl: data.redirectUrl,
+            senderName: data.senderName,
+          });
+          await this.prisma.notificationDeliveryLog.create({
+            data: {
+              notificationId: notification.id,
+              recipientId: data.userId,
+              channel: 'EMAIL',
+              status: sent ? 'DELIVERED' : 'FAILED',
+              deliveredAt: sent ? new Date() : undefined,
+            },
+          });
+        } catch (err) {
+          console.warn(`Email notification failed for user ${data.userId}:`, err);
+          await this.prisma.notificationDeliveryLog.create({
+            data: {
+              notificationId: notification.id,
+              recipientId: data.userId,
+              channel: 'EMAIL',
+              status: 'FAILED',
+            },
+          });
+        }
+      }
+    }
+
+    return notification ? enrichNotification(notification) : null;
+  }
+
+  private async createNotificationRecord(data: {
     userId: string;
     createdById?: string;
     title: string;
@@ -143,11 +255,7 @@ export class NotificationsService {
     entityId?: string;
     redirectUrl?: string;
   }) {
-    if (data.createdById && data.createdById === data.userId) {
-      return null;
-    }
-
-    const notification = await this.prisma.notification.create({
+    return this.prisma.notification.create({
       data: {
         title: data.title,
         message: data.message,
@@ -166,23 +274,37 @@ export class NotificationsService {
         status: 'UNREAD',
       } as Prisma.NotificationUncheckedCreateInput,
     });
+  }
 
-    await this.prisma.notificationDeliveryLog.create({
-      data: {
-        notificationId: notification.id,
-        recipientId: data.userId,
-        channel: 'IN_APP',
-        status: 'DELIVERED',
-        deliveredAt: new Date(),
-      },
+  private async createForRecipient(data: {
+    userId: string;
+    createdById?: string;
+    title: string;
+    message: string;
+    type: NotificationType;
+    category: NotificationCategory;
+    priority: NotificationPriority;
+    senderName?: string;
+    eventKey?: string;
+    entityType?: string;
+    entityId?: string;
+    redirectUrl?: string;
+  }) {
+    const inAppEnabled = await this.dispatch.isChannelEnabled(data.userId, data.category, 'IN_APP');
+    const emailEnabled = await this.dispatch.isChannelEnabled(data.userId, data.category, 'EMAIL');
+    if (!inAppEnabled && !emailEnabled) return null;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { email: true },
     });
 
-    const enriched = enrichNotification(notification);
-    this.gateway?.emitNotification(data.userId, enriched);
-    const stats = await this.getInboxStats(data.userId);
-    this.gateway?.emitStats(data.userId, stats);
-
-    return enriched;
+    return this.deliverToRecipient({
+      ...data,
+      recipientEmail: user?.email,
+      inAppEnabled,
+      emailEnabled,
+    });
   }
 
   /** Legacy create — prefer dispatchEvent. Still enforces self-notification skip. */
@@ -507,6 +629,33 @@ export class NotificationsService {
       ),
     );
     return this.getPreferences(userId);
+  }
+
+  async sendTestNotificationEmail(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, username: true },
+    });
+    if (!user?.email?.trim()) {
+      return { success: false, message: 'No email address on your admin account. Update your profile email first.' };
+    }
+
+    const sent = await this.mailService.sendNotificationEmail(user.email, {
+      title: 'Notification test — Aamin EMS',
+      message:
+        'This is a test notification email. If you received this, your notification email settings are working correctly.',
+      priority: 'MEDIUM',
+      actionUrl: '/admin/notifications?tab=settings',
+      senderName: 'Aamin EMS',
+    });
+
+    return {
+      success: sent,
+      email: user.email,
+      message: sent
+        ? `Test email sent to ${user.email}`
+        : 'SMTP is not configured on the server. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in backend environment.',
+    };
   }
 
   async getBroadcasts(limit = 50) {

@@ -13,10 +13,10 @@ const ACTIVE_MISSION: EmergencyRequestStatus[] = [
   'ARRIVED_HOSPITAL',
 ];
 
-const SHIFT_DEFINITIONS = [
-  { id: 'morning', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', status: 'ACTIVE' },
-  { id: 'evening', name: 'Evening Shift', startTime: '14:00', endTime: '22:00', status: 'ACTIVE' },
-  { id: 'night', name: 'Night Shift', startTime: '22:00', endTime: '06:00', status: 'ACTIVE' },
+const DEFAULT_SHIFTS = [
+  { code: 'MORNING', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', description: 'Day shift coverage', color: '#22C55E' },
+  { code: 'EVENING', name: 'Evening Shift', startTime: '14:00', endTime: '22:00', description: 'Afternoon and evening coverage', color: '#3B82F6' },
+  { code: 'NIGHT', name: 'Night Shift', startTime: '22:00', endTime: '06:00', description: 'Overnight coverage', color: '#6366F1' },
 ];
 
 function startOfDay(d = new Date()) {
@@ -31,31 +31,45 @@ function endOfDay(d = new Date()) {
   return x;
 }
 
-function hoursBetween(checkIn: Date, checkOut: Date | null) {
-  if (!checkOut) return null;
-  const ms = checkOut.getTime() - checkIn.getTime();
+function hoursBetween(checkIn: Date, checkOut: Date | null, allowOpen = false) {
+  if (!checkOut && !allowOpen) return null;
+  const end = checkOut ?? new Date();
+  const ms = end.getTime() - checkIn.getTime();
+  if (ms < 0) return null;
   return Math.round((ms / 3600000) * 100) / 100;
 }
 
-function inferShiftLabel(typicalStartTime?: string | null) {
-  if (!typicalStartTime) return 'Morning Shift';
+function formatClockTime(value: Date | null | undefined) {
+  if (!value) return null;
+  return value.toISOString();
+}
+
+function attendanceStatusFromRecord(rec: { checkIn: Date } | undefined) {
+  return rec?.checkIn ? 'Present' : 'Absent';
+}
+
+function inferShiftLabel(
+  typicalStartTime?: string | null,
+  defaultShift?: string | null,
+  shifts?: { name: string; startTime: string; endTime: string }[],
+) {
+  if (defaultShift) return defaultShift;
+  if (!typicalStartTime) return shifts?.[0]?.name ?? 'Morning Shift';
   const [h] = typicalStartTime.split(':').map(Number);
+  if (shifts?.length) {
+    const match = shifts.find((s) => {
+      const [sh] = s.startTime.split(':').map(Number);
+      if (s.endTime < s.startTime) {
+        return h >= sh || h < Number(s.endTime.split(':')[0]);
+      }
+      const [eh] = s.endTime.split(':').map(Number);
+      return h >= sh && h < eh;
+    });
+    if (match) return match.name;
+  }
   if (h >= 6 && h < 14) return 'Morning Shift';
   if (h >= 14 && h < 22) return 'Evening Shift';
   return 'Night Shift';
-}
-
-function mapRecordStatus(status: string) {
-  const m: Record<string, string> = {
-    ON_TIME: 'Present',
-    LATE: 'Late',
-    ABSENT: 'Absent',
-    ON_LEAVE: 'On Leave',
-    ON_MISSION: 'On Mission',
-    BREAK: 'Break',
-    OFF_DUTY: 'Off Duty',
-  };
-  return m[status] ?? status;
 }
 
 @Injectable()
@@ -80,6 +94,112 @@ export class EmployeeAttendanceService {
     } catch {
       return new Set();
     }
+  }
+
+  private async ensureDefaultShifts() {
+    const delegate = (this.prisma as { workShift?: { count: () => Promise<number>; createMany: Function } }).workShift;
+    if (!delegate) return [];
+    try {
+      const count = await delegate.count();
+      if (count === 0) {
+        await delegate.createMany({
+          data: DEFAULT_SHIFTS.map((s) => ({
+            code: s.code,
+            name: s.name,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            description: s.description,
+            color: s.color,
+          })),
+          skipDuplicates: true,
+        });
+      }
+      return await this.listWorkShifts(false);
+    } catch {
+      return DEFAULT_SHIFTS.map((s, i) => ({ id: `default-${i}`, ...s, isActive: true, gracePeriodMins: 15, breakMinutes: 30 }));
+    }
+  }
+
+  async listWorkShifts(activeOnly = true) {
+    const delegate = (this.prisma as { workShift?: { findMany: Function } }).workShift;
+    if (!delegate) return (await this.ensureDefaultShifts());
+    try {
+      return await delegate.findMany({
+        where: activeOnly ? { isActive: true } : {},
+        orderBy: [{ startTime: 'asc' }],
+      });
+    } catch {
+      return await this.ensureDefaultShifts();
+    }
+  }
+
+  async createWorkShift(body: {
+    code: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    description?: string;
+    gracePeriodMins?: number;
+    breakMinutes?: number;
+    color?: string;
+  }, userId: string) {
+    const delegate = (this.prisma as { workShift?: { create: Function } }).workShift;
+    if (!delegate) throw new BadRequestException('Shift management is not available');
+    const created = await delegate.create({
+      data: {
+        code: body.code.trim().toUpperCase(),
+        name: body.name.trim(),
+        startTime: body.startTime,
+        endTime: body.endTime,
+        description: body.description ?? null,
+        gracePeriodMins: body.gracePeriodMins ?? 15,
+        breakMinutes: body.breakMinutes ?? 0,
+        color: body.color ?? null,
+      },
+    });
+    await this.logAudit(userId, 'Work shift created', created.name, created.id);
+    return created;
+  }
+
+  async updateWorkShift(
+    id: string,
+    body: Partial<{
+      code: string;
+      name: string;
+      startTime: string;
+      endTime: string;
+      description: string;
+      gracePeriodMins: number;
+      breakMinutes: number;
+      color: string;
+      isActive: boolean;
+    }>,
+    userId: string,
+  ) {
+    const delegate = (this.prisma as { workShift?: { findUnique: Function; update: Function } }).workShift;
+    if (!delegate) throw new BadRequestException('Shift management is not available');
+    const existing = await delegate.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Shift not found');
+    const updated = await delegate.update({
+      where: { id },
+      data: {
+        ...(body.code ? { code: body.code.trim().toUpperCase() } : {}),
+        ...(body.name ? { name: body.name.trim() } : {}),
+        ...(body.startTime ? { startTime: body.startTime } : {}),
+        ...(body.endTime ? { endTime: body.endTime } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.gracePeriodMins !== undefined ? { gracePeriodMins: body.gracePeriodMins } : {}),
+        ...(body.breakMinutes !== undefined ? { breakMinutes: body.breakMinutes } : {}),
+        ...(body.color !== undefined ? { color: body.color } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      },
+    });
+    await this.logAudit(userId, 'Work shift updated', updated.name, id);
+    return updated;
+  }
+
+  async deleteWorkShift(id: string, userId: string) {
+    return this.updateWorkShift(id, { isActive: false }, userId);
   }
 
   private employeeInclude = {
@@ -133,32 +253,22 @@ export class EmployeeAttendanceService {
   async getOverview() {
     const todayStart = startOfDay();
     const todayEnd = endOfDay();
-    const [employees, todayRecords, onMissionIds, onLeaveToday, activeShifts] =
-      await Promise.all([
-        this.getActiveEmployees(),
-        this.prisma.attendanceRecord.findMany({
-          where: { date: { gte: todayStart, lte: todayEnd } },
-        }),
-        this.getOnMissionEmployeeIds(),
-        this.getApprovedLeaveToday(),
-        this.prisma.shiftRecord.count({ where: { endTime: null } }),
-      ]);
+    const [employees, todayRecords, activeShifts] = await Promise.all([
+      this.getActiveEmployees(),
+      this.prisma.attendanceRecord.findMany({
+        where: { date: { gte: todayStart, lte: todayEnd } },
+      }),
+      this.prisma.shiftRecord.count({ where: { endTime: null } }),
+    ]);
 
-    const leaveIds = new Set(onLeaveToday.map((l) => l.employeeId));
     const presentIds = new Set(todayRecords.filter((r) => r.checkIn).map((r) => r.employeeId));
-    const late = todayRecords.filter((r) => r.status === 'LATE').length;
     const onDuty = employees.filter((e) =>
       ['ON_DUTY', 'AVAILABLE'].includes(e.shiftStatus),
-    ).length;
-    const offDuty = employees.filter((e) => e.shiftStatus === 'OFF_DUTY').length;
-    const onLeave = employees.filter(
-      (e) => leaveIds.has(e.id) || e.shiftStatus === 'ON_LEAVE',
     ).length;
 
     let absent = 0;
     employees.forEach((e) => {
-      if (leaveIds.has(e.id) || onMissionIds.has(e.id) || presentIds.has(e.id)) return;
-      if (e.shiftStatus === 'OFF_DUTY') return;
+      if (presentIds.has(e.id)) return;
       absent++;
     });
 
@@ -168,10 +278,7 @@ export class EmployeeAttendanceService {
     return {
       employeesPresentToday: presentIds.size,
       employeesAbsentToday: absent,
-      lateArrivals: late,
-      onLeave,
       onDuty,
-      offDuty,
       attendanceRate,
       activeShifts,
       totalEmployees: total,
@@ -215,7 +322,7 @@ export class EmployeeAttendanceService {
       clockIn: r.checkIn,
       clockOut: r.checkOut,
       totalHours: hoursBetween(r.checkIn, r.checkOut),
-      attendanceStatus: mapRecordStatus(r.status),
+      attendanceStatus: attendanceStatusFromRecord(r),
       attendanceDate: r.date,
       notes: r.notes,
       rawStatus: r.status,
@@ -263,30 +370,22 @@ export class EmployeeAttendanceService {
     const dayEnd = endOfDay(day);
     const isToday = startOfDay(new Date()).getTime() === dayStart.getTime();
 
-    const [employees, records, onMissionIds, leaveOnDay] = await Promise.all([
+    const [employees, records, workShifts] = await Promise.all([
       this.getActiveEmployees(),
       this.prisma.attendanceRecord.findMany({
         where: { date: { gte: dayStart, lte: dayEnd } },
         include: { employee: { include: this.employeeInclude } },
       }),
-      isToday ? this.getOnMissionEmployeeIds() : Promise.resolve(new Set<string>()),
-      this.getApprovedLeaveForRange(dayStart, dayEnd),
+      this.listWorkShifts(),
     ]);
 
     const recordByEmp = new Map(records.map((r) => [r.employeeId, r]));
-    const leaveIds = new Set(leaveOnDay.map((l) => l.employeeId));
 
     const items = employees.map((e) => {
       const rec = recordByEmp.get(e.id);
-      let status = 'Absent';
-      if (leaveIds.has(e.id) || e.shiftStatus === 'ON_LEAVE') status = 'On Leave';
-      else if (isToday && onMissionIds.has(e.id)) status = 'On Mission';
-      else if (rec) status = mapRecordStatus(rec.status);
-      else if (isToday && e.shiftStatus === 'OFF_DUTY') status = 'Off Duty';
-      else if (isToday && e.shiftStatus === 'ON_BREAK') status = 'Break';
-      else if (!rec) status = 'Absent';
-
-      const present = ['Present', 'Late', 'On Mission'].includes(status);
+      const present = Boolean(rec?.checkIn);
+      const status = present ? 'Present' : 'Absent';
+      const openSession = present && !rec?.checkOut && isToday;
 
       return {
         recordId: rec?.id ?? null,
@@ -296,21 +395,23 @@ export class EmployeeAttendanceService {
         role: e.employeeRole?.name ?? '—',
         department: e.department?.name ?? '—',
         phone: e.phone ?? '—',
-        shift: inferShiftLabel(e.typicalStartTime),
+        shift: inferShiftLabel(e.typicalStartTime, e.defaultShift, workShifts),
         status,
         present,
-        absent: !present && status === 'Absent',
-        clockIn: rec?.checkIn ?? null,
-        clockOut: rec?.checkOut ?? null,
-        totalHours: rec ? hoursBetween(rec.checkIn, rec.checkOut) : null,
+        absent: !present,
+        clockIn: formatClockTime(rec?.checkIn),
+        clockOut: formatClockTime(rec?.checkOut),
+        totalHours: rec?.checkIn
+          ? hoursBetween(rec.checkIn, rec.checkOut ?? null, openSession)
+          : null,
+        hoursInProgress: openSession,
         shiftStatus: e.shiftStatus,
         profilePhoto: e.profilePhoto,
       };
     });
 
     const presentCount = items.filter((i) => i.present).length;
-    const absentCount = items.filter((i) => i.absent || i.status === 'Absent').length;
-    const lateCount = items.filter((i) => i.status === 'Late').length;
+    const absentCount = items.filter((i) => i.absent).length;
 
     return {
       items,
@@ -319,9 +420,6 @@ export class EmployeeAttendanceService {
         total: items.length,
         present: presentCount,
         absent: absentCount,
-        late: lateCount,
-        onLeave: items.filter((i) => i.status === 'On Leave').length,
-        onMission: items.filter((i) => i.status === 'On Mission').length,
       },
     };
   }
@@ -331,18 +429,31 @@ export class EmployeeAttendanceService {
   }
 
   async getShiftManagement() {
-    const employees = await this.getActiveEmployees();
-    const openShifts = await this.prisma.shiftRecord.findMany({
-      where: { endTime: null },
-      include: { employee: { include: this.employeeInclude } },
-    });
+    const [employees, openShifts, workShifts] = await Promise.all([
+      this.getActiveEmployees(),
+      this.prisma.shiftRecord.findMany({
+        where: { endTime: null },
+        include: { employee: { include: this.employeeInclude } },
+      }),
+      this.listWorkShifts(false),
+    ]);
 
-    const shifts = SHIFT_DEFINITIONS.map((s) => {
+    const shifts = workShifts.map((s: any) => {
       const assigned = employees.filter(
-        (e) => inferShiftLabel(e.typicalStartTime) === s.name,
+        (e) => e.defaultShift === s.name || inferShiftLabel(e.typicalStartTime, e.defaultShift, workShifts) === s.name,
       );
       return {
-        ...s,
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        description: s.description,
+        gracePeriodMins: s.gracePeriodMins,
+        breakMinutes: s.breakMinutes,
+        color: s.color,
+        status: s.isActive ? 'ACTIVE' : 'INACTIVE',
+        isActive: s.isActive,
         assignedCount: assigned.length,
         assignedEmployees: assigned.slice(0, 8).map((e) => ({
           id: e.id,
@@ -517,6 +628,11 @@ export class EmployeeAttendanceService {
       .slice(-14)
       .map(([date, v]) => ({ date, ...v }));
 
+    const [employees, workShifts] = await Promise.all([
+      this.getActiveEmployees(),
+      this.listWorkShifts(),
+    ]);
+
     return {
       kpis: {
         attendanceRate: Math.round((present / total) * 1000) / 10,
@@ -528,9 +644,13 @@ export class EmployeeAttendanceService {
         attendanceTrend: trend,
         absenceTrend: trend.map((t) => ({ date: t.date, value: t.absent })),
         lateTrend: trend.map((t) => ({ date: t.date, value: t.late })),
-        shiftUtilization: SHIFT_DEFINITIONS.map((s) => ({
+        shiftUtilization: workShifts.map((s: { name: string }) => ({
           name: s.name,
-          value: Math.floor(Math.random() * 20) + 5,
+          value: employees.filter(
+            (e) =>
+              e.defaultShift === s.name ||
+              inferShiftLabel(e.typicalStartTime, e.defaultShift, workShifts) === s.name,
+          ).length,
         })),
       },
     };

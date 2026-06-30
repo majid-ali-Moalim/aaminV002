@@ -1,7 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import MdmSystemSettingsPage from '@/components/master-data/MdmSystemSettingsPage'
-
-export default function SystemSettingsPage() {
-  return <MdmSystemSettingsPage />
+export default function MasterDataSettingsRedirectPage() {
+  redirect('/admin/system-settings')
 }

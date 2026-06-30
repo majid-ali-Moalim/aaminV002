@@ -20,9 +20,17 @@ type AdminReportFilters = {
   emergencyType?: string;
   ambulance?: string;
   vehicleType?: string;
+  ambulanceStatus?: string;
   staffRole?: string;
   hospital?: string;
 };
+
+const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
+const EMERGENCY_STATUS_OPTIONS = [
+  'PENDING', 'REVIEWING', 'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
+  'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED', 'CANCELLED',
+] as const;
+const AMBULANCE_STATUS_OPTIONS = ['AVAILABLE', 'ON_DUTY', 'MAINTENANCE', 'UNAVAILABLE'] as const;
 
 @Injectable()
 export class ReportsService {
@@ -869,6 +877,57 @@ export class ReportsService {
     };
   }
 
+  async getAdminReportFilterOptions() {
+    const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles] =
+      await Promise.all([
+        this.prisma.region.findMany({
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true },
+        }),
+        this.prisma.district.findMany({
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, regionId: true },
+        }),
+        this.prisma.incidentCategory.findMany({
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true },
+        }),
+        this.prisma.ambulance.findMany({
+          where: { isActive: true },
+          orderBy: { ambulanceNumber: 'asc' },
+          select: { id: true, ambulanceNumber: true, plateNumber: true, vehicleType: true, status: true },
+        }),
+        this.prisma.hospital.findMany({
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, status: true },
+        }),
+        this.prisma.employeeRole.findMany({
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true },
+        }),
+      ]);
+
+    return {
+      regions,
+      districts,
+      incidentCategories,
+      ambulances,
+      hospitals,
+      employeeRoles,
+      priorities: PRIORITY_OPTIONS.map((value) => ({ value, label: value })),
+      emergencyStatuses: EMERGENCY_STATUS_OPTIONS.map((value) => ({ value, label: value.replace(/_/g, ' ') })),
+      ambulanceStatuses: AMBULANCE_STATUS_OPTIONS.map((value) => ({ value, label: value.replace(/_/g, ' ') })),
+      vehicleTypes: [...new Set(ambulances.map((a) => a.vehicleType).filter(Boolean))].map((value) => ({
+        value: value as string,
+        label: value as string,
+      })),
+    };
+  }
+
   async getAdminReport(
     type: string,
     filters: AdminReportFilters = {},
@@ -969,25 +1028,21 @@ export class ReportsService {
 
   private async getEmergencyOperationsReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const [total, active, completed, cancelled, critical, pending, statusGroups, priorityGroups, trends, recent] =
-      await Promise.all([
-        this.prisma.emergencyRequest.count({ where }),
-        this.prisma.emergencyRequest.count({
-          where: { ...where, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
-        }),
-        this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
-        this.prisma.emergencyRequest.count({ where: { ...where, status: 'CANCELLED' } }),
-        this.prisma.emergencyRequest.count({ where: { ...where, priority: 'CRITICAL' } }),
-        this.prisma.emergencyRequest.count({ where: { ...where, status: 'PENDING' } }),
-        this.prisma.emergencyRequest.groupBy({ by: ['status'], where, _count: true }),
-        this.prisma.emergencyRequest.groupBy({ by: ['priority'], where, _count: true }),
-        this.getDailyEmergencyTrend(period, {}, filters),
-        this.getRecentEmergencyRows(where),
-      ]);
+    const [total, active, completed, cancelled, critical, pending, rows] = await Promise.all([
+      this.prisma.emergencyRequest.count({ where }),
+      this.prisma.emergencyRequest.count({
+        where: { ...where, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      }),
+      this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
+      this.prisma.emergencyRequest.count({ where: { ...where, status: 'CANCELLED' } }),
+      this.prisma.emergencyRequest.count({ where: { ...where, priority: 'CRITICAL' } }),
+      this.prisma.emergencyRequest.count({ where: { ...where, status: 'PENDING' } }),
+      this.getFullEmergencyRows(where),
+    ]);
 
     return {
       title: 'Emergency Reports',
-      subtitle: 'Emergency request volume, priorities, live workload, and recent cases.',
+      subtitle: 'Complete emergency case listing with filters by region, district, priority, and status.',
       period,
       permissions: ['report.view', 'report.kpi', 'report.export', 'report.audit'],
       summary: [
@@ -998,16 +1053,13 @@ export class ReportsService {
         { label: 'Pending Queue', value: pending },
         { label: 'Cancellation Rate', value: this.percent(cancelled, total), suffix: '%' },
       ],
-      charts: [
-        { title: 'Daily Emergency Trend', type: 'bar', data: trends, xKey: 'label', series: [{ key: 'requests', label: 'Requests' }, { key: 'completed', label: 'Completed' }] },
-        { title: 'Emergency Area Trend', type: 'area', data: trends, xKey: 'label', series: [{ key: 'requests', label: 'Requests' }] },
-        { title: 'Priority Distribution', type: 'pie', data: this.groupRows(priorityGroups, 'priority') },
-        { title: 'Status Distribution', type: 'pie', data: this.groupRows(statusGroups, 'status') },
-      ],
       table: {
-        title: 'Recent Emergency Cases',
-        columns: ['Tracking Code', 'Patient', 'Priority', 'Status', 'Pickup', 'Created'],
-        rows: recent,
+        title: 'All Emergency Cases',
+        columns: [
+          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
+          'Pickup', 'Destination', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Service (min)', 'Created', 'Completed',
+        ],
+        rows,
       },
     };
   }
@@ -1015,36 +1067,41 @@ export class ReportsService {
   private async getAmbulanceUtilizationReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
     const ambulanceWhere: any = { isActive: true };
-    if (filters.ambulance) {
-      ambulanceWhere.OR = [
-        { id: filters.ambulance },
-        { ambulanceNumber: { contains: filters.ambulance, mode: 'insensitive' } },
-        { plateNumber: { contains: filters.ambulance, mode: 'insensitive' } },
-      ];
-    }
+    if (filters.ambulance) ambulanceWhere.id = filters.ambulance;
     if (filters.vehicleType) {
       ambulanceWhere.vehicleType = { contains: filters.vehicleType, mode: 'insensitive' };
     }
-    const [total, byStatus, ambulances, assignedRequests, completedRequests] = await Promise.all([
+    if (filters.ambulanceStatus) ambulanceWhere.status = filters.ambulanceStatus;
+
+    const [total, ambulances, assignedRequests, completedRequests, activeMissions] = await Promise.all([
       this.prisma.ambulance.count({ where: ambulanceWhere }),
-      this.prisma.ambulance.groupBy({ by: ['status'], where: ambulanceWhere, _count: true }),
       this.prisma.ambulance.findMany({
         where: ambulanceWhere,
-        take: 25,
         orderBy: [{ status: 'asc' }, { ambulanceNumber: 'asc' }],
-        include: { station: true, employees: { include: { employeeRole: true } }, emergencyRequests: { where, select: { id: true, status: true } } },
+        include: {
+          station: true,
+          region: true,
+          employees: { include: { employeeRole: true } },
+          emergencyRequests: {
+            where,
+            select: { id: true, status: true, trackingCode: true, priority: true, createdAt: true },
+          },
+        },
       }),
       this.prisma.emergencyRequest.count({ where: { ...where, ambulanceId: { not: null } } }),
       this.prisma.emergencyRequest.count({ where: { ...where, ambulanceId: { not: null }, status: 'COMPLETED' } }),
+      this.prisma.emergencyRequest.count({
+        where: { ...where, ambulanceId: { not: null }, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      }),
     ]);
 
-    const available = byStatus.find((s) => s.status === 'AVAILABLE')?._count ?? 0;
-    const onDuty = byStatus.find((s) => s.status === 'ON_DUTY')?._count ?? 0;
-    const maintenance = byStatus.find((s) => s.status === 'MAINTENANCE')?._count ?? 0;
+    const available = ambulances.filter((a) => a.status === 'AVAILABLE').length;
+    const onDuty = ambulances.filter((a) => a.status === 'ON_DUTY').length;
+    const maintenance = ambulances.filter((a) => a.status === 'MAINTENANCE').length;
 
     return {
       title: 'Ambulance Utilization',
-      subtitle: 'Fleet readiness, assignment load, maintenance backlog, and crew coverage.',
+      subtitle: 'Full fleet utilization with missions, crew, and station assignment for the selected period.',
       period,
       summary: [
         { label: 'Total Ambulances', value: total },
@@ -1052,82 +1109,106 @@ export class ReportsService {
         { label: 'On Duty', value: onDuty },
         { label: 'Maintenance', value: maintenance },
         { label: 'Assigned Missions', value: assignedRequests },
-        { label: 'Fleet Utilization', value: this.percent(onDuty + assignedRequests, Math.max(total, 1) + assignedRequests), suffix: '%' },
-      ],
-      charts: [
-        { title: 'Fleet Status', type: 'pie', data: this.groupRows(byStatus, 'status') },
-        { title: 'Daily Assigned Missions', type: 'bar', data: await this.getDailyEmergencyTrend(period, { ambulanceId: { not: null } }, filters), xKey: 'label', series: [{ key: 'requests', label: 'Assigned' }, { key: 'completed', label: 'Completed' }] },
+        { label: 'Active Missions', value: activeMissions },
+        { label: 'Completed Missions', value: completedRequests },
+        { label: 'Fleet Utilization', value: this.percent(onDuty + activeMissions, Math.max(total, 1)), suffix: '%' },
       ],
       table: {
-        title: 'Ambulance Utilization Details',
-        columns: ['Ambulance', 'Status', 'Station', 'Crew', 'Period Missions', 'Completed'],
-        rows: ambulances.map((a) => [
-          a.ambulanceNumber,
-          a.status,
-          a.station?.name ?? 'Unassigned',
-          a.employees.length,
-          a.emergencyRequests.length,
-          a.emergencyRequests.filter((r) => r.status === 'COMPLETED').length,
-        ]),
+        title: 'Ambulance Utilization Detail',
+        columns: [
+          'Ambulance', 'Plate', 'Type', 'Status', 'Station', 'Region', 'Crew',
+          'Period Missions', 'Active', 'Completed', 'Last Mission',
+        ],
+        rows: ambulances.map((a) => {
+          const missions = a.emergencyRequests;
+          const last = missions.sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime())[0];
+          return [
+            a.ambulanceNumber,
+            a.plateNumber ?? '—',
+            a.vehicleType ?? '—',
+            a.status,
+            a.station?.name ?? 'Unassigned',
+            a.region?.name ?? '—',
+            a.employees.length,
+            missions.length,
+            missions.filter((r) => !['COMPLETED', 'CANCELLED'].includes(r.status)).length,
+            missions.filter((r) => r.status === 'COMPLETED').length,
+            last ? `${last.trackingCode} (${last.createdAt.toISOString().slice(0, 10)})` : '—',
+          ];
+        }),
       },
-      notes: [`${completedRequests} ambulance missions completed in the selected period.`],
     };
   }
 
   private async getStaffPerformanceReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const employeeWhere: any = {};
-    if (filters.staffRole) {
-      employeeWhere.employeeRole = { name: { contains: filters.staffRole, mode: 'insensitive' } };
-    }
+    const employeeWhere: any = { status: 'ACTIVE' };
+    if (filters.staffRole) employeeWhere.employeeRoleId = filters.staffRole;
+
     const [employees, activeStaff, attendance, completed] = await Promise.all([
       this.prisma.employee.findMany({
         where: employeeWhere,
-        take: 30,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ employeeRole: { name: 'asc' } }, { firstName: 'asc' }],
         include: {
           employeeRole: true,
+          department: true,
           station: true,
-          _count: { select: { drivenRequests: true, nurseRequests: true, dispatchedRequests: true, attendanceRecords: true } },
+          user: { select: { email: true, username: true } },
+          _count: {
+            select: {
+              drivenRequests: true,
+              nurseRequests: true,
+              dispatchedRequests: true,
+              attendanceRecords: true,
+            },
+          },
         },
       }),
-      this.prisma.employee.count({ where: { ...employeeWhere, shiftStatus: { not: 'OFF_DUTY' }, status: 'ACTIVE' } }),
+      this.prisma.employee.count({ where: { ...employeeWhere, shiftStatus: { not: 'OFF_DUTY' } } }),
       this.prisma.attendanceRecord.count({ where: { date: { gte: period.start, lte: period.end } } }),
       this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
     ]);
 
-    const roleCounts = employees.reduce<Record<string, number>>((acc, employee) => {
-      const role = employee.employeeRole?.name ?? 'Unassigned';
-      acc[role] = (acc[role] ?? 0) + 1;
-      return acc;
-    }, {});
+    const periodCompletedByEmployee = await this.prisma.emergencyRequest.groupBy({
+      by: ['driverId'],
+      where: { ...where, status: 'COMPLETED', driverId: { not: null } },
+      _count: true,
+    });
+    const driverCompletedMap = Object.fromEntries(
+      periodCompletedByEmployee.map((r) => [r.driverId!, r._count]),
+    );
 
     return {
       title: 'Staff Performance Reports',
-      subtitle: 'Crew availability, mission workload, attendance activity, and staff productivity.',
+      subtitle: 'Complete staff scorecard with missions, attendance, and role breakdown.',
       period,
       summary: [
         { label: 'Total Staff', value: employees.length },
-        { label: 'Active Staff', value: activeStaff },
+        { label: 'Active on Shift', value: activeStaff },
         { label: 'Attendance Records', value: attendance },
-        { label: 'Completed Cases', value: completed },
+        { label: 'Completed Cases (period)', value: completed },
         { label: 'Staff Utilization', value: this.percent(activeStaff, employees.length), suffix: '%' },
         { label: 'Avg Missions / Staff', value: employees.length ? Math.round(completed / employees.length) : 0 },
       ],
-      charts: [
-        { title: 'Staff by Role', type: 'pie', data: Object.entries(roleCounts).map(([name, value]) => ({ name, value })) },
-      ],
       table: {
-        title: 'Staff Scorecard',
-        columns: ['Employee', 'Role', 'Station', 'Shift Status', 'Driver Cases', 'Nurse Cases', 'Dispatch Cases'],
+        title: 'Staff Performance Detail',
+        columns: [
+          'Employee', 'Role', 'Department', 'Station', 'Shift', 'Status',
+          'Driver Cases', 'Nurse Cases', 'Dispatch Cases', 'Period Driver Completions', 'Attendance Records', 'Email',
+        ],
         rows: employees.map((e) => [
-          `${e.firstName ?? ''} ${e.lastName ?? ''}`.trim() || e.employeeCode || 'Unnamed',
+          this.employeeDisplayName(e),
           e.employeeRole?.name ?? 'Unassigned',
-          e.station?.name ?? 'Unassigned',
-          e.shiftStatus,
+          e.department?.name ?? '—',
+          e.station?.name ?? '—',
+          e.shiftStatus ?? '—',
+          e.status,
           e._count.drivenRequests,
           e._count.nurseRequests,
           e._count.dispatchedRequests,
+          driverCompletedMap[e.id] ?? 0,
+          e._count.attendanceRecords,
+          e.user?.email ?? e.user?.username ?? '—',
         ]),
       },
     };
@@ -1136,18 +1217,18 @@ export class ReportsService {
   private async getHospitalAcceptanceReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
     const hospitalWhere: any = {};
-    if (filters.hospital) {
-      hospitalWhere.OR = [
-        { id: filters.hospital },
-        { name: { contains: filters.hospital, mode: 'insensitive' } },
-      ];
-    }
+    if (filters.hospital) hospitalWhere.id = filters.hospital;
+
     const [hospitals, referrals, accepted, rejected, completed, destinationCases] = await Promise.all([
       this.prisma.hospital.findMany({
         where: hospitalWhere,
-        take: 30,
         orderBy: { name: 'asc' },
-        include: { region: true, district: true, referrals: { where: { createdAt: { gte: period.start, lte: period.end } } }, requests: { where } },
+        include: {
+          region: true,
+          district: true,
+          referrals: { where: { createdAt: { gte: period.start, lte: period.end } } },
+          requests: { where },
+        },
       }),
       this.prisma.referral.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
       this.prisma.referral.count({ where: { status: 'ACCEPTED', createdAt: { gte: period.start, lte: period.end } } }),
@@ -1155,15 +1236,10 @@ export class ReportsService {
       this.prisma.referral.count({ where: { status: 'COMPLETED', createdAt: { gte: period.start, lte: period.end } } }),
       this.prisma.emergencyRequest.count({ where: { ...where, destinationHospitalId: { not: null } } }),
     ]);
-    const referralGroups = await this.prisma.referral.groupBy({
-      by: ['status'],
-      where: { createdAt: { gte: period.start, lte: period.end } },
-      _count: true,
-    });
 
     return {
       title: 'Hospital Acceptance Reports',
-      subtitle: 'Referral acceptance, hospital capacity signals, and destination case load.',
+      subtitle: 'Full hospital referral and destination case listing for the selected period.',
       period,
       summary: [
         { label: 'Referrals', value: referrals },
@@ -1173,20 +1249,25 @@ export class ReportsService {
         { label: 'Acceptance Rate', value: this.percent(accepted + completed, referrals), suffix: '%' },
         { label: 'Destination Cases', value: destinationCases },
       ],
-      charts: [
-        { title: 'Referral Outcomes', type: 'pie', data: this.groupRows(referralGroups, 'status') },
-      ],
       table: {
-        title: 'Hospital Performance',
-        columns: ['Hospital', 'Status', 'Beds', 'ER Ready', 'Region', 'Referrals', 'Destination Cases'],
+        title: 'Hospital Performance Detail',
+        columns: [
+          'Hospital', 'Status', 'Beds', 'ER Ready', 'Region', 'District',
+          'Referrals', 'Accepted', 'Rejected', 'Completed', 'Destination Cases', 'Phone',
+        ],
         rows: hospitals.map((h) => [
           h.name,
           h.status,
-          h.beds,
+          h.beds ?? '—',
           h.erReady ? 'Yes' : 'No',
-          h.region?.name ?? 'Unassigned',
+          h.region?.name ?? '—',
+          h.district?.name ?? '—',
           h.referrals.length,
+          h.referrals.filter((r) => r.status === 'ACCEPTED').length,
+          h.referrals.filter((r) => r.status === 'REJECTED').length,
+          h.referrals.filter((r) => r.status === 'COMPLETED').length,
           h.requests.length,
+          h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
         ]),
       },
     };
@@ -1194,35 +1275,38 @@ export class ReportsService {
 
   private async getResponseTimeReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const [avg, completed, priorityGroups, regionGroups, trend] = await Promise.all([
-      this.prisma.emergencyRequest.aggregate({ where: { ...where, responseMinutes: { not: null } }, _avg: { responseMinutes: true, serviceMinutes: true } }),
-      this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
-      this.prisma.emergencyRequest.groupBy({
-        by: ['priority'],
+    const [avg, completed, rows, regionGroups] = await Promise.all([
+      this.prisma.emergencyRequest.aggregate({
         where: { ...where, responseMinutes: { not: null } },
-        _avg: { responseMinutes: true },
-        _count: true,
+        _avg: { responseMinutes: true, serviceMinutes: true },
       }),
+      this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
+      this.getFullResponseTimeRows(where),
       this.getRegionResponseRows(where),
-      this.getDailyResponseTrend(period, filters),
     ]);
+
+    const measured = rows.length;
 
     return {
       title: 'Response Time Analysis',
-      subtitle: 'Average response, service duration, regional response, and priority performance.',
+      subtitle: 'Case-level response and service duration with regional summary.',
       period,
       summary: [
         { label: 'Avg Response', value: Math.round(avg._avg.responseMinutes ?? 0), suffix: ' min' },
         { label: 'Avg Service Time', value: Math.round(avg._avg.serviceMinutes ?? 0), suffix: ' min' },
-        { label: 'Measured Cases', value: priorityGroups.reduce((sum, row) => sum + row._count, 0) },
+        { label: 'Measured Cases', value: measured },
         { label: 'Completed Cases', value: completed },
       ],
-      charts: [
-        { title: 'Daily Avg Response', type: 'line', data: trend, xKey: 'label', series: [{ key: 'avgResponse', label: 'Avg Response (min)' }] },
-        { title: 'Avg by Priority', type: 'bar', data: priorityGroups.map((row) => ({ label: row.priority, avgResponse: Math.round(row._avg.responseMinutes ?? 0), cases: row._count })), xKey: 'label', series: [{ key: 'avgResponse', label: 'Avg Response' }, { key: 'cases', label: 'Cases' }] },
-      ],
       table: {
-        title: 'Regional Response Detail',
+        title: 'Case Response Time Detail',
+        columns: [
+          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District',
+          'Response (min)', 'Service (min)', 'Ambulance', 'Created', 'Dispatched', 'Completed',
+        ],
+        rows,
+      },
+      secondaryTable: {
+        title: 'Regional Response Summary',
         columns: ['Region', 'Measured Cases', 'Avg Response', 'Avg Service'],
         rows: regionGroups,
       },
@@ -1231,19 +1315,18 @@ export class ReportsService {
 
   private async getCaseOutcomeReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const [total, completed, cancelled, statusGroups, careRecords, incidents, recent] = await Promise.all([
+    const [total, completed, cancelled, careRecords, incidents, rows] = await Promise.all([
       this.prisma.emergencyRequest.count({ where }),
       this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
       this.prisma.emergencyRequest.count({ where: { ...where, status: 'CANCELLED' } }),
-      this.prisma.emergencyRequest.groupBy({ by: ['status'], where, _count: true }),
       this.prisma.patientCareRecord.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
       this.prisma.incidentReport.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
-      this.getRecentEmergencyRows(where),
+      this.getFullEmergencyRows(where),
     ]);
 
     return {
       title: 'Case Outcome Reports',
-      subtitle: 'Completed, cancelled, active, patient care, and incident outcome indicators.',
+      subtitle: 'Complete case outcome listing with completion and cancellation details.',
       period,
       summary: [
         { label: 'Total Cases', value: total },
@@ -1253,14 +1336,15 @@ export class ReportsService {
         { label: 'Care Records', value: careRecords },
         { label: 'Incident Reports', value: incidents },
       ],
-      charts: [
-        { title: 'Case Outcomes', type: 'pie', data: this.groupRows(statusGroups, 'status') },
-        { title: 'Daily Outcomes', type: 'bar', data: await this.getDailyEmergencyTrend(period, {}, filters), xKey: 'label', series: [{ key: 'requests', label: 'Total' }, { key: 'completed', label: 'Completed' }] },
-      ],
       table: {
-        title: 'Recent Case Outcomes',
-        columns: ['Tracking Code', 'Patient', 'Priority', 'Status', 'Pickup', 'Created'],
-        rows: recent,
+        title: 'All Case Outcomes',
+        columns: [
+          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
+          'Pickup', 'Destination', 'Ambulance', 'Response (min)', 'Created', 'Completed',
+        ],
+        rows: rows.map((row) => [
+          row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[12], row[14], row[15],
+        ]),
       },
     };
   }
@@ -1278,7 +1362,7 @@ export class ReportsService {
 
     return {
       title: 'Export PDF / Excel',
-      subtitle: 'Download-ready report bundles for management review and auditing.',
+      subtitle: 'Download complete report datasets for all analytics modules.',
       period,
       summary: [
         { label: 'Available Reports', value: 6 },
@@ -1298,15 +1382,87 @@ export class ReportsService {
         title: 'Export Packages',
         columns: ['Report', 'Rows', 'Formats', 'Status'],
         rows: [
-          ['Emergency Reports', emergency.table.rows.length, 'CSV / JSON', 'Ready'],
-          ['Ambulance Utilization', utilization.table.rows.length, 'CSV / JSON', 'Ready'],
-          ['Staff Performance Reports', performance.table.rows.length, 'CSV / JSON', 'Ready'],
-          ['Hospital Acceptance Reports', hospitals.table.rows.length, 'CSV / JSON', 'Ready'],
-          ['Response Time Analysis', responseTime.table.rows.length, 'CSV / JSON', 'Ready'],
-          ['Case Outcome Reports', outcomes.table.rows.length, 'CSV / JSON', 'Ready'],
+          ['Emergency Reports', emergency.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
+          ['Ambulance Utilization', utilization.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
+          ['Staff Performance Reports', performance.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
+          ['Hospital Acceptance Reports', hospitals.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
+          ['Response Time Analysis', responseTime.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
+          ['Case Outcome Reports', outcomes.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
         ],
       },
     };
+  }
+
+  private employeeDisplayName(e: {
+    firstName?: string | null;
+    lastName?: string | null;
+    employeeCode?: string | null;
+  }) {
+    return [e.firstName, e.lastName].filter(Boolean).join(' ').trim() || e.employeeCode || 'Unnamed';
+  }
+
+  private async getFullEmergencyRows(where: any) {
+    const rows = await this.prisma.emergencyRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        patient: true,
+        region: true,
+        district: true,
+        incidentCategory: true,
+        ambulance: true,
+        driver: true,
+        nurse: true,
+        destinationHospital: true,
+      },
+    });
+
+    return rows.map((r) => [
+      r.trackingCode,
+      r.patient?.fullName ?? 'Unknown',
+      r.priority,
+      r.status,
+      r.region?.name ?? '—',
+      r.district?.name ?? '—',
+      r.incidentCategory?.name ?? '—',
+      r.pickupLocation,
+      r.destination ?? r.destinationHospital?.name ?? '—',
+      r.ambulance?.ambulanceNumber ?? '—',
+      r.driver ? this.employeeDisplayName(r.driver) : '—',
+      r.nurse ? this.employeeDisplayName(r.nurse) : '—',
+      r.responseMinutes ?? '—',
+      r.serviceMinutes ?? '—',
+      r.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+      r.completedAt ? r.completedAt.toISOString().slice(0, 16).replace('T', ' ') : '—',
+    ]);
+  }
+
+  private async getFullResponseTimeRows(where: any) {
+    const rows = await this.prisma.emergencyRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        patient: true,
+        region: true,
+        district: true,
+        ambulance: true,
+      },
+    });
+
+    return rows.map((r) => [
+      r.trackingCode,
+      r.patient?.fullName ?? 'Unknown',
+      r.priority,
+      r.status,
+      r.region?.name ?? '—',
+      r.district?.name ?? '—',
+      r.responseMinutes ?? '—',
+      r.serviceMinutes ?? '—',
+      r.ambulance?.ambulanceNumber ?? '—',
+      r.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+      r.dispatchedAt ? r.dispatchedAt.toISOString().slice(0, 16).replace('T', ' ') : '—',
+      r.completedAt ? r.completedAt.toISOString().slice(0, 16).replace('T', ' ') : '—',
+    ]);
   }
 
   private async getRecentEmergencyRows(where: any) {
@@ -1392,23 +1548,9 @@ export class ReportsService {
     const where: any = {};
     if (filters.priority) where.priority = filters.priority;
     if (filters.status) where.status = filters.status;
-    if (filters.region) {
-      where.OR = [
-        ...(where.OR ?? []),
-        { regionId: filters.region },
-        { region: { name: { contains: filters.region, mode: 'insensitive' } } },
-      ];
-    }
-    if (filters.district) {
-      where.OR = [
-        ...(where.OR ?? []),
-        { districtId: filters.district },
-        { district: { name: { contains: filters.district, mode: 'insensitive' } } },
-      ];
-    }
-    if (filters.emergencyType) {
-      where.incidentCategory = { name: { contains: filters.emergencyType, mode: 'insensitive' } };
-    }
+    if (filters.region) where.regionId = filters.region;
+    if (filters.district) where.districtId = filters.district;
+    if (filters.emergencyType) where.incidentCategoryId = filters.emergencyType;
     return where;
   }
 

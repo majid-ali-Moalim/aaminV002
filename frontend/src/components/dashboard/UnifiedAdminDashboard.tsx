@@ -59,16 +59,16 @@ const KPI_ICONS: Record<string, typeof Activity> = {
 }
 
 const KPI_TONES: Record<string, { accent: string; bg: string }> = {
-  totalEmergencyCases: { accent: 'text-slate-700', bg: 'bg-slate-100' },
-  activeCases: { accent: 'text-red-600', bg: 'bg-red-50' },
-  pendingCases: { accent: 'text-amber-600', bg: 'bg-amber-50' },
-  criticalCases: { accent: 'text-red-700', bg: 'bg-red-50' },
-  availableAmbulances: { accent: 'text-emerald-600', bg: 'bg-emerald-50' },
-  ambulancesOnCase: { accent: 'text-blue-600', bg: 'bg-blue-50' },
-  availableCrew: { accent: 'text-indigo-600', bg: 'bg-indigo-50' },
-  hospitalsAvailable: { accent: 'text-teal-600', bg: 'bg-teal-50' },
-  completedCases: { accent: 'text-emerald-600', bg: 'bg-emerald-50' },
-  delayedCases: { accent: 'text-orange-600', bg: 'bg-orange-50' },
+  totalEmergencyCases: { accent: 'text-slate-700 dark:text-slate-200', bg: 'bg-slate-100 dark:bg-slate-800' },
+  activeCases: { accent: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
+  pendingCases: { accent: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+  criticalCases: { accent: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
+  availableAmbulances: { accent: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  ambulancesOnCase: { accent: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  availableCrew: { accent: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40' },
+  hospitalsAvailable: { accent: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40' },
+  completedCases: { accent: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  delayedCases: { accent: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40' },
 }
 
 const HIDDEN_KPI_KEYS = new Set(['averageResponseTimeMinutes'])
@@ -140,10 +140,10 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
       </div>
 
       {showCritical && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/30">
           <div className="flex items-center gap-2 min-w-0">
-            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-            <p className="text-xs font-bold text-red-800 truncate">
+            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+            <p className="text-xs font-bold text-red-800 dark:text-red-300 truncate">
               {summary.criticalCases} critical case{summary.criticalCases !== 1 ? 's' : ''} active
             </p>
           </div>
@@ -153,21 +153,24 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
         </div>
       )}
 
-      {/* TOP — KPI Cards */}
+      {/* TOP — KPI Cards (4 per row, two rows) */}
       <section id="summary-kpis" className="scroll-mt-20">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {kpiCards.map((kpi) => (
-            <div key={kpi.key} className="bg-white rounded-lg border border-slate-100 px-2.5 py-2 shadow-sm">
+            <div
+              key={kpi.key}
+              className="admin-card rounded-lg px-2.5 py-2"
+            >
               <div className="flex items-center justify-between gap-1">
                 <div className={`w-7 h-7 rounded-md ${kpi.tone.bg} flex items-center justify-center`}>
                   <kpi.icon className={`w-3.5 h-3.5 ${kpi.tone.accent}`} />
                 </div>
                 {kpi.live && (
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded-full">Live</span>
+                  <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded-full">Live</span>
                 )}
               </div>
-              <p className="text-lg font-black text-slate-900 mt-1.5 leading-none">{kpi.displayValue}</p>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mt-1 leading-tight line-clamp-2">
+              <p className="text-lg font-black text-admin-text mt-1.5 leading-none">{kpi.displayValue}</p>
+              <p className="text-[9px] font-bold text-admin-text-muted uppercase tracking-wide mt-1 leading-tight line-clamp-2">
                 {kpi.label}
               </p>
             </div>
@@ -203,13 +206,21 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
           </DashboardSection>
 
           <DashboardSection id="recent-activities" icon={ClipboardList} title="Recent Activities">
-            <RecentActivitiesWidget variant="widget" hideSummary hideViewAll bare className="h-[440px]" />
+            <RecentActivitiesWidget
+              variant="widget"
+              hideSummary
+              hideViewAll
+              bare
+              previewLimit={5}
+              showSeeMore
+              className="h-[360px]"
+            />
           </DashboardSection>
         </div>
       </div>
 
-      {/* BOTTOM — Resource / Hospital / Staff / Quick Actions / Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      {/* BOTTOM — Row 1: Resource / Hospital / Staff */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <DashboardSection icon={Truck} title="Resource Status">
           <DashboardResourceStatus charts={charts} ambulances={operational.ambulances} />
         </DashboardSection>
@@ -221,7 +232,10 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
         <DashboardSection icon={Users} title="Staff Status">
           <DashboardStaffStatus employees={operational.employees} summary={summary} />
         </DashboardSection>
+      </div>
 
+      {/* BOTTOM — Row 2: Quick Actions / Operations Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <DashboardSection icon={Zap} title="Quick Actions">
           <DashboardQuickActions summary={summary} />
         </DashboardSection>

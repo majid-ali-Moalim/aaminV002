@@ -131,17 +131,17 @@ export default function NotificationDrawer() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl"
+        className="relative p-2 text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white transition-all hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
       >
         <Bell className="w-6 h-6" />
         {unread > 0 && (
-          <span className="absolute top-1 right-1 min-w-[1.25rem] h-5 px-1 bg-red-600 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">
+          <span className="absolute top-1 right-1 min-w-[1.25rem] h-5 px-1 bg-red-600 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
         <span
-          className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full border border-white dark:border-gray-900 ${
+          className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full border border-white dark:border-slate-900 ${
             connected ? 'bg-green-500' : 'bg-gray-300'
           }`}
           title={connected ? 'Live' : 'Polling'}
@@ -149,8 +149,8 @@ export default function NotificationDrawer() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-[min(calc(100vw-1.5rem),28rem)] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl shadow-2xl shadow-blue-900/10 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="p-4 border-b border-gray-50 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
+        <div className="absolute right-0 mt-3 w-[min(calc(100vw-1.5rem),28rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl shadow-2xl shadow-black/10 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between bg-gray-50/80 dark:bg-slate-800/60">
             <div className="flex items-center gap-2">
               <h3 className="font-black text-gray-900 dark:text-white text-sm">Notifications</h3>
               {connected ? (
@@ -173,15 +173,15 @@ export default function NotificationDrawer() {
             </button>
           </div>
 
-          <div className="p-3 border-b border-gray-50 dark:border-gray-800">
+          <div className="p-3 border-b border-gray-100 dark:border-slate-800">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
               <input
                 type="search"
                 placeholder="Search notifications..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 h-10 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20"
+                className="w-full pl-10 pr-4 h-10 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500/20 focus:border-red-300 dark:focus:border-red-800"
               />
             </div>
           </div>

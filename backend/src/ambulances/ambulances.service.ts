@@ -191,33 +191,51 @@ export class AmbulancesService {
   }
 
   async assignDriver(id: string, driverEmployeeId: string) {
-    const updateEmployee = this.prisma.employee.update({
-      where: { id: driverEmployeeId },
-      data: {
-        assignedAmbulanceId: id,
-      },
-      include: {
-        user: true,
-        assignedAmbulance: true,
-      },
-    });
+    const [employee, result] = await this.prisma.$transaction(async (tx) => {
+      const existingDriver = await tx.employee.findFirst({
+        where: {
+          id: { not: driverEmployeeId },
+          assignedAmbulanceId: id,
+          employeeRole: { name: { contains: 'Driver', mode: 'insensitive' } },
+        },
+        select: { firstName: true, lastName: true, employeeCode: true },
+      });
+      if (existingDriver) {
+        const name =
+          [existingDriver.firstName, existingDriver.lastName].filter(Boolean).join(' ') ||
+          existingDriver.employeeCode ||
+          'another driver';
+        throw new ConflictException(`This ambulance is already assigned to ${name}. Change that driver's ambulance first.`);
+      }
 
-    const updateAmbulance = this.prisma.ambulance.update({
-      where: { id },
-      data: {
-        status: AmbulanceStatus.ON_DUTY,
-      },
-      include: {
-        employees: {
-          include: {
-            user: true,
-            employeeRole: true,
+      const updatedEmployee = await tx.employee.update({
+        where: { id: driverEmployeeId },
+        data: {
+          assignedAmbulanceId: id,
+        },
+        include: {
+          user: true,
+          assignedAmbulance: true,
+        },
+      });
+
+      const updatedAmbulance = await tx.ambulance.update({
+        where: { id },
+        data: {
+          status: AmbulanceStatus.AVAILABLE,
+        },
+        include: {
+          employees: {
+            include: {
+              user: true,
+              employeeRole: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    const [employee, result] = await Promise.all([updateEmployee, updateAmbulance]);
+      return [updatedEmployee, updatedAmbulance];
+    });
 
     await this.notifications.create({
       title: 'Ambulance Crew Assigned',
@@ -233,30 +251,9 @@ export class AmbulancesService {
   }
 
   async assignNurse(id: string, nurseEmployeeId: string) {
-    const existing = await this.prisma.ambulance.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('Ambulance not found');
-
-    const employee = await this.prisma.employee.update({
-      where: { id: nurseEmployeeId },
-      data: { assignedAmbulanceId: id },
-      include: {
-        user: true,
-        assignedAmbulance: true,
-        employeeRole: true,
-      },
-    });
-
-    await this.notifications.create({
-      title: 'Nurse Assigned to Ambulance',
-      message: `Nurse ${employee.user?.username || employee.firstName} assigned to Ambulance ${existing.ambulanceNumber}`,
-      type: 'AMBULANCE' as any,
-      priority: 'MEDIUM',
-      relatedModule: 'Ambulance',
-      relatedId: existing.id,
-      actionUrl: `/admin/ambulances?id=${existing.id}`,
-    });
-
-    return employee;
+    void id;
+    void nurseEmployeeId;
+    throw new ConflictException('Nurses are assigned to emergency cases, not directly to ambulances.');
   }
 
   delete(id: string) {
@@ -279,17 +276,26 @@ export class AmbulancesService {
   private resolveOperationalStatus(
     dbStatus: AmbulanceStatus,
     hasActiveCase: boolean,
+    hasAssignedDriver: boolean,
   ): 'available' | 'unavailable' {
-    if (dbStatus === 'AVAILABLE' && !hasActiveCase) return 'available';
+    if (
+      hasAssignedDriver &&
+      !hasActiveCase &&
+      dbStatus !== 'MAINTENANCE' &&
+      dbStatus !== 'UNAVAILABLE'
+    ) {
+      return 'available';
+    }
     return 'unavailable';
   }
 
   private getUnavailableReason(
     dbStatus: AmbulanceStatus,
     hasActiveCase: boolean,
+    hasAssignedDriver: boolean,
   ): string | null {
-    if (hasActiveCase) return 'On case';
-    if (dbStatus === 'ON_DUTY') return 'On duty';
+    if (hasActiveCase) return 'Assigned to active case';
+    if (!hasAssignedDriver) return 'No driver assigned';
     if (dbStatus === 'MAINTENANCE') return 'Not working';
     if (dbStatus === 'UNAVAILABLE') return 'Out of service';
     return null;
@@ -374,16 +380,16 @@ export class AmbulancesService {
     const rows = ambulances.map((amb) => {
       const activeCase =
         amb.emergencyRequests?.[0] ?? activeCaseByAmbulance.get(amb.id) ?? null;
+      const driver = getEmployeeByRole(amb.employees ?? [], 'DRIVER');
       const operationalStatus = this.resolveOperationalStatus(
         amb.status,
         !!activeCase,
+        Boolean(driver),
       );
       const unavailableReason =
         operationalStatus === 'unavailable'
-          ? this.getUnavailableReason(amb.status, !!activeCase)
+          ? this.getUnavailableReason(amb.status, !!activeCase, Boolean(driver))
           : null;
-      const driver = getEmployeeByRole(amb.employees ?? [], 'DRIVER');
-      const nurse = getEmployeeByRole(amb.employees ?? [], 'NURSE');
 
       return {
         id: amb.id,
@@ -395,9 +401,6 @@ export class AmbulancesService {
         operationalStatus,
         driver: driver
           ? { id: driver.id, name: [driver.firstName, driver.lastName].filter(Boolean).join(' ') }
-          : null,
-        nurse: nurse
-          ? { id: nurse.id, name: [nurse.firstName, nurse.lastName].filter(Boolean).join(' ') }
           : null,
         currentCase: activeCase
           ? {
@@ -558,7 +561,11 @@ export class AmbulancesService {
         vehicleBrand: ambulance.vehicleBrand,
         vehicleModel: ambulance.vehicleModel,
         dbStatus: ambulance.status,
-        operationalStatus: this.resolveOperationalStatus(ambulance.status, !!activeCase),
+        operationalStatus: this.resolveOperationalStatus(
+          ambulance.status,
+          !!activeCase,
+          Boolean(getEmployeeByRole('DRIVER')),
+        ),
         region: ambulance.region,
         district: ambulance.district,
         station: ambulance.station,
@@ -567,7 +574,6 @@ export class AmbulancesService {
         updatedAt: ambulance.updatedAt.toISOString(),
       },
       driver: getEmployeeByRole('DRIVER'),
-      nurse: getEmployeeByRole('NURSE'),
       currentCase: activeCase ?? null,
       caseHistory: ambulance.emergencyRequests,
       statusHistory,

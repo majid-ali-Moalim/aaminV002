@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { DispatcherGuard } from '@/components/guards'
 import DispatcherSidebarSections from '@/components/dispatcher/DispatcherSidebar'
 import DispatcherTopBar from '@/components/dispatcher/DispatcherTopBar'
+import { DispatcherNotificationProvider } from '@/components/dispatcher/DispatcherNotificationProvider'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { OptimisticNavProvider } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
@@ -16,6 +17,7 @@ function DispatcherShell({ children }: { children: ReactNode }) {
   return (
     <OptimisticNavProvider>
       <DispatcherGuard>
+        <DispatcherNotificationProvider>
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
         <DispatcherSidebarSections
           open={sidebarOpen}
@@ -26,6 +28,7 @@ function DispatcherShell({ children }: { children: ReactNode }) {
             <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">{children}</main>
           </div>
         </div>
+        </DispatcherNotificationProvider>
       </DispatcherGuard>
     </OptimisticNavProvider>
   )

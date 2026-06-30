@@ -7,6 +7,7 @@ import {
   Request,
   UseGuards,
   Query,
+  Param,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -34,13 +35,13 @@ export class DispatchersAppController {
   }
 
   @Get('dashboard')
-  @ApiOperation({ summary: 'Dispatcher command center stats' })
+  @ApiOperation({ summary: 'Dispatcher command center stats (my cases + regional resources)' })
   getDashboard(@Request() req) {
     return this.service.getDashboardStats(req.user.sub);
   }
 
   @Get('dashboard/overview')
-  @ApiOperation({ summary: 'Full dashboard overview with KPIs, lists, and activity feed' })
+  @ApiOperation({ summary: 'Dashboard overview scoped to cases this dispatcher handles' })
   getDashboardOverview(@Request() req) {
     return this.service.getDashboardOverview(req.user.sub);
   }
@@ -73,47 +74,62 @@ export class DispatchersAppController {
   }
 
   @Get('queue/pending')
-  getPendingQueue() {
-    return this.service.getPendingQueue();
+  getPendingQueue(@Request() req) {
+    return this.service.getPendingQueue(req.user.sub);
   }
 
   @Get('missions/active')
-  getActiveMissions() {
-    return this.service.getActiveMissions();
+  getActiveMissions(@Request() req) {
+    return this.service.getActiveMissions(req.user.sub);
   }
 
   @Get('fleet')
-  getFleet() {
-    return this.service.getFleetOverview();
+  getFleet(@Request() req) {
+    return this.service.getFleetOverview(req.user.sub);
   }
 
   @Get('staff')
-  getStaff() {
-    return this.service.getStaffOverview();
+  getStaff(@Request() req) {
+    return this.service.getStaffOverview(req.user.sub);
   }
 
   @Get('emergencies')
-  getEmergencies(@Query('view') view = 'all-cases') {
-    return this.service.getEmergenciesByView(view);
+  getEmergencies(@Request() req, @Query('view') view = 'all-cases') {
+    return this.service.getEmergenciesByView(req.user.sub, view);
   }
 
   @Get('ambulances')
-  getAmbulances(@Query('view') view = 'all') {
-    return this.service.getAmbulancesByView(view);
+  getAmbulances(@Request() req, @Query('view') view = 'all') {
+    return this.service.getAmbulancesByView(req.user.sub, view);
   }
 
   @Get('crew')
-  getCrew(@Query('view') view = 'drivers') {
-    return this.service.getCrewByView(view);
+  getCrew(@Request() req, @Query('view') view = 'drivers') {
+    return this.service.getCrewByView(req.user.sub, view);
   }
 
   @Get('hospitals')
-  getHospitals(@Query('view') view = 'directory') {
-    return this.service.getHospitalsByView(view);
+  getHospitals(@Request() req, @Query('view') view = 'directory') {
+    return this.service.getHospitalsByView(req.user.sub, view);
   }
 
   @Get('alerts/feed')
-  getAlerts(@Query('view') view = 'critical') {
-    return this.service.getAlertsByView(view);
+  getAlerts(@Request() req, @Query('view') view = 'critical') {
+    return this.service.getAlertsByView(req.user.sub, view);
+  }
+
+  @Get('available/assign')
+  getAssignable(@Request() req) {
+    return this.service.getAssignableResources(req.user.sub);
+  }
+
+  @Get('notifications')
+  getNotifications(@Request() req, @Query('view') view = 'all') {
+    return this.service.getCaseNotifications(req.user.sub, view);
+  }
+
+  @Get('reports/:type')
+  getReports(@Request() req, @Param('type') type: string) {
+    return this.service.getReports(req.user.sub, type || 'emergency');
   }
 }

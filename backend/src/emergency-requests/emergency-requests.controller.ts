@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EmergencyRequestsService } from './emergency-requests.service';
@@ -34,8 +35,14 @@ export class EmergencyRequestsController {
   @Get()
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Get all emergency requests' })
-  findAll() {
-    return this.emergencyRequestsService.findAll();
+  @ApiQuery({
+    name: 'queue',
+    required: false,
+    enum: ['pending', 'my-active', 'my-cases', 'regional'],
+    description: 'Dispatcher queue filter: pending (regional unassigned), my-active (your missions), my-cases (all yours)',
+  })
+  findAll(@Request() req, @Query('queue') queue?: string) {
+    return this.emergencyRequestsService.findAllForUser(req.user, queue);
   }
 
   @Public()
@@ -76,32 +83,50 @@ export class EmergencyRequestsController {
   @Get(':id')
   @Roles('ADMIN', 'DISPATCHER', 'DRIVER', 'NURSE')
   @ApiOperation({ summary: 'Get emergency request by ID' })
-  findOne(@Param('id') id: string) {
-    return this.emergencyRequestsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.emergencyRequestsService.findOne(id, req.user);
   }
 
   @Patch(':id/assign')
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Assign ambulance and driver to emergency request' })
-  assign(@Param('id') id: string, @Body() assignDto: any) {
-    return this.emergencyRequestsService.assign(id, assignDto);
+  assign(@Param('id') id: string, @Body() assignDto: any, @Request() req) {
+    if (
+      req.user?.role === 'EMPLOYEE' &&
+      req.user?.employeeId &&
+      !assignDto.dispatcherId
+    ) {
+      assignDto.dispatcherId = req.user.employeeId;
+    }
+    return this.emergencyRequestsService.assign(id, assignDto, req.user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'DISPATCHER', 'DRIVER', 'NURSE')
   @ApiOperation({ summary: 'Update emergency request status' })
   updateStatus(
-    @Param('id') id: string, 
-    @Body() updateStatusDto: { status: string }
+    @Param('id') id: string,
+    @Body() updateStatusDto: { status: string },
+    @Request() req,
   ) {
-    return this.emergencyRequestsService.updateStatus(id, updateStatusDto.status as EmergencyRequestStatus);
+    return this.emergencyRequestsService.updateStatus(
+      id,
+      updateStatusDto.status as EmergencyRequestStatus,
+      req.user?.employeeId,
+      req.user,
+    );
   }
 
   @Patch(':id/cancel')
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Cancel emergency request' })
-  cancel(@Param('id') id: string, @Body() cancelDto: { reason: string }) {
-    return this.emergencyRequestsService.cancelRequest(id, cancelDto.reason);
+  cancel(@Param('id') id: string, @Body() cancelDto: { reason: string }, @Request() req) {
+    return this.emergencyRequestsService.cancelRequest(
+      id,
+      cancelDto.reason,
+      req.user?.employeeId,
+      req.user,
+    );
   }
 
   @Patch(':id/fail')

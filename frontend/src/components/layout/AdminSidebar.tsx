@@ -6,13 +6,13 @@ import { useState } from 'react'
 import SidebarNavLink from '@/components/navigation/SidebarNavLink'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
-import AaminLogo from '@/components/brand/AaminLogo'
 import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/components/layout/AmbulanceManagementSidebar'
 import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
 import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
-import DispatcherDashboardSidebar, { isDispatcherDashboardPath } from '@/components/layout/DispatcherDashboardSidebar'
 import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
+import AdminSidebarProfile from '@/components/layout/AdminSidebarProfile'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import {
   LayoutGrid,
   Users,
@@ -83,9 +83,6 @@ const dispatcherManagementSubMenu = [
   { href: '/admin/dispatchers/add', label: 'Add New Dispatcher', icon: UserPlus },
   { href: '/admin/dispatchers/shifts', label: 'Shift & Availability', icon: Calendar },
   { href: '/admin/dispatchers/cases', label: 'Assigned Cases', icon: ClipboardList },
-  { href: '/admin/dispatchers/duty-logs', label: 'Duty Logs', icon: FileText },
-  { href: '/admin/dispatchers/performance', label: 'Performance Reports', icon: BarChart2 },
-  { href: '/admin/dispatchers/activity', label: 'Dispatch Activity', icon: Activity },
 ]
 
 const dispatchCenterOperationsSubMenu = [
@@ -108,11 +105,8 @@ const hospitalCoordinationSubMenu = [
 
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
-  { href: '/admin/drivers', label: 'Drivers', icon: Truck },
-  { href: '/admin/nurses', label: 'Nurses / Paramedics', icon: Stethoscope },
-  { href: '/admin/system-setup?tab=departments', label: 'Departments', icon: Building2 },
+  { href: '/admin/employees/shifts', label: 'Shift Management', icon: Calendar },
   { href: '/admin/employees/attendance', label: 'Attendance Management', icon: Clock },
-  { href: '/admin/reports/performance', label: 'Staff Performance', icon: BarChart2 },
 ]
 
 const analyticsSubMenu = [
@@ -131,7 +125,6 @@ const masterDataSubMenu = [
   { href: '/admin/master-data/ambulance', label: 'Ambulance Configuration', icon: Truck },
   { href: '/admin/master-data/hospital', label: 'Hospital Configuration', icon: Building2 },
   { href: '/admin/master-data/mission', label: 'Mission Configuration', icon: ClipboardList },
-  { href: '/admin/master-data/settings', label: 'System Settings', icon: Settings },
 ]
 
 export default function AdminSidebar() {
@@ -144,7 +137,6 @@ export default function AdminSidebar() {
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = isPatientsCaseRecordsPath(pathname)
-  const isDispatcherDashboardActive = isDispatcherDashboardPath(pathname)
   const isDispatchResourcesActive =
     pathname.startsWith('/admin/ambulances/availability') ||
     pathname.startsWith('/admin/drivers/availability') ||
@@ -161,17 +153,14 @@ export default function AdminSidebar() {
   const isNursesActive = isNurseManagementPath(pathname)
   const isAmbulancesActive = isAmbulanceManagementPath(pathname)
   const isHospitalCoordinationActive = pathname.startsWith('/admin/hospitals')
-  const isWorkforceActive =
-    pathname.startsWith('/admin/employees') ||
-    (pathname.startsWith('/admin/drivers') && !isDispatchResourcesActive) ||
-    (pathname.startsWith('/admin/nurses') && !isDispatchResourcesActive)
+  const isWorkforceActive = pathname.startsWith('/admin/employees')
   const isAccessControlActive = isAccessControlPath(pathname)
   const isAnalyticsActive = pathname.startsWith('/admin/reports')
   const isMasterDataActive = pathname.startsWith('/admin/master-data')
+  const isSystemSettingsActive = pathname.startsWith('/admin/system-settings')
 
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
-  const [dispatcherDashboardOpen, setDispatcherDashboardOpen] = useState(isDispatcherDashboardActive)
   const [dispatchResourcesOpen, setDispatchResourcesOpen] = useState(isDispatchResourcesActive)
   const [dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen] = useState(isDispatchCenterOperationsActive)
   const [dispatcherManagementOpen, setDispatcherManagementOpen] = useState(isDispatcherManagementActive)
@@ -323,12 +312,10 @@ export default function AdminSidebar() {
         borderRight: `1px solid ${SIDEBAR.border}`,
       }}
     >
-      <div className="p-4 shrink-0" style={{ borderBottom: `1px solid ${SIDEBAR.border}` }}>
-        <AaminLogo size="sidebar" onDark priority />
-      </div>
+      <AdminSidebarProfile />
 
-      <nav className="flex-1 overflow-y-auto py-3 space-y-px px-2.5 custom-scrollbar">
-        <SectionLabel label="Dashboard" />
+      <nav className="flex-1 overflow-y-auto py-2 space-y-px px-2.5 custom-scrollbar">
+        <SectionLabel label="Modules" />
         {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
         {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
 
@@ -341,12 +328,6 @@ export default function AdminSidebar() {
         </div>
         <div className="px-0.5">
           <PatientsCaseRecordsSidebar isOpen={patientsOpen} setOpen={setPatientsOpen} />
-        </div>
-        <div className="px-0.5">
-          <DispatcherDashboardSidebar
-            isOpen={dispatcherDashboardOpen}
-            setOpen={setDispatcherDashboardOpen}
-          />
         </div>
         {renderCollapsible(
           'Dispatch Resources',
@@ -404,7 +385,6 @@ export default function AdminSidebar() {
           workforceOpen,
           setWorkforceOpen,
           workforceSubMenu,
-          { queryBased: true },
         )}
         {renderCollapsible(
           'Analytics & Reports',
@@ -428,15 +408,19 @@ export default function AdminSidebar() {
             setOpen={setAccessControlOpen}
           />
         </div>
+        {renderLink('/admin/system-settings', 'System Settings', Settings, isSystemSettingsActive)}
       </nav>
 
       <div
-        className="p-2.5 shrink-0"
+        className="p-2.5 shrink-0 space-y-2"
         style={{
           borderTop: `1px solid ${SIDEBAR.border}`,
           backgroundColor: 'rgba(17,24,39,0.5)',
         }}
       >
+        <div className="px-0.5">
+          <AdminThemeToggle onDark />
+        </div>
         <button
           type="button"
           onClick={() => logout()}

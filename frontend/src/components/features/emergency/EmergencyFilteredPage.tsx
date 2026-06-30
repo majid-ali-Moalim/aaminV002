@@ -4,13 +4,13 @@ import { useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, Search, ArrowRight, LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
-import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
+import { useEmergencyPaths, useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests, type EmergencyQueue } from '@/lib/emergency/fetchEmergencyRequests'
 
 interface EmergencyFilteredPageProps {
   title: string
@@ -22,6 +22,8 @@ interface EmergencyFilteredPageProps {
   refreshMs?: number
   headerExtra?: ReactNode
   onRowAction?: (request: EmergencyRequest) => ReactNode
+  /** Dispatcher queue: monitoring pages use my-active; omit for admin (all cases). */
+  queue?: EmergencyQueue
 }
 
 export default function EmergencyFilteredPage({
@@ -34,17 +36,22 @@ export default function EmergencyFilteredPage({
   refreshMs = 8000,
   headerExtra,
   onRowAction,
+  queue,
 }: EmergencyFilteredPageProps) {
   const router = useRouter()
   const paths = useEmergencyPaths()
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
 
+  const effectiveQueue =
+    queue ?? (portal === 'dispatcher' ? ('my-active' as EmergencyQueue) : undefined)
+
   const load = async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
+      const data = await fetchEmergencyRequests(portal, effectiveQueue)
       setRequests(Array.isArray(data) ? data.filter(filter) : [])
     } catch (err) {
       console.error('Failed to fetch emergency cases:', err)
@@ -57,7 +64,7 @@ export default function EmergencyFilteredPage({
     load(true)
     const interval = setInterval(() => load(false), refreshMs)
     return () => clearInterval(interval)
-  }, [])
+  }, [portal, effectiveQueue, refreshMs])
 
   const filtered = requests
     .filter((r) => {

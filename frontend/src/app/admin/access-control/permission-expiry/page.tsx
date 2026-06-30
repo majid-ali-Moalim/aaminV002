@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function LegacyPermissionExpiryRedirect() {
-  redirect('/admin/access-control/user-access')
+  redirect('/admin/access-control/permissions')
 }

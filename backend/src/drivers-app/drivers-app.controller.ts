@@ -103,6 +103,17 @@ export class DriversAppController {
     return this.service.updateMissionStatus(req.user.sub, id, body.status, body.notes);
   }
 
+  @Post('missions/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject assigned mission before dispatch' })
+  rejectMission(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.service.rejectMissionAssignment(req.user.sub, id, body.reason);
+  }
+
   // ─── AMBULANCE ────────────────────────────────────────────────────────────
 
   @Get('ambulance')

@@ -8,7 +8,9 @@ import {
   Clock,
 } from 'lucide-react'
 
-export const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+import { API_BASE_URL } from '@/lib/api'
+
+export const API_BASE = API_BASE_URL
 
 export const STEPS = [
   { id: 'urgency', label: 'Urgency', icon: Siren },
@@ -38,6 +40,46 @@ export const REQUEST_TYPES = [
   },
 ] as const
 
+export const TRANSPORT_TYPES = [
+  { value: 'HOSPITAL_APPOINTMENT', label: 'Hospital Appointment' },
+  { value: 'HOSPITAL_DISCHARGE', label: 'Hospital Discharge' },
+  { value: 'INTER_HOSPITAL_TRANSFER', label: 'Inter-Hospital Transfer' },
+  { value: 'ROUTINE_MEDICAL', label: 'Routine Medical Transport' },
+  { value: 'FUNERAL', label: 'Funeral / Deceased Person Transport' },
+  { value: 'OTHER', label: 'Other' },
+] as const
+
+export type TransportTypeValue = (typeof TRANSPORT_TYPES)[number]['value']
+
+export const HOSPITAL_TRANSPORT_TYPES: TransportTypeValue[] = [
+  'HOSPITAL_APPOINTMENT',
+  'HOSPITAL_DISCHARGE',
+  'INTER_HOSPITAL_TRANSFER',
+  'ROUTINE_MEDICAL',
+]
+
+export const AGE_GROUPS = [
+  { value: 'INFANT', label: 'Infant (0–1 year)', age: 0 },
+  { value: 'TODDLER', label: 'Toddler (2–5 years)', age: 3 },
+  { value: 'CHILD', label: 'Child (6–12 years)', age: 9 },
+  { value: 'TEENAGER', label: 'Teenager (13–17 years)', age: 15 },
+  { value: 'YOUNG_ADULT', label: 'Young Adult (18–35 years)', age: 26 },
+  { value: 'ADULT', label: 'Adult (36–59 years)', age: 45 },
+  { value: 'SENIOR', label: 'Senior (60+ years)', age: 65 },
+] as const
+
+export type AgeGroupValue = (typeof AGE_GROUPS)[number]['value']
+
+export const BLEEDING_STATUSES = [
+  { value: 'NONE', label: 'No Bleeding' },
+  { value: 'MINOR', label: 'Minor Bleeding' },
+  { value: 'SEVERE', label: 'Severe Bleeding' },
+  { value: 'HEAVY_UNCONTROLLED', label: 'Heavy Uncontrolled Bleeding' },
+] as const
+
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const
+
 export const DRAFT_KEY = 'aamin-hire-ambulance-draft'
+export const LANG_KEY = 'aamin-hire-ambulance-lang'
 
 export const EMERGENCY_HOTLINE = '999'

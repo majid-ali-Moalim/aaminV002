@@ -125,8 +125,8 @@ export default function DriverAvailabilityView() {
       setAssignAmbulanceModal(null)
       mutate()
       if (detailId === driverId) openDetail(driverId)
-    } catch {
-      alert('Failed to assign ambulance')
+    } catch (error: any) {
+      alert(error?.response?.data?.message || error?.message || 'Failed to assign ambulance')
     } finally {
       setSubmitting(false)
     }
@@ -248,8 +248,8 @@ export default function DriverAvailabilityView() {
           const cfg = DRIVER_STATUS_CONFIG[key]
           const count = data?.statusCounts[key] ?? 0
           const desc = key === 'available'
-            ? 'Can be assigned to a new case immediately.'
-            : 'On duty, on case, on break, off duty, or not working.'
+            ? 'Has an assigned ambulance and is not assigned to a case.'
+            : 'No ambulance assigned, inactive, or already assigned to a case.'
           return (
             <div key={key} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between">
@@ -496,7 +496,11 @@ export default function DriverAvailabilityView() {
                   <span className="text-xl">{cfg.emoji}</span>
                   <div>
                     <p className="font-bold">{cfg.label}</p>
-                    <p className="text-xs text-slate-500">{key === 'available' ? 'Ready for new case assignment' : 'Not available for dispatch'}</p>
+                    <p className="text-xs text-slate-500">
+                      {key === 'available'
+                        ? 'Availability is confirmed when the driver has an ambulance and no active case.'
+                        : 'Unavailable means no ambulance, inactive, or assigned to a case.'}
+                    </p>
                   </div>
                 </button>
               )

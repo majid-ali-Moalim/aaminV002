@@ -1,0 +1,135 @@
+/* Admin portal — balanced modern light / dark theme tokens */
+.admin-shell {
+  --admin-bg: 210 40% 98%;
+  --admin-bg-subtle: 214 32% 96%;
+  --admin-surface: 0 0% 100%;
+  --admin-surface-raised: 0 0% 100%;
+  --admin-surface-muted: 210 40% 96%;
+  --admin-border: 214 32% 91%;
+  --admin-border-subtle: 214 32% 94%;
+  --admin-text: 222 47% 11%;
+  --admin-text-secondary: 215 16% 47%;
+  --admin-text-muted: 215 20% 65%;
+  --admin-topbar: 0 0% 100%;
+  --admin-input: 0 0% 100%;
+  --admin-input-border: 214 32% 88%;
+  --admin-hover: 210 40% 96%;
+  --admin-ring: 355 78% 56%;
+  --admin-shadow: 222 47% 11%;
+  --admin-success-bg: 152 76% 95%;
+  --admin-success-text: 152 69% 31%;
+  --admin-success-border: 152 58% 85%;
+  color-scheme: light;
+}
+
+.dark .admin-shell {
+  --admin-bg: 222 47% 7%;
+  --admin-bg-subtle: 222 47% 9%;
+  --admin-surface: 217 33% 12%;
+  --admin-surface-raised: 217 33% 15%;
+  --admin-surface-muted: 217 33% 10%;
+  --admin-border: 217 25% 22%;
+  --admin-border-subtle: 217 25% 18%;
+  --admin-text: 210 40% 98%;
+  --admin-text-secondary: 215 20% 72%;
+  --admin-text-muted: 215 16% 55%;
+  --admin-topbar: 217 33% 10%;
+  --admin-input: 217 33% 14%;
+  --admin-input-border: 217 25% 24%;
+  --admin-hover: 217 33% 18%;
+  --admin-ring: 355 78% 56%;
+  --admin-shadow: 222 47% 4%;
+  --admin-success-bg: 152 45% 12%;
+  --admin-success-text: 152 55% 62%;
+  --admin-success-border: 152 35% 22%;
+  color-scheme: dark;
+}
+
+.admin-page-bg {
+  background-color: hsl(var(--admin-bg));
+  color: hsl(var(--admin-text));
+}
+
+.admin-card {
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--admin-border));
+  background-color: hsl(var(--admin-surface));
+  color: hsl(var(--admin-text));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid hsl(var(--admin-border));
+  background-color: hsl(var(--admin-surface-muted));
+  padding: 0.75rem 1rem;
+}
+
+.admin-card-title {
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: hsl(var(--admin-text-secondary));
+}
+
+.admin-input {
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--admin-input-border));
+  background-color: hsl(var(--admin-input));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--admin-text));
+}
+
+.admin-input::placeholder {
+  color: hsl(var(--admin-text-muted));
+}
+
+.admin-input:focus {
+  outline: none;
+  border-color: rgb(252 165 165);
+  box-shadow: 0 0 0 2px rgb(239 68 68 / 0.15);
+}
+
+.dark .admin-input:focus {
+  border-color: rgb(153 27 27);
+}
+
+.admin-muted-text {
+  color: hsl(var(--admin-text-secondary));
+}
+
+.admin-topbar-surface {
+  border-bottom: 1px solid hsl(var(--admin-border));
+  backdrop-filter: blur(12px);
+  background-color: hsl(var(--admin-topbar) / 0.92);
+}
+
+.admin-ticker {
+  display: flex;
+  height: 2.25rem;
+  min-width: 0;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--admin-border));
+  background-color: hsl(var(--admin-surface-muted));
+  padding: 0 0.75rem;
+}
+
+.admin-badge-live {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--admin-success-border));
+  padding: 0.375rem 0.75rem;
+  background-color: hsl(var(--admin-success-bg));
+  color: hsl(var(--admin-success-text));
+}

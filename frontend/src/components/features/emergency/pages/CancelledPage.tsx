@@ -13,7 +13,6 @@ import {
   RotateCcw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -21,11 +20,13 @@ import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
-import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
+import { useEmergencyPaths, useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function CancelledRequestsPage() {
   const router = useRouter()
   const paths = useEmergencyPaths()
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -33,9 +34,8 @@ export default function CancelledRequestsPage() {
   const fetchRequests = async () => {
     try {
       if (requests.length === 0) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
-      // Filter for CANCELLED only
-      setRequests(data.filter(r => r.status === 'CANCELLED'))
+      const data = await fetchEmergencyRequests(portal, portal === 'dispatcher' ? 'my-cases' : undefined)
+      setRequests(Array.isArray(data) ? data.filter((r) => r.status === 'CANCELLED') : [])
     } catch (err) {
       console.error('Failed to fetch cancelled requests:', err)
     } finally {

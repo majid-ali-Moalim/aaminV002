@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Phone, MapPin, Clock, Users, Shield, Activity, Truck, FileText, AlertCircle } from 'lucide-react'
+import { PUBLIC_HEADER_OFFSET } from '@/lib/layout/publicHeader'
 
 export default function ServicesPage() {
   const services = [
@@ -69,7 +70,7 @@ export default function ServicesPage() {
   ]
 
   return (
-    <div className="pt-16 pb-12">
+    <div className={`${PUBLIC_HEADER_OFFSET} pb-12`}>
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-red-50 to-white py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -5,11 +5,13 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationDispatchService } from './notification-dispatch.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MailModule } from '../mail/mail.module';
 
 @Global()
 @Module({
   imports: [
     PrismaModule,
+    MailModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
     }),

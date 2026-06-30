@@ -16,7 +16,6 @@ import {
   Calendar
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { format, formatDistanceToNow } from 'date-fns'
 
@@ -24,11 +23,13 @@ import { format, formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
-import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
+import { useEmergencyPaths, useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function CompletedRequestsPage() {
   const router = useRouter()
   const paths = useEmergencyPaths()
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -36,9 +37,8 @@ export default function CompletedRequestsPage() {
   const fetchRequests = async () => {
     try {
       if (requests.length === 0) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
-      // Filter for COMPLETED only
-      setRequests(data.filter(r => r.status === 'COMPLETED'))
+      const data = await fetchEmergencyRequests(portal, portal === 'dispatcher' ? 'my-cases' : undefined)
+      setRequests(Array.isArray(data) ? data.filter((r) => r.status === 'COMPLETED') : [])
     } catch (err) {
       console.error('Failed to fetch completed requests:', err)
     } finally {

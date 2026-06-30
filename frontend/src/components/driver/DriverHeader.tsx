@@ -1,7 +1,10 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Wifi, WifiOff, Bell, ChevronLeft } from 'lucide-react'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
+import { DriverThemeToggle } from '@/components/driver/DriverThemeToggle'
 
 interface DriverHeaderProps {
   title: string
@@ -10,7 +13,9 @@ interface DriverHeaderProps {
 }
 
 export function DriverHeader({ title, showBack, backHref = '/driver' }: DriverHeaderProps) {
-  const { isOnline, isSocketConnected, unreadCount, profile } = useDriverStore()
+  const { isSocketConnected, unreadCount, profile } = useDriverStore()
+  const photoSrc = profilePhotoUrl(profile?.profilePhoto)
+  const initials = getEmployeeInitials(profile?.firstName, profile?.lastName)
 
   return (
     <header className="driver-header">
@@ -25,6 +30,22 @@ export function DriverHeader({ title, showBack, backHref = '/driver' }: DriverHe
             <span className="driver-logo-text">EADS</span>
           </div>
         )}
+        {!showBack && profile ? (
+          <Link href="/driver/profile" className="driver-header-avatar">
+            {photoSrc ? (
+              <Image
+                src={photoSrc}
+                alt={`${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || 'Driver'}
+                width={36}
+                height={36}
+                className="driver-header-avatar-img"
+                unoptimized
+              />
+            ) : (
+              <span className="driver-header-avatar-fallback">{initials}</span>
+            )}
+          </Link>
+        ) : null}
         <div>
           <h1 className="driver-header-title">{title}</h1>
           {!showBack && profile && (
@@ -35,6 +56,7 @@ export function DriverHeader({ title, showBack, backHref = '/driver' }: DriverHe
         </div>
       </div>
       <div className="driver-header-right">
+        <DriverThemeToggle compact />
         <div className={`driver-conn-indicator ${isSocketConnected ? 'online' : 'offline'}`}>
           {isSocketConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
           <span className="conn-label">{isSocketConnected ? 'Live' : 'Offline'}</span>

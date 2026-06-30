@@ -12,7 +12,7 @@ import {
   User,
   Zap,
 } from 'lucide-react'
-import { emergencyRequestsService, nursesService } from '@/lib/api'
+import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 
@@ -33,7 +33,7 @@ export default function NurseDashboardView() {
   useEffect(() => {
     if (!nurseId) return
     const load = () => {
-      emergencyRequestsService.getAll().then((d) => setCases(Array.isArray(d) ? d : [])).catch(() => {})
+      nursesService.getMyCases(nurseId).then((d) => setCases(Array.isArray(d) ? d : [])).catch(() => {})
       nursesService.getPatientCareRecords(nurseId).then((d) => setRecords(Array.isArray(d) ? d : [])).catch(() => {})
     }
     load()
@@ -100,7 +100,7 @@ export default function NurseDashboardView() {
   const quickActions = [
     { label: 'Open Mission Workspace', href: '/nurse/mission', icon: HeartPulse },
     { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
-    { label: 'Record Vital Signs', href: '/nurse/medical-records?tab=vitals', icon: Activity },
+    { label: 'Record Vital Signs', href: '/nurse/mission', icon: Activity },
     { label: 'Add Treatment', href: '/nurse/mission', icon: Zap },
     { label: 'Complete Handover', href: '/nurse/mission', icon: ClipboardList },
   ]
@@ -171,7 +171,7 @@ export default function NurseDashboardView() {
               {todayMissions.map((m) => (
                 <Link
                   key={m.id}
-                  href="/nurse/patient-care?tab=active"
+                  href={`/nurse/mission?caseId=${m.id}`}
                   className="nurse-mission-row"
                 >
                   <span className="code">{m.trackingCode}</span>

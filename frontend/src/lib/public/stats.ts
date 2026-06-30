@@ -20,20 +20,30 @@ export const EMPTY_PUBLIC_STATS: PublicStats = {
   updatedAt: new Date(0).toISOString(),
 }
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.API_URL ||
-  'http://127.0.0.1:3001'
+export function getPublicStatsUrl(): string {
+  const base = (
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.API_URL ||
+    'http://127.0.0.1:3001'
+  ).replace(/\/$/, '')
+  return `${base}/api/public/stats`
+}
 
 export async function fetchPublicStats(): Promise<PublicStats> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
   try {
-    const res = await fetch(`${API_BASE}/api/public/stats`, {
+    const res = await fetch(getPublicStatsUrl(), {
+      signal: controller.signal,
       next: { revalidate: 60 },
     })
     if (!res.ok) return EMPTY_PUBLIC_STATS
     return (await res.json()) as PublicStats
   } catch {
     return EMPTY_PUBLIC_STATS
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

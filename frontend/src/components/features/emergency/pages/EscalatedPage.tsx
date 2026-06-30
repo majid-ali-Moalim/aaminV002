@@ -14,7 +14,6 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
@@ -27,11 +26,13 @@ import {
   getWaitMinutes,
   isEscalatedPendingCase,
 } from '@/lib/emergency/dateFilters'
-import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
+import { useEmergencyPaths, useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function EscalatedCasesPage() {
   const router = useRouter()
   const paths = useEmergencyPaths()
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -41,14 +42,14 @@ export default function EscalatedCasesPage() {
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
+      const data = await fetchEmergencyRequests(portal, portal === 'dispatcher' ? 'pending' : undefined)
       setRequests(Array.isArray(data) ? data.filter(isEscalatedPendingCase) : [])
     } catch (err) {
       console.error('Failed to fetch escalated requests:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [portal])
 
   useEffect(() => {
     fetchRequests(true)

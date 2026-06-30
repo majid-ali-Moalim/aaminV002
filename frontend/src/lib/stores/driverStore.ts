@@ -35,6 +35,8 @@ export interface DriverMission {
   region?: { name: string }
   district?: { name: string }
   dispatcher?: { user?: { username: string } }
+  nurse?: { firstName?: string; lastName?: string }
+  callerName?: string
   statusLogs?: Array<{ toStatus: string; createdAt: string; notes?: string }>
 }
 
@@ -84,11 +86,16 @@ interface OfflineUpdate {
   timestamp: number
 }
 
+export type DriverTheme = 'light' | 'dark'
+
 interface DriverStore {
   // Auth
   token: string | null
   userId: string | null
   isAuthenticated: boolean
+
+  // UI
+  theme: DriverTheme
 
   // Profile
   profile: DriverProfile | null
@@ -112,6 +119,8 @@ interface DriverStore {
   // Actions
   setAuth: (token: string, userId: string) => void
   clearAuth: () => void
+  setTheme: (theme: DriverTheme) => void
+  toggleTheme: () => void
   setProfile: (profile: DriverProfile) => void
   setActiveMission: (mission: DriverMission | null) => void
   setStats: (stats: DashboardStats) => void
@@ -129,6 +138,7 @@ export const useDriverStore = create<DriverStore>()(
       token: null,
       userId: null,
       isAuthenticated: false,
+      theme: 'light',
       profile: null,
       activeMission: null,
       stats: null,
@@ -138,6 +148,9 @@ export const useDriverStore = create<DriverStore>()(
       offlineQueue: [],
 
       setAuth: (token, userId) => set({ token, userId, isAuthenticated: true }),
+      setTheme: (theme) => set({ theme }),
+      toggleTheme: () =>
+        set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       clearAuth: () =>
         set({
           token: null,
@@ -173,6 +186,7 @@ export const useDriverStore = create<DriverStore>()(
         token: state.token,
         userId: state.userId,
         isAuthenticated: state.isAuthenticated,
+        theme: state.theme,
         profile: state.profile,
         activeMission: state.activeMission,
         offlineQueue: state.offlineQueue,

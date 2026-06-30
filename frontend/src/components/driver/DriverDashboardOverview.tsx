@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   MapPin, User, Truck, ArrowRight, PlayCircle, StopCircle,
   AlertTriangle, CheckCircle, Loader2, Phone, Siren, Clock, Coffee,
 } from 'lucide-react'
 import { MissionStatusBadge, PriorityBadge, ShiftBadge, StatCard, DriverSkeleton } from '@/components/driver/DriverUI'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
+import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
 import type { DriverMission, DriverProfile, DashboardStats } from '@/lib/stores/driverStore'
 
 interface Props {
@@ -38,48 +40,70 @@ export function DriverDashboardOverview({
 }: Props) {
   const fullName = profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : 'Driver'
   const statusLabel = getStatusLabel(currentShift, !!activeMission)
+  const photoSrc = profilePhotoUrl(profile?.profilePhoto)
+  const initials = getEmployeeInitials(profile?.firstName, profile?.lastName)
 
   return (
     <>
-      {/* Welcome + Status */}
-      <div className="driver-welcome-bar">
-        <div>
-          <p className="driver-welcome-greeting">Dashboard Overview</p>
-          <h2 className="driver-welcome-name">{fullName}</h2>
-          {profile?.station && (
-            <p className="driver-welcome-station">📍 {profile.station.name}</p>
-          )}
+      {/* Hero welcome */}
+      <div className="driver-dash-hero">
+        <div className="driver-dash-hero-main">
+          <Link href="/driver/profile" className="driver-dash-avatar" aria-label="Open profile">
+            {photoSrc ? (
+              <Image
+                src={photoSrc}
+                alt={fullName}
+                width={56}
+                height={56}
+                className="driver-dash-avatar-img"
+                unoptimized
+              />
+            ) : (
+              <span className="driver-dash-avatar-fallback">{initials}</span>
+            )}
+          </Link>
+          <div className="driver-dash-hero-text">
+            <p className="driver-welcome-greeting">Welcome back</p>
+            <h2 className="driver-welcome-name">{fullName}</h2>
+            {profile?.station && (
+              <p className="driver-welcome-station">
+                <MapPin size={12} className="inline mr-1" />
+                {profile.station.name}
+              </p>
+            )}
+          </div>
         </div>
         <ShiftBadge status={currentShift} />
       </div>
 
-      {/* Current Status Card */}
-      <div className="driver-card driver-status-card">
-        <h3 className="driver-section-title">Current Status</h3>
-        <div className="driver-status-pills">
-          <StatusPill label="On Duty" active={currentShift === 'ON_DUTY'} />
-          <StatusPill label="Off Duty" active={currentShift === 'OFF_DUTY' || currentShift === 'AVAILABLE'} />
-          <StatusPill label="On Mission" active={!!activeMission} />
-          <StatusPill label="Break" active={currentShift === 'ON_BREAK'} />
+      {/* Status + mission summary row */}
+      <div className="driver-dash-grid">
+        <div className="driver-card driver-status-card">
+          <h3 className="driver-section-title">Current Status</h3>
+          <div className="driver-status-pills">
+            <StatusPill label="On Duty" active={currentShift === 'ON_DUTY'} />
+            <StatusPill label="Off Duty" active={currentShift === 'OFF_DUTY' || currentShift === 'AVAILABLE'} />
+            <StatusPill label="On Mission" active={!!activeMission} />
+            <StatusPill label="Break" active={currentShift === 'ON_BREAK'} />
+          </div>
+          <p className="driver-status-summary">{statusLabel}</p>
         </div>
-        <p className="driver-status-summary">{statusLabel}</p>
-      </div>
 
-      {/* Mission Summary */}
-      <div className="driver-card">
-        <h3 className="driver-section-title">Mission Summary</h3>
-        <div className="driver-stats-grid driver-stats-grid--4">
-          <StatCard label="Active Mission" value={activeMission ? 1 : 0} accent />
-          <StatCard label="Assigned" value={activeMission?.status === 'ASSIGNED' ? 1 : 0} />
-          <StatCard label="Completed Today" value={stats?.completedMissions ?? 0} />
-          <StatCard label="Pending" value={activeMission ? 0 : 0} />
+        <div className="driver-card">
+          <h3 className="driver-section-title">Mission Summary</h3>
+          <div className="driver-stats-grid driver-stats-grid--2x2">
+            <StatCard label="Active" value={activeMission ? 1 : 0} accent />
+            <StatCard label="Assigned" value={activeMission?.status === 'ASSIGNED' ? 1 : 0} />
+            <StatCard label="Completed Today" value={stats?.completedMissions ?? 0} />
+            <StatCard label="Pending" value={activeMission ? 0 : 0} />
+          </div>
         </div>
       </div>
 
       {/* Ambulance strip */}
       {profile?.assignedAmbulance && (
         <div className="driver-amb-strip">
-          <Truck size={18} className="text-red-600" />
+          <Truck size={18} className="driver-amb-icon" />
           <span className="driver-amb-code">{profile.assignedAmbulance.ambulanceNumber}</span>
           <span className="driver-amb-sep">·</span>
           <span className="driver-amb-type">{profile.assignedAmbulance.vehicleType || 'Ambulance'}</span>
@@ -94,16 +118,20 @@ export function DriverDashboardOverview({
         <h3 className="driver-section-title">Quick Actions</h3>
         <div className="driver-quick-actions-grid">
           <Link href="/driver/shifts" className="driver-action-tile">
-            <PlayCircle size={20} /> Start Shift
+            <PlayCircle size={22} />
+            <span>Start Shift</span>
           </Link>
-          <Link href="/driver/missions/active" className="driver-action-tile">
-            <Siren size={20} /> Active Mission
+          <Link href="/driver/mission" className="driver-action-tile">
+            <Siren size={22} />
+            <span>Case Workspace</span>
           </Link>
           <a href="tel:+1911" className="driver-action-tile">
-            <Phone size={20} /> Contact Dispatcher
+            <Phone size={22} />
+            <span>Dispatcher</span>
           </a>
-          <Link href="/driver/incidents/new" className="driver-action-tile">
-            <AlertTriangle size={20} /> Report Incident
+          <Link href="/driver/incidents" className="driver-action-tile">
+            <AlertTriangle size={22} />
+            <span>Report Incident</span>
           </Link>
         </div>
       </div>
@@ -166,7 +194,7 @@ export function DriverDashboardOverview({
               {nextAction.label}
             </button>
           )}
-          <Link href="/driver/missions/active" className="driver-mission-detail-link">
+          <Link href="/driver/mission" className="driver-mission-detail-link">
             Open Mission Center <ArrowRight size={16} />
           </Link>
         </div>
@@ -175,19 +203,6 @@ export function DriverDashboardOverview({
           <div className="driver-no-mission-icon">🟢</div>
           <p className="driver-no-mission-title">No Active Mission</p>
           <p className="driver-no-mission-sub">Stand by for dispatch assignment</p>
-        </div>
-      )}
-
-      {/* Daily Statistics */}
-      {stats && (
-        <div className="driver-stats-section">
-          <h3 className="driver-section-title">Daily Statistics</h3>
-          <div className="driver-stats-grid">
-            <StatCard label="Missions Today" value={stats.completedMissions} accent />
-            <StatCard label="Avg Response" value={`${stats.avgResponseMinutes}m`} sub="minutes" />
-            <StatCard label="Success Rate" value={`${stats.completionRate}%`} />
-            <StatCard label="Attendance" value={currentShift === 'ON_DUTY' ? 'Present' : 'Off Duty'} />
-          </div>
         </div>
       )}
 

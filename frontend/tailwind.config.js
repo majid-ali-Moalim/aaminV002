@@ -59,6 +59,22 @@ module.exports = {
         info: {
           DEFAULT: "hsl(var(--info))",
         },
+        admin: {
+          bg: "hsl(var(--admin-bg))",
+          "bg-subtle": "hsl(var(--admin-bg-subtle))",
+          surface: "hsl(var(--admin-surface))",
+          "surface-raised": "hsl(var(--admin-surface-raised))",
+          "surface-muted": "hsl(var(--admin-surface-muted))",
+          border: "hsl(var(--admin-border))",
+          "border-subtle": "hsl(var(--admin-border-subtle))",
+          text: "hsl(var(--admin-text))",
+          "text-secondary": "hsl(var(--admin-text-secondary))",
+          "text-muted": "hsl(var(--admin-text-muted))",
+          topbar: "hsl(var(--admin-topbar))",
+          input: "hsl(var(--admin-input))",
+          "input-border": "hsl(var(--admin-input-border))",
+          hover: "hsl(var(--admin-hover))",
+        },
         ems: {
           primary: '#EF2D2D',
           bg: '#081120',

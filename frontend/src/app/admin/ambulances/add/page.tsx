@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Shield,
   Warehouse,
-  Stethoscope,
   Wind,
   HeartPulse,
   FileText,
@@ -101,7 +100,6 @@ export default function AddAmbulancePage() {
 
   const [stations, setStations] = useState<Station[]>([])
   const [drivers, setDrivers] = useState<Employee[]>([])
-  const [nurses, setNurses] = useState<Employee[]>([])
   const [ambulanceTypes, setAmbulanceTypes] = useState<AmbulanceTypeOption[]>([])
 
   const currentStep = STEPS[stepIndex]
@@ -134,17 +132,9 @@ export default function AddAmbulancePage() {
       const driverRole = roles.find((r: EmployeeRole) =>
         r.name.toUpperCase().includes('DRIVER'),
       )
-      const nurseRole = roles.find((r: EmployeeRole) =>
-        r.name.toUpperCase().includes('NURSE'),
-      )
-
       if (driverRole) {
         const driverList = await employeesService.getAll(driverRole.id)
         setDrivers(driverList.filter((d) => !d.assignedAmbulanceId))
-      }
-      if (nurseRole) {
-        const nurseList = await employeesService.getAll(nurseRole.id)
-        setNurses(nurseList.filter((n) => !n.assignedAmbulanceId))
       }
     } catch {
       toast.error('Failed to load form data')
@@ -159,8 +149,6 @@ export default function AddAmbulancePage() {
 
   const stationName = stations.find((s) => s.id === form.stationId)?.name
   const driverName = drivers.find((d) => d.id === form.assignedDriverId)
-  const nurseName = nurses.find((n) => n.id === form.assignedNurseId)
-
   const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
     setFieldErrors((prev) => {
@@ -265,10 +253,6 @@ export default function AddAmbulancePage() {
       if (form.assignedDriverId) {
         await ambulancesService.assignDriver(created.id, form.assignedDriverId)
       }
-      if (form.assignedNurseId) {
-        await ambulancesService.assignNurse(created.id, form.assignedNurseId)
-      }
-
       toast.success(`Ambulance ${created.ambulanceNumber} registered successfully`)
       router.push('/admin/ambulances')
     } catch (err: unknown) {
@@ -570,22 +554,6 @@ export default function AddAmbulancePage() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className={labelClass}>Assigned Nurse</label>
-                  <select
-                    className={inputClass}
-                    value={form.assignedNurseId}
-                    onChange={(e) => setField('assignedNurseId', e.target.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {nurses.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.firstName} {n.lastName}
-                        {n.user?.username ? ` (${n.user.username})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
             )}
 
@@ -644,12 +612,6 @@ export default function AddAmbulancePage() {
                     label: 'Primary Driver',
                     value: driverName
                       ? `${driverName.firstName} ${driverName.lastName}`
-                      : 'Unassigned',
-                  },
-                  {
-                    label: 'Assigned Nurse',
-                    value: nurseName
-                      ? `${nurseName.firstName} ${nurseName.lastName}`
                       : 'Unassigned',
                   },
                   {
@@ -753,10 +715,6 @@ export default function AddAmbulancePage() {
                 <div className="flex items-center gap-2 text-slate-600">
                   <User className="w-4 h-4 text-slate-400" />
                   {driverName ? `${driverName.firstName} ${driverName.lastName}` : 'No driver'}
-                </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Stethoscope className="w-4 h-4 text-slate-400" />
-                  {nurseName ? `${nurseName.firstName} ${nurseName.lastName}` : 'No nurse'}
                 </div>
                 <div className="flex gap-2 pt-1">
                   {form.oxygenAvailable && (

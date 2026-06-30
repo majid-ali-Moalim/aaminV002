@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import useSWR from 'swr'
 import { Search, Menu, Bell, Plus, User } from 'lucide-react'
 import { format } from 'date-fns'
 import { getModuleByPath, getNavItem, LEGACY_DISPATCHER_REDIRECTS } from '@/lib/dispatcher/navigation'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
+import { dispatcherDashboardApi } from '@/lib/dispatcherApi'
 
 function resolveTitle(pathname: string): string {
   if (pathname === '/dispatcher/profile') return 'My Profile'
@@ -39,6 +41,11 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
   const { profile } = useDispatcherAccess()
   const pathname = usePathname()
   const pageTitle = resolveTitle(pathname)
+  const { data: notificationStats } = useSWR('dispatcher-notification-stats', () =>
+    dispatcherDashboardApi.getNotificationStats(),
+    { refreshInterval: 30000 },
+  )
+  const unreadCount = notificationStats?.unread ?? notificationStats?.unreadCount ?? 0
 
   const firstName = profile?.firstName ?? ''
   const lastName = profile?.lastName ?? ''
@@ -103,14 +110,16 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
 
           {/* 1. Notifications */}
           <Link
-            href="/dispatcher/alerts/all"
+            href="/dispatcher/alerts/emergency"
             className="relative p-2 text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
             aria-label="Notifications"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-600 text-white text-[9px] font-bold flex items-center justify-center rounded-full border-2 border-white">
-              2
-            </span>
+            {unreadCount > 0 ? (
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-red-600 text-white text-[9px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            ) : null}
           </Link>
 
           {/* 2. New emergency */}

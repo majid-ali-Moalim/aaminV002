@@ -5,14 +5,16 @@ import { Bell } from 'lucide-react'
 import Link from 'next/link'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
+import { NurseBottomNav } from '@/components/nurse/NurseBottomNav'
 
 type Props = {
   title: string
   subtitle?: string
   children: ReactNode
+  mainClassName?: string
 }
 
-export function NursePageLayout({ title, subtitle, children }: Props) {
+export function NursePageLayout({ title, subtitle, children, mainClassName }: Props) {
   const { fullName } = useNurseEmployee()
   const { stats, connected } = useNotificationStore()
   const unread = stats?.unread ?? 0
@@ -36,7 +38,8 @@ export function NursePageLayout({ title, subtitle, children }: Props) {
           </Link>
         </div>
       </header>
-      <main className="nurse-main">{children}</main>
+      <main className={mainClassName ? `nurse-main ${mainClassName}` : 'nurse-main'}>{children}</main>
+      <NurseBottomNav />
     </div>
   )
 }

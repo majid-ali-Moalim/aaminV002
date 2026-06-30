@@ -5,41 +5,23 @@ export type WorkflowStepId =
   | 'ACCEPTED'
   | 'EN_ROUTE_SCENE'
   | 'ARRIVED_SCENE'
-  | 'PATIENT_ASSESSMENT'
-  | 'PATIENT_LOADED'
   | 'EN_ROUTE_HOSPITAL'
   | 'ARRIVED_HOSPITAL'
-  | 'PATIENT_HANDOVER'
   | 'MISSION_COMPLETED'
 
 export type WorkflowActionId =
   | 'accept'
   | 'view_details'
   | 'start_navigation'
-  | 'contact_dispatcher'
-  | 'open_gps'
   | 'update_eta'
   | 'request_backup'
   | 'report_delay'
   | 'mark_arrival'
-  | 'notify_dispatcher'
-  | 'record_condition'
-  | 'select_severity'
-  | 'select_hospital'
-  | 'confirm_onboard'
   | 'start_transport'
-  | 'navigate_hospital'
-  | 'share_location'
-  | 'send_eta_hospital'
   | 'mark_hospital_arrival'
-  | 'notify_hospital'
-  | 'complete_handover'
-  | 'capture_signature'
-  | 'upload_notes'
   | 'submit_report'
   | 'record_fuel'
   | 'record_mileage'
-  | 'mark_available'
   | 'advance'
 
 export type WorkflowAction = {
@@ -59,6 +41,46 @@ export type WorkflowStep = {
   backendStatus?: string
 }
 
+/** Compact 5-step timeline shown in the case workspace (transport only — clinical work is on the nurse side). */
+export type DriverTimelineStep = {
+  id: string
+  label: string
+  shortLabel: string
+  description: string
+  stepIds: WorkflowStepId[]
+}
+
+export const DRIVER_TIMELINE_STEPS: DriverTimelineStep[] = [
+  {
+    id: 'ACCEPT',
+    label: 'Accept Assignment',
+    shortLabel: 'Accept',
+    description: 'Review dispatch details and confirm you are responding.',
+    stepIds: ['ASSIGNED', 'ACCEPTED'],
+  },
+  {
+    id: 'EN_ROUTE',
+    label: 'En Route to Scene',
+    shortLabel: 'En Route',
+    description: 'Navigate to the incident location.',
+    stepIds: ['EN_ROUTE_SCENE'],
+  },
+  {
+    id: 'ON_SCENE',
+    label: 'On Scene',
+    shortLabel: 'On Scene',
+    description: 'Confirm arrival — the nurse handles patient care on scene.',
+    stepIds: ['ARRIVED_SCENE'],
+  },
+  {
+    id: 'TRANSPORT',
+    label: 'Transport to Hospital',
+    shortLabel: 'Transport',
+    description: 'Drive to the receiving facility and confirm hospital arrival.',
+    stepIds: ['EN_ROUTE_HOSPITAL', 'ARRIVED_HOSPITAL'],
+  },
+]
+
 export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
   {
     id: 'ASSIGNED',
@@ -68,20 +90,19 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     backendStatus: 'ASSIGNED',
     primaryAdvance: 'accept',
     actions: [
+      { id: 'view_details', label: 'Review Case Details', variant: 'primary' },
       { id: 'accept', label: 'Accept Assignment', variant: 'primary' },
-      { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'ACCEPTED',
     label: 'Accepted',
     shortLabel: 'Accepted',
-    description: 'Assignment accepted — prepare for response.',
+    description: 'Assignment accepted — start en route to the scene.',
     backendStatus: 'DISPATCHED',
     primaryAdvance: 'start_navigation',
     actions: [
-      { id: 'start_navigation', label: 'Start Navigation', variant: 'primary' },
-      { id: 'contact_dispatcher', label: 'Contact Dispatcher', variant: 'secondary' },
+      { id: 'start_navigation', label: 'Start En Route to Scene', variant: 'primary' },
       { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
@@ -89,11 +110,10 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     id: 'EN_ROUTE_SCENE',
     label: 'En Route to Scene',
     shortLabel: 'En Route',
-    description: 'Proceed to incident location using shared GPS coordinates.',
+    description: 'Proceed to the incident location.',
     backendStatus: 'DISPATCHED',
     primaryAdvance: 'mark_arrival',
     actions: [
-      { id: 'open_gps', label: 'Open GPS Navigation', variant: 'primary' },
       { id: 'mark_arrival', label: 'Mark Arrival at Scene', variant: 'primary' },
       { id: 'update_eta', label: 'Update ETA', variant: 'secondary' },
       { id: 'request_backup', label: 'Request Backup', variant: 'secondary' },
@@ -102,94 +122,54 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
   },
   {
     id: 'ARRIVED_SCENE',
-    label: 'Arrived at Scene',
+    label: 'On Scene',
     shortLabel: 'On Scene',
-    description: 'Confirm arrival and notify dispatch.',
-    backendStatus: 'ARRIVED_SCENE',
-    primaryAdvance: 'advance',
-    actions: [
-      { id: 'advance', label: 'Begin Patient Assessment', variant: 'primary' },
-      { id: 'notify_dispatcher', label: 'Notify Dispatcher', variant: 'secondary' },
-    ],
-  },
-  {
-    id: 'PATIENT_ASSESSMENT',
-    label: 'Patient Assessment',
-    shortLabel: 'Assessment',
-    description: 'Document patient condition and select destination.',
-    backendStatus: 'ARRIVED_SCENE',
-    primaryAdvance: 'advance',
-    actions: [
-      { id: 'record_condition', label: 'Record Patient Condition', variant: 'primary' },
-      { id: 'select_severity', label: 'Select Severity Level', variant: 'secondary' },
-      { id: 'select_hospital', label: 'Select Destination Hospital', variant: 'secondary' },
-    ],
-  },
-  {
-    id: 'PATIENT_LOADED',
-    label: 'Patient Loaded',
-    shortLabel: 'Loaded',
-    description: 'Confirm patient is onboard and ready for transport.',
+    description: 'Crew is on scene. Start transport when the nurse confirms the patient is ready.',
     backendStatus: 'ARRIVED_SCENE',
     primaryAdvance: 'start_transport',
     actions: [
-      { id: 'confirm_onboard', label: 'Confirm Patient On Board', variant: 'primary' },
-      { id: 'start_transport', label: 'Start Transport', variant: 'primary' },
+      { id: 'start_transport', label: 'Start Transport to Hospital', variant: 'primary' },
+      { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'EN_ROUTE_HOSPITAL',
     label: 'En Route to Hospital',
     shortLabel: 'Transport',
-    description: 'Transport patient to receiving facility.',
+    description: 'Transport the patient to the receiving facility.',
     backendStatus: 'TRANSPORTING',
     primaryAdvance: 'mark_hospital_arrival',
     actions: [
-      { id: 'navigate_hospital', label: 'Navigate to Hospital', variant: 'primary' },
       { id: 'mark_hospital_arrival', label: 'Mark Hospital Arrival', variant: 'primary' },
-      { id: 'share_location', label: 'Share Live Location', variant: 'secondary' },
-      { id: 'send_eta_hospital', label: 'Send ETA to Hospital', variant: 'secondary' },
+      { id: 'update_eta', label: 'Update ETA', variant: 'secondary' },
     ],
   },
   {
     id: 'ARRIVED_HOSPITAL',
-    label: 'Arrived at Hospital',
+    label: 'At Hospital',
     shortLabel: 'At Hospital',
-    description: 'Confirm hospital arrival and notify receiving staff.',
+    description: 'Patient delivered — the nurse completes handover and closes the mission.',
     backendStatus: 'ARRIVED_HOSPITAL',
-    primaryAdvance: 'advance',
     actions: [
-      { id: 'advance', label: 'Begin Patient Handover', variant: 'primary' },
-      { id: 'notify_hospital', label: 'Notify Receiving Hospital', variant: 'secondary' },
-    ],
-  },
-  {
-    id: 'PATIENT_HANDOVER',
-    label: 'Patient Handover',
-    shortLabel: 'Handover',
-    description: 'Complete clinical handover and documentation.',
-    backendStatus: 'ARRIVED_HOSPITAL',
-    primaryAdvance: 'complete_handover',
-    actions: [
-      { id: 'complete_handover', label: 'Complete Handover Form', variant: 'primary' },
-      { id: 'capture_signature', label: 'Capture Digital Signature', variant: 'secondary' },
-      { id: 'upload_notes', label: 'Upload Notes', variant: 'secondary' },
+      { id: 'view_details', label: 'View Case Summary', variant: 'secondary' },
+      { id: 'submit_report', label: 'Submit Run Report', variant: 'secondary' },
     ],
   },
   {
     id: 'MISSION_COMPLETED',
     label: 'Mission Completed',
     shortLabel: 'Complete',
-    description: 'Finalize mission report and return to service.',
+    description: 'Case closed by nurse — read-only summary.',
     backendStatus: 'COMPLETED',
-    actions: [
-      { id: 'submit_report', label: 'Submit Mission Report', variant: 'primary' },
-      { id: 'record_fuel', label: 'Record Fuel Usage', variant: 'secondary' },
-      { id: 'record_mileage', label: 'Record Mileage', variant: 'secondary' },
-      { id: 'mark_available', label: 'Mark Ambulance Available', variant: 'primary' },
-    ],
+    actions: [{ id: 'view_details', label: 'View Case Summary', variant: 'secondary' }],
   },
 ]
+
+const LEGACY_STEP_MAP: Record<string, WorkflowStepId> = {
+  PATIENT_ASSESSMENT: 'ARRIVED_SCENE',
+  PATIENT_LOADED: 'ARRIVED_SCENE',
+  PATIENT_HANDOVER: 'ARRIVED_HOSPITAL',
+}
 
 const PHASE_STORAGE_KEY = (missionId: string) => `eads-driver-workflow:${missionId}`
 const META_STORAGE_KEY = (missionId: string) => `eads-driver-workflow-meta:${missionId}`
@@ -198,6 +178,8 @@ export type WorkflowStageMeta = {
   timestamps: Partial<Record<WorkflowStepId, string>>
   gps: Partial<Record<WorkflowStepId, { lat: number; lng: number }>>
   notes: Partial<Record<WorkflowStepId, string>>
+  reviewedAt?: string
+  enRouteStartedAt?: string
   eta?: string
   severity?: string
   hospital?: string
@@ -206,9 +188,15 @@ export type WorkflowStageMeta = {
   signature?: string
 }
 
+export function markCaseReviewed(missionId: string) {
+  patchWorkflowMeta(missionId, { reviewedAt: new Date().toISOString() })
+}
+
 export function getStoredPhase(missionId: string): WorkflowStepId | null {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(PHASE_STORAGE_KEY(missionId)) as WorkflowStepId | null
+  const raw = sessionStorage.getItem(PHASE_STORAGE_KEY(missionId)) as WorkflowStepId | null
+  if (!raw) return null
+  return LEGACY_STEP_MAP[raw] ?? raw
 }
 
 export function setStoredPhase(missionId: string, phase: WorkflowStepId) {
@@ -255,23 +243,38 @@ export function resolveWorkflowStep(mission: DriverMission | null): WorkflowStep
   const stored = getStoredPhase(mission.id)
   const status = mission.status
 
-  if (status === 'COMPLETED') return 'MISSION_COMPLETED'
+  if (status === 'COMPLETED' || status === 'CANCELLED') return 'MISSION_COMPLETED'
   if (status === 'ARRIVED_HOSPITAL') {
-    if (stored === 'PATIENT_HANDOVER') return 'PATIENT_HANDOVER'
+    if (stored === 'MISSION_COMPLETED') return 'MISSION_COMPLETED'
     return 'ARRIVED_HOSPITAL'
   }
   if (status === 'TRANSPORTING') return 'EN_ROUTE_HOSPITAL'
-  if (status === 'ARRIVED_SCENE') {
-    if (stored === 'PATIENT_LOADED') return 'PATIENT_LOADED'
-    if (stored === 'PATIENT_ASSESSMENT') return 'PATIENT_ASSESSMENT'
+  if (status === 'ARRIVED_SCENE' || status === 'PATIENT_STABILIZED') {
+    if (stored === 'EN_ROUTE_HOSPITAL') return 'EN_ROUTE_HOSPITAL'
     return 'ARRIVED_SCENE'
   }
-  if (status === 'DISPATCHED') {
+  if (status === 'DISPATCHED' || status === 'EN_ROUTE') {
     if (stored === 'ACCEPTED') return 'ACCEPTED'
+    if (stored === 'EN_ROUTE_SCENE') return 'EN_ROUTE_SCENE'
     return 'EN_ROUTE_SCENE'
   }
   if (status === 'ASSIGNED') return 'ASSIGNED'
+  return stored || 'ASSIGNED'
+}
+
+export function stepFromBackendStatus(status: string): WorkflowStepId {
+  if (status === 'COMPLETED' || status === 'CANCELLED') return 'MISSION_COMPLETED'
+  if (status === 'ARRIVED_HOSPITAL') return 'ARRIVED_HOSPITAL'
+  if (status === 'TRANSPORTING') return 'EN_ROUTE_HOSPITAL'
+  if (status === 'ARRIVED_SCENE' || status === 'PATIENT_STABILIZED') return 'ARRIVED_SCENE'
+  if (status === 'DISPATCHED' || status === 'EN_ROUTE') return 'EN_ROUTE_SCENE'
   return 'ASSIGNED'
+}
+
+export function getDriverTimelineIndex(stepId: WorkflowStepId): number {
+  if (stepId === 'MISSION_COMPLETED') return DRIVER_TIMELINE_STEPS.length - 1
+  const idx = DRIVER_TIMELINE_STEPS.findIndex((t) => t.stepIds.includes(stepId))
+  return idx >= 0 ? idx : 0
 }
 
 export function getStepIndex(stepId: WorkflowStepId): number {

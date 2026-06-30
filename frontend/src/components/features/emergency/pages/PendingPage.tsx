@@ -12,7 +12,6 @@ import {
   ClipboardCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
@@ -21,6 +20,8 @@ import AssignModal from '@/components/features/emergency/AssignModal'
 import DispatcherTriagePanel from '@/components/features/emergency/DispatcherTriagePanel'
 import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
 import { ESCALATION_DELAY_MINUTES, getWaitMinutes } from '@/lib/emergency/dateFilters'
+import { useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
+import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
 export default function PendingRequestsPage() {
   return (
@@ -37,6 +38,7 @@ export default function PendingRequestsPage() {
 }
 
 function PendingRequestsContent() {
+  const portal = useEmergencyPortal()
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -55,8 +57,10 @@ function PendingRequestsContent() {
   const fetchRequests = useCallback(async (showLoader = false) => {
     try {
       if (showLoader) setIsLoading(true)
-      const data = await emergencyRequestsService.getAll()
-      const pending = Array.isArray(data) ? data.filter((r) => r.status === 'PENDING') : []
+      const data = await fetchEmergencyRequests(portal, portal === 'dispatcher' ? 'pending' : undefined)
+      const pending = Array.isArray(data)
+        ? data.filter((r) => r.status === 'PENDING' || r.status === 'REVIEWING')
+        : []
       setRequests(pending)
 
       setSelectedRequest((prev) => {
@@ -72,7 +76,7 @@ function PendingRequestsContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [portal])
 
   useEffect(() => {
     fetchRequests(true)
@@ -119,8 +123,9 @@ function PendingRequestsContent() {
             </p>
             <h1 className="text-3xl font-black tracking-tight">Pending Review &amp; Triage</h1>
             <p className="text-red-100/80 mt-2 max-w-2xl">
-              Review caller information, verify conscious status, breathing, and bleeding, adjust
-              priority if needed, then assign ambulance with driver and nurse.
+              {portal === 'dispatcher'
+                ? 'Unassigned cases in your region — review, triage, and assign a crew. Once assigned, cases move to your Active Missions.'
+                : 'Review caller information, verify conscious status, breathing, and bleeding, adjust priority if needed, then assign ambulance with driver and nurse.'}
             </p>
           </div>
           <Button

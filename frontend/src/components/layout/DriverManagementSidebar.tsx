@@ -9,9 +9,6 @@ import {
   UserCheck,
   Shuffle,
   History,
-  Calendar,
-  TrendingUp,
-  BarChart2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -41,9 +38,6 @@ const driverMenuItems: MenuItem[] = [
   { href: '/admin/drivers/active', label: 'Active Drivers', icon: UserCheck },
   { href: '/admin/drivers/assignments', label: 'Driver Assignments', icon: Shuffle, accent: 'info' },
   { href: '/admin/drivers/mission-history', label: 'Mission History', icon: History },
-  { href: '/admin/drivers/shifts', label: 'Driver Availability', icon: Calendar },
-  { href: '/admin/drivers/performance', label: 'Driver Performance', icon: TrendingUp },
-  { href: '/admin/drivers/reports', label: 'Reports', icon: BarChart2 },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {

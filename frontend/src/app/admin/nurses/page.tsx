@@ -10,9 +10,10 @@ import {
   Stethoscope, GraduationCap, Briefcase
 } from 'lucide-react'
 import { nursesService, systemSetupService } from '@/lib/api'
-import { Employee, Station } from '@/types'
+import { Employee, Station, Department } from '@/types'
 import { format } from 'date-fns'
 import { getStaffStatusLabel, getStaffStatusStyles } from '@/lib/staff/status'
+import NurseEditModal from '@/components/nurses/NurseEditModal'
 
 export default function NursesDashboard() {
   const router = useRouter()
@@ -20,6 +21,8 @@ export default function NursesDashboard() {
   const [stats, setStats] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [stations, setStations] = useState<Station[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [editingNurse, setEditingNurse] = useState<Employee | null>(null)
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -50,8 +53,12 @@ export default function NursesDashboard() {
 
   const fetchMasterData = async () => {
     try {
-      const stationsData = await systemSetupService.getStations()
+      const [stationsData, departmentsData] = await Promise.all([
+        systemSetupService.getStations(),
+        systemSetupService.getDepartments(),
+      ])
       setStations(Array.isArray(stationsData) ? stationsData.filter((s) => s.isActive !== false) : [])
+      setDepartments(Array.isArray(departmentsData) ? departmentsData : [])
     } catch (err) {
       console.error('Failed to fetch master data:', err)
     }
@@ -249,7 +256,12 @@ export default function NursesDashboard() {
                         <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm">
                           <Eye className="w-4 h-4 text-gray-400" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-sm"
+                          onClick={() => setEditingNurse(nurse)}
+                        >
                           <Edit className="w-4 h-4 text-gray-400" />
                         </Button>
                       </div>
@@ -261,6 +273,18 @@ export default function NursesDashboard() {
           )}
         </div>
       </div>
+
+      <NurseEditModal
+        nurse={editingNurse}
+        open={Boolean(editingNurse)}
+        stations={stations}
+        departments={departments}
+        onClose={() => setEditingNurse(null)}
+        onSaved={(updated) => {
+          setNurses((prev) => prev.map((n) => (n.id === updated.id ? updated : n)))
+          setEditingNurse(null)
+        }}
+      />
     </div>
   )
 }

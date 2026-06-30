@@ -1,4 +1,8 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_BASE = (
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://127.0.0.1:3001'
+).replace(/\/$/, '')
 
 /** Resolve stored upload path or relative URL to a browser-loadable image URL. */
 export function profilePhotoUrl(path?: string | null): string {

@@ -324,11 +324,13 @@ model UserPermission {
   grantedAt     DateTime  @default(now())
   grantedById   String?
   expiresAt     DateTime?
+  isActive      Boolean   @default(true)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, permissionKey])
   @@index([userId])
   @@index([expiresAt])
+  @@index([isActive])
   @@map("user_permissions")
 }
 
@@ -884,6 +886,23 @@ model ActivityLog {
   @@index([userId])
   @@index([entityType, entityId])
   @@map("activity_logs")
+}
+
+model WorkShift {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String   @unique
+  startTime       String
+  endTime         String
+  description     String?
+  gracePeriodMins Int      @default(15)
+  breakMinutes    Int      @default(0)
+  color           String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("work_shifts")
 }
 
 model ShiftRecord {

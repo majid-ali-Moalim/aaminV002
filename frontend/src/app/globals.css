@@ -4,49 +4,54 @@
 
 @layer base {
   :root {
-    --background: 130 60% 98%; /* Powder Blue / Off-White background */
-    --foreground: 222 47% 11%; /* Charcoal/Midnight text */
-    --primary: 355 78% 56%;    /* Emergency Red */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --primary: 355 78% 56%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 50% 23%;  /* Midnight Blue for sidebars/navigation */
+    --secondary: 215 50% 23%;
     --secondary-foreground: 210 40% 98%;
-    --accent: 203 39% 44%;     /* Clinical Blue for actions */
+    --accent: 203 39% 44%;
     --accent-foreground: 210 40% 98%;
     --destructive: 355 78% 46%;
     --destructive-foreground: 210 40% 98%;
-    --muted: 215 15% 90%;
-    --muted-foreground: 215 15% 45%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-    --border: 215 15% 85%;
-    --input: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
     --ring: 355 78% 56%;
-    --success: 152 43% 52%;
-    --warning: 43 100% 51%;
-    --info: 203 39% 44%;
+    --success: 152 69% 40%;
+    --warning: 38 92% 50%;
+    --info: 217 91% 60%;
     --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 222 47% 7%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 217 33% 12%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 217 33% 12%;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
+    --primary: 355 78% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 18%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 18%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 217 25% 22%;
+    --input: 217 25% 22%;
+    --ring: 355 78% 56%;
+    --success: 152 55% 45%;
+    --warning: 38 92% 50%;
+    --info: 217 91% 65%;
   }
 }
 
@@ -58,6 +63,17 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Sync React state when browsers autofill login fields */
+  @keyframes onAutoFillStart {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+
+  input:-webkit-autofill {
+    animation-name: onAutoFillStart;
+    animation-duration: 0.01s;
   }
 }
 
@@ -79,19 +95,19 @@
   }
   
   .status-pending {
-    @apply bg-yellow-100 text-yellow-800;
+    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300;
   }
-  
+
   .status-active {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300;
   }
-  
+
   .status-completed {
-    @apply bg-green-100 text-green-800;
+    @apply bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300;
   }
-  
+
   .status-cancelled {
-    @apply bg-red-100 text-red-800;
+    @apply bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300;
   }
 
   /* EMS / 911 Command Center — Admin shell */
@@ -114,4 +130,173 @@
   .ems-kpi-card {
     @apply bg-ems-panel border border-ems-border rounded-2xl p-4 hover:border-ems-primary/30 hover:-translate-y-0.5 transition-all duration-300;
   }
+}
+
+@keyframes site-header-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes site-top-bar-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes site-nav-enter {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.site-header-marquee {
+  animation: site-header-marquee 28s linear infinite;
+}
+
+.site-header-marquee:hover {
+  animation-play-state: paused;
+}
+
+.site-top-bar-enter {
+  animation: site-top-bar-enter 0.55s ease-out both;
+}
+
+.site-nav-enter {
+  animation: site-nav-enter 0.6s ease-out 0.12s both;
+}
+
+/* Shared My Permissions module (all portals) */
+.perm-module-loading {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.perm-module-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.perm-module-refresh {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.perm-module-refresh:hover {
+  text-decoration: underline;
+}
+
+.perm-module-card {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+}
+
+.dark .perm-module-card,
+.nurse-shell .perm-module-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.perm-module-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.perm-module-alert {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 13px;
+}
+
+.perm-module-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.perm-module-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.perm-module-item:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.perm-module-item.static {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.perm-module-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.perm-module-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.perm-module-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.perm-module-back:hover {
+  text-decoration: underline;
+}
+
+.perm-module-embed {
+  border-radius: 12px;
+  overflow: hidden;
 }

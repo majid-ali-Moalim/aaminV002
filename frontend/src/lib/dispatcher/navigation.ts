@@ -96,7 +96,10 @@ export const DISPATCHER_MODULES: NavModule[] = [
       { slug: 'ambulances', label: 'Ambulances', icon: Truck },
       { slug: 'drivers', label: 'Drivers', icon: Users },
       { slug: 'nurses', label: 'Nurses', icon: Stethoscope },
-      { slug: 'availability', label: 'Availability Board', icon: Activity },
+      { slug: 'ambulance-availability', label: 'Ambulance Availability', icon: Activity },
+      { slug: 'driver-availability', label: 'Driver Availability', icon: Users },
+      { slug: 'nurse-availability', label: 'Nurse Availability', icon: Stethoscope },
+      { slug: 'hospital-availability', label: 'Hospital Availability', icon: Building2 },
     ],
   },
   {
@@ -162,12 +165,10 @@ export const DISPATCHER_MODULES: NavModule[] = [
     label: 'My Permissions',
     icon: Lock,
     basePath: '/dispatcher/permissions',
-    description: 'Capabilities granted by your administrator',
+    description: 'Administrator-granted capabilities',
     defaultSlug: 'overview',
-    items: [
-      { slug: 'overview', label: 'All Capabilities', icon: Lock, exact: true },
-      { slug: 'granted', label: 'Admin Granted', icon: Shield, exact: true },
-    ],
+    standalone: true,
+    items: [{ slug: 'overview', label: 'My Permissions', icon: Lock, exact: true }],
   },
   {
     id: 'profile',
@@ -190,8 +191,8 @@ export function getModuleByPath(pathname: string): NavModule | undefined {
   }
   if (pathname === '/dispatcher/profile') return getModuleById('profile')
   if (pathname.startsWith('/dispatcher/patients')) return undefined
-  if (pathname.startsWith('/dispatcher/add-driver')) return getModuleById('driver-registration')
-  if (pathname.startsWith('/dispatcher/add-nurse')) return getModuleById('nurse-registration')
+  if (pathname.startsWith('/dispatcher/resources/drivers')) return getModuleById('resources')
+  if (pathname.startsWith('/dispatcher/resources/nurses')) return getModuleById('resources')
   return DISPATCHER_MODULES.find(
     (m) => m.id !== 'dashboard' && m.id !== 'profile' && pathname.startsWith(m.basePath),
   )
@@ -228,10 +229,10 @@ export function isViewActive(pathname: string, module: NavModule, slug: string):
 
 /** Map new tab slugs to existing dispatcher-app API views */
 export const EMERGENCY_VIEW_API: Record<string, string> = {
-  all: 'all-cases',
+  all: 'pending-dispatch',
   new: 'pending-dispatch',
   active: 'active-missions',
-  pending: 'dispatch-board',
+  pending: 'pending-dispatch',
   critical: 'critical',
   closed: 'closed',
 }
@@ -249,6 +250,10 @@ export const RESOURCE_VIEW_API: Record<string, string> = {
   drivers: 'drivers',
   nurses: 'nurses',
   availability: 'available',
+  'ambulance-availability': 'available',
+  'driver-availability': 'drivers-available',
+  'nurse-availability': 'nurses-available',
+  'hospital-availability': 'capacity',
 }
 
 export const MONITORING_VIEW_API: Record<string, string> = {

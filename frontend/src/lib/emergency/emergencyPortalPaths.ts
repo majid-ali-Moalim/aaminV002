@@ -6,7 +6,7 @@ export function emergencyPortalPaths(portal: EmergencyPortal = 'admin') {
 
   return {
     base,
-    all: base,
+    all: portal === 'dispatcher' ? `${base}/pending` : base,
     new: `${base}/new`,
     critical: `${base}/critical`,
     escalated: `${base}/escalated`,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -10,10 +10,10 @@ import {
 } from 'recharts'
 import {
   Stethoscope, Search, RefreshCw, Plus, Download, FileSpreadsheet, FileText,
-  Eye, Truck, X, Loader2, AlertCircle, ExternalLink, Clock, Activity, ChevronRight,
+  Eye, X, Loader2, AlertCircle, ExternalLink, Clock, Activity, ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { nursesService, ambulancesService } from '@/lib/api'
+import { nursesService } from '@/lib/api'
 import {
   type NurseAvailabilityOverview,
   type NurseAvailabilityRow,
@@ -22,7 +22,6 @@ import {
   NURSE_STATUS_CONFIG,
   formatTimeAgo,
 } from '@/lib/nurses/availability'
-import { Ambulance } from '@/types'
 
 const STATUS_TABS: { id: NurseStatusFilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -47,8 +46,6 @@ export default function NurseAvailabilityView() {
   const [detailData, setDetailData] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [statusModal, setStatusModal] = useState<Pick<NurseAvailabilityRow, 'id' | 'fullName'> | null>(null)
-  const [assignAmbulanceModal, setAssignAmbulanceModal] = useState<Pick<NurseAvailabilityRow, 'id' | 'fullName'> | null>(null)
-  const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const { data, isLoading, isValidating, mutate, error } = useSWR<NurseAvailabilityOverview>(
@@ -56,10 +53,6 @@ export default function NurseAvailabilityView() {
     () => nursesService.getAvailabilityOverview(),
     { refreshInterval: 15000, revalidateOnFocus: true },
   )
-
-  useEffect(() => {
-    ambulancesService.getAll().then(setAmbulances).catch(() => setAmbulances([]))
-  }, [])
 
   const openDetail = async (id: string) => {
     setDetailId(id)
@@ -89,20 +82,6 @@ export default function NurseAvailabilityView() {
     }
   }
 
-  const handleAssignAmbulance = async (nurseId: string, ambulanceId: string | null) => {
-    try {
-      setSubmitting(true)
-      await nursesService.assignAmbulance(nurseId, ambulanceId)
-      setAssignAmbulanceModal(null)
-      mutate()
-      if (detailId === nurseId) openDetail(nurseId)
-    } catch {
-      alert('Failed to assign ambulance')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const filteredRows = useMemo(() => {
     if (!data?.nurses) return []
     const q = search.trim().toLowerCase()
@@ -114,7 +93,7 @@ export default function NurseAvailabilityView() {
       if (specializationFilter && row.specialization !== specializationFilter) return false
       if (!q) return true
       const hay = [row.fullName, row.employeeCode ?? '', row.phone ?? '', row.specialization ?? '',
-        row.assignedAmbulance?.ambulanceNumber ?? '', row.currentCase?.trackingCode ?? '', row.station?.name ?? ''].join(' ').toLowerCase()
+        row.currentCase?.trackingCode ?? '', row.station?.name ?? ''].join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [data?.nurses, search, statusFilter, stationFilter, regionFilter, districtFilter, specializationFilter])
@@ -128,7 +107,6 @@ export default function NurseAvailabilityView() {
     Phone: r.phone ?? '—',
     Status: NURSE_STATUS_CONFIG[r.operationalStatus].label,
     Reason: r.unavailableReason ?? '—',
-    Ambulance: r.assignedAmbulance?.ambulanceNumber ?? '—',
     'Current Case': r.currentCase?.trackingCode ?? '—',
     Station: r.station?.name ?? '—',
     'Last Updated': format(new Date(r.updatedAt), 'yyyy-MM-dd HH:mm'),
@@ -267,7 +245,6 @@ export default function NurseAvailabilityView() {
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Specialization</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Ambulance</th>
                   <th className="px-4 py-3">Current Case</th>
                   <th className="px-4 py-3">Station</th>
                   <th className="px-4 py-3">Updated</th>
@@ -276,7 +253,7 @@ export default function NurseAvailabilityView() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">No nurses match your filters</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">No nurses match your filters</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/80">
                     <td className="px-4 py-3 font-mono text-slate-600">{row.employeeCode ?? '—'}</td>
@@ -286,7 +263,6 @@ export default function NurseAvailabilityView() {
                       <StatusBadge status={row.operationalStatus} />
                       {row.unavailableReason && <p className="text-[10px] text-slate-500 mt-0.5">{row.unavailableReason}</p>}
                     </td>
-                    <td className="px-4 py-3">{row.assignedAmbulance?.ambulanceNumber ?? '—'}</td>
                     <td className="px-4 py-3">
                       {row.currentCase ? <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link> : '—'}
                     </td>
@@ -372,7 +348,6 @@ export default function NurseAvailabilityView() {
                 <InfoField label="Reason" value={detailData.nurse.unavailableReason ?? 'Ready for dispatch'} />
                 <InfoField label="Medical Clearance" value={detailData.nurse.medicalClearanceStatus ?? '—'} />
                 <InfoField label="Station" value={detailData.nurse.station?.name ?? '—'} />
-                <InfoField label="Assigned Ambulance" value={detailData.assignedAmbulance?.ambulanceNumber ?? '—'} />
               </div>
               {detailData.currentCase && (
                 <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
@@ -396,7 +371,6 @@ export default function NurseAvailabilityView() {
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setStatusModal({ id: detailData.nurse.id, fullName: `${detailData.nurse.firstName} ${detailData.nurse.lastName}`.trim() })}>Change Status</Button>
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignAmbulanceModal({ id: detailData.nurse.id, fullName: `${detailData.nurse.firstName} ${detailData.nurse.lastName}`.trim() })}><Truck className="w-4 h-4 mr-1" /> Assign Ambulance</Button>
                 {detailData.currentCase && <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}><Button size="sm" className="rounded-xl bg-violet-600 hover:bg-violet-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>}
               </div>
             </div>
@@ -417,19 +391,6 @@ export default function NurseAvailabilityView() {
         </Modal>
       )}
 
-      {assignAmbulanceModal && (
-        <Modal onClose={() => setAssignAmbulanceModal(null)} title={`Assign Ambulance — ${assignAmbulanceModal.fullName}`}>
-          <div className="max-h-72 overflow-y-auto space-y-2">
-            <button type="button" disabled={submitting} onClick={() => handleAssignAmbulance(assignAmbulanceModal.id, null)} className="w-full p-3 rounded-xl border text-left text-sm text-slate-600 hover:bg-slate-50">Remove assignment</button>
-            {ambulances.map((amb) => (
-              <button key={amb.id} type="button" disabled={submitting} onClick={() => handleAssignAmbulance(assignAmbulanceModal.id, amb.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-violet-200 hover:bg-violet-50 text-left">
-                <div className="p-2 rounded-lg bg-violet-100 text-violet-600"><Truck className="w-4 h-4" /></div>
-                <div><p className="text-sm font-bold">{amb.ambulanceNumber}</p><p className="text-xs text-slate-500">{amb.plateNumber}</p></div>
-              </button>
-            ))}
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }
