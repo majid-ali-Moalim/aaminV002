@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { 
   Truck, 
   User, 
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { emergencyRequestsService } from '@/lib/api';
+import { dispatcherDashboardApi } from '@/lib/dispatcherApi';
 import { EmergencyRequest, Ambulance, Employee } from '@/types';
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel';
 
@@ -22,6 +24,8 @@ interface AssignModalProps {
 }
 
 const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }) => {
+  const pathname = usePathname();
+  const isDispatcherPortal = pathname?.startsWith('/dispatcher');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingUnits, setIsFetchingUnits] = useState(false);
   const [availableAmbulances, setAvailableAmbulances] = useState<Ambulance[]>([]);
@@ -40,22 +44,31 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
   const fetchUnits = async () => {
     try {
       setIsFetchingUnits(true);
-      const [ambulances, drivers, nurses] = await Promise.all([
-        emergencyRequestsService.getAvailableAmbulances(),
-        emergencyRequestsService.getAvailableDrivers(),
-        emergencyRequestsService.getAvailableNurses()
-      ]);
-      setAvailableAmbulances(ambulances);
-      const readyDrivers = filterDispatchReady(drivers);
-      const readyNurses = filterDispatchReady(nurses);
-      setAvailableDrivers(readyDrivers);
-      setAvailableNurses(readyNurses);
-      
+      let readyDrivers: Employee[] = [];
+
+      if (isDispatcherPortal) {
+        const regional = await dispatcherDashboardApi.getAssignableResources();
+        setAvailableAmbulances(regional.ambulances ?? []);
+        readyDrivers = filterDispatchReady(regional.drivers ?? []);
+        setAvailableDrivers(readyDrivers);
+        setAvailableNurses(filterDispatchReady(regional.nurses ?? []));
+      } else {
+        const [ambulances, drivers, nurses] = await Promise.all([
+          emergencyRequestsService.getAvailableAmbulances(),
+          emergencyRequestsService.getAvailableDrivers(),
+          emergencyRequestsService.getAvailableNurses(),
+        ]);
+        setAvailableAmbulances(ambulances);
+        readyDrivers = filterDispatchReady(drivers);
+        setAvailableDrivers(readyDrivers);
+        setAvailableNurses(filterDispatchReady(nurses));
+      }
+
       if (readyDrivers.length > 0 && !assignmentParams.driverId) {
-        setAssignmentParams(prev => ({ 
-          ...prev, 
+        setAssignmentParams(prev => ({
+          ...prev,
           driverId: readyDrivers[0].id,
-          ambulanceId: readyDrivers[0].assignedAmbulanceId || ''
+          ambulanceId: readyDrivers[0].assignedAmbulanceId || '',
         }));
       }
     } catch (err) {
@@ -74,6 +87,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
   const handleAssign = async () => {
     if (!assignmentParams.driverId) {
       return alert('Please select a driver');
+    }
+    if (!assignmentParams.nurseId) {
+      return alert('Please select a nurse — both driver and nurse are required for dispatch');
     }
 
     const selectedDriver = availableDrivers.find(d => d.id === assignmentParams.driverId);
@@ -216,7 +232,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select available Nurse</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">
+                  Select available Nurse <span className="text-red-600">*</span>
+                </h3>
               </div>
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                 {isFetchingUnits && availableNurses.length === 0 ? (
@@ -231,7 +249,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                 ) : availableNurses.map(nurse => (
                   <div
                     key={nurse.id}
-                    onClick={() => setAssignmentParams(prev => ({ ...prev, nurseId: nurse.id === prev.nurseId ? '' : nurse.id }))}
+                    onClick={() => setAssignmentParams(prev => ({ ...prev, nurseId: nurse.id }))}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${assignmentParams.nurseId === nurse.id
                         ? 'border-emerald-500 bg-emerald-50/50'
                         : 'border-slate-100 hover:border-slate-300 bg-white'
@@ -266,7 +284,10 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
         <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center sm:text-left">
             <span>Assignment Queue Ready</span>
-            <p className="text-blue-500 mt-0.5">{selectedDriver?.assignedAmbulance?.ambulanceNumber || 'UNITS-TBD'} / {selectedDriver?.firstName || 'STAFF-TBD'}</p>
+            <p className="text-blue-500 mt-0.5">
+              {selectedDriver?.assignedAmbulance?.ambulanceNumber || 'UNITS-TBD'} / {selectedDriver?.firstName || 'STAFF-TBD'}
+              {selectedNurse ? ` + ${selectedNurse.firstName}` : ' + Nurse required'}
+            </p>
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
             <Button 
@@ -278,7 +299,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             </Button>
             <Button
               onClick={handleAssign}
-              disabled={isSubmitting || !assignmentParams.driverId}
+              disabled={isSubmitting || !assignmentParams.driverId || !assignmentParams.nurseId}
               className="flex-1 sm:flex-none px-8 h-12 bg-red-600 hover:bg-red-700 text-white font-bold uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Confirm Dispatch'}

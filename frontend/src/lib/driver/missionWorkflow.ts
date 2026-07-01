@@ -193,6 +193,7 @@ export type WorkflowStageMeta = {
   fuel?: string
   mileage?: string
   signature?: string
+  runReportSubmitted?: boolean
 }
 
 export function markCaseReviewed(missionId: string) {

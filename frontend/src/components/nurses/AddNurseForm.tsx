@@ -20,6 +20,7 @@ import {
   Briefcase,
   CheckCircle2,
   AlertCircle,
+  Building2,
   Eye,
   EyeOff,
 } from 'lucide-react'
@@ -35,6 +36,8 @@ import {
 import {
   fetchNurseFormMasterData,
   validateMasterData,
+  suggestNurseDepartment,
+  nextNurseCode,
   type SelectOption,
 } from '@/lib/nurseFormMasterData'
 import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
@@ -42,12 +45,7 @@ import {
   uploadService,
   employeesService,
 } from '@/lib/api'
-import { Department, Region } from '@/types'
-import {
-  suggestEmployeeCode,
-  departmentsForRole,
-  defaultUsernameFromFirstName,
-} from '@/lib/staffEmployeeCode'
+import { Station, Department, Region, District } from '@/types'
 import { mapStaffShiftStatus } from '@/lib/staff/status'
 import {
   NurseFormErrors,
@@ -87,6 +85,8 @@ const STEP_FIELDS = {
   location: [
     'address',
     'regionId',
+    'districtId',
+    'stationId',
     'employeeCode',
     'departmentId',
     'employmentType',
@@ -96,14 +96,14 @@ const STEP_FIELDS = {
     'emergencyPhone',
   ],
   credentials: [
+    'licenseNumber',
     'qualification',
     'specialization',
-    'licenseNumber',
     'certificationUpload',
     'yearsOfExperience',
     'notes',
   ],
-  account: ['email', 'password', 'confirmPassword'],
+  account: ['email', 'username', 'password', 'confirmPassword'],
 } as const satisfies Record<StepId, readonly (keyof NurseFormErrors)[]>
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -175,6 +175,8 @@ export default function AddNurseForm() {
   const [createdNurse, setCreatedNurse] = useState<{ id: string; code: string; name: string } | null>(null)
 
   const [regions, setRegions] = useState<Region[]>([])
+  const [allDistricts, setAllDistricts] = useState<District[]>([])
+  const [allStations, setAllStations] = useState<Station[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [bloodGroupOptions, setBloodGroupOptions] = useState<SelectOption[]>([])
@@ -201,6 +203,8 @@ export default function AddNurseForm() {
     nationalId: '',
     address: '',
     regionId: '',
+    districtId: '',
+    stationId: '',
     emergencyContactName: '',
     emergencyPhone: '',
     relationship: '',
@@ -248,7 +252,9 @@ export default function AddNurseForm() {
 
   const applyMasterData = useCallback((data: Awaited<ReturnType<typeof fetchNurseFormMasterData>>) => {
     setRegions(data.regions)
-    setDepartments(departmentsForRole(data.departments, 'nurse'))
+    setAllDistricts(data.districts)
+    setAllStations(data.stations)
+    setDepartments(data.departments)
     setNurseRoleId(data.nurseRoleId)
     setGenderOptions(data.genderOptions)
     setBloodGroupOptions(data.bloodGroupOptions)
@@ -270,15 +276,14 @@ export default function AddNurseForm() {
     setMasterDataError(null)
     try {
       const data = applyMasterData(await fetchNurseFormMasterData())
-      const code = await suggestEmployeeCode('NUR', data.nurseRoleId)
+      const code = nextNurseCode(data.nurseStatsTotal)
       setNurseCode(code)
-      const roleDepts = departmentsForRole(data.departments, 'nurse')
-      const defaultDept = roleDepts[0]
+      const opsDept = suggestNurseDepartment(data.departments)
 
       setForm((f) => ({
         ...f,
         employeeCode: code,
-        departmentId: f.departmentId || defaultDept?.id || '',
+        departmentId: f.departmentId || opsDept?.id || '',
         employmentType: f.employmentType || data.employmentTypes[0]?.id || 'Full-time',
       }))
     } catch {
@@ -326,12 +331,60 @@ export default function AddNurseForm() {
     [departments, qualificationOptions, specializationOptions, employmentTypeOptions]
   )
 
+  const districtsForRegion = useMemo(() => {
+    if (!form.regionId) return []
+    const region = regions.find((r) => r.id === form.regionId)
+    if (region?.districts?.length) {
+      return region.districts.filter((d) => d.isActive !== false)
+    }
+    return allDistricts.filter((d) => d.regionId === form.regionId)
+  }, [form.regionId, regions, allDistricts])
+
+  const stationOptions = useMemo(() => allStations, [allStations])
+
+  const selectedRegion = useMemo(
+    () => regions.find((r) => r.id === form.regionId),
+    [regions, form.regionId]
+  )
+  const selectedDistrict = useMemo(
+    () =>
+      districtsForRegion.find((d) => d.id === form.districtId) ||
+      allDistricts.find((d) => d.id === form.districtId),
+    [districtsForRegion, allDistricts, form.districtId]
+  )
+  const selectedStation = useMemo(
+    () => allStations.find((s) => s.id === form.stationId),
+    [allStations, form.stationId]
+  )
+  const selectedDepartment = useMemo(
+    () => departments.find((d) => d.id === form.departmentId),
+    [departments, form.departmentId]
+  )
+
   const ageLimits = useMemo(() => getNurseAgeLimits(), [])
   const minJoinDate = useMemo(() => getMinJoinDate(form.dateOfBirth), [form.dateOfBirth])
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = (regionId: string) => {
-    patch({ regionId })
+    patch({ regionId, districtId: '' })
+  }
+
+  const handleDistrictChange = (districtId: string) => {
+    patch({ districtId })
+  }
+
+  const handleStationChange = (stationId: string) => {
+    const station = allStations.find((s) => s.id === stationId)
+    patch({
+      stationId,
+      assignedAmbulanceId: '',
+      ...(station
+        ? {
+            regionId: station.regionId || form.regionId,
+            districtId: station.districtId || form.districtId,
+          }
+        : {}),
+    })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -365,20 +418,19 @@ export default function AddNurseForm() {
 
     const address = form.address.trim() || undefined
 
-    const username = defaultUsernameFromFirstName(form.firstName, form.phone)
-
     return {
       role: 'EMPLOYEE' as const,
-      username,
+      username: form.username.trim(),
       email: form.email.trim(),
       password: form.password,
       employeeRoleId: nurseRoleId,
       departmentId: form.departmentId || undefined,
+      stationId: form.stationId || undefined,
       firstName,
       lastName: form.lastName.trim(),
       phone: form.phone.trim(),
       alternatePhone: form.alternatePhone.trim() || undefined,
-      status: 'ACTIVE' as const,
+      status: form.accountActive ? 'ACTIVE' : 'INACTIVE',
       employeeCode: form.employeeCode.trim() || nurseCode,
       gender: form.gender || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
@@ -408,11 +460,7 @@ export default function AddNurseForm() {
   const stepErrorCount = Object.keys(stepFieldErrors).length
 
   const validateStep = (s: StepId): boolean => {
-    const formForStep =
-      s === 'account'
-        ? { ...form, username: form.username || defaultUsernameFromFirstName(form.firstName, form.phone) }
-        : form
-    const result = validateNurseFormStep(s, formForStep, validationContext)
+    const result = validateNurseFormStep(s, form, validationContext)
     setFieldErrors((prev) => {
       const next = { ...prev }
       for (const field of STEP_FIELDS[s]) {
@@ -431,8 +479,8 @@ export default function AddNurseForm() {
     const idx = STEPS.findIndex((s) => s.id === step)
     if (idx < STEPS.length - 1) {
       const next = STEPS[idx + 1].id
-      if (next === 'account') {
-        patch({ username: defaultUsernameFromFirstName(form.firstName, form.phone) })
+      if (next === 'account' && !form.username && form.phone) {
+        patch({ username: phoneDigits(form.phone) })
       }
       setStep(next)
     }
@@ -453,12 +501,7 @@ export default function AddNurseForm() {
       return
     }
 
-    const accountForm = {
-      ...form,
-      username: form.username || defaultUsernameFromFirstName(form.firstName, form.phone),
-    }
-
-    const result = validateNurseForm(accountForm, validationContext)
+    const result = validateNurseForm(form, validationContext)
     setFieldErrors(result.errors)
     if (!result.valid) {
       if (result.firstMessage) toast.error(result.firstMessage)
@@ -508,6 +551,8 @@ export default function AddNurseForm() {
                 onClick={() => {
                   setCreatedNurse(null)
                   setStep('personal')
+                  setDistricts([])
+                  setStations([])
                   setFieldErrors({})
                   loadMasterData()
                   setForm({
@@ -522,6 +567,8 @@ export default function AddNurseForm() {
                     nationalId: '',
                     address: '',
                     regionId: '',
+                    districtId: '',
+                    stationId: '',
                     emergencyContactName: '',
                     emergencyPhone: '',
                     relationship: '',
@@ -624,6 +671,32 @@ export default function AddNurseForm() {
             uploadingPhoto={uploadingPhoto}
             onUpload={handlePhotoUpload}
           />
+
+          {(selectedDepartment || selectedRegion || selectedDistrict || selectedStation) && (
+            <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-red-100 space-y-2">
+              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Assignment</p>
+              {selectedDepartment && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">Department:</span> {selectedDepartment.name}
+                </p>
+              )}
+              {selectedRegion && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">Region:</span> {selectedRegion.name}
+                </p>
+              )}
+              {selectedDistrict && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">District:</span> {selectedDistrict.name}
+                </p>
+              )}
+              {selectedStation && (
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold text-slate-800">Station:</span> {selectedStation.name}
+                </p>
+              )}
+            </div>
+          )}
 
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-relaxed mt-6">
             Complete all steps to register a nurse with system login and optional ambulance assignment.
@@ -782,7 +855,18 @@ export default function AddNurseForm() {
 
                 {step === 'location' && (
                   <>
-                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Region and department" color="red" />
+                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Station assignment" color="red" />
+
+                    {(selectedRegion || selectedDistrict || selectedStation) && (
+                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
+                        <MapPin className="w-4 h-4 text-red-500 shrink-0" />
+                        <span>{selectedRegion?.name || '—'}</span>
+                        <ChevronRight className="w-3 h-3 text-red-300" />
+                        <span>{selectedDistrict?.name || 'Select district'}</span>
+                        <ChevronRight className="w-3 h-3 text-red-300" />
+                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2">
@@ -798,6 +882,24 @@ export default function AddNurseForm() {
                         />
                       </div>
                       <FormSelect
+                        label="Assigned Station"
+                        required
+                        icon={Building2}
+                        options={stationOptions}
+                        value={form.stationId}
+                        error={fieldErrors.stationId}
+                        disabled={loading}
+                        loading={loading}
+                        emptyHint={
+                          stationOptions.length
+                            ? 'Select Station'
+                            : 'No stations — add in System Setup'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                          handleStationChange(e.target.value)
+                        }
+                      />
+                      <FormSelect
                         label="Region"
                         required
                         icon={MapPin}
@@ -807,6 +909,40 @@ export default function AddNurseForm() {
                         emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
                       />
+                      <FormSelect
+                        label="District"
+                        required
+                        icon={MapPin}
+                        options={districtsForRegion}
+                        value={form.districtId}
+                        error={fieldErrors.districtId}
+                        disabled={!form.regionId || loading}
+                        loading={loading}
+                        emptyHint={
+                          !form.regionId
+                            ? 'Select a region first'
+                            : districtsForRegion.length
+                              ? 'Select District'
+                              : 'No districts in this region'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
+                      />
+
+                      {selectedStation && (
+                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
+                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
+                            Selected Station
+                          </p>
+                          <p className="text-sm font-bold text-slate-800">{selectedStation.name}</p>
+                          {selectedStation.address && (
+                            <p className="text-xs text-slate-600 mt-1">{selectedStation.address}</p>
+                          )}
+                          {selectedStation.phone && (
+                            <p className="text-xs text-slate-500 mt-1">Tel: {selectedStation.phone}</p>
+                          )}
+                        </div>
+                      )}
+
                       <FormInput
                         label="Employee Code"
                         required
@@ -832,6 +968,17 @@ export default function AddNurseForm() {
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ departmentId: e.target.value })}
                       />
+                      {selectedDepartment && (
+                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
+                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
+                            Selected Department
+                          </p>
+                          <p className="text-sm font-bold text-slate-800">{selectedDepartment.name}</p>
+                          {selectedDepartment.description && (
+                            <p className="text-xs text-slate-600 mt-1">{selectedDepartment.description}</p>
+                          )}
+                        </div>
+                      )}
                       <FormSelect
                         label="Employment Type"
                         required
@@ -1035,6 +1182,17 @@ export default function AddNurseForm() {
                         placeholder="nurse@example.com"
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ email: e.target.value.trim() })}
                       />
+                      <FormInput
+                        label="Username"
+                        required
+                        value={form.username}
+                        error={fieldErrors.username}
+                        maxLength={30}
+                        placeholder="Letters, numbers, underscore"
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          patch({ username: e.target.value.replace(/\s/g, '') })
+                        }
+                      />
                       <div className="space-y-1.5 group">
                         <div className="flex items-center justify-between">
                           <label className="flex items-center text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 group-focus-within:text-red-600 transition-colors">
@@ -1113,6 +1271,16 @@ export default function AddNurseForm() {
                           </div>
                         </div>
                       </div>
+                    </div>
+                    <div className="mt-6">
+                      <FormCheckbox
+                        label="Account Active"
+                        description="Nurse can log in to the nurse portal immediately"
+                        checked={form.accountActive}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          patch({ accountActive: e.target.checked })
+                        }
+                      />
                     </div>
                   </>
                 )}

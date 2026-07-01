@@ -1,4 +1,4 @@
-import {
+﻿import {
   User,
   HeartPulse,
   MapPin,
@@ -27,7 +27,7 @@ export const REQUEST_TYPES = [
   {
     value: 'EMERGENCY',
     label: 'Emergency',
-    desc: 'Life-threatening — immediate dispatch',
+    desc: 'Life-threatening ΓÇö immediate dispatch',
     icon: Siren,
     accent: 'border-red-500 bg-red-50 ring-red-500',
   },
@@ -40,6 +40,46 @@ export const REQUEST_TYPES = [
   },
 ] as const
 
+export const TRANSPORT_TYPES = [
+  { value: 'HOSPITAL_APPOINTMENT', label: 'Hospital Appointment' },
+  { value: 'HOSPITAL_DISCHARGE', label: 'Hospital Discharge' },
+  { value: 'INTER_HOSPITAL_TRANSFER', label: 'Inter-Hospital Transfer' },
+  { value: 'ROUTINE_MEDICAL', label: 'Routine Medical Transport' },
+  { value: 'FUNERAL', label: 'Funeral / Deceased Person Transport' },
+  { value: 'OTHER', label: 'Other' },
+] as const
+
+export type TransportTypeValue = (typeof TRANSPORT_TYPES)[number]['value']
+
+export const HOSPITAL_TRANSPORT_TYPES: TransportTypeValue[] = [
+  'HOSPITAL_APPOINTMENT',
+  'HOSPITAL_DISCHARGE',
+  'INTER_HOSPITAL_TRANSFER',
+  'ROUTINE_MEDICAL',
+]
+
+export const AGE_GROUPS = [
+  { value: 'INFANT', label: 'Infant (0ΓÇô1 year)', age: 0 },
+  { value: 'TODDLER', label: 'Toddler (2ΓÇô5 years)', age: 3 },
+  { value: 'CHILD', label: 'Child (6ΓÇô12 years)', age: 9 },
+  { value: 'TEENAGER', label: 'Teenager (13ΓÇô17 years)', age: 15 },
+  { value: 'YOUNG_ADULT', label: 'Young Adult (18ΓÇô35 years)', age: 26 },
+  { value: 'ADULT', label: 'Adult (36ΓÇô59 years)', age: 45 },
+  { value: 'SENIOR', label: 'Senior (60+ years)', age: 65 },
+] as const
+
+export type AgeGroupValue = (typeof AGE_GROUPS)[number]['value']
+
+export const BLEEDING_STATUSES = [
+  { value: 'NONE', label: 'No Bleeding' },
+  { value: 'MINOR', label: 'Minor Bleeding' },
+  { value: 'SEVERE', label: 'Severe Bleeding' },
+  { value: 'HEAVY_UNCONTROLLED', label: 'Heavy Uncontrolled Bleeding' },
+] as const
+
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const
+
 export const DRAFT_KEY = 'aamin-hire-ambulance-draft'
+export const LANG_KEY = 'aamin-hire-ambulance-lang'
 
 export const EMERGENCY_HOTLINE = '999'

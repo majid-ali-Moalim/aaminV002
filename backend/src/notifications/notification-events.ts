@@ -26,6 +26,7 @@ export type DispatchContext = {
   assignedUserIds?: string[];
   includeEmployeeRoles?: string[];
   directOnly?: boolean;
+  regionId?: string | null;
 };
 
 export type DispatchPayload = {
