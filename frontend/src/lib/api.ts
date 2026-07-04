@@ -323,9 +323,13 @@ export const patientsService = {
 
 // Emergency requests service
 export const emergencyRequestsService = {
-  getAll: async () => {
+  getAll: async (filters?: { queue?: string; status?: string }) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests')
+    const params = new URLSearchParams()
+    if (filters?.queue) params.set('queue', filters.queue)
+    if (filters?.status) params.set('status', filters.status)
+    const qs = params.toString()
+    return await api.get(`/api/emergency-requests${qs ? `?${qs}` : ''}`)
   },
 
   getById: async (id: string) => {

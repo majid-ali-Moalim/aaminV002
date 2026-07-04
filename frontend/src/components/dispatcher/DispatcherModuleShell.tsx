@@ -130,6 +130,21 @@ export function AmbulanceGrid({ items }: { items: any[] }) {
             {a.status}
           </span>
           {a.station?.name && <p className="text-[10px] text-gray-400 mt-1">{a.station.name}</p>}
+          {a.currentMission && (
+            <Link
+              href={`/dispatcher/emergency-requests/${a.currentMission.id}`}
+              className="block mt-2 text-[10px] font-bold text-red-600 hover:underline"
+            >
+              Case {a.currentMission.trackingCode} · {a.currentMission.status?.replace(/_/g, ' ')}
+            </Link>
+          )}
+          {(a.fuelLevel != null || a.readinessScore != null) && (
+            <p className="text-[10px] text-gray-400 mt-1">
+              {a.fuelLevel != null ? `Fuel ${a.fuelLevel}%` : ''}
+              {a.fuelLevel != null && a.readinessScore != null ? ' · ' : ''}
+              {a.readinessScore != null ? `Readiness ${a.readinessScore}` : ''}
+            </p>
+          )}
         </div>
       ))}
     </div>
@@ -146,9 +161,19 @@ export function CrewGrid({ items }: { items: any[] }) {
             {e.firstName} {e.lastName}
           </p>
           <p className="text-xs text-gray-500">{e.employeeRole?.name || 'Staff'}</p>
+          <p className="text-[10px] text-gray-400">{e.employeeCode || ''}</p>
           <span className="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
             {e.shiftStatus}
           </span>
+          {e.station?.name && <p className="text-[10px] text-gray-400 mt-1">{e.station.name}</p>}
+          {e.currentMission && (
+            <Link
+              href={`/dispatcher/emergency-requests/${e.currentMission.id}`}
+              className="block mt-2 text-[10px] font-bold text-red-600 hover:underline"
+            >
+              On case {e.currentMission.trackingCode} · {e.currentMission.status?.replace(/_/g, ' ')}
+            </Link>
+          )}
         </div>
       ))}
     </div>

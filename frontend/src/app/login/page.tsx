@@ -6,9 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { getPostLoginPath } from '@/lib/authRedirect'
 import { isApiNetworkError } from '@/lib/api'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react'
 import AaminLogo from '@/components/brand/AaminLogo'
 import { AuthPortalFooter } from '@/components/auth/AuthPortalTopBar'
+import { PublicThemeToggle } from '@/components/public/PublicThemeToggle'
 
 function syncAutofillValues(
   setEmail: (v: string) => void,
@@ -95,7 +96,11 @@ function LoginForm() {
         axiosErr?.response?.data?.message ||
         axiosErr?.message ||
         'Invalid credentials. Please try again.'
-      setError(message)
+      const hint =
+        message === 'Invalid credentials' || message === 'Invalid credentials. Please try again.'
+          ? ' Check your email/username and password, or use Forgot password.'
+          : ''
+      setError(`${message}${hint}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -103,30 +108,40 @@ function LoginForm() {
 
   if (!loading && user && token) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-red-600 animate-spin" aria-label="Redirecting" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors">
+      <div className="max-w-md mx-auto w-full px-4 pt-6 flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-red-600 dark:text-slate-300 dark:hover:text-red-400 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to home
+        </Link>
+        <PublicThemeToggle compact />
+      </div>
       <div className="flex-1 flex items-center justify-center p-4 py-10">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
             <div className="flex justify-center mb-4">
               <AaminLogo size="auth" width={160} priority />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-1">Login</h1>
-            <p className="text-slate-600 text-sm">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Login</h1>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
               Sign in to your Aamin Ambulance account
             </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 shadow-sm">
             <form onSubmit={handleSubmit} className="space-y-5" noValidate={false}>
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Email / Username
                 </label>
                 <input
@@ -137,7 +152,7 @@ function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onInput={(e) => setEmail(e.currentTarget.value)}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   placeholder="Enter your email or username"
                   required
                   disabled={isSubmitting}
@@ -145,7 +160,7 @@ function LoginForm() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Password
                 </label>
                 <div className="relative">
@@ -157,7 +172,7 @@ function LoginForm() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onInput={(e) => setPassword(e.currentTarget.value)}
-                    className="w-full px-4 py-2.5 pr-11 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                    className="w-full px-4 py-2.5 pr-11 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                     placeholder="Enter your password"
                     required
                     disabled={isSubmitting}
@@ -165,7 +180,7 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                     disabled={isSubmitting}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -175,8 +190,8 @@ function LoginForm() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-red-700 text-sm">{error}</p>
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
                 </div>
               )}
 
@@ -203,7 +218,7 @@ function LoginForm() {
             </form>
 
             <div className="mt-5 text-center">
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
                 Need help? Contact{' '}
                 <a href="mailto:info@aaminambulance.com" className="text-red-600 hover:underline">
                   info@aaminambulance.com

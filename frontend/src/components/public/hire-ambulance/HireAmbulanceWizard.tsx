@@ -67,10 +67,10 @@ type District = { id: string; name: string }
 type Hospital = { id: string; name: string }
 
 const inputClass =
-  'w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100'
+  'w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
 const selectClass =
-  'w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100'
-const labelClass = 'block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2'
+  'w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
+const labelClass = 'block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2'
 
 function FieldLabel({ children, required }: { children: ReactNode; required?: boolean }) {
   return (
@@ -91,10 +91,10 @@ function SectionCard({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+    <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
       <div className="mb-6">
-        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
-        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
+        {subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
       </div>
       {children}
     </div>
@@ -102,12 +102,9 @@ function SectionCard({
 }
 
 const STEP_ICONS: Record<StepId, ComponentType<{ className?: string }>> = {
-  urgency: Clock,
-  identity: User,
-  patient: HeartPulse,
+  emergency: Clock,
+  request: User,
   location: Globe,
-  details: Wind,
-  review: Shield,
 }
 
 export default function HireAmbulanceWizard() {
@@ -468,7 +465,7 @@ export default function HireAmbulanceWizard() {
     }
   }
 
-  const reviewForm = currentStep === 'review' ? getValues() : null
+  const reviewForm = currentStep === 'location' ? getValues() : null
   const reviewRows = reviewForm
     ? [
         { label: t.review.requestType, value: isEmergency ? t.requestType.emergency : t.requestType.nonEmergency },
@@ -516,8 +513,8 @@ export default function HireAmbulanceWizard() {
     : []
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50/40 pb-32 ${PUBLIC_HEADER_OFFSET}`}>
-      <section className="border-b border-slate-100 bg-white/80 backdrop-blur">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-32 ${PUBLIC_HEADER_OFFSET}`}>
+      <section className="border-b border-slate-100 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
           <a
             href={`tel:${EMERGENCY_HOTLINE}`}
@@ -526,7 +523,7 @@ export default function HireAmbulanceWizard() {
             <Phone className="h-4 w-4" />
             {t.emergencyHotline}: {EMERGENCY_HOTLINE}
           </a>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
             <button
               type="button"
               onClick={() => setLanguage('en')}
@@ -552,19 +549,19 @@ export default function HireAmbulanceWizard() {
       <section className="px-4 pb-6 pt-8">
         <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_300px]">
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               {t.heroTitle} <span className="text-red-600">{t.heroTitleAccent}</span>
             </h1>
-            <p className="mt-2 max-w-2xl text-slate-600">{t.heroSubtitle}</p>
+            <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">{t.heroSubtitle}</p>
           </div>
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-widest text-slate-400">{t.fleetLive}</p>
             <div className="mt-3 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100">
                 <Truck className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <p className="text-2xl font-black text-slate-900">{fleet.available}</p>
+                <p className="text-2xl font-black text-slate-900 dark:text-white">{fleet.available}</p>
                 <p className="text-xs text-slate-500">{t.fleetAvailable}</p>
               </div>
             </div>
@@ -581,7 +578,7 @@ export default function HireAmbulanceWizard() {
         </div>
       </section>
 
-      <div className="sticky top-[7.25rem] z-20 border-y border-slate-100 bg-white/90 px-4 py-4 backdrop-blur">
+      <div className="sticky top-[7.25rem] z-20 border-y border-slate-100 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-4 py-4 backdrop-blur">
         <div className="mx-auto w-full max-w-6xl">
           <div className="flex gap-1 overflow-x-auto pb-1">
             {STEPS.map((step, index) => {
@@ -641,7 +638,7 @@ export default function HireAmbulanceWizard() {
             </div>
           ) : null}
 
-          {currentStep === 'urgency' ? (
+          {currentStep === 'emergency' ? (
             <>
               <SectionCard title={t.requestType.title} subtitle={t.requestType.subtitle}>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -822,7 +819,7 @@ export default function HireAmbulanceWizard() {
             </>
           ) : null}
 
-          {currentStep === 'identity' ? (
+          {currentStep === 'request' ? (
             <SectionCard title={t.identity.title} subtitle={t.identity.subtitle}>
               <FieldLabel required>{t.identity.areYouPatient}</FieldLabel>
               <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -898,7 +895,7 @@ export default function HireAmbulanceWizard() {
             </SectionCard>
           ) : null}
 
-          {currentStep === 'patient' ? (
+          {currentStep === 'request' ? (
             <SectionCard title={t.patient.title} subtitle={t.patient.subtitle}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -1131,7 +1128,7 @@ export default function HireAmbulanceWizard() {
             </>
           ) : null}
 
-          {currentStep === 'details' ? (
+          {currentStep === 'request' ? (
             <SectionCard title={t.details.title} subtitle={t.details.subtitle}>
               <div className="space-y-6">
                 <div>
@@ -1222,7 +1219,7 @@ export default function HireAmbulanceWizard() {
             </SectionCard>
           ) : null}
 
-          {currentStep === 'review' ? (
+          {currentStep === 'location' && reviewForm ? (
             <>
               <SectionCard title={t.review.title} subtitle={t.review.subtitle}>
                 <div className="space-y-2">

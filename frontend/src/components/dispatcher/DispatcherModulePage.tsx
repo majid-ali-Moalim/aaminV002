@@ -91,6 +91,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
         )
         return {
           items: availDrivers,
+          onMission: onMission,
           stats: {
             total: drivers.length,
             available: availDrivers.length,
@@ -115,6 +116,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
         const availNurses = available.items ?? []
         return {
           items: availNurses,
+          onMission,
           stats: {
             total: nurses.length,
             available: availNurses.length,
@@ -248,7 +250,11 @@ export default function DispatcherModulePage({
       return (
         <DispatcherPanel title={navItem.label} empty={!items.length ? 'No cases in this queue' : undefined}>
           {(overview?.region) && (
-            <p className="text-xs text-gray-500 mb-3">Regional cases · {overview.region}</p>
+            <p className="text-xs text-gray-500 mb-3">
+              {view === 'pending-dispatch' || view === 'dispatch-board'
+                ? `Unassigned cases in your region · ${overview.region}`
+                : `Cases you handle · ${overview.region}`}
+            </p>
           )}
           <div className="flex justify-end mb-3">
             <Link
@@ -285,7 +291,7 @@ export default function DispatcherModulePage({
         const maintItems = (data as any)?.maintenance?.items ?? []
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional ambulance fleet{regionLabel}</p>
+            <p className="text-sm text-gray-600">Regional ambulance fleet{regionLabel} — only ambulances in your assigned region</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 ['Available', avail.length, 'text-emerald-600'],
@@ -313,9 +319,12 @@ export default function DispatcherModulePage({
 
       if (view === 'driver-availability') {
         const stats = (data as any)?.stats ?? {}
+        const onMissionDrivers = ((data as any)?.onMission?.items ?? []).filter((e: any) =>
+          String(e.employeeRole?.name ?? '').toLowerCase().includes('driver'),
+        )
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional driver availability{regionLabel}</p>
+            <p className="text-sm text-gray-600">Regional driver availability{regionLabel} — only drivers in your assigned region</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 ['Available', stats.available ?? items.length],
@@ -332,6 +341,11 @@ export default function DispatcherModulePage({
             <DispatcherPanel title="Available Drivers" empty={!items.length ? 'No drivers available' : undefined}>
               <CrewGrid items={items} />
             </DispatcherPanel>
+            {onMissionDrivers.length > 0 && (
+              <DispatcherPanel title="Drivers On Mission">
+                <CrewGrid items={onMissionDrivers} />
+              </DispatcherPanel>
+            )}
           </div>
         )
       }
@@ -340,7 +354,7 @@ export default function DispatcherModulePage({
         const stats = (data as any)?.stats ?? {}
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional nurse availability{regionLabel}</p>
+            <p className="text-sm text-gray-600">Regional nurse availability{regionLabel} — only nurses in your assigned region</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 ['Available', stats.available ?? items.length],
@@ -357,6 +371,17 @@ export default function DispatcherModulePage({
             <DispatcherPanel title="Available Nurses" empty={!items.length ? 'No nurses available' : undefined}>
               <CrewGrid items={items} />
             </DispatcherPanel>
+            {((data as any)?.onMission?.items ?? []).filter((e: any) =>
+              String(e.employeeRole?.name ?? '').toLowerCase().includes('nurse'),
+            ).length > 0 && (
+              <DispatcherPanel title="Nurses On Mission">
+                <CrewGrid
+                  items={((data as any)?.onMission?.items ?? []).filter((e: any) =>
+                    String(e.employeeRole?.name ?? '').toLowerCase().includes('nurse'),
+                  )}
+                />
+              </DispatcherPanel>
+            )}
           </div>
         )
       }
@@ -365,7 +390,7 @@ export default function DispatcherModulePage({
         const stats = (data as any)?.stats ?? {}
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional hospital capacity{regionLabel}</p>
+            <p className="text-sm text-gray-600">Regional hospital capacity{regionLabel} — hospitals in your assigned region only</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
                 ['Hospitals', stats.total ?? items.length],
@@ -521,16 +546,19 @@ export default function DispatcherModulePage({
       const s = overview.summary
       const cases = overview.cases ?? []
       const breakdown = overview.statusBreakdown ?? []
+      const priorityBreakdown = overview.priorityBreakdown ?? []
+      const attendance = overview.attendance ?? []
       return (
         <div className="space-y-6">
           <p className="text-sm text-gray-600">
-            Reports for cases you handle
+            Reports for cases you handle only — not system-wide totals
             {overview.region ? ` · ${overview.region}` : ''}
           </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {[
               ['My Cases', s.totalCases],
               ['Completed Today', s.completedToday],
+              ['Completed This Month', s.completedMonth],
               ['Avg Response (min)', s.avgResponseMinutes ?? '—'],
               ['Active Cases', s.activeCases],
             ].map(([label, val]) => (
@@ -552,11 +580,24 @@ export default function DispatcherModulePage({
               </div>
             </DispatcherPanel>
           )}
+          {priorityBreakdown.length > 0 && (
+            <DispatcherPanel title="Priority Breakdown">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {priorityBreakdown.map((b: any) => (
+                  <div key={b.priority} className="bg-gray-50 rounded-lg p-3 text-center">
+                    <p className="text-xl font-black text-gray-900">{b.count}</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase">{b.priority}</p>
+                  </div>
+                ))}
+              </div>
+            </DispatcherPanel>
+          )}
           <DispatcherPanel title="Case Report Data" empty={!cases.length ? 'No cases in your scope' : undefined}>
             <EmergencyTable items={cases} />
           </DispatcherPanel>
-          {(overview.attendance?.length ?? 0) > 0 && (
-            <DispatcherPanel title="Regional Crew Attendance">
+          {attendance.length > 0 && (
+            <DispatcherPanel title="Crew Attendance (Your Cases)">
+              <p className="text-xs text-gray-500 mb-3">Drivers and nurses assigned to cases you handle</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -568,7 +609,7 @@ export default function DispatcherModulePage({
                     </tr>
                   </thead>
                   <tbody>
-                    {overview.attendance.map((a: any) => (
+                    {attendance.map((a: any) => (
                       <tr key={a.id} className="border-b border-gray-50">
                         <td className="py-2">{a.employee?.firstName} {a.employee?.lastName}</td>
                         <td className="py-2">{a.employee?.employeeRole?.name}</td>

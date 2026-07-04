@@ -1,4 +1,4 @@
-﻿import {
+import {
   User,
   HeartPulse,
   MapPin,
@@ -13,12 +13,9 @@ import { API_BASE_URL } from '@/lib/api'
 export const API_BASE = API_BASE_URL
 
 export const STEPS = [
-  { id: 'urgency', label: 'Urgency', icon: Siren },
-  { id: 'identity', label: 'Identity', icon: User },
-  { id: 'patient', label: 'Patient', icon: HeartPulse },
+  { id: 'emergency', label: 'Emergency', icon: Siren },
+  { id: 'request', label: 'Request', icon: User },
   { id: 'location', label: 'Location', icon: MapPin },
-  { id: 'details', label: 'Details', icon: Globe },
-  { id: 'review', label: 'Review', icon: ClipboardCheck },
 ] as const
 
 export type StepId = (typeof STEPS)[number]['id']
@@ -27,7 +24,7 @@ export const REQUEST_TYPES = [
   {
     value: 'EMERGENCY',
     label: 'Emergency',
-    desc: 'Life-threatening ΓÇö immediate dispatch',
+    desc: 'Life-threatening — immediate dispatch',
     icon: Siren,
     accent: 'border-red-500 bg-red-50 ring-red-500',
   },

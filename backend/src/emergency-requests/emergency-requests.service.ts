@@ -968,6 +968,7 @@ export class EmergencyRequestsService {
         createdById: employeeId
           ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
           : undefined,
+        regionId: existing.regionId ?? null,
       },
     });
 

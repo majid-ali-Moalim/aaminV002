@@ -1,4 +1,4 @@
-﻿export type HireLang = 'en' | 'so'
+export type HireLang = 'en' | 'so'
 
 const en = {
   langLabel: 'Language',
@@ -26,12 +26,9 @@ const en = {
   helpHotline: 'For immediate life-threatening emergencies, also call',
   // Steps
   steps: {
-    urgency: 'Urgency',
-    identity: 'Identity',
-    patient: 'Patient',
+    emergency: 'Emergency',
+    request: 'Request',
     location: 'Location',
-    details: 'Details',
-    review: 'Review',
   },
   requestType: {
     title: 'Request Type',
@@ -270,12 +267,9 @@ const so = {
   helpCall: 'Dispatcher ayaa ku soo wici doona si uu u xaqiijiyo faahfaahinta.',
   helpHotline: 'Haddii ay tahay degdeg halis ah, sidoo kale wac',
   steps: {
-    urgency: 'Mudnaan',
-    identity: 'Aqoonsi',
-    patient: 'Bukaanka',
+    emergency: 'Degdeg',
+    request: 'Codsi',
     location: 'Goobta',
-    details: 'Faahfaahin',
-    review: 'Dib u eeg',
   },
   requestType: {
     title: 'Nooca Codsiga',

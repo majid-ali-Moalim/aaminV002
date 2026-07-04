@@ -71,6 +71,18 @@ export class NotificationDispatchService {
     return employees.map((e) => e.userId).filter(Boolean);
   }
 
+  async findDispatcherUserIdsByRegion(regionId: string): Promise<string[]> {
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        status: 'ACTIVE',
+        employeeRole: { name: { contains: 'Dispatcher', mode: 'insensitive' } },
+        station: { regionId },
+      },
+      select: { userId: true },
+    });
+    return employees.map((e) => e.userId).filter(Boolean);
+  }
+
   async resolveRecipients(
     eventKey: NotificationEventKey,
     context: DispatchContext = {},
@@ -87,7 +99,13 @@ export class NotificationDispatchService {
     }
 
     if (rules.employeeRoleNames?.length) {
-      ids.push(...(await this.findEmployeeUserIdsByRoleNames(rules.employeeRoleNames)));
+      for (const roleName of rules.employeeRoleNames) {
+        if (roleName === 'Dispatcher' && context.regionId) {
+          ids.push(...(await this.findDispatcherUserIdsByRegion(context.regionId)));
+        } else {
+          ids.push(...(await this.findEmployeeUserIdsByRoleNames([roleName])));
+        }
+      }
     }
 
     if (context.includeEmployeeRoles?.length) {

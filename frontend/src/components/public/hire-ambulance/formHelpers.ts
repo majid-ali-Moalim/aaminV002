@@ -1,4 +1,4 @@
-﻿import { StepId } from './constants'
+import { StepId } from './constants'
 import {
   AGE_GROUPS,
   HOSPITAL_TRANSPORT_TYPES,
@@ -230,6 +230,7 @@ export function validateStep(
   const emergency = isEmergencyRequest(data)
 
   switch (step) {
+    case 'emergency':
     case 'urgency': {
       if (!data.requestType) return t.validation.requestType
       if (!emergency) {
@@ -245,6 +246,31 @@ export function validateStep(
         if (!data.bleedingStatus) return t.validation.bleeding
         if (!data.consciousStatus) return t.validation.conscious
         if (!data.breathingStatus) return t.validation.breathing
+      }
+      return null
+    }
+    case 'request': {
+      if (!data.isPatient) return t.validation.isPatient
+      if (data.isPatient === 'NO') {
+        if (!data.callerName.trim()) return t.validation.callerName
+        if (!data.callerRelationship) return t.validation.relationship
+      }
+      if (!data.callerPhone.trim()) return t.validation.phone
+      if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
+      if (data.isPatient === 'YES' && !data.patientName.trim()) return t.validation.patientName
+      if (data.isPatient === 'YES') {
+        if (!data.dateOfBirth) return t.validation.dob
+        const age = calculateAgeFromDateOfBirth(data.dateOfBirth)
+        if (age === null) return t.validation.dobInvalid
+      } else if (!data.ageGroup) {
+        return t.validation.ageGroup
+      }
+      if (
+        !isEmergencyRequest(data) &&
+        isHospitalTransport(data.transportType) &&
+        !data.destinationHospital.trim()
+      ) {
+        return t.validation.destinationHospital
       }
       return null
     }
@@ -288,16 +314,7 @@ export function validateStep(
           return t.validation.destination
         }
       }
-      return null
-    }
-    case 'details': {
-      if (
-        !isEmergencyRequest(data) &&
-        isHospitalTransport(data.transportType) &&
-        !data.destinationHospital.trim()
-      ) {
-        return t.validation.destinationHospital
-      }
+      if (!data.consent) return t.validation.consent
       return null
     }
     case 'review':
@@ -312,7 +329,7 @@ export function validateAllSteps(
   data: HireFormValues,
   context: ValidationContext,
 ): { step: StepId; message: string } | null {
-  const steps: StepId[] = ['urgency', 'identity', 'patient', 'location', 'details', 'review']
+  const steps: StepId[] = ['emergency', 'request', 'location']
   for (const step of steps) {
     const err = validateStep(step, data, context)
     if (err) return { step, message: err }
