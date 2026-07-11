@@ -9,6 +9,7 @@ export interface DashboardKpiItem {
 }
 
 export interface UnifiedDashboardSummary {
+  totalCases: number
   totalEmergencyCases: number
   activeCases: number
   pendingCases: number
@@ -23,6 +24,11 @@ export interface UnifiedDashboardSummary {
   cancelledCases: number
   averageResponseTimeMinutes: number | null
   delayedCases: number
+  totalAmbulances: number
+  totalDrivers: number
+  totalNurses: number
+  totalDispatchers: number
+  totalHospitals: number
   /** @deprecated use pendingCases */
   pendingQueue: number
   highPriority: number

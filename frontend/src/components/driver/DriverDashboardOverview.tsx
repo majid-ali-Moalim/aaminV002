@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import {
   MapPin, User, Truck, ArrowRight, PlayCircle, StopCircle,
-  AlertTriangle, CheckCircle, Loader2, Phone, Siren, Clock, Coffee,
+  AlertTriangle, CheckCircle, Loader2, Phone, Siren, Clock,
 } from 'lucide-react'
 import { MissionStatusBadge, PriorityBadge, ShiftBadge, StatCard, DriverSkeleton } from '@/components/driver/DriverUI'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
@@ -117,10 +117,10 @@ export function DriverDashboardOverview({
       <div className="driver-card">
         <h3 className="driver-section-title">Quick Actions</h3>
         <div className="driver-quick-actions-grid">
-          <Link href="/driver/shifts" className="driver-action-tile">
+          <a href="#shift-controls" className="driver-action-tile">
             <PlayCircle size={22} />
-            <span>Start Shift</span>
-          </Link>
+            <span>Clock In</span>
+          </a>
           <Link href="/driver/mission" className="driver-action-tile">
             <Siren size={22} />
             <span>Case Workspace</span>
@@ -137,7 +137,7 @@ export function DriverDashboardOverview({
       </div>
 
       {/* Shift Control */}
-      <div className="driver-shift-controls">
+      <div id="shift-controls" className="driver-shift-controls">
         {currentShift === 'ON_DUTY' ? (
           <button type="button" className="driver-shift-btn end" onClick={onEndShift} disabled={loadingShift}>
             {loadingShift ? <Loader2 size={16} className="driver-spin" /> : <StopCircle size={16} />}
@@ -148,11 +148,6 @@ export function DriverDashboardOverview({
             {loadingShift ? <Loader2 size={16} className="driver-spin" /> : <PlayCircle size={16} />}
             Clock In / Start Shift
           </button>
-        )}
-        {currentShift === 'ON_DUTY' && (
-          <Link href="/driver/shifts" className="driver-shift-btn break">
-            <Coffee size={16} /> Break
-          </Link>
         )}
       </div>
 

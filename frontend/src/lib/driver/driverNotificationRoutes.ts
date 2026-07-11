@@ -30,7 +30,7 @@ export function resolveDriverNotificationUrl(notification: {
   }
 
   if (notification.category === 'ATTENDANCE') {
-    return '/driver/shifts'
+    return '/driver'
   }
 
   if (raw.includes('emergency') || raw.includes('mission')) {

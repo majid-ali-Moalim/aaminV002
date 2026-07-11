@@ -3,15 +3,12 @@ import {
   LayoutGrid,
   Siren,
   Truck,
-  Clock,
   AlertTriangle,
   Bell,
   User,
   History,
   PlusCircle,
   FileText,
-  LogIn,
-  Shield,
 } from 'lucide-react'
 
 export type DriverModuleId =
@@ -19,10 +16,8 @@ export type DriverModuleId =
   | 'mission'
   | 'missions'
   | 'ambulance'
-  | 'shifts'
   | 'incidents'
   | 'notifications'
-  | 'permissions'
   | 'profile'
 
 export type DriverNavItem = {
@@ -75,14 +70,6 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     items: [{ slug: 'my-ambulance', label: 'Ambulance', icon: Truck }],
   },
   {
-    id: 'shifts',
-    label: 'Shift & Attendance',
-    icon: Clock,
-    basePath: '/driver/shifts',
-    singlePage: true,
-    items: [{ slug: 'clock', label: 'Clock In / Out', icon: LogIn }],
-  },
-  {
     id: 'incidents',
     label: 'Incident Reports',
     icon: AlertTriangle,
@@ -100,14 +87,6 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     basePath: '/driver/notifications',
     singlePage: true,
     items: [{ slug: 'feed', label: 'Notifications', icon: Bell }],
-  },
-  {
-    id: 'permissions',
-    label: 'My Permissions',
-    icon: Shield,
-    basePath: '/driver/permissions',
-    singlePage: true,
-    items: [{ slug: 'access', label: 'My Permissions', icon: Shield }],
   },
   {
     id: 'profile',
@@ -138,6 +117,8 @@ export const LEGACY_DRIVER_REDIRECTS: Record<string, string> = {
   '/driver/incidents/new': '/driver/incidents',
   '/driver/incidents/submitted': '/driver/incidents?tab=submitted',
   '/driver/communications': '/driver',
+  '/driver/shifts': '/driver/mission',
+  '/driver/permissions': '/driver',
 }
 
 export function getModuleById(id: DriverModuleId): DriverNavModule | undefined {

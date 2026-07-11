@@ -148,3 +148,55 @@ export function isTodayCriticalCase(request: EmergencyRequest): boolean {
     !['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status)
   )
 }
+
+/**
+ * Critical (Priority 1) cases created on a specific calendar day (yyyy-MM-dd).
+ * For today, closed cases are hidden to preserve the live board; for past days
+ * all critical cases from that date are included so history stays visible.
+ */
+export function isCriticalCaseOnDate(request: EmergencyRequest, dateStr: string): boolean {
+  if (request.priority !== 'CRITICAL') return false
+  const day = new Date(dateStr)
+  const from = startOfDay(day).getTime()
+  const to = endOfDay(day).getTime()
+  const created = new Date(request.createdAt).getTime()
+  if (created < from || created > to) return false
+
+  const isToday = startOfDay(new Date()).getTime() === startOfDay(day).getTime()
+  if (isToday) {
+    return !['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status)
+  }
+  return true
+}
+
+/** Rolling window presets for the critical cases board. */
+export type CriticalRangePreset = 'day' | 'week' | 'month' | 'year'
+
+export const CRITICAL_RANGE_PRESETS: { id: CriticalRangePreset; label: string }[] = [
+  { id: 'day', label: 'Last Day' },
+  { id: 'week', label: 'Last Week' },
+  { id: 'month', label: 'Last Month' },
+  { id: 'year', label: 'Last Year' },
+]
+
+export function getCriticalRange(preset: CriticalRangePreset): DateRange {
+  const now = new Date()
+  const to = endOfDay(now)
+  switch (preset) {
+    case 'week':
+      return { from: startOfDay(subDays(now, 6)), to, label: 'Last Week' }
+    case 'month':
+      return { from: startOfDay(subDays(now, 29)), to, label: 'Last Month' }
+    case 'year':
+      return { from: startOfDay(subDays(now, 364)), to, label: 'Last Year' }
+    case 'day':
+    default:
+      return { from: startOfDay(now), to, label: 'Last Day' }
+  }
+}
+
+/** Critical (Priority 1) case created within the given range (any status). */
+export function isCriticalCaseInRange(request: EmergencyRequest, range: DateRange): boolean {
+  if (request.priority !== 'CRITICAL') return false
+  return isWithinDateRange(request.createdAt, range)
+}

@@ -30,7 +30,7 @@ export function resolveNurseNotificationUrl(notification: {
     return '/nurse/notifications'
   }
   if (notification.category === 'ATTENDANCE') {
-    return '/nurse/shifts'
+    return '/nurse/dashboard'
   }
   if (notification.category === 'HOSPITAL') {
     return notification.entityId

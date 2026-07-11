@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { usePermissions } from '@/lib/hooks/usePermissions'
 import { getPermissionLabel } from '@/lib/accessControlCatalog'
 
-export function useGrantedAccessGate(permissionKey: string, redirectTo = '/nurse/permissions') {
+export function useGrantedAccessGate(permissionKey: string, redirectTo = '/nurse/dashboard') {
   const router = useRouter()
   const { hasGrantedPermission, hasPermission, ready, refresh } = usePermissions()
   const deniedNotified = useRef(false)

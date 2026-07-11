@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EmergencyRequestStatus } from '@prisma/client';
+import { EmergencyRequestStatus, RequestSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type ReportPeriod = {
@@ -499,6 +499,9 @@ export class ReportsService {
     'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
   ];
 
+  // A "real emergency" is any request that isn't a hospital referral/other transfer.
+  private readonly EMERGENCY_REQUEST_SOURCES: RequestSource[] = ['PHONE_CALL', 'WALK_IN', 'STAFF'];
+
   private async getDashboardKpiMetrics() {
     const now = new Date();
     const closedStatuses: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
@@ -508,6 +511,7 @@ export class ReportsService {
     const responseWindowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const [
+      totalCases,
       totalEmergencyCases,
       activeCases,
       pendingCases,
@@ -516,6 +520,8 @@ export class ReportsService {
       completedCases,
       cancelledCases,
       hospitalsAvailable,
+      totalHospitals,
+      totalDispatchers,
       activeAssignments,
       ambulances,
       drivers,
@@ -523,6 +529,9 @@ export class ReportsService {
       responseTimeRecords,
     ] = await Promise.all([
       this.prisma.emergencyRequest.count(),
+      this.prisma.emergencyRequest.count({
+        where: { requestSource: { in: this.EMERGENCY_REQUEST_SOURCES } },
+      }),
       this.prisma.emergencyRequest.count({
         where: { status: { in: this.DASHBOARD_ACTIVE_MISSION } },
       }),
@@ -550,6 +559,10 @@ export class ReportsService {
           acceptEmergencyCases: true,
           availabilityStatus: { in: ['Available', 'Limited Capacity'] },
         },
+      }),
+      this.prisma.hospital.count({ where: { isActive: true } }),
+      this.prisma.employee.count({
+        where: { employeeRole: { name: { equals: 'Dispatcher', mode: 'insensitive' } } },
       }),
       this.prisma.emergencyRequest.findMany({
         where: {
@@ -624,6 +637,7 @@ export class ReportsService {
         : null;
 
     return {
+      totalCases,
       totalEmergencyCases,
       activeCases,
       pendingCases,
@@ -638,6 +652,11 @@ export class ReportsService {
       cancelledCases,
       averageResponseTimeMinutes,
       delayedCases,
+      totalAmbulances: ambulances.length,
+      totalDrivers: drivers.length,
+      totalNurses: nurses.length,
+      totalDispatchers,
+      totalHospitals,
     };
   }
 
@@ -767,9 +786,9 @@ export class ReportsService {
 
     const kpis = [
       {
-        key: 'totalEmergencyCases',
-        label: 'Total Emergency Cases',
-        value: kpiMetrics.totalEmergencyCases,
+        key: 'totalCases',
+        label: 'Total Cases',
+        value: kpiMetrics.totalCases,
         format: 'number' as const,
       },
       {
@@ -786,36 +805,6 @@ export class ReportsService {
         format: 'number' as const,
       },
       {
-        key: 'criticalCases',
-        label: 'Critical Cases',
-        value: kpiMetrics.criticalCases,
-        format: 'number' as const,
-      },
-      {
-        key: 'availableAmbulances',
-        label: 'Available Ambulances',
-        value: kpiMetrics.availableAmbulances,
-        format: 'number' as const,
-      },
-      {
-        key: 'ambulancesOnCase',
-        label: 'Ambulances On Case',
-        value: kpiMetrics.ambulancesOnCase,
-        format: 'number' as const,
-      },
-      {
-        key: 'availableCrew',
-        label: 'Available Crew',
-        value: kpiMetrics.availableCrew,
-        format: 'number' as const,
-      },
-      {
-        key: 'hospitalsAvailable',
-        label: 'Hospitals Available',
-        value: kpiMetrics.hospitalsAvailable,
-        format: 'number' as const,
-      },
-      {
         key: 'completedCases',
         label: 'Completed Cases',
         value: kpiMetrics.completedCases,
@@ -825,6 +814,42 @@ export class ReportsService {
         key: 'delayedCases',
         label: 'Delayed Cases',
         value: kpiMetrics.delayedCases,
+        format: 'number' as const,
+      },
+      {
+        key: 'criticalCases',
+        label: 'Critical Cases',
+        value: kpiMetrics.criticalCases,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalAmbulances',
+        label: 'Total Ambulances',
+        value: kpiMetrics.totalAmbulances,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalDrivers',
+        label: 'Total Drivers',
+        value: kpiMetrics.totalDrivers,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalNurses',
+        label: 'Total Nurses',
+        value: kpiMetrics.totalNurses,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalDispatchers',
+        label: 'Total Dispatchers',
+        value: kpiMetrics.totalDispatchers,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalHospitals',
+        label: 'Total Hospitals',
+        value: kpiMetrics.totalHospitals,
         format: 'number' as const,
       },
     ];

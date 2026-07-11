@@ -9,6 +9,7 @@ import {
   Plus, 
   Eye, 
   Trash2, 
+  XCircle,
   Truck, 
   Clock, 
   AlertTriangle,
@@ -18,6 +19,7 @@ import {
   Globe,
   Loader2,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest, EmergencyRequestStatus, Priority } from '@/types'
@@ -34,16 +36,13 @@ import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 import EmergencyDateFilter from '@/components/features/emergency/EmergencyDateFilter'
 import {
   computeEmergencyStats,
-  filterLiveDispatchCases,
   filterRequestsByDateRange,
   getDateRange,
   type DateFilterPreset,
 } from '@/lib/emergency/dateFilters'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 
-const OPERATIONAL_STATUSES = Object.values(EmergencyRequestStatus).filter(
-  (s) => !['COMPLETED', 'CANCELLED'].includes(s),
-)
+const ALL_STATUSES = Object.values(EmergencyRequestStatus)
 
 export default function EmergencyRequestsPage() {
   const router = useRouter()
@@ -56,6 +55,7 @@ export default function EmergencyRequestsPage() {
   const [datePreset, setDatePreset] = useState<DateFilterPreset>('today')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Modal states
   const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null)
@@ -93,15 +93,25 @@ export default function EmergencyRequestsPage() {
     [datePreset, customFrom, customTo],
   )
 
-  const operationalRequests = useMemo(
-    () => filterLiveDispatchCases(requests),
-    [requests],
+  const periodRequests = useMemo(
+    () => filterRequestsByDateRange(requests, dateRange),
+    [requests, dateRange],
   )
 
-  const periodRequests = useMemo(
-    () => filterRequestsByDateRange(operationalRequests, dateRange),
-    [operationalRequests, dateRange],
-  )
+  const handleDelete = async (request: EmergencyRequest) => {
+    if (!window.confirm(`Delete case ${request.trackingCode}? This cannot be undone.`)) return
+    try {
+      setDeletingId(request.id)
+      await emergencyRequestsService.delete(request.id)
+      setRequests((prev) => prev.filter((r) => r.id !== request.id))
+      toast.success(`Case ${request.trackingCode} deleted`)
+    } catch (err) {
+      console.error('Failed to delete case:', err)
+      toast.error('Failed to delete case')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const stats = computeEmergencyStats(periodRequests)
 
@@ -129,7 +139,7 @@ export default function EmergencyRequestsPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Emergency Requests</h1>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Live dispatch — assigned &amp; in-progress cases
+              All cases — every status
             </p>
           </div>
         </div>
@@ -233,8 +243,8 @@ export default function EmergencyRequestsPage() {
              onChange={(e) => setStatusFilter(e.target.value)}
              className="h-12 px-6 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/10 cursor-pointer transition-all"
            >
-             <option value="">All Active Statuses</option>
-             {OPERATIONAL_STATUSES.map((status) => (
+             <option value="">All Statuses</option>
+             {ALL_STATUSES.map((status) => (
                 <option key={status} value={status}>{status.replace(/_/g, ' ').toLowerCase()}</option>
               ))}
            </select>
@@ -279,12 +289,9 @@ export default function EmergencyRequestsPage() {
                    ) : filteredRequests.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-20 text-center">
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No assigned or in-progress cases in this period</p>
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No cases in this period</p>
                         <p className="text-xs text-slate-400 mt-2">
-                          Completed cases are in{' '}
-                          <Link href={paths.patientsCases} className="text-red-600 font-bold hover:underline">
-                            Patient Cases
-                          </Link>
+                          Try widening the date range or clearing filters
                         </p>
                       </td>
                     </tr>
@@ -370,12 +377,25 @@ export default function EmergencyRequestsPage() {
                             {!['COMPLETED', 'CANCELLED', 'FAILED'].includes(request.status) && (
                               <button 
                                 onClick={() => openModal(request, 'cancel')}
-                                className="p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                                className="p-2.5 text-amber-500 hover:bg-amber-50 hover:text-amber-600 rounded-xl transition-all"
                                 title="Cancel Request"
                               >
-                                <Trash2 className="w-5 h-5" />
+                                <XCircle className="w-5 h-5" />
                               </button>
                             )}
+
+                            <button
+                              onClick={() => handleDelete(request)}
+                              disabled={deletingId === request.id}
+                              className="p-2.5 text-red-500 hover:bg-red-50 hover:text-red-700 rounded-xl transition-all disabled:opacity-50"
+                              title="Delete case permanently"
+                            >
+                              {deletingId === request.id ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-5 h-5" />
+                              )}
+                            </button>
                           </div>
                         </td>
                       </tr>

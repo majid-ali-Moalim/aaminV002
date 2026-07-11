@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Truck,
   User,
+  CheckCircle2,
 } from 'lucide-react'
 import { emergencyRequestsService, nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
@@ -23,7 +24,6 @@ import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
   encodeAssessment,
   encodeHandover,
-  encodeMonitoring,
   isAssessmentRecord,
   isHandoverRecord,
   isMedicalNoteRecord,
@@ -49,22 +49,20 @@ import {
   setStoredNursePhase,
   stampNurseStage,
   markNurseCaseReviewed,
-  getNurseWorkflowMeta,
   type NurseTaskId,
   type NurseWorkflowStepId,
 } from '@/lib/nurse/nurseWorkflow'
 import { useNurseWorkflowState } from '@/lib/nurse/useNurseWorkflowState'
+import MissionHorizontalTimeline from '@/components/mission-workflow/MissionHorizontalTimeline'
 import {
   AssessmentTaskFields,
   HandoverTaskFields,
-  MonitoringTaskFields,
   NotesTaskFields,
   TaskShell,
   TreatmentTaskFields,
   VitalsTaskFields,
   type AssessmentFormState,
   type HandoverFormState,
-  type MonitoringFormState,
   type NotesFormState,
   type TreatmentFormState,
   type VitalsFormState,
@@ -108,15 +106,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     medication: '',
     notes: '',
   })
-  const [monitoringForm, setMonitoringForm] = useState<MonitoringFormState>({
-    bloodPressure: '',
-    heartRate: '',
-    temperature: '',
-    oxygenSaturation: '',
-    respiratoryRate: '',
-    condition: '',
-    notes: '',
-  })
   const [handoverForm, setHandoverForm] = useState<HandoverFormState>({
     patientCondition: '',
     treatmentGiven: '',
@@ -154,8 +143,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const progressPct = missionClosed
     ? 100
     : Math.round(((timelineIndex + 1) / NURSE_TIMELINE_STEPS.length) * 100)
-  const missionAccepted = Boolean(meta?.acceptedAt)
-  const caseReviewed = Boolean(meta?.reviewedAt)
   const readOnly = missionClosed
   const onScene = mission ? canStartPatientCare(mission.status) : false
   const phaseMessage = mission ? getNurseTransportPhaseMessage(mission.status) : null
@@ -172,33 +159,27 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   }
 
   const stageActions = useMemo(() => {
-    if (currentStepId === 'MISSION_ASSIGNED' && missionAccepted) {
+    if (currentStepId === 'MISSION_ASSIGNED') {
       return [
-        { id: 'review_emergency' as NurseTaskId, label: 'Review Case Details', variant: 'secondary' as const },
         {
           id: 'begin_care' as NurseTaskId,
           label: onScene ? 'Start Patient Care' : 'Waiting for crew on scene',
           variant: 'primary' as const,
         },
+        { id: 'view_case' as NurseTaskId, label: 'Review Case Details', variant: 'secondary' as const },
       ]
     }
-    if (currentStepId === 'MISSION_ASSIGNED' && !missionAccepted) {
-      return currentStep.actions
-    }
-    return currentStep.actions
-  }, [currentStepId, currentStep.actions, missionAccepted, onScene])
+    return currentStep.actions.filter((a) => a.id !== 'accept')
+  }, [currentStepId, currentStep.actions, onScene])
 
   const stickyPrimary = useMemo(() => {
     return stageActions.find((a) => a.variant === 'primary') ?? stageActions[0] ?? null
   }, [stageActions])
 
-  const stickyPrimaryDisabled =
-    stickyPrimary &&
-    ((stickyPrimary.id === 'accept' && !caseReviewed) ||
-      (stickyPrimary.id === 'begin_care' && !onScene))
+  const stickyPrimaryDisabled = stickyPrimary && stickyPrimary.id === 'begin_care' && !onScene
 
   const visibleTaskChips = useMemo((): [NurseTaskId, string, typeof Stethoscope][] => {
-    if (!mission || !missionAccepted) return []
+    if (!mission) return []
     const status = mission.status
     const chips: [NurseTaskId, string, typeof Stethoscope][] = []
     if (canDoPatientCareTasks(status)) {
@@ -209,14 +190,13 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
     if (canDoTreatmentMonitoring(status)) {
       chips.push(['treatment', 'Treatment', HeartPulse])
-      chips.push(['monitoring', 'Monitoring', Activity])
     }
     if (canDoHandover(status)) {
       chips.push(['handover', 'Handover', Building2])
       chips.push(['documentation', 'Documentation', ClipboardList])
     }
     return chips
-  }, [mission, missionAccepted])
+  }, [mission])
 
   const loadRecords = useCallback(async () => {
     if (!nurseId) return
@@ -267,43 +247,10 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     toast.success(`Stage: ${NURSE_WORKFLOW_STEPS.find((s) => s.id === next)?.label}`)
   }
 
-  const acceptMission = async (id: string) => {
-    if (!onDuty) {
-      toast.error('Clock in under Shift & Attendance to accept missions')
-      return
-    }
-    if (!getNurseWorkflowMeta(id).reviewedAt) {
-      toast.error('Review case details before accepting')
-      return
-    }
-    if (!nurseId) return
-    try {
-      await nursesService.acceptMission(id, nurseId)
-      setMissionId(id)
-      setStoredNursePhase(id, 'MISSION_ASSIGNED')
-      patchNurseWorkflowMeta(id, { acceptedAt: new Date().toISOString() })
-      stampNurseStage(id, 'MISSION_ASSIGNED')
-      logNurseActivity(id, 'Mission accepted by nurse')
-      syncWorkflow()
-      toast.success('Mission accepted')
-      refresh()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Could not accept mission')
-    }
-  }
-
-  const rejectMission = async (id: string) => {
-    if (!nurseId) return
-    const reason = window.prompt('Reason for rejecting this mission (optional):') ?? ''
-    if (reason === null) return
-    try {
-      await nursesService.rejectMission(id, nurseId, reason.trim() || undefined)
-      toast.success('Mission rejected — dispatch has been notified')
-      if (missionId === id) setMissionId(null)
-      refresh()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Could not reject mission')
-    }
+  const openCase = (id: string) => {
+    setMissionId(id)
+    markNurseCaseReviewed(id)
+    syncWorkflow()
   }
 
   const handleTask = async (taskId: NurseTaskId) => {
@@ -314,21 +261,15 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         markNurseCaseReviewed(mission.id)
         syncWorkflow()
         setActiveTask(null)
-        toast.success('Case reviewed — you may now accept the mission')
-        break
-      case 'accept':
-        if (!caseReviewed) {
-          toast.error('Review case details before accepting')
-          return
-        }
-        acceptMission(mission.id)
+        logNurseActivity(mission.id, 'Case details reviewed')
+        toast.success('Case details reviewed')
         break
       case 'review_emergency':
         markNurseCaseReviewed(mission.id)
         syncWorkflow()
         setActiveTask(null)
         logNurseActivity(mission.id, 'Case details reviewed')
-        toast.success('Case reviewed — you may now accept the mission')
+        toast.success('Case details reviewed')
         break
       case 'begin_care':
         if (!guardTask('begin_care')) return
@@ -360,10 +301,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       case 'treatment':
         if (!guardTask('treatment')) return
         setActiveTask('treatment')
-        break
-      case 'monitoring':
-        if (!guardTask('monitoring')) return
-        setActiveTask('monitoring')
         break
       case 'handover':
         if (!guardTask('handover')) return
@@ -412,7 +349,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         MEDICAL_NOTES: 'notes',
         PATIENT_LOADED: 'load_patient',
         TREATMENT: 'treatment',
-        PATIENT_MONITORING: 'monitoring',
         HOSPITAL_HANDOVER: 'handover',
         COMPLETE_DOCUMENTATION: 'documentation',
       }
@@ -493,42 +429,9 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       'TREATMENT',
       `Treatment recorded: ${treatmentForm.treatmentType}`,
     )
-    advanceTo('PATIENT_MONITORING')
-    setActiveTask('monitoring')
+    advanceTo('TREATMENT')
+    setActiveTask(null)
     setTreatmentForm({ treatmentType: TREATMENT_TYPES[0], medication: '', notes: '' })
-  }
-
-  const submitMonitoring = async (e: React.FormEvent) => {
-    e.preventDefault()
-    await saveRecord(
-      {
-        bloodPressure: monitoringForm.bloodPressure || undefined,
-        heartRate: monitoringForm.heartRate || undefined,
-        temperature: monitoringForm.temperature || undefined,
-        oxygenSaturation: monitoringForm.oxygenSaturation || undefined,
-        respiratoryRate: monitoringForm.respiratoryRate || undefined,
-        clinicalNotes: encodeMonitoring({
-          bloodPressure: monitoringForm.bloodPressure,
-          heartRate: monitoringForm.heartRate,
-          temperature: monitoringForm.temperature,
-          oxygenSaturation: monitoringForm.oxygenSaturation,
-          respiratoryRate: monitoringForm.respiratoryRate,
-          condition: monitoringForm.condition,
-          notes: monitoringForm.notes,
-        }),
-      },
-      'PATIENT_MONITORING',
-      'Patient monitoring updated',
-    )
-    setMonitoringForm({
-      bloodPressure: '',
-      heartRate: '',
-      temperature: '',
-      oxygenSaturation: '',
-      respiratoryRate: '',
-      condition: '',
-      notes: '',
-    })
   }
 
   const submitHandover = async (e: React.FormEvent) => {
@@ -573,7 +476,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       <div className="nmw-queue">
         <div className="nmw-queue-banner">
           <HeartPulse size={18} />
-          <span>{assignedPending.length} mission{assignedPending.length > 1 ? 's' : ''} awaiting acceptance</span>
+          <span>{assignedPending.length} new mission{assignedPending.length > 1 ? 's' : ''} from dispatch</span>
         </div>
         <div className="nmw-queue-list">
           {assignedPending.map((m) => (
@@ -584,31 +487,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               </div>
               <p className="text-sm text-zinc-400">{m.patient?.fullName || m.callerName} · {m.pickupLocation}</p>
               <div className="nmw-queue-actions">
-                <button
-                  type="button"
-                  className="nurse-btn ghost"
-                  onClick={() => {
-                    markNurseCaseReviewed(m.id)
-                    setMissionId(m.id)
-                    toast.success('Case reviewed — you may now accept')
-                  }}
-                >
-                  Review Case
-                </button>
-                <button
-                  type="button"
-                  className="nurse-btn primary"
-                  disabled={!getNurseWorkflowMeta(m.id).reviewedAt}
-                  onClick={() => acceptMission(m.id)}
-                >
-                  Accept Mission
-                </button>
-                <button
-                  type="button"
-                  className="nurse-btn ghost border-red-200 text-red-600"
-                  onClick={() => rejectMission(m.id)}
-                >
-                  Reject
+                <button type="button" className="nurse-btn primary" onClick={() => openCase(m.id)}>
+                  Open Case Workspace
                 </button>
               </div>
             </article>
@@ -624,7 +504,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         <div className="nmw-empty-icon"><Stethoscope size={32} /></div>
         <h3>No Active Mission</h3>
         <p>When dispatch assigns you a case, your full clinical workflow will appear here.</p>
-        <Link href="/nurse/shifts" className="nurse-btn ghost">Shift & Attendance</Link>
+        <Link href="/nurse/dashboard" className="nurse-btn ghost">Back to Dashboard</Link>
         <Link href="/nurse/mission/history" className="nurse-btn ghost">Case History</Link>
       </div>
     )
@@ -682,53 +562,48 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         <span><Building2 size={14} /> {mission.destination || 'Hospital TBD'}</span>
       </div>
 
-      <div className="nmw-grid">
-        {/* Timeline */}
-        <section className="nmw-card nmw-timeline-card nmw-timeline-compact">
-          <h3 className="nmw-card-title"><Activity size={16} /> Workflow Timeline</h3>
-          <ol className="nmw-timeline">
-            {NURSE_TIMELINE_STEPS.map((step, i) => {
-              const done = missionClosed || i < timelineIndex
-              const active = !missionClosed && i === timelineIndex
-              const ts = step.stepIds.map((id) => meta?.timestamps[id]).find(Boolean)
-              return (
-                <li
-                  key={step.id}
-                  className={`nmw-timeline-item${done ? ' done' : ''}${active ? ' active' : ''}`}
-                >
-                  <span className="nmw-timeline-dot">{i + 1}</span>
-                  <div>
-                    <p className="nmw-timeline-label">{step.label}</p>
-                    <p className="nmw-timeline-desc">{step.description}</p>
-                    {active && (
-                      <p className="nmw-timeline-current">{currentStep.label}</p>
-                    )}
-                    {ts && (
-                      <p className="nmw-timeline-time">{format(new Date(ts), 'h:mm a')}</p>
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
-        </section>
+      <section className="nmw-card nmw-timeline-card nmw-span-2">
+        <h3 className="nmw-card-title"><Activity size={16} /> Mission Progress</h3>
+        <MissionHorizontalTimeline
+          classPrefix="nmw"
+          steps={NURSE_TIMELINE_STEPS.map((s) => ({
+            id: s.id,
+            label: s.label,
+            shortLabel: s.shortLabel,
+            icon:
+              s.id === 'PATIENT_CARE'
+                ? Stethoscope
+                : s.id === 'TREATMENT'
+                  ? HeartPulse
+                  : s.id === 'HANDOVER'
+                    ? Building2
+                    : CheckCircle2,
+          }))}
+          activeIndex={timelineIndex}
+          completed={missionClosed}
+          currentStepLabel={currentStep.label}
+          getStepTime={(i) => {
+            const step = NURSE_TIMELINE_STEPS[i]
+            const ts = step.stepIds.map((id) => meta?.timestamps[id]).find(Boolean)
+            return ts || null
+          }}
+        />
+      </section>
 
+      <div className="nmw-grid nmw-grid-stage">
         {/* Current stage + actions */}
         <section className="nmw-card nmw-stage-card">
           <h3 className="nmw-card-title"><ChevronRight size={16} /> Current Stage</h3>
           <p className="nmw-stage-name">{currentStep.label}</p>
           <p className="nmw-stage-desc">{currentStep.description}</p>
 
-          {!readOnly && !onDuty && currentStepId === 'MISSION_ASSIGNED' && !missionAccepted && (
-            <p className="nmw-warn">Clock in to accept and execute workflow actions.</p>
+          {!readOnly && !onDuty && (
+            <p className="nmw-warn">Clock in to execute clinical workflow actions.</p>
           )}
-          {!readOnly && currentStepId === 'MISSION_ASSIGNED' && !missionAccepted && !caseReviewed && (
-            <p className="nmw-warn">Review case details before you can accept this mission.</p>
-          )}
-          {!readOnly && missionAccepted && !onScene && currentStepId === 'MISSION_ASSIGNED' && phaseMessage && (
+          {!readOnly && !onScene && currentStepId === 'MISSION_ASSIGNED' && phaseMessage && (
             <p className="nmw-warn">{phaseMessage}</p>
           )}
-          {!readOnly && missionAccepted && onScene && phaseMessage && !canDoHandover(mission.status) && (
+          {!readOnly && onScene && phaseMessage && !canDoHandover(mission.status) && (
             <p className="nmw-warn">{phaseMessage}</p>
           )}
           {!readOnly && canDoHandover(mission.status) && !handoverComplete && (
@@ -744,24 +619,12 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 key={action.id}
                 type="button"
                 className={`nmw-action-btn${action.variant === 'primary' ? ' primary' : ''}`}
-                disabled={
-                  (action.id === 'accept' && !caseReviewed) ||
-                  (action.id === 'begin_care' && !onScene)
-                }
+                disabled={action.id === 'begin_care' && !onScene}
                 onClick={() => handleTask(action.id)}
               >
                 {action.label}
               </button>
             ))}
-            {currentStepId === 'MISSION_ASSIGNED' && !missionAccepted && mission && (
-              <button
-                type="button"
-                className="nmw-action-btn border-red-200 text-red-500"
-                onClick={() => rejectMission(mission.id)}
-              >
-                Reject Mission
-              </button>
-            )}
           </div>
           )}
 
@@ -785,7 +648,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         </section>
 
         {/* Task panel */}
-        <section className="nmw-card nmw-task-card nmw-span-2">
+        <section className="nmw-card nmw-task-card">
           <h3 className="nmw-card-title">Task Workspace</h3>
 
           {readOnly && (
@@ -798,7 +661,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
             <div className="nmw-task-placeholder">
               <p>Select an activity from the current stage or use the quick task chips above.</p>
               <p className="text-sm text-zinc-500 mt-2">
-                Your workflow: Accept → Patient care → Treatment & monitoring → Handover → Close. Transport is handled by the driver.
+                Your workflow: Patient care → Treatment → Handover → Close. Transport is handled by the driver.
               </p>
             </div>
           )}
@@ -824,12 +687,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           {!readOnly && activeTask === 'treatment' && (
             <TaskShell title="Treatment Record" subtitle="Interventions performed" saving={saving} onSubmit={submitTreatment} submitLabel="Save Treatment">
               <TreatmentTaskFields form={treatmentForm} setForm={setTreatmentForm} />
-            </TaskShell>
-          )}
-
-          {!readOnly && activeTask === 'monitoring' && (
-            <TaskShell title="Patient Monitoring" subtitle="Update vitals and condition during transport" saving={saving} onSubmit={submitMonitoring} submitLabel="Save Monitoring Update">
-              <MonitoringTaskFields form={monitoringForm} setForm={setMonitoringForm} />
             </TaskShell>
           )}
 

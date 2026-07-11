@@ -347,7 +347,7 @@ export function DashboardQuickActions({ summary }: { summary: UnifiedDashboardDa
 
 export function DashboardOperationsSummary({ summary }: { summary: UnifiedDashboardData['summary'] }) {
   const rows = [
-    { label: 'Total cases', value: summary.totalEmergencyCases },
+    { label: 'Total cases', value: summary.totalCases ?? summary.totalEmergencyCases },
     { label: 'Completed', value: summary.completedCases ?? summary.completedCasesToday ?? 0 },
     { label: 'Cancelled', value: summary.cancelledCases ?? summary.cancelledToday ?? 0 },
     { label: 'Delayed', value: summary.delayedCases },
