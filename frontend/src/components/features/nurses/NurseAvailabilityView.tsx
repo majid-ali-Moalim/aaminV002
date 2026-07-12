@@ -196,15 +196,6 @@ export default function NurseAvailabilityView() {
         })}
       </div>
 
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 print:hidden">
-        <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Live Nurse Board</h2>
-        <div className="grid lg:grid-cols-3 gap-4">
-          <LiveBoardColumn title="Available" rows={data?.liveBoard.available ?? []} tone="emerald" onSelect={openDetail} />
-          <LiveBoardColumn title="Unavailable" rows={data?.liveBoard.unavailable ?? []} tone="red" onSelect={openDetail} />
-          <LiveBoardColumn title="Recently Updated" rows={data?.liveBoard.recentlyUpdated ?? []} tone="slate" onSelect={openDetail} showTime />
-        </div>
-      </section>
-
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 print:hidden">
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
@@ -408,24 +399,6 @@ function KpiCard({ label, value, icon: Icon, tone }: { label: string; value: num
 function StatusBadge({ status }: { status: OperationalNurseStatus }) {
   const cfg = NURSE_STATUS_CONFIG[status]
   return <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${cfg.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}</span>
-}
-
-function LiveBoardColumn({ title, rows, tone, onSelect, showTime }: { title: string; rows: NurseAvailabilityRow[]; tone: 'emerald' | 'red' | 'slate'; onSelect: (id: string) => void; showTime?: boolean }) {
-  const border = tone === 'emerald' ? 'border-emerald-200' : tone === 'red' ? 'border-red-200' : 'border-slate-200'
-  return (
-    <div className={`rounded-xl border ${border} bg-slate-50/50 p-3 min-h-[140px]`}>
-      <p className="text-[10px] font-black text-slate-500 uppercase mb-2">{title} ({rows.length})</p>
-      <div className="space-y-1.5 max-h-36 overflow-y-auto">
-        {rows.length === 0 ? <p className="text-xs text-slate-400 py-4 text-center">None</p> : rows.map((row) => (
-          <button key={row.id} type="button" onClick={() => onSelect(row.id)} className="w-full text-left px-2.5 py-2 rounded-lg bg-white border hover:border-violet-200 text-xs font-semibold">
-            {row.fullName}
-            {showTime && <span className="block text-[10px] font-normal text-slate-400 mt-0.5">{formatTimeAgo(row.updatedAt)}</span>}
-            {!showTime && row.unavailableReason && <span className="block text-[10px] font-normal text-red-600 mt-0.5">{row.unavailableReason}</span>}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 function ChartCard({ title, children }: { title: string; children: ReactNode }) {

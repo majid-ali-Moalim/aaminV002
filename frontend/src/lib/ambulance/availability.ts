@@ -1,4 +1,4 @@
-export type OperationalAmbulanceStatus = 'available' | 'unavailable'
+export type OperationalAmbulanceStatus = 'available' | 'unavailable' | 'maintenance'
 
 export interface AmbulanceAvailabilityRow {
   id: string
@@ -27,11 +27,13 @@ export interface AmbulanceAvailabilityOverview {
     total: number
     available: number
     unavailable: number
+    maintenance: number
     activeToday: number
   }
   statusCounts: {
     available: number
     unavailable: number
+    maintenance: number
   }
   ambulances: AmbulanceAvailabilityRow[]
   recentChanges: {
@@ -75,6 +77,12 @@ export const OPERATIONAL_STATUS_CONFIG: Record<
     emoji: '🔴',
     badge: 'bg-red-100 text-red-800 border-red-200',
     dot: 'bg-red-500',
+  },
+  maintenance: {
+    label: 'Maintenance',
+    emoji: '🔧',
+    badge: 'bg-amber-100 text-amber-800 border-amber-200',
+    dot: 'bg-amber-500',
   },
 }
 

@@ -6,6 +6,7 @@ import { DispatcherGuard } from '@/components/guards'
 import DispatcherSidebarSections from '@/components/dispatcher/DispatcherSidebar'
 import DispatcherTopBar from '@/components/dispatcher/DispatcherTopBar'
 import { DispatcherNotificationProvider } from '@/components/dispatcher/DispatcherNotificationProvider'
+import ChatAlerts from '@/components/chat/ChatAlerts'
 import { DispatcherThemeInit } from '@/components/dispatcher/DispatcherThemeInit'
 import { DispatcherThemeProvider } from '@/components/dispatcher/DispatcherThemeProvider'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
@@ -20,6 +21,7 @@ function DispatcherShell({ children }: { children: ReactNode }) {
     <OptimisticNavProvider>
       <DispatcherGuard>
         <DispatcherNotificationProvider>
+          <ChatAlerts />
           <div className="dispatcher-shell min-h-screen font-sans">
             <DispatcherSidebarSections
               open={sidebarOpen}

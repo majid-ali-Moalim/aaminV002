@@ -313,8 +313,33 @@ model User {
   createdNotifications Notification[] @relation("NotificationCreatedBy")
   patient       Patient?
   userPermissions UserPermission[]
+  sentMessages     ChatMessage[] @relation("ChatSender")
+  receivedMessages ChatMessage[] @relation("ChatRecipient")
 
   @@map("users")
+}
+
+model ChatMessage {
+  id             String    @id @default(cuid())
+  senderId       String
+  recipientId    String
+  content        String    @default("")
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String?
+  attachmentSize Int?
+  readAt         DateTime?
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  sender         User      @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient      User      @relation("ChatRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([createdAt])
+  @@map("chat_messages")
 }
 
 model UserPermission {

@@ -4,12 +4,14 @@ import { ReactNode } from 'react'
 import { NurseGuard } from '@/components/guards'
 import { NurseSidebar } from '@/components/nurse/NurseSidebar'
 import { NurseNotificationProvider } from '@/components/nurse/NurseNotificationProvider'
+import ChatAlerts from '@/components/chat/ChatAlerts'
 import './nurse.css'
 
 export default function NurseLayout({ children }: { children: ReactNode }) {
   return (
     <NurseGuard>
       <NurseNotificationProvider>
+        <ChatAlerts />
         <div className="nurse-shell">
           <NurseSidebar />
           <div className="nurse-viewport">{children}</div>

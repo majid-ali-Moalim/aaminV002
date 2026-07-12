@@ -9,6 +9,7 @@ import AdminTopBar from '@/components/layout/AdminTopBar'
 import { AdminThemeProvider } from '@/components/admin/AdminThemeProvider'
 import { AdminThemeInit } from '@/components/admin/AdminThemeInit'
 import LiveToastContainer from '@/components/notifications/LiveToastContainer'
+import ChatAlerts from '@/components/chat/ChatAlerts'
 import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
 import './admin.css'
@@ -72,6 +73,7 @@ export default function AdminLayout({
       <OptimisticNavProvider>
         <div className="admin-shell min-h-screen bg-admin-bg text-admin-text">
           <LiveToastContainer />
+          <ChatAlerts />
           <NavigationProgressBar />
           <AdminSidebar />
           <div className="ml-64">

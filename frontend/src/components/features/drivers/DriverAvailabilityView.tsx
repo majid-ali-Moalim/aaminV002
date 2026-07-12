@@ -33,10 +33,8 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
-  Clock,
   Activity,
   ChevronRight,
-  Phone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { driversService, ambulancesService } from '@/lib/api'
@@ -236,41 +234,11 @@ export default function DriverAvailabilityView() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Total Drivers" value={summary.total} icon={Users} tone="slate" />
         <KpiCard label="Available" value={summary.available} icon={Users} tone="emerald" />
         <KpiCard label="Unavailable" value={summary.unavailable} icon={AlertCircle} tone="red" />
-        <KpiCard label="Active Today" value={summary.activeToday} icon={Clock} tone="violet" />
       </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        {(Object.keys(DRIVER_STATUS_CONFIG) as OperationalDriverStatus[]).map((key) => {
-          const cfg = DRIVER_STATUS_CONFIG[key]
-          const count = data?.statusCounts[key] ?? 0
-          const desc = key === 'available'
-            ? 'Has an assigned ambulance and is not assigned to a case.'
-            : 'No ambulance assigned, inactive, or already assigned to a case.'
-          return (
-            <div key={key} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">{cfg.emoji}</span>
-                <span className={`text-3xl font-black ${key === 'available' ? 'text-emerald-600' : 'text-red-600'}`}>{count}</span>
-              </div>
-              <h3 className="text-sm font-black text-slate-800 mt-3">{cfg.label}</h3>
-              <p className="text-xs text-slate-500 mt-1">{desc}</p>
-            </div>
-          )
-        })}
-      </div>
-
-      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 print:hidden">
-        <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Live Driver Board</h2>
-        <div className="grid lg:grid-cols-3 gap-4">
-          <LiveBoardColumn title="Available" rows={data?.liveBoard.available ?? []} tone="emerald" onSelect={openDetail} />
-          <LiveBoardColumn title="Unavailable" rows={data?.liveBoard.unavailable ?? []} tone="red" onSelect={openDetail} />
-          <LiveBoardColumn title="Recently Updated" rows={data?.liveBoard.recentlyUpdated ?? []} tone="slate" onSelect={openDetail} showTime />
-        </div>
-      </section>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 print:hidden">
         <div className="flex flex-col lg:flex-row gap-3">
@@ -290,13 +258,11 @@ export default function DriverAvailabilityView() {
             <option value="">All Districts</option>
             {data?.filters.districts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {STATUS_TABS.map((tab) => (
-            <button key={tab.id} type="button" onClick={() => setStatusFilter(tab.id)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === tab.id ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-              {tab.label}
-            </button>
-          ))}
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as DriverStatusFilterTab)} className="lg:w-44 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
+            {STATUS_TABS.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.id === 'all' ? 'All Statuses' : tab.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -539,25 +505,6 @@ function KpiCard({ label, value, icon: Icon, tone }: { label: string; value: num
 function StatusBadge({ status }: { status: OperationalDriverStatus }) {
   const cfg = DRIVER_STATUS_CONFIG[status]
   return <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${cfg.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}</span>
-}
-
-function LiveBoardColumn({ title, rows, tone, onSelect, showTime }: { title: string; rows: DriverAvailabilityRow[]; tone: 'emerald' | 'red' | 'slate'; onSelect: (id: string) => void; showTime?: boolean }) {
-  const border = tone === 'emerald' ? 'border-emerald-200' : tone === 'red' ? 'border-red-200' : 'border-slate-200'
-  return (
-    <div className={`rounded-xl border ${border} bg-slate-50/50 p-3 min-h-[140px]`}>
-      <p className="text-[10px] font-black text-slate-500 uppercase mb-2">{title} ({rows.length})</p>
-      <div className="space-y-1.5 max-h-36 overflow-y-auto">
-        {rows.length === 0 ? <p className="text-xs text-slate-400 py-4 text-center">None</p> : rows.map((row) => (
-          <button key={row.id} type="button" onClick={() => onSelect(row.id)} className="w-full text-left px-2.5 py-2 rounded-lg bg-white border hover:border-red-200 text-xs font-semibold">
-            {row.fullName}
-            {showTime && <span className="block text-[10px] font-normal text-slate-400 mt-0.5">{formatTimeAgo(row.updatedAt)}</span>}
-            {!showTime && row.unavailableReason && <span className="block text-[10px] font-normal text-red-600 mt-0.5">{row.unavailableReason}</span>}
-            {!showTime && !row.unavailableReason && row.assignedAmbulance && <span className="block text-[10px] text-blue-600 mt-0.5">{row.assignedAmbulance.ambulanceNumber}</span>}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 function ChartCard({ title, children }: { title: string; children: ReactNode }) {

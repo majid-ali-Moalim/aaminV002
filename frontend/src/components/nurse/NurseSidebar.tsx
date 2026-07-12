@@ -8,12 +8,14 @@ import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
 import { NURSE_NAV_ITEMS, isNurseNavActive } from '@/lib/nurse/navigation'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
+import { useChatStore } from '@/lib/stores/chatStore'
 
 export function NurseSidebar() {
   const pathname = usePathname()
   const { logout } = useAuth()
   const { fullName, employeeCode, shiftStatus, profilePhoto, firstName, lastName } = useNurseEmployee()
   const unread = useNotificationStore((s) => s.stats?.unread ?? 0)
+  const chatUnread = useChatStore((s) => s.unreadTotal)
 
   const photo = profilePhotoUrl(profilePhoto)
 
@@ -57,6 +59,9 @@ export function NurseSidebar() {
               <span>{item.label}</span>
               {item.id === 'notifications' && unread > 0 && (
                 <span className="nurse-sidebar-badge">{unread > 9 ? '9+' : unread}</span>
+              )}
+              {item.id === 'messages' && chatUnread > 0 && (
+                <span className="nurse-sidebar-badge">{chatUnread > 9 ? '9+' : chatUnread}</span>
               )}
             </Link>
           )

@@ -5,6 +5,7 @@ import {
   Truck,
   AlertTriangle,
   Bell,
+  MessageSquare,
   User,
   History,
   PlusCircle,
@@ -18,6 +19,7 @@ export type DriverModuleId =
   | 'ambulance'
   | 'incidents'
   | 'notifications'
+  | 'messages'
   | 'profile'
 
 export type DriverNavItem = {
@@ -87,6 +89,14 @@ export const DRIVER_MODULES: DriverNavModule[] = [
     basePath: '/driver/notifications',
     singlePage: true,
     items: [{ slug: 'feed', label: 'Notifications', icon: Bell }],
+  },
+  {
+    id: 'messages',
+    label: 'Messages',
+    icon: MessageSquare,
+    basePath: '/driver/chat',
+    singlePage: true,
+    items: [{ slug: 'chat', label: 'Messages', icon: MessageSquare }],
   },
   {
     id: 'profile',

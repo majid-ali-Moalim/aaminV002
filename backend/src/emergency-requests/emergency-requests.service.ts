@@ -609,6 +609,18 @@ export class EmergencyRequestsService {
       },
     });
 
+    // Keep the crew paired with the dispatched ambulance so the assignment is
+    // reflected system-wide (availability boards, driver/nurse apps, etc.).
+    if (data.ambulanceId) {
+      const crewIds = [data.driverId, data.nurseId].filter(Boolean) as string[];
+      if (crewIds.length) {
+        await this.prisma.employee.updateMany({
+          where: { id: { in: crewIds } },
+          data: { assignedAmbulanceId: data.ambulanceId },
+        });
+      }
+    }
+
     const assignedIds = [result.driver?.userId, result.nurse?.userId].filter(Boolean) as string[];
 
     const gpsNote =
@@ -1055,6 +1067,11 @@ export class EmergencyRequestsService {
         status: 'AVAILABLE',
         id: { notIn: busyAmbulanceIds as string[] }
       },
+      include: {
+        equipmentLevel: true,
+        station: true,
+        region: true,
+      },
     });
   }
 
@@ -1078,7 +1095,6 @@ export class EmergencyRequestsService {
         employeeRoleId: driverRole.id,
         status: 'ACTIVE',
         shiftStatus: 'AVAILABLE',
-        assignedAmbulanceId: { not: null },
         id: { notIn: busyDriverIds as string[] },
       },
       include: {
@@ -1090,7 +1106,7 @@ export class EmergencyRequestsService {
           },
         },
         employeeRole: true,
-        assignedAmbulance: true,
+        assignedAmbulance: { include: { equipmentLevel: true } },
       },
     });
   }
@@ -1115,7 +1131,6 @@ export class EmergencyRequestsService {
         employeeRoleId: nurseRole.id,
         status: 'ACTIVE',
         shiftStatus: 'AVAILABLE',
-        assignedAmbulanceId: { not: null },
         id: { notIn: busyNurseIds as string[] },
       },
       include: {
@@ -1127,7 +1142,7 @@ export class EmergencyRequestsService {
           },
         },
         employeeRole: true,
-        assignedAmbulance: true,
+        assignedAmbulance: { include: { equipmentLevel: true } },
       },
     });
   }

@@ -146,6 +146,35 @@ export class NotificationsController {
     return this.notificationsService.broadcast(body);
   }
 
+  @Post('direct')
+  sendDirect(
+    @CurrentUser() user: any,
+    @Body()
+    body: {
+      userId?: string;
+      employeeId?: string;
+      title?: string;
+      message: string;
+      priority?: NotificationPriority;
+      redirectUrl?: string;
+      entityType?: string;
+      entityId?: string;
+    },
+  ) {
+    return this.notificationsService.sendDirectMessage({
+      userId: body.userId,
+      employeeId: body.employeeId,
+      title: body.title,
+      message: body.message,
+      priority: body.priority,
+      redirectUrl: body.redirectUrl,
+      entityType: body.entityType,
+      entityId: body.entityId,
+      createdById: user.id,
+      senderName: user.username || user.email || 'Administrator',
+    });
+  }
+
   @Post('mark-all-read')
   markAllRead(@CurrentUser() user: any) {
     return this.notificationsService.markAllAsRead(user.id, user.role as Role);

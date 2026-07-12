@@ -8,6 +8,7 @@ type SidebarPalette = {
   panel: string
   primary: string
   text: string
+  textActive?: string
   secondary: string
   muted: string
 }
@@ -23,6 +24,7 @@ interface SidebarMenuLinkProps {
   className?: string
   iconClassName?: string
   onNavigate?: () => void
+  badge?: number
 }
 
 export default function SidebarMenuLink({
@@ -36,11 +38,13 @@ export default function SidebarMenuLink({
   className = 'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium',
   iconClassName = 'w-4 h-4 shrink-0',
   onNavigate,
+  badge,
 }: SidebarMenuLinkProps) {
   const { isActive } = useOptimisticNav()
   const key = navKey ?? `${label}-${href}`
   const active = isActive(key, href, exact)
   const iconColor = accentColor ?? SIDEBAR.muted
+  const activeTextColor = SIDEBAR.textActive ?? SIDEBAR.text
 
   return (
     <SidebarNavLink
@@ -48,7 +52,7 @@ export default function SidebarMenuLink({
       href={href}
       exact={exact}
       className={className}
-      activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text, fontWeight: 600 }}
+      activeStyle={{ backgroundColor: SIDEBAR.primary, color: activeTextColor, fontWeight: 600 }}
       inactiveStyle={{ color: SIDEBAR.secondary }}
       onMouseEnter={(e) => {
         if (!active) {
@@ -66,9 +70,14 @@ export default function SidebarMenuLink({
     >
       <Icon
         className={iconClassName}
-        style={{ color: active ? SIDEBAR.text : iconColor }}
+        style={{ color: active ? activeTextColor : iconColor }}
       />
-      <span className="truncate leading-tight">{label}</span>
+      <span className="truncate leading-tight flex-1">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </SidebarNavLink>
   )
 }

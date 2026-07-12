@@ -1055,6 +1055,7 @@ export class DispatchersAppService {
           status: 'AVAILABLE',
           id: { notIn: busyAmbulanceIds },
         },
+        include: { equipmentLevel: true, station: true, region: true },
       }),
       driverRole
         ? this.prisma.employee.findMany({
@@ -1063,10 +1064,9 @@ export class DispatchersAppService {
               employeeRoleId: driverRole.id,
               status: 'ACTIVE',
               shiftStatus: 'AVAILABLE',
-              assignedAmbulanceId: { not: null },
               id: { notIn: busyDriverIds },
             },
-            include: { assignedAmbulance: true },
+            include: { assignedAmbulance: { include: { equipmentLevel: true } } },
           })
         : [],
       nurseRole
@@ -1078,6 +1078,7 @@ export class DispatchersAppService {
               shiftStatus: 'AVAILABLE',
               id: { notIn: busyNurseIds },
             },
+            include: { assignedAmbulance: { include: { equipmentLevel: true } } },
           })
         : [],
     ]);

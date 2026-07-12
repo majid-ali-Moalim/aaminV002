@@ -19,6 +19,14 @@
   --admin-success-bg: 152 76% 95%;
   --admin-success-text: 152 69% 31%;
   --admin-success-border: 152 58% 85%;
+  --sidebar-bg: 0 0% 100%;
+  --sidebar-panel: 210 40% 96%;
+  --sidebar-primary: 0 84% 56%;
+  --sidebar-text: 222 47% 20%;
+  --sidebar-text-active: 0 0% 100%;
+  --sidebar-secondary: 215 16% 40%;
+  --sidebar-muted: 215 20% 60%;
+  --sidebar-border: 214 32% 91%;
   color-scheme: light;
 }
 
@@ -42,6 +50,14 @@
   --admin-success-bg: 152 45% 12%;
   --admin-success-text: 152 55% 62%;
   --admin-success-border: 152 35% 22%;
+  --sidebar-bg: 222 47% 8%;
+  --sidebar-panel: 217 33% 16%;
+  --sidebar-primary: 0 84% 56%;
+  --sidebar-text: 0 0% 100%;
+  --sidebar-text-active: 0 0% 100%;
+  --sidebar-secondary: 215 20% 68%;
+  --sidebar-muted: 215 16% 48%;
+  --sidebar-border: 217 25% 20%;
   color-scheme: dark;
 }
 

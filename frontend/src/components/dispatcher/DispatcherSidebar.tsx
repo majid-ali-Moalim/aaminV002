@@ -1,12 +1,13 @@
 'use client'
 
-import { LogOut, X } from 'lucide-react'
+import { LogOut, X, MessageSquare } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
 import DispatcherEmergencyCommandSidebar from '@/components/dispatcher/DispatcherEmergencyCommandSidebar'
 import DispatcherAccountSidebar from '@/components/dispatcher/DispatcherAccountSidebar'
 import { DISPATCHER_DASHBOARD_ITEM } from '@/lib/dispatcher/emergencyCommandNav'
 import AaminLogo from '@/components/brand/AaminLogo'
+import { useChatStore } from '@/lib/stores/chatStore'
 
 const SIDEBAR = {
   bg: '#0B1220',
@@ -25,6 +26,7 @@ interface Props {
 
 export default function DispatcherSidebarSections({ open = false, onClose }: Props) {
   const { logout } = useAuth()
+  const chatUnread = useChatStore((s) => s.unreadTotal)
 
   return (
     <>
@@ -79,6 +81,17 @@ export default function DispatcherSidebarSections({ open = false, onClose }: Pro
               accentColor={DISPATCHER_DASHBOARD_ITEM.accent ? SIDEBAR[DISPATCHER_DASHBOARD_ITEM.accent] : SIDEBAR.muted}
               className="flex items-center gap-2.5 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
               onNavigate={onClose}
+            />
+            <SidebarMenuLink
+              navKey="dispatcher-chat"
+              href="/dispatcher/chat"
+              label="Messages"
+              icon={MessageSquare}
+              sidebar={SIDEBAR}
+              accentColor={SIDEBAR.muted}
+              className="flex items-center gap-2.5 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
+              onNavigate={onClose}
+              badge={chatUnread}
             />
           </div>
 

@@ -3,6 +3,7 @@ import {
   LayoutGrid,
   ClipboardList,
   Bell,
+  MessageSquare,
   User,
   Route,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ export const NURSE_NAV_ITEMS: NurseNavItem[] = [
   { id: 'mission', label: 'Case Workspace', href: '/nurse/mission', icon: Route },
   { id: 'mission-history', label: 'Case History', href: '/nurse/mission/history', icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', href: '/nurse/notifications', icon: Bell },
+  { id: 'messages', label: 'Messages', href: '/nurse/chat', icon: MessageSquare },
   { id: 'profile', label: 'My Profile', href: '/nurse/profile', icon: User },
 ]
 
