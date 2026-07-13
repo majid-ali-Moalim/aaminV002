@@ -12,6 +12,38 @@ import { API_BASE_URL } from '@/lib/api'
 
 export const API_BASE = API_BASE_URL
 
+/** Fixed emergency types for the public quick-submit form (< 30 seconds). */
+export const EMERGENCY_TYPE_OPTIONS = [
+  { value: 'road_accident', label: 'Road Accident' },
+  { value: 'chest_pain', label: 'Chest Pain' },
+  { value: 'difficulty_breathing', label: 'Difficulty Breathing' },
+  { value: 'unconscious', label: 'Unconscious Person' },
+  { value: 'pregnancy', label: 'Pregnancy Emergency' },
+  { value: 'fire_burn', label: 'Fire/Burn' },
+  { value: 'violence_injury', label: 'Violence/Injury' },
+  { value: 'stroke', label: 'Stroke' },
+  { value: 'other', label: 'Other' },
+] as const
+
+/** Quick-pick booking times for non-emergency requests. */
+export const BOOKING_TIME_SLOTS = [
+  { value: '06:00', label: '6:00 AM' },
+  { value: '07:00', label: '7:00 AM' },
+  { value: '08:00', label: '8:00 AM' },
+  { value: '09:00', label: '9:00 AM' },
+  { value: '10:00', label: '10:00 AM' },
+  { value: '11:00', label: '11:00 AM' },
+  { value: '12:00', label: '12:00 PM' },
+  { value: '13:00', label: '1:00 PM' },
+  { value: '14:00', label: '2:00 PM' },
+  { value: '15:00', label: '3:00 PM' },
+  { value: '16:00', label: '4:00 PM' },
+  { value: '17:00', label: '5:00 PM' },
+  { value: '18:00', label: '6:00 PM' },
+  { value: '19:00', label: '7:00 PM' },
+  { value: '20:00', label: '8:00 PM' },
+] as const
+
 export const STEPS = [
   { id: 'emergency', label: 'Emergency', icon: Siren },
   { id: 'request', label: 'Request', icon: User },

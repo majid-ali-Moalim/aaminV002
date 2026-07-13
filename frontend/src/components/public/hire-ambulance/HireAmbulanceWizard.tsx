@@ -1,62 +1,42 @@
 'use client'
 
-import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, useWatch } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import {
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
+  Calendar,
   Clock,
-  ExternalLink,
-  Globe,
-  HeartPulse,
   Loader2,
   MapPin,
-  Navigation,
   Phone,
-  Share2,
   Shield,
+  Siren,
   Truck,
   User,
-  Wind,
 } from 'lucide-react'
-import { COUNTRY_NAMES } from '@/lib/countries'
 import { fetchFleetAvailability } from '@/lib/emergency/emergencyTypes'
 import { fetchHireEmergencyTypes } from '@/lib/hire-ambulance/emergencyTypes'
 import { PUBLIC_HEADER_OFFSET } from '@/lib/layout/publicHeader'
-import { googleMapsUrl } from '@/lib/pickupGps'
 import {
-  AGE_GROUPS,
   API_BASE,
-  BLEEDING_STATUSES,
-  BLOOD_GROUPS,
+  BOOKING_TIME_SLOTS,
   DRAFT_KEY,
   EMERGENCY_HOTLINE,
-  HOSPITAL_TRANSPORT_TYPES,
+  EMERGENCY_TYPE_OPTIONS,
   LANG_KEY,
   REQUEST_TYPES,
-  STEPS,
   TRANSPORT_TYPES,
-  type StepId,
 } from './constants'
 import {
   buildPayload,
-  calculateAgeFromDateOfBirth,
-  computePriority,
   defaultFormValues,
   formatSomaliaPhone,
-  hasGpsLocation,
-  hasManualLocation,
-  hasPickupLocation,
-  isFuneralTransport,
-  isHospitalTransport,
-  isOtherEmergencyType,
+  isOtherEmergencyTypeValue,
   isOtherTransportType,
-  transportTypeLabel,
-  validateAllSteps,
-  validateStep,
+  validateEmergencyForm,
+  validateNonEmergencyForm,
   type HireEmergencyTypeOption,
   type HireFormValues,
 } from './formHelpers'
@@ -101,169 +81,46 @@ function SectionCard({
   )
 }
 
-const STEP_ICONS: Record<StepId, ComponentType<{ className?: string }>> = {
-  emergency: Clock,
-  request: User,
-  location: Globe,
-}
-
 export default function HireAmbulanceWizard() {
   const router = useRouter()
   const submitLockRef = useRef(false)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [stepIndex, setStepIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [lang, setLang] = useState<HireLang>('en')
   const [regions, setRegions] = useState<Region[]>([])
   const [districts, setDistricts] = useState<District[]>([])
   const [hospitals, setHospitals] = useState<Hospital[]>([])
-  const [fleet, setFleet] = useState<{ available: number; total: number }>({ available: 0, total: 0 })
+  const [fleet, setFleet] = useState({ available: 0, total: 0 })
   const [fleetStatus, setFleetStatus] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [emergencyTypes, setEmergencyTypes] = useState<HireEmergencyTypeOption[]>([])
-  const [loadingEmergencyTypes, setLoadingEmergencyTypes] = useState(true)
-  const [emergencyTypesError, setEmergencyTypesError] = useState(false)
-  const [locating, setLocating] = useState(false)
 
   const { register, handleSubmit, watch, setValue, reset, getValues, control } = useForm<HireFormValues>({
     defaultValues: defaultFormValues,
   })
 
-  const values = watch()
-  const gpsShared = hasGpsLocation(values)
-  const manualAddress = hasManualLocation(values)
+  const [requestType, regionId, districtId, emergencyType, transportType, bookingTime, conditionDescription] =
+    useWatch({
+      control,
+      name: ['requestType', 'regionId', 'districtId', 'emergencyType', 'transportType', 'bookingTime', 'conditionDescription'],
+    })
 
-  const [
-    requestType,
-    transportType,
-    isPatient,
-    regionId,
-    districtId,
-    emergencyType,
-    ageGroup,
-    dateOfBirth,
-    nationalityType,
-    country,
-    breathingStatus,
-    consciousStatus,
-    bleedingStatus,
-  ] = useWatch({
-    control,
-    name: [
-      'requestType',
-      'transportType',
-      'isPatient',
-      'regionId',
-      'districtId',
-      'emergencyType',
-      'ageGroup',
-      'dateOfBirth',
-      'nationalityType',
-      'country',
-      'breathingStatus',
-      'consciousStatus',
-      'bleedingStatus',
-    ],
-  })
-
-  const triageValues = useMemo(
-    () =>
-      ({
-        requestType: requestType ?? defaultFormValues.requestType,
-        breathingStatus: breathingStatus ?? '',
-        consciousStatus: consciousStatus ?? '',
-        bleedingStatus: bleedingStatus ?? '',
-      }) as HireFormValues,
-    [bleedingStatus, breathingStatus, consciousStatus, requestType],
-  )
   const t = useMemo(() => getHireT(lang), [lang])
-  const currentStep = STEPS[stepIndex].id
   const isEmergency = requestType === 'EMERGENCY'
-  const priority = useMemo(() => computePriority(triageValues), [triageValues])
-  const priorityStyle = {
-    CRITICAL: 'bg-red-600 text-white',
-    HIGH: 'bg-orange-500 text-white',
-    MEDIUM: 'bg-amber-500 text-white',
-    LOW: 'bg-blue-500 text-white',
-  }[priority]
-  const selectedEmergencyType = useMemo(
-    () => emergencyTypes.find((item) => item.id === emergencyType),
-    [emergencyTypes, emergencyType],
-  )
-  const showEmergencyTypeOther = isOtherEmergencyType(selectedEmergencyType)
+  const showEmergencyTypeOther = isOtherEmergencyTypeValue(emergencyType ?? '')
   const showOtherTransport = isOtherTransportType(transportType ?? '')
-  const needsHospitalDestination = !isEmergency && isHospitalTransport(transportType ?? '')
-  const needsFuneralDestination = !isEmergency && isFuneralTransport(transportType ?? '')
-  const estimatedAgeDisplay = useMemo(() => {
-    if (isPatient === 'YES') {
-      const age = calculateAgeFromDateOfBirth(dateOfBirth ?? '')
-      return age === null ? '' : String(age)
-    }
-    const selected = AGE_GROUPS.find((item) => item.value === ageGroup)
-    return selected ? String(selected.age) : ''
-  }, [ageGroup, dateOfBirth, isPatient])
+  const today = new Date().toISOString().slice(0, 10)
 
-  const currentRegion = useMemo(
-    () => regions.find((item) => item.id === regionId)?.name || '—',
-    [regions, regionId],
-  )
   const setLanguage = useCallback((next: HireLang) => {
     setLang(next)
     try {
       sessionStorage.setItem(LANG_KEY, next)
     } catch {
-      /* ignore session storage errors */
+      /* ignore */
     }
   }, [])
 
-  const captureLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported on this device')
-      return
-    }
-    setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setValue('latitude', pos.coords.latitude.toFixed(6))
-        setValue('longitude', pos.coords.longitude.toFixed(6))
-        toast.success('GPS location captured — dispatch can find you faster')
-        setLocating(false)
-      },
-      () => {
-        toast.error('Could not get location. Allow location access or enter address manually.')
-        setLocating(false)
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    )
-  }
-
-  const shareGpsLocation = async () => {
-    const lat = values.latitude
-    const lng = values.longitude
-    if (!lat || !lng) {
-      toast.error('Capture GPS location first')
-      return
-    }
-    const mapsUrl = googleMapsUrl(parseFloat(lat), parseFloat(lng))
-    const text = `My location for ambulance pickup: ${lat}, ${lng}\n${mapsUrl}`
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Ambulance pickup location', text, url: mapsUrl })
-      } else {
-        await navigator.clipboard.writeText(text)
-        toast.success('Location copied to clipboard')
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        toast.error('Could not share location')
-      }
-    }
-  }
-
   const loadPublicData = useCallback(async () => {
     setFleetStatus((prev) => (prev === 'available' ? prev : 'loading'))
-    setLoadingEmergencyTypes(true)
-    setEmergencyTypesError(false)
-
     try {
       const [regionsRes, hospitalsRes, fleetInfo, emergency] = await Promise.all([
         fetch(`${API_BASE}/api/setup/regions`, { cache: 'no-store' }),
@@ -271,17 +128,9 @@ export default function HireAmbulanceWizard() {
         fetchFleetAvailability(),
         fetchHireEmergencyTypes(),
       ])
-
-      if (regionsRes.ok) {
-        setRegions((await regionsRes.json()) as Region[])
-      }
-      if (hospitalsRes.ok) {
-        setHospitals((await hospitalsRes.json()) as Hospital[])
-      }
-
+      if (regionsRes.ok) setRegions((await regionsRes.json()) as Region[])
+      if (hospitalsRes.ok) setHospitals((await hospitalsRes.json()) as Hospital[])
       setEmergencyTypes(emergency)
-      setEmergencyTypesError(emergency.length === 0)
-
       if (fleetInfo) {
         setFleet({ available: fleetInfo.available, total: fleetInfo.total })
         setFleetStatus(fleetInfo.canAcceptRequests ? 'available' : 'unavailable')
@@ -290,33 +139,20 @@ export default function HireAmbulanceWizard() {
         setFleetStatus('unavailable')
       }
     } catch {
-      setEmergencyTypes([])
-      setEmergencyTypesError(true)
       setFleet({ available: 0, total: 0 })
       setFleetStatus('unavailable')
-    } finally {
-      setLoadingEmergencyTypes(false)
     }
   }, [])
 
   useEffect(() => {
     try {
       const savedLang = sessionStorage.getItem(LANG_KEY)
-      if (savedLang === 'en' || savedLang === 'so') {
-        setLang(savedLang)
-      }
+      if (savedLang === 'en' || savedLang === 'so') setLang(savedLang)
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (!raw) return
-      const draft = JSON.parse(raw) as { form?: Partial<HireFormValues>; stepIndex?: number; lang?: HireLang }
-      if (draft.form) {
-        reset({ ...defaultFormValues, ...draft.form })
-      }
-      if (typeof draft.stepIndex === 'number') {
-        setStepIndex(Math.max(0, Math.min(draft.stepIndex, STEPS.length - 1)))
-      }
-      if (draft.lang === 'en' || draft.lang === 'so') {
-        setLang(draft.lang)
-      }
+      const draft = JSON.parse(raw) as { form?: Partial<HireFormValues>; lang?: HireLang }
+      if (draft.form) reset({ ...defaultFormValues, ...draft.form })
+      if (draft.lang === 'en' || draft.lang === 'so') setLang(draft.lang)
     } catch {
       /* ignore */
     }
@@ -324,9 +160,7 @@ export default function HireAmbulanceWizard() {
 
   useEffect(() => {
     void loadPublicData()
-    const timer = setInterval(() => {
-      void loadPublicData()
-    }, 60000)
+    const timer = setInterval(() => void loadPublicData(), 60000)
     return () => clearInterval(timer)
   }, [loadPublicData])
 
@@ -338,9 +172,7 @@ export default function HireAmbulanceWizard() {
     }
     const loadDistricts = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/setup/districts?regionId=${regionId}`, {
-          cache: 'no-store',
-        })
+        const response = await fetch(`${API_BASE}/api/setup/districts?regionId=${regionId}`, { cache: 'no-store' })
         if (!response.ok) {
           setDistricts([])
           setValue('districtId', '')
@@ -348,9 +180,7 @@ export default function HireAmbulanceWizard() {
         }
         const rows = (await response.json()) as District[]
         setDistricts(rows)
-        if (districtId && !rows.some((item) => item.id === districtId)) {
-          setValue('districtId', '')
-        }
+        if (districtId && !rows.some((item) => item.id === districtId)) setValue('districtId', '')
       } catch {
         setDistricts([])
         setValue('districtId', '')
@@ -361,15 +191,10 @@ export default function HireAmbulanceWizard() {
 
   useEffect(() => {
     const subscription = watch(() => {
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current)
-      }
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
       draftTimerRef.current = setTimeout(() => {
         try {
-          sessionStorage.setItem(
-            DRAFT_KEY,
-            JSON.stringify({ form: getValues(), stepIndex, lang }),
-          )
+          sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form: getValues(), lang }))
         } catch {
           /* ignore */
         }
@@ -377,63 +202,42 @@ export default function HireAmbulanceWizard() {
     })
     return () => {
       subscription.unsubscribe()
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current)
-      }
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
     }
-  }, [getValues, lang, stepIndex, watch])
+  }, [getValues, lang, watch])
 
-  const handleRequestTypeChange = (nextRequestType: string) => {
-    setValue('requestType', nextRequestType)
-    if (nextRequestType === 'EMERGENCY') {
+  const handleRequestTypeChange = (next: string) => {
+    setValue('requestType', next)
+    if (next === 'EMERGENCY') {
       setValue('transportType', '')
       setValue('transportTypeOther', '')
-      return
+      setValue('bookingDate', '')
+      setValue('bookingTime', '')
+      setValue('bookingTimeCustom', '')
+      setValue('destinationHospital', '')
+      setValue('consent', false)
+    } else {
+      setValue('emergencyType', '')
+      setValue('emergencyTypeOther', '')
     }
-    setValue('emergencyType', '')
-    setValue('emergencyTypeOther', '')
-    setValue('consciousStatus', '')
-    setValue('breathingStatus', '')
-    setValue('bleedingStatus', '')
-    setValue('needsOxygen', false)
-    setValue('needsStretcher', false)
-  }
-
-  const nextStep = () => {
-    const formValues = getValues()
-    const validationError = validateStep(currentStep, formValues, { emergencyTypes, t })
-    if (validationError) {
-      toast.error(validationError)
-      return
-    }
-    setStepIndex((prev) => Math.min(prev + 1, STEPS.length - 1))
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const prevStep = () => {
-    setStepIndex((prev) => Math.max(prev - 1, 0))
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const onSubmit = async (data: HireFormValues) => {
     if (submitLockRef.current) return
     submitLockRef.current = true
     setSubmitting(true)
-
     try {
       if (fleetStatus === 'unavailable' || fleet.available <= 0) {
         toast.error(t.errors.noFleet)
         return
       }
-
-      const allValidation = validateAllSteps(data, { emergencyTypes, t })
-      if (allValidation) {
-        const nextIndex = STEPS.findIndex((step) => step.id === allValidation.step)
-        if (nextIndex >= 0) setStepIndex(nextIndex)
-        toast.error(allValidation.message)
+      const validationError = isEmergency
+        ? validateEmergencyForm(data, { emergencyTypes, t })
+        : validateNonEmergencyForm(data, { emergencyTypes, t })
+      if (validationError) {
+        toast.error(validationError)
         return
       }
-
       const response = await fetch(`${API_BASE}/api/emergency-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -443,863 +247,212 @@ export default function HireAmbulanceWizard() {
         const errorBody = await response.json().catch(() => ({}))
         throw new Error(errorBody?.message || t.errors.submitFailed)
       }
-
       const result = (await response.json()) as { trackingCode?: string }
-      const code = encodeURIComponent(result.trackingCode || '')
-      const at = encodeURIComponent(new Date().toISOString())
-      const langParam = encodeURIComponent(lang)
       sessionStorage.removeItem(DRAFT_KEY)
-      router.push(`/hire-ambulance/success?code=${code}&at=${at}&lang=${langParam}`)
+      router.push(
+        `/hire-ambulance/success?code=${encodeURIComponent(result.trackingCode || '')}&at=${encodeURIComponent(new Date().toISOString())}&lang=${encodeURIComponent(lang)}`,
+      )
     } catch (error) {
-      const message = error instanceof Error ? error.message : t.errors.submitFailed
-      toast.error(message || t.errors.submitFailed)
+      toast.error(error instanceof Error ? error.message : t.errors.submitFailed)
     } finally {
       submitLockRef.current = false
       setSubmitting(false)
     }
   }
 
-  const goToStep = (index: number) => {
-    if (index <= stepIndex) {
-      setStepIndex(index)
-    }
-  }
-
-  const reviewForm = currentStep === 'location' ? getValues() : null
-  const reviewRows = reviewForm
-    ? [
-        { label: t.review.requestType, value: isEmergency ? t.requestType.emergency : t.requestType.nonEmergency },
-        ...(!isEmergency
-          ? [{ label: t.review.transportType, value: transportTypeLabel(reviewForm, t) || '—' }]
-          : []),
-        ...(isEmergency
-          ? [
-              {
-                label: t.review.emergencyType,
-                value: selectedEmergencyType
-                  ? isOtherEmergencyType(selectedEmergencyType)
-                    ? reviewForm.emergencyTypeOther || selectedEmergencyType.name
-                    : selectedEmergencyType.name
-                  : '—',
-              },
-            ]
-          : []),
-        { label: t.review.priority, value: priority },
-        { label: t.review.patient, value: reviewForm.patientName || '—' },
-        { label: t.review.age, value: estimatedAgeDisplay || '—' },
-        {
-          label: t.review.phone,
-          value: reviewForm.callerPhone ? `+252 ${reviewForm.callerPhone}` : '—',
-        },
-        {
-          label: t.review.location,
-          value: hasPickupLocation(reviewForm)
-            ? `${reviewForm.areaName}, ${reviewForm.landmarkDescription}`
-            : '—',
-        },
-        { label: t.review.region, value: currentRegion },
-        ...(reviewForm.destinationHospital.trim()
-          ? [{ label: t.review.destination, value: reviewForm.destinationHospital.trim() }]
-          : []),
-        ...(reviewForm.conditionDescription.trim()
-          ? [
-              {
-                label: isEmergency ? t.review.condition : t.review.transportNotes,
-                value: reviewForm.conditionDescription.trim(),
-              },
-            ]
-          : []),
-      ]
-    : []
+  const LocationFields = ({ areaRequired = false }: { areaRequired?: boolean }) => (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div>
+        <FieldLabel required>{t.emergencyQuick.region}</FieldLabel>
+        <select {...register('regionId')} className={selectClass}>
+          <option value="">{t.location.selectRegion}</option>
+          {regions.map((region) => (
+            <option key={region.id} value={region.id}>
+              {region.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <FieldLabel required>{t.emergencyQuick.district}</FieldLabel>
+        <select
+          {...register('districtId')}
+          disabled={!regionId}
+          className={`${selectClass} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
+        >
+          <option value="">{t.location.selectDistrict}</option>
+          {districts.map((district) => (
+            <option key={district.id} value={district.id}>
+              {district.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="sm:col-span-2">
+        <FieldLabel required={areaRequired}>{t.emergencyQuick.areaStreet}</FieldLabel>
+        <input {...register('areaName')} className={inputClass} placeholder="e.g. Hodan, Wadada Maka Al-Mukarama" />
+      </div>
+    </div>
+  )
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-32 ${PUBLIC_HEADER_OFFSET}`}>
       <section className="border-b border-slate-100 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-          <a
-            href={`tel:${EMERGENCY_HOTLINE}`}
-            className="inline-flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700"
-          >
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3">
+          <a href={`tel:${EMERGENCY_HOTLINE}`} className="inline-flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700">
             <Phone className="h-4 w-4" />
             {t.emergencyHotline}: {EMERGENCY_HOTLINE}
           </a>
           <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              className={`h-8 rounded-lg px-3 text-xs font-bold uppercase ${
-                lang === 'en' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('so')}
-              className={`h-8 rounded-lg px-3 text-xs font-bold uppercase ${
-                lang === 'so' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              SO
-            </button>
+            {(['en', 'so'] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLanguage(code)}
+                className={`h-8 rounded-lg px-3 text-xs font-bold uppercase ${lang === code ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                {code}
+              </button>
+            ))}
           </div>
         </div>
       </section>
 
       <section className="px-4 pb-6 pt-8">
-        <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_300px]">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              {t.heroTitle} <span className="text-red-600">{t.heroTitleAccent}</span>
-            </h1>
-            <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">{t.heroSubtitle}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">{t.fleetLive}</p>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100">
-                <Truck className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-black text-slate-900 dark:text-white">{fleet.available}</p>
-                <p className="text-xs text-slate-500">{t.fleetAvailable}</p>
-              </div>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full bg-gradient-to-r from-red-500 to-rose-400 transition-all"
-                style={{ width: fleet.total ? `${(fleet.available / fleet.total) * 100}%` : '0%' }}
-              />
-            </div>
-            <div className={`mt-3 inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold ${priorityStyle}`}>
-              {t.priority}: {priority}
-            </div>
+        <div className="mx-auto w-full max-w-4xl">
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+            {t.heroTitle} <span className="text-red-600">{t.heroTitleAccent}</span>
+          </h1>
+          <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">{t.heroSubtitle}</p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
+            <Truck className="h-4 w-4 text-red-600" />
+            <span className="font-bold text-slate-900">{fleet.available}</span>
+            <span className="text-slate-500">{t.fleetAvailable}</span>
           </div>
         </div>
       </section>
 
-      <div className="sticky top-[7.25rem] z-20 border-y border-slate-100 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-4 py-4 backdrop-blur">
-        <div className="mx-auto w-full max-w-6xl">
-          <div className="flex gap-1 overflow-x-auto pb-1">
-            {STEPS.map((step, index) => {
-              const Icon = STEP_ICONS[step.id]
-              const active = index === stepIndex
-              const done = index < stepIndex
+      <form
+        id="hire-ambulance-form"
+        onSubmit={handleSubmit(onSubmit)}
+        className="mx-auto w-full max-w-4xl space-y-6 px-4 py-4"
+      >
+        {fleetStatus !== 'available' && (
+          <div className={`rounded-2xl border p-4 text-sm ${fleetStatus === 'loading' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+            <div className="flex items-start gap-2">
+              {fleetStatus === 'loading' ? <Loader2 className="mt-0.5 h-4 w-4 animate-spin" /> : <AlertTriangle className="mt-0.5 h-4 w-4" />}
+              <p>{fleetStatus === 'loading' ? t.fleet.checking : `${t.fleet.unavailableDesc} ${t.fleet.callHotline} ${EMERGENCY_HOTLINE}`}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 1 — Request Type */}
+        <SectionCard title={t.requestType.title} subtitle={t.requestType.subtitle}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {REQUEST_TYPES.map((typeOption) => {
+              const selected = requestType === typeOption.value
               return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => goToStep(index)}
-                  disabled={index > stepIndex}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wider transition ${
-                    active
-                      ? 'bg-red-600 text-white'
-                      : done
-                        ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                        : 'bg-slate-50 text-slate-400'
-                  }`}
+                <label
+                  key={typeOption.value}
+                  className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-5 transition ${selected ? `${typeOption.accent} ring-2` : 'border-slate-200 hover:border-slate-300'}`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t.steps[step.id]}</span>
-                  <span className="sm:hidden">{index + 1}</span>
-                </button>
+                  <input
+                    type="radio"
+                    name="requestType"
+                    value={typeOption.value}
+                    checked={selected}
+                    onChange={() => handleRequestTypeChange(typeOption.value)}
+                    className="mt-1 h-4 w-4 accent-red-600"
+                  />
+                  <div>
+                    <p className="font-bold text-slate-900">
+                      {typeOption.value === 'EMERGENCY' ? t.requestType.emergency : t.requestType.nonEmergency}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {typeOption.value === 'EMERGENCY' ? t.requestType.emergencyDesc : t.requestType.nonEmergencyDesc}
+                    </p>
+                  </div>
+                </label>
               )
             })}
           </div>
-        </div>
-      </div>
+        </SectionCard>
 
-      <form
-        id="hire-ambulance-form"
-        onSubmit={(event) => event.preventDefault()}
-        className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[1fr_280px]"
-      >
-        <div className="space-y-6">
-          {fleetStatus !== 'available' ? (
-            <div
-              className={`rounded-2xl border p-4 text-sm ${
-                fleetStatus === 'loading'
-                  ? 'border-blue-200 bg-blue-50 text-blue-900'
-                  : 'border-amber-200 bg-amber-50 text-amber-900'
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                {fleetStatus === 'loading' ? (
-                  <Loader2 className="mt-0.5 h-4 w-4 animate-spin" />
-                ) : (
-                  <AlertTriangle className="mt-0.5 h-4 w-4" />
-                )}
-                <p>
-                  {fleetStatus === 'loading'
-                    ? t.fleet.checking
-                    : `${t.fleet.unavailableDesc} ${t.fleet.callHotline} ${EMERGENCY_HOTLINE}`}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {currentStep === 'emergency' ? (
-            <>
-              <SectionCard title={t.requestType.title} subtitle={t.requestType.subtitle}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {REQUEST_TYPES.map((typeOption) => {
-                    const selected = requestType === typeOption.value
-                    return (
-                      <button
-                        key={typeOption.value}
-                        type="button"
-                        onClick={() => handleRequestTypeChange(typeOption.value)}
-                        className={`rounded-2xl border-2 p-5 text-left transition ${
-                          selected ? `${typeOption.accent} ring-2` : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="font-bold text-slate-900">
-                          {typeOption.value === 'EMERGENCY' ? t.requestType.emergency : t.requestType.nonEmergency}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {typeOption.value === 'EMERGENCY'
-                            ? t.requestType.emergencyDesc
-                            : t.requestType.nonEmergencyDesc}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </SectionCard>
-
-              {isEmergency ? (
-                <>
-                  <SectionCard title={t.emergencyType.title} subtitle={t.emergencyType.subtitle}>
-                    {loadingEmergencyTypes ? (
-                      <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {t.emergencyType.loading}
-                      </div>
-                    ) : (
-                      <>
-                        <FieldLabel>{t.emergencyType.label}</FieldLabel>
-                        <select
-                          {...register('emergencyType', {
-                            onChange: (event) => {
-                              const selected = emergencyTypes.find((item) => item.id === event.target.value)
-                              if (!isOtherEmergencyType(selected)) {
-                                setValue('emergencyTypeOther', '')
-                              }
-                            },
-                          })}
-                          className={selectClass}
-                        >
-                          <option value="">{t.triage.select}</option>
-                          {emergencyTypes.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                        {showEmergencyTypeOther ? (
-                          <div className="mt-4">
-                            <FieldLabel required>{t.emergencyType.otherLabel}</FieldLabel>
-                            <input
-                              {...register('emergencyTypeOther')}
-                              className={inputClass}
-                              placeholder={t.emergencyType.otherPlaceholder}
-                            />
-                          </div>
-                        ) : null}
-                        {emergencyTypesError ? (
-                          <button
-                            type="button"
-                            onClick={() => void loadPublicData()}
-                            className="mt-4 text-sm font-semibold text-red-700 hover:text-red-800"
-                          >
-                            {t.emergencyType.retry}
-                          </button>
-                        ) : null}
-                      </>
-                    )}
-                  </SectionCard>
-
-                  <SectionCard title={t.triage.title} subtitle={t.triage.subtitle}>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div>
-                        <FieldLabel required>{t.triage.conscious}</FieldLabel>
-                        <select {...register('consciousStatus')} className={selectClass}>
-                          <option value="">{t.triage.select}</option>
-                          <option value="CONSCIOUS">{t.triage.consciousYes}</option>
-                          <option value="UNCONSCIOUS">{t.triage.consciousNo}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <FieldLabel required>{t.triage.breathing}</FieldLabel>
-                        <select {...register('breathingStatus')} className={selectClass}>
-                          <option value="">{t.triage.select}</option>
-                          <option value="NORMAL">{t.triage.breathNormal}</option>
-                          <option value="DIFFICULTY">{t.triage.breathDifficulty}</option>
-                          <option value="NOT_BREATHING">{t.triage.breathNone}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <FieldLabel required>{t.triage.bleeding}</FieldLabel>
-                        <select {...register('bleedingStatus')} className={selectClass}>
-                          <option value="">{t.triage.select}</option>
-                          {BLEEDING_STATUSES.map((status) => (
-                            <option key={status.value} value={status.value}>
-                              {status.value === 'NONE'
-                                ? t.triage.bleedNone
-                                : status.value === 'MINOR'
-                                  ? t.triage.bleedMinor
-                                  : status.value === 'SEVERE'
-                                    ? t.triage.bleedSevere
-                                    : t.triage.bleedHeavy}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <FieldLabel>{t.triage.condition}</FieldLabel>
-                      <textarea
-                        {...register('conditionDescription')}
-                        rows={4}
-                        className={`${inputClass} h-auto resize-none py-3`}
-                        placeholder={t.triage.conditionPlaceholder}
-                      />
-                    </div>
-                  </SectionCard>
-                </>
-              ) : (
-                <SectionCard title={t.transport.title} subtitle={t.transport.subtitle}>
-                  <div>
-                    <FieldLabel required>{t.transport.typeLabel}</FieldLabel>
-                    <select
-                      {...register('transportType', {
-                        onChange: (event) => {
-                          const selected = event.target.value
-                          if (!isOtherTransportType(selected)) {
-                            setValue('transportTypeOther', '')
-                          }
-                          if (!HOSPITAL_TRANSPORT_TYPES.includes(selected as (typeof HOSPITAL_TRANSPORT_TYPES)[number])) {
-                            if (!isFuneralTransport(selected)) {
-                              setValue('destinationHospital', '')
-                            }
-                          }
-                        },
-                      })}
-                      className={selectClass}
-                    >
-                      <option value="">{t.triage.select}</option>
-                      {TRANSPORT_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {t.transportTypes[type.value]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {showOtherTransport ? (
-                    <div className="mt-4">
-                      <FieldLabel required>{t.transport.otherLabel}</FieldLabel>
-                      <input
-                        {...register('transportTypeOther')}
-                        className={inputClass}
-                        placeholder={t.transport.otherPlaceholder}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="mt-4">
-                    <FieldLabel>{t.transport.notesLabel}</FieldLabel>
-                    <textarea
-                      {...register('conditionDescription')}
-                      rows={4}
-                      className={`${inputClass} h-auto resize-none py-3`}
-                      placeholder={t.transport.notesPlaceholder}
-                    />
-                  </div>
-                </SectionCard>
-              )}
-            </>
-          ) : null}
-
-          {currentStep === 'request' ? (
-            <SectionCard title={t.identity.title} subtitle={t.identity.subtitle}>
-              <FieldLabel required>{t.identity.areYouPatient}</FieldLabel>
-              <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                {[
-                  { value: 'YES', title: t.identity.imPatient, description: t.identity.imPatientDesc },
-                  { value: 'NO', title: t.identity.someoneElse, description: t.identity.someoneElseDesc },
-                ].map((item) => (
+        {/* Emergency — short form only */}
+        {isEmergency && (
+          <SectionCard title={t.emergencyQuick.title} subtitle={t.emergencyQuick.subtitle}>
+            <div className="space-y-5">
+              <div>
+                <FieldLabel required>{t.emergencyQuick.patientName}</FieldLabel>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input {...register('patientName')} className={inputClass} placeholder="Full name" />
                   <button
-                    key={item.value}
                     type="button"
-                    onClick={() => setValue('isPatient', item.value)}
-                    className={`rounded-2xl border-2 p-5 text-left transition ${
-                      isPatient === item.value
-                        ? 'border-red-500 bg-red-50 ring-2 ring-red-200'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
+                    onClick={() => setValue('patientName', 'Unknown Patient')}
+                    className="shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                   >
-                    <p className="font-bold text-slate-900">{item.title}</p>
-                    <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+                    {t.unknownPatient}
                   </button>
-                ))}
-              </div>
-
-              {isPatient === 'NO' ? (
-                <div className="mb-6 grid gap-4 border-b border-slate-100 pb-6 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel required>{t.identity.callerName}</FieldLabel>
-                    <input {...register('callerName')} className={inputClass} />
-                  </div>
-                  <div>
-                    <FieldLabel required>{t.identity.relationship}</FieldLabel>
-                    <select {...register('callerRelationship')} className={selectClass}>
-                      <option value="">{t.triage.select}</option>
-                      <option value="FAMILY">{t.identity.relationships.FAMILY}</option>
-                      <option value="FRIEND">{t.identity.relationships.FRIEND}</option>
-                      <option value="WITNESS">{t.identity.relationships.WITNESS}</option>
-                      <option value="OTHER">{t.identity.relationships.OTHER}</option>
-                    </select>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <FieldLabel required>{t.identity.phone}</FieldLabel>
-                  <div className="flex">
-                    <span className="inline-flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600">
-                      +252
-                    </span>
-                    <input
-                      {...register('callerPhone')}
-                      className={`${inputClass} rounded-l-none`}
-                      placeholder={t.identity.phonePlaceholder}
-                      onChange={(event) => setValue('callerPhone', formatSomaliaPhone(event.target.value))}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <FieldLabel>{t.identity.altPhone}</FieldLabel>
-                  <div className="flex">
-                    <span className="inline-flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600">
-                      +252
-                    </span>
-                    <input
-                      {...register('callerAltPhone')}
-                      className={`${inputClass} rounded-l-none`}
-                      placeholder={t.identity.altPlaceholder}
-                      onChange={(event) => setValue('callerAltPhone', formatSomaliaPhone(event.target.value))}
-                    />
-                  </div>
                 </div>
               </div>
-            </SectionCard>
-          ) : null}
 
-          {currentStep === 'request' ? (
-            <SectionCard title={t.patient.title} subtitle={t.patient.subtitle}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <FieldLabel required={isPatient === 'YES'}>{t.patient.fullName}</FieldLabel>
-                  <input {...register('patientName')} className={inputClass} />
+              <div>
+                <FieldLabel required>{t.emergencyQuick.phone}</FieldLabel>
+                <div className="flex">
+                  <span className="inline-flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600">+252</span>
+                  <input
+                    {...register('callerPhone')}
+                    className={`${inputClass} rounded-l-none`}
+                    placeholder={t.identity.phonePlaceholder}
+                    onChange={(e) => setValue('callerPhone', formatSomaliaPhone(e.target.value))}
+                  />
                 </div>
+              </div>
 
-                {isPatient === 'YES' ? (
-                  <div>
-                    <FieldLabel required>{t.patient.dob}</FieldLabel>
-                    <input
-                      type="date"
-                      {...register('dateOfBirth')}
-                      className={inputClass}
-                      max={new Date().toISOString().slice(0, 10)}
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <FieldLabel required>{t.patient.ageGroup}</FieldLabel>
-                    <select {...register('ageGroup')} className={selectClass}>
-                      <option value="">{t.triage.select}</option>
-                      {AGE_GROUPS.map((group) => (
-                        <option key={group.value} value={group.value}>
-                          {t.ageGroups[group.value]}
-                        </option>
-                      ))}
-                    </select>
+              <div>
+                <FieldLabel required>{t.emergencyType.label}</FieldLabel>
+                <select
+                  {...register('emergencyType', {
+                    onChange: (e) => {
+                      if (!isOtherEmergencyTypeValue(e.target.value)) setValue('emergencyTypeOther', '')
+                    },
+                  })}
+                  className={selectClass}
+                >
+                  <option value="">{t.triage.select}</option>
+                  {EMERGENCY_TYPE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {showEmergencyTypeOther && (
+                  <div className="mt-4">
+                    <FieldLabel required>{t.emergencyType.otherLabel}</FieldLabel>
+                    <input {...register('emergencyTypeOther')} className={inputClass} placeholder={t.emergencyType.otherPlaceholder} />
                   </div>
                 )}
-
-                <div>
-                  <FieldLabel>{t.patient.estimatedAge}</FieldLabel>
-                  <input
-                    readOnly
-                    value={estimatedAgeDisplay}
-                    className={`${inputClass} cursor-not-allowed bg-slate-50`}
-                    placeholder="—"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>{t.patient.gender}</FieldLabel>
-                  <select {...register('gender')} className={selectClass}>
-                    <option value="">{t.triage.select}</option>
-                    <option value="MALE">{t.patient.genderMale}</option>
-                    <option value="FEMALE">{t.patient.genderFemale}</option>
-                  </select>
-                </div>
-                <div>
-                  <FieldLabel>{t.patient.marital}</FieldLabel>
-                  <select {...register('maritalStatus')} className={selectClass}>
-                    <option value="">{t.triage.select}</option>
-                    <option value="SINGLE">{t.patient.single}</option>
-                    <option value="MARRIED">{t.patient.married}</option>
-                  </select>
-                </div>
-                <div>
-                  <FieldLabel>{t.patient.blood}</FieldLabel>
-                  <select {...register('bloodGroup')} className={selectClass}>
-                    <option value="">{t.triage.select}</option>
-                    {BLOOD_GROUPS.map((group) => (
-                      <option key={group} value={group}>
-                        {group === 'UNKNOWN' ? t.patient.bloodUnknown : group}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </SectionCard>
-          ) : null}
-
-          {currentStep === 'location' ? (
-            <>
-              <SectionCard
-                title="GPS Location"
-                subtitle="Share your exact coordinates for faster dispatch — or describe the building and street"
-              >
-                <div className="rounded-2xl border-2 border-dashed border-red-200 bg-red-50/40 p-6 space-y-4">
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={captureLocation}
-                      disabled={locating}
-                      className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 transition disabled:opacity-60 shadow-md shadow-red-200"
-                    >
-                      {locating ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Navigation className="w-5 h-5" />
-                      )}
-                      {locating ? 'Getting location…' : 'Share my GPS location'}
-                    </button>
-                    {gpsShared && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void shareGpsLocation()}
-                          className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition"
-                        >
-                          <Share2 className="w-5 h-5" />
-                          Share with others
-                        </button>
-                        <a
-                          href={googleMapsUrl(parseFloat(values.latitude), parseFloat(values.longitude))}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl border-2 border-slate-200 text-slate-800 font-bold text-sm hover:bg-white transition"
-                        >
-                          <ExternalLink className="w-5 h-5" />
-                          Adjust pin in Maps
-                        </a>
-                      </>
-                    )}
-                  </div>
-                  {gpsShared && (
-                    <>
-                      <div className="flex items-center gap-2 text-sm text-green-800 font-semibold bg-green-100 px-4 py-3 rounded-xl border border-green-200">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span>
-                          Patient location pinned: {values.latitude}, {values.longitude}
-                        </span>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <div>
-                          <FieldLabel>Latitude (fine-tune)</FieldLabel>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            className={inputClass}
-                            value={values.latitude}
-                            onChange={(e) => setValue('latitude', e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <FieldLabel>Longitude (fine-tune)</FieldLabel>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            className={inputClass}
-                            value={values.longitude}
-                            onChange={(e) => setValue('longitude', e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <FieldLabel>Where is the patient? (building, street, floor)</FieldLabel>
-                        <textarea
-                          {...register('gpsLocationDescription')}
-                          rows={3}
-                          className={`${inputClass} h-auto py-3 resize-none`}
-                          placeholder="e.g. Blue building near Z block, 2nd floor…"
-                        />
-                      </div>
-                    </>
-                  )}
-                  <p className="text-sm text-slate-600">
-                    {gpsShared
-                      ? 'GPS captured. Add building or street details above, or continue with the address section below.'
-                      : manualAddress
-                        ? 'Address provided. GPS is optional but pins the patient faster.'
-                        : 'Share GPS to mark where the patient is, or enter the pickup address below.'}
-                  </p>
-                </div>
-              </SectionCard>
-
-              <SectionCard
-                title={needsFuneralDestination ? t.location.pickupFuneral : t.location.pickupTitle}
-                subtitle={
-                  gpsShared
-                    ? 'Optional — add street or area details'
-                    : needsFuneralDestination
-                      ? t.location.pickupFuneralSubtitle
-                      : t.location.pickupSubtitle
-                }
-              >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <FieldLabel required>{t.location.region}</FieldLabel>
-                  <select {...register('regionId')} className={selectClass}>
-                    <option value="">{t.location.selectRegion}</option>
-                    {regions.map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <FieldLabel required>{t.location.district}</FieldLabel>
-                  <select
-                    {...register('districtId')}
-                    disabled={!regionId}
-                    className={`${selectClass} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
-                  >
-                    <option value="">{t.location.selectDistrict}</option>
-                    {districts.map((district) => (
-                      <option key={district.id} value={district.id}>
-                        {district.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <FieldLabel required>{t.location.area}</FieldLabel>
-                  <input {...register('areaName')} className={inputClass} />
-                </div>
-                <div className="sm:col-span-2">
-                  <FieldLabel>{t.location.landmark}</FieldLabel>
-                  <textarea
-                    {...register('landmarkDescription')}
-                    rows={3}
-                    className={`${inputClass} h-auto resize-none py-3`}
-                    placeholder={t.location.landmarkPlaceholder}
-                  />
-                </div>
-
-                {needsFuneralDestination ? (
-                  <div className="sm:col-span-2">
-                    <FieldLabel required>{t.location.destinationFuneral}</FieldLabel>
-                    <input
-                      {...register('destinationHospital')}
-                      className={inputClass}
-                      placeholder={t.location.destinationFuneralHint}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </SectionCard>
-            </>
-          ) : null}
-
-          {currentStep === 'request' ? (
-            <SectionCard title={t.details.title} subtitle={t.details.subtitle}>
-              <div className="space-y-6">
-                <div>
-                  <FieldLabel>{t.details.nationality}</FieldLabel>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {[
-                      { value: 'LOCAL', label: t.details.local },
-                      { value: 'INTERNATIONAL', label: t.details.international },
-                    ].map((item) => (
-                      <label
-                        key={item.value}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition ${
-                          nationalityType === item.value
-                            ? 'border-red-500 bg-red-50'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          checked={nationalityType === item.value}
-                          onChange={() => {
-                            setValue('nationalityType', item.value)
-                            if (item.value === 'LOCAL') {
-                              setValue('country', 'Somalia')
-                            } else if (country === 'Somalia') {
-                              setValue('country', '')
-                            }
-                          }}
-                          className="h-4 w-4"
-                        />
-                        <span className="font-semibold text-slate-800">{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {nationalityType === 'INTERNATIONAL' ? (
-                  <div>
-                    <FieldLabel>{t.details.country}</FieldLabel>
-                    <select {...register('country')} className={selectClass}>
-                      <option value="">{t.details.selectCountry}</option>
-                      {COUNTRY_NAMES.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <FieldLabel required={needsHospitalDestination}>
-                      {t.details.destinationHospital}
-                    </FieldLabel>
-                    <input
-                      list="hire-hospital-list"
-                      {...register('destinationHospital')}
-                      className={inputClass}
-                      placeholder={t.details.destinationHospitalPlaceholder}
-                    />
-                    <datalist id="hire-hospital-list">
-                      {hospitals.map((hospital) => (
-                        <option key={hospital.id} value={hospital.name} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div>
-                    <FieldLabel>{t.details.preferredLang}</FieldLabel>
-                    <select {...register('preferredLanguage')} className={selectClass}>
-                      <option value="">{t.triage.select}</option>
-                      <option value="SOMALI">Somali</option>
-                      <option value="ENGLISH">English</option>
-                      <option value="ARABIC">Arabic</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <FieldLabel>{t.details.special}</FieldLabel>
-                    <textarea
-                      {...register('specialInstructions')}
-                      rows={3}
-                      className={`${inputClass} h-auto resize-none py-3`}
-                      placeholder={t.details.specialPlaceholder}
-                    />
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-          ) : null}
-
-          {currentStep === 'location' && reviewForm ? (
-            <>
-              <SectionCard title={t.review.title} subtitle={t.review.subtitle}>
-                <div className="space-y-2">
-                  {reviewRows.map((row) => (
-                    <div key={row.label} className="flex items-start justify-between gap-4 border-b border-slate-50 py-2 text-sm">
-                      <span className="font-medium text-slate-500">{row.label}</span>
-                      <span className="text-right font-semibold text-slate-900">{row.value || '—'}</span>
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-
-              <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <p>{t.review.consentWarning}</p>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 p-5">
-                <input type="checkbox" {...register('consent')} className="mt-1 h-5 w-5" />
-                <span className="text-sm font-semibold text-slate-800">{t.review.consent}</span>
-              </label>
-            </>
-          ) : null}
-        </div>
+              <LocationFields />
 
-        <aside className="hidden lg:block">
-          <div className="sticky top-44 space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400">{t.needHelp}</p>
-            <ul className="space-y-3 text-sm text-slate-600">
-              <li className="flex gap-2">
-                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                {t.helpSecure}
-              </li>
-              <li className="flex gap-2">
-                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                {t.helpCall}
-              </li>
-              <li className="flex gap-2">
-                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                {t.helpHotline} <a href={`tel:${EMERGENCY_HOTLINE}`}>{EMERGENCY_HOTLINE}</a>
-              </li>
-            </ul>
-          </div>
-        </aside>
-      </form>
+              <div>
+                <FieldLabel>{t.emergencyQuick.whatHappened}</FieldLabel>
+                <p className="mb-2 text-xs text-slate-400">{t.emergencyQuick.whatHappenedHint}</p>
+                <textarea
+                  {...register('conditionDescription', { maxLength: 100 })}
+                  rows={3}
+                  maxLength={100}
+                  className={`${inputClass} h-auto resize-none py-3`}
+                  placeholder={t.emergencyQuick.whatHappenedPlaceholder}
+                />
+                <p className="mt-1 text-right text-xs text-slate-400">{(conditionDescription ?? '').length}/100</p>
+              </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-100 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <p className="hidden text-xs font-bold uppercase tracking-wider text-slate-400 sm:block">
-            {t.step} {stepIndex + 1} {t.of} {STEPS.length}
-          </p>
-          <div className="ml-auto flex w-full gap-3 sm:w-auto">
-            {stepIndex > 0 ? (
               <button
-                type="button"
-                onClick={prevStep}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-1 rounded-xl border-2 border-slate-200 px-6 text-sm font-bold uppercase text-slate-700 transition hover:bg-slate-50 sm:flex-none"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                {t.back}
-              </button>
-            ) : null}
-
-            {stepIndex < STEPS.length - 1 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-1 rounded-xl bg-red-600 px-8 text-sm font-bold uppercase text-white shadow-lg shadow-red-200 transition hover:bg-red-700 sm:flex-none"
-              >
-                {t.continue}
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
+                type="submit"
                 disabled={submitting}
-                onClick={() => {
-                  void handleSubmit(onSubmit)()
-                }}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-8 text-sm font-bold uppercase text-white shadow-lg shadow-red-200 transition hover:bg-red-700 disabled:opacity-60 sm:flex-none"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-base font-bold uppercase tracking-wide text-white shadow-lg shadow-red-200 transition hover:bg-red-700 disabled:opacity-60"
               >
                 {submitting ? (
                   <>
@@ -1307,13 +460,192 @@ export default function HireAmbulanceWizard() {
                     {t.submitting}
                   </>
                 ) : (
-                  t.requestAmbulance
+                  <>
+                    <Siren className="h-5 w-5" />
+                    {t.requestEmergencyAmbulance}
+                  </>
                 )}
               </button>
-            )}
-          </div>
+            </div>
+          </SectionCard>
+        )}
+
+        {/* Non-Emergency — complete booking form */}
+        {!isEmergency && requestType === 'NON_EMERGENCY' && (
+          <>
+            <SectionCard title={t.patient.title} subtitle={t.patient.subtitle}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <FieldLabel required>{t.patient.fullName}</FieldLabel>
+                  <input {...register('patientName')} className={inputClass} />
+                </div>
+                <div className="sm:col-span-2">
+                  <FieldLabel required>{t.identity.phone}</FieldLabel>
+                  <div className="flex">
+                    <span className="inline-flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600">+252</span>
+                    <input
+                      {...register('callerPhone')}
+                      className={`${inputClass} rounded-l-none`}
+                      placeholder={t.identity.phonePlaceholder}
+                      onChange={(e) => setValue('callerPhone', formatSomaliaPhone(e.target.value))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title={t.transport.title} subtitle={t.transport.subtitle}>
+              <div>
+                <FieldLabel required>{t.transport.typeLabel}</FieldLabel>
+                <select
+                  {...register('transportType', {
+                    onChange: (e) => {
+                      if (!isOtherTransportType(e.target.value)) setValue('transportTypeOther', '')
+                    },
+                  })}
+                  className={selectClass}
+                >
+                  <option value="">{t.triage.select}</option>
+                  {TRANSPORT_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {t.transportTypes[type.value]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {showOtherTransport && (
+                <div className="mt-4">
+                  <FieldLabel required>{t.transport.otherLabel}</FieldLabel>
+                  <input {...register('transportTypeOther')} className={inputClass} placeholder={t.transport.otherPlaceholder} />
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title={t.location.pickupTitle} subtitle={t.location.pickupSubtitle}>
+              <LocationFields areaRequired />
+            </SectionCard>
+
+            <SectionCard title={t.details.destinationHospital} subtitle={t.details.subtitle}>
+              <FieldLabel required>{t.details.destinationHospital}</FieldLabel>
+              <input
+                list="hire-hospital-list"
+                {...register('destinationHospital')}
+                className={inputClass}
+                placeholder={t.details.destinationHospitalPlaceholder}
+              />
+              <datalist id="hire-hospital-list">
+                {hospitals.map((hospital) => (
+                  <option key={hospital.id} value={hospital.name} />
+                ))}
+              </datalist>
+            </SectionCard>
+
+            <SectionCard title={t.schedule.title} subtitle={t.schedule.subtitle}>
+              <div className="grid gap-6">
+                <div>
+                  <FieldLabel required>{t.schedule.date}</FieldLabel>
+                  <div className="relative">
+                    <Calendar className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input type="date" {...register('bookingDate')} min={today} className={`${inputClass} pl-11`} />
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel required>{t.schedule.time}</FieldLabel>
+                  <p className="mb-3 text-xs text-slate-400">{t.schedule.timeHint}</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {BOOKING_TIME_SLOTS.map((slot) => (
+                      <button
+                        key={slot.value}
+                        type="button"
+                        onClick={() => {
+                          setValue('bookingTime', slot.value)
+                          setValue('bookingTimeCustom', '')
+                        }}
+                        className={`rounded-xl border-2 px-2 py-2.5 text-xs font-semibold transition ${
+                          bookingTime === slot.value
+                            ? 'border-red-500 bg-red-50 text-red-700'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        {slot.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setValue('bookingTime', 'custom')}
+                      className={`rounded-xl border-2 px-2 py-2.5 text-xs font-semibold transition ${
+                        bookingTime === 'custom'
+                          ? 'border-red-500 bg-red-50 text-red-700'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {t.schedule.customTime}
+                    </button>
+                  </div>
+                  {bookingTime === 'custom' && (
+                    <div className="relative mt-3">
+                      <Clock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input type="time" {...register('bookingTimeCustom')} className={`${inputClass} pl-11`} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title={t.details.special} subtitle={t.transport.notesLabel}>
+              <textarea
+                {...register('specialInstructions')}
+                rows={4}
+                className={`${inputClass} h-auto resize-none py-3`}
+                placeholder={t.details.specialPlaceholder}
+              />
+            </SectionCard>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 p-5">
+              <input type="checkbox" {...register('consent')} className="mt-1 h-5 w-5 accent-red-600" />
+              <span className="text-sm font-semibold text-slate-800">{t.review.consent}</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-base font-bold uppercase tracking-wide text-white shadow-lg shadow-red-200 transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {t.submitting}
+                </>
+              ) : (
+                <>
+                  <MapPin className="h-5 w-5" />
+                  {t.bookAmbulance}
+                </>
+              )}
+            </button>
+          </>
+        )}
+      </form>
+
+      <aside className="mx-auto mt-8 hidden max-w-4xl px-4 lg:block">
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">{t.needHelp}</p>
+          <ul className="mt-3 space-y-3 text-sm text-slate-600">
+            <li className="flex gap-2">
+              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+              {t.helpSecure}
+            </li>
+            <li className="flex gap-2">
+              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+              {t.helpCall}
+            </li>
+            <li className="flex gap-2">
+              <User className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+              {t.helpHotline} <a href={`tel:${EMERGENCY_HOTLINE}`} className="font-bold text-red-600">{EMERGENCY_HOTLINE}</a>
+            </li>
+          </ul>
         </div>
-      </div>
+      </aside>
     </div>
   )
 }

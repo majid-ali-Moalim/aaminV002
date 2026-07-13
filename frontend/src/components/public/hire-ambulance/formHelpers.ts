@@ -1,6 +1,7 @@
 import { StepId } from './constants'
 import {
   AGE_GROUPS,
+  EMERGENCY_TYPE_OPTIONS,
   HOSPITAL_TRANSPORT_TYPES,
   TRANSPORT_TYPES,
   type TransportTypeValue,
@@ -82,6 +83,9 @@ export type HireFormValues = {
   longitude: string
   gpsLocationDescription: string
   nationalityUnknown: boolean
+  bookingDate: string
+  bookingTime: string
+  bookingTimeCustom: string
 }
 
 export const defaultFormValues: HireFormValues = {
@@ -123,6 +127,9 @@ export const defaultFormValues: HireFormValues = {
   longitude: '',
   gpsLocationDescription: '',
   nationalityUnknown: false,
+  bookingDate: '',
+  bookingTime: '',
+  bookingTimeCustom: '',
 }
 
 export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): boolean {
@@ -325,16 +332,80 @@ export function validateStep(
   }
 }
 
+export function isOtherEmergencyTypeValue(value: string): boolean {
+  return value === 'other'
+}
+
+export function emergencyTypeLabel(value: string, other?: string): string {
+  if (value === 'other') return other?.trim() || 'Other'
+  const row = EMERGENCY_TYPE_OPTIONS.find((item) => item.value === value)
+  return row?.label || value
+}
+
+export function resolveIncidentCategoryId(
+  emergencyType: string,
+  emergencyTypes?: HireEmergencyTypeOption[],
+): string | undefined {
+  if (!emergencyType || emergencyType === 'other') return undefined
+  const label = emergencyTypeLabel(emergencyType).toLowerCase()
+  const match = emergencyTypes?.find((item) => {
+    const name = item.name.trim().toLowerCase()
+    const code = (item.code || '').toLowerCase().replace(/-/g, '_')
+    return name === label || name.includes(label) || code.includes(emergencyType)
+  })
+  return match?.incidentCategoryId || match?.incidentCategory?.id || undefined
+}
+
+export function validateEmergencyForm(data: HireFormValues, context: ValidationContext): string | null {
+  const { t } = context
+  if (!data.patientName.trim()) return t.validation.patientName
+  if (!data.callerPhone.trim()) return t.validation.phone
+  if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
+  if (!data.emergencyType) return t.validation.emergencyType
+  if (isOtherEmergencyTypeValue(data.emergencyType) && !data.emergencyTypeOther.trim()) {
+    return t.validation.emergencyTypeOther
+  }
+  if (!data.regionId) return t.validation.region
+  if (!data.districtId) return t.validation.district
+  if (data.conditionDescription.length > 100) return t.validation.conditionMax
+  return null
+}
+
+export function validateNonEmergencyForm(data: HireFormValues, context: ValidationContext): string | null {
+  const { t } = context
+  if (!data.patientName.trim()) return t.validation.patientName
+  if (!data.callerPhone.trim()) return t.validation.phone
+  if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
+  if (!data.transportType) return t.validation.transportType
+  if (isOtherTransportType(data.transportType) && !data.transportTypeOther.trim()) {
+    return t.validation.transportTypeOther
+  }
+  if (!data.regionId) return t.validation.region
+  if (!data.districtId) return t.validation.district
+  if (!data.areaName.trim()) return t.validation.area
+  if (!data.destinationHospital.trim()) return t.validation.destinationHospital
+  if (!data.bookingDate) return t.validation.bookingDate
+  const time = data.bookingTime === 'custom' ? data.bookingTimeCustom : data.bookingTime
+  if (!time) return t.validation.bookingTime
+  if (!data.consent) return t.validation.consent
+  return null
+}
+
+export function resolvedBookingTime(data: HireFormValues): string {
+  if (data.bookingTime === 'custom') return data.bookingTimeCustom.trim()
+  return data.bookingTime.trim()
+}
+
 export function validateAllSteps(
   data: HireFormValues,
   context: ValidationContext,
 ): { step: StepId; message: string } | null {
-  const steps: StepId[] = ['emergency', 'request', 'location']
-  for (const step of steps) {
-    const err = validateStep(step, data, context)
-    if (err) return { step, message: err }
+  if (isEmergencyRequest(data)) {
+    const err = validateEmergencyForm(data, context)
+    return err ? { step: 'emergency', message: err } : null
   }
-  return null
+  const err = validateNonEmergencyForm(data, context)
+  return err ? { step: 'request', message: err } : null
 }
 
 export function transportTypeLabel(data: HireFormValues, t: HireTranslations): string {
@@ -346,91 +417,59 @@ export function transportTypeLabel(data: HireFormValues, t: HireTranslations): s
 }
 
 export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergencyTypeOption[]) {
-  const selectedType = emergencyTypes?.find((et) => et.id === data.emergencyType)
-  const emergencyTypeLabel = selectedType
-    ? isOtherEmergencyType(selectedType)
-      ? data.emergencyTypeOther.trim()
-      : selectedType.name
-    : data.emergencyType
-  const incidentCategoryId =
-    selectedType?.incidentCategoryId || selectedType?.incidentCategory?.id || undefined
+  const emergency = isEmergencyRequest(data)
+  const typeLabel = emergencyTypeLabel(data.emergencyType, data.emergencyTypeOther)
+  const incidentCategoryId = emergency
+    ? resolveIncidentCategoryId(data.emergencyType, emergencyTypes)
+    : undefined
 
-  const finalCallerName =
-    data.isPatient === 'YES' ? data.patientName.trim() : data.callerName.trim()
-  const finalRelationship = data.isPatient === 'YES' ? 'SELF' : data.callerRelationship || 'OTHER'
-  const finalAge = resolvePatientAge(data)
-  const finalCountry =
-    data.nationalityType === 'LOCAL' ? 'Somalia' : data.country.trim() || 'Somalia'
-
-  const gps = hasGpsLocation(data)
-  const manual = hasManualLocation(data)
-  const gpsLabel = gps ? `GPS: ${data.latitude}, ${data.longitude}` : ''
-  const gpsDetail = data.gpsLocationDescription.trim()
   const pickupParts = [data.areaName.trim(), data.landmarkDescription.trim()].filter(Boolean)
   const pickupLocation =
-    [manual ? data.areaName.trim() : '', gpsLabel, gpsDetail ? `Place: ${gpsDetail}` : '']
-      .filter(Boolean)
-      .join(' | ') ||
-    pickupParts.join(', ') ||
-    gpsLabel ||
-    'Location pending confirmation'
-  const pickupLandmark =
-    data.areaName.trim() || gpsDetail || data.landmarkDescription.trim() || gpsLabel || undefined
+    pickupParts.join(', ') || data.areaName.trim() || 'Location pending confirmation'
+  const pickupLandmark = data.areaName.trim() || data.landmarkDescription.trim() || undefined
 
-  const transportLabel = !isEmergencyRequest(data)
+  const transportLabel = !emergency
     ? TRANSPORT_TYPES.find((tt) => tt.value === data.transportType)?.label ??
       (isOtherTransportType(data.transportType) ? data.transportTypeOther.trim() : '')
     : ''
 
+  const bookingTime = resolvedBookingTime(data)
+
   return {
-    callerName: finalCallerName || 'Unknown Caller',
+    callerName: data.patientName.trim() || 'Unknown Caller',
     callerPhone: normalizePhone(data.callerPhone),
-    callerAltPhone: data.callerAltPhone.trim() ? normalizePhone(data.callerAltPhone) : '',
-    callerRelationship: finalRelationship,
+    callerRelationship: 'OTHER',
     newPatient: {
-      fullName: data.patientName.trim() || (data.isPatient === 'YES' ? 'Unknown Patient' : 'Patient'),
-      gender: data.gender || 'UNKNOWN',
-      age: finalAge,
-      dateOfBirth: data.isPatient === 'YES' ? data.dateOfBirth : undefined,
-      bloodType: data.bloodGroup && data.bloodGroup !== 'UNKNOWN' ? data.bloodGroup : undefined,
-      maritalStatus: data.maritalStatus || 'UNKNOWN',
-      nationalityType: data.nationalityType || 'LOCAL',
-      country: finalCountry,
+      fullName: data.patientName.trim() || 'Unknown Patient',
+      gender: 'UNKNOWN',
+      age: 0,
       phone: normalizePhone(data.callerPhone),
-      alternatePhone: data.callerAltPhone.trim() ? normalizePhone(data.callerAltPhone) : undefined,
+      nationalityType: 'LOCAL',
+      country: 'Somalia',
     },
-    patientCondition:
-      data.conditionDescription.trim() ||
-      (isEmergencyRequest(data)
-        ? 'Emergency transport request'
-        : `Non-emergency transport: ${transportLabel}`),
-    consciousStatus: data.consciousStatus || undefined,
-    breathingStatus: data.breathingStatus || undefined,
-    bleedingStatus: data.bleedingStatus || undefined,
-    destination: data.destinationHospital.trim() || undefined,
-    priority: computePriority(data),
+    patientCondition: emergency
+      ? data.conditionDescription.trim() || `Emergency: ${typeLabel}`
+      : `Non-emergency transport: ${transportLabel}`,
+    destination: !emergency ? data.destinationHospital.trim() || undefined : undefined,
+    priority: emergency ? 'HIGH' : 'LOW',
     incidentCategoryId,
     regionId: data.regionId || undefined,
     districtId: data.districtId || undefined,
     pickupLocation,
     pickupLandmark,
-    pickupLatitude: gps ? parseFloat(data.latitude) : undefined,
-    pickupLongitude: gps ? parseFloat(data.longitude) : undefined,
-    needsOxygen: data.needsOxygen,
-    needsStretcher: data.needsStretcher,
     notes: [
-      isEmergencyRequest(data) && emergencyTypeLabel ? `Emergency Type: ${emergencyTypeLabel}` : '',
-      !isEmergencyRequest(data) && transportLabel ? `Transport Type: ${transportLabel}` : '',
-      !isEmergencyRequest(data) && isOtherTransportType(data.transportType)
+      `Request Type: ${emergency ? 'Emergency' : 'Non-Emergency'}`,
+      emergency ? `Emergency Type: ${typeLabel}` : '',
+      !emergency && transportLabel ? `Transport Type: ${transportLabel}` : '',
+      !emergency && isOtherTransportType(data.transportType)
         ? `Transport Detail: ${data.transportTypeOther.trim()}`
         : '',
-      data.ageGroup && data.isPatient === 'NO' ? `Age Group: ${data.ageGroup}` : '',
-      `Language: ${data.preferredLanguage || 'Not specified'}`,
-      `Special Instructions: ${data.specialInstructions.trim() || 'None'}`,
-      `Request Type: ${isEmergencyRequest(data) ? 'Emergency' : 'Non-Emergency'}`,
-      gps ? `Coordinates: ${data.latitude}, ${data.longitude}` : '',
-      gps && gpsDetail ? `Patient location details: ${gpsDetail}` : '',
-      gps ? `Maps: https://www.google.com/maps?q=${data.latitude},${data.longitude}` : '',
+      !emergency && data.bookingDate ? `Booking Date: ${data.bookingDate}` : '',
+      !emergency && bookingTime ? `Booking Time: ${bookingTime}` : '',
+      !emergency ? `Special Instructions: ${data.specialInstructions.trim() || 'None'}` : '',
+      emergency && data.conditionDescription.trim()
+        ? `What happened: ${data.conditionDescription.trim()}`
+        : '',
     ]
       .filter(Boolean)
       .join('\n'),
