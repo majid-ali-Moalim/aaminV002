@@ -25,6 +25,29 @@ export const EMERGENCY_TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ] as const
 
+/** Triage options aligned with dispatcher New Emergency Case form. */
+export const HIRE_CONSCIOUS_OPTIONS = [
+  { value: 'CONSCIOUS', labelKey: 'consciousYes' as const },
+  { value: 'SEMI_CONSCIOUS', labelKey: 'consciousSemi' as const },
+  { value: 'UNCONSCIOUS', labelKey: 'consciousNo' as const },
+] as const
+
+export const HIRE_BREATHING_OPTIONS = [
+  { value: 'NORMAL', labelKey: 'breathNormal' as const },
+  { value: 'DIFFICULT', labelKey: 'breathDifficulty' as const },
+  { value: 'LABORED', labelKey: 'breathLabored' as const },
+  { value: 'ARREST', labelKey: 'breathNone' as const },
+] as const
+
+export const HIRE_BLEEDING_OPTIONS = [
+  { value: 'NONE', labelKey: 'bleedNone' as const },
+  { value: 'MILD', labelKey: 'bleedMinor' as const },
+  { value: 'MODERATE', labelKey: 'bleedModerate' as const },
+  { value: 'SEVERE', labelKey: 'bleedSevere' as const },
+] as const
+
+export { TRIAGE_PRIORITY_OPTIONS } from '@/lib/emergency/triageOptions'
+
 /** Quick-pick booking times for non-emergency requests. */
 export const BOOKING_TIME_SLOTS = [
   { value: '06:00', label: '6:00 AM' },

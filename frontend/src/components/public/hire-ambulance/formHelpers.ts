@@ -86,6 +86,83 @@ export type HireFormValues = {
   bookingDate: string
   bookingTime: string
   bookingTimeCustom: string
+  scheduleMode: 'now' | 'booking' | ''
+}
+
+const KEYBOARD_SPAM_PATTERNS = [
+  'asdf',
+  'asdfg',
+  'asdfgh',
+  'qwerty',
+  'qwertyu',
+  'qwer',
+  'zxcv',
+  'zxcvb',
+  'zxcvbn',
+  '12345',
+  '123456',
+  '1234567',
+  'abcdef',
+  'abc123',
+  'qazwsx',
+  'qweasd',
+  'wasd',
+  'fdsa',
+  'ytrewq',
+  'poiuy',
+  'lkjhg',
+  'mnbvc',
+  'hjkl',
+  'yuio',
+  'bnm',
+]
+
+const ALLOWED_LITERAL_NAMES = new Set(['unknown patient', 'unknown caller'])
+
+export function hasRepeatedCharacters(value: string, minRepeat = 4): boolean {
+  const compact = value.replace(/\s+/g, '')
+  if (compact.length < minRepeat) return false
+  return /(.)\1{3,}/i.test(compact)
+}
+
+export function hasKeyboardSpamPattern(value: string): boolean {
+  const compact = value.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (compact.length < 4) return false
+  return KEYBOARD_SPAM_PATTERNS.some((pattern) => compact.includes(pattern))
+}
+
+export function isInvalidTextInput(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (ALLOWED_LITERAL_NAMES.has(trimmed.toLowerCase())) return false
+  return hasRepeatedCharacters(trimmed) || hasKeyboardSpamPattern(trimmed)
+}
+
+function validateOptionalTextField(
+  value: string,
+  field: keyof HireFormValues,
+  errors: HireFormErrors,
+  invalidMessage: string,
+) {
+  if (value.trim() && isInvalidTextInput(value)) {
+    errors[field] = invalidMessage
+  }
+}
+
+function validateRequiredTextField(
+  value: string,
+  field: keyof HireFormValues,
+  errors: HireFormErrors,
+  requiredMessage: string,
+  invalidMessage: string,
+) {
+  if (!value.trim()) {
+    errors[field] = requiredMessage
+    return
+  }
+  if (isInvalidTextInput(value)) {
+    errors[field] = invalidMessage
+  }
 }
 
 export const defaultFormValues: HireFormValues = {
@@ -108,9 +185,9 @@ export const defaultFormValues: HireFormValues = {
   transportType: '',
   transportTypeOther: '',
   conditionDescription: '',
-  consciousStatus: '',
-  breathingStatus: '',
-  bleedingStatus: '',
+  consciousStatus: 'CONSCIOUS',
+  breathingStatus: 'NORMAL',
+  bleedingStatus: 'NONE',
   regionId: '',
   districtId: '',
   areaName: '',
@@ -130,6 +207,7 @@ export const defaultFormValues: HireFormValues = {
   bookingDate: '',
   bookingTime: '',
   bookingTimeCustom: '',
+  scheduleMode: 'now',
 }
 
 export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): boolean {
@@ -138,20 +216,31 @@ export function isEmergencyRequest(data: Pick<HireFormValues, 'requestType'>): b
 
 export function computePriority(data: HireFormValues): 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' {
   if (!isEmergencyRequest(data)) return 'LOW'
+
+  const { consciousStatus, breathingStatus, bleedingStatus } = data
+  if (!consciousStatus || !breathingStatus || !bleedingStatus) return 'HIGH'
+
   if (
-    data.breathingStatus === 'NOT_BREATHING' ||
-    data.consciousStatus === 'UNCONSCIOUS' ||
-    data.bleedingStatus === 'HEAVY_UNCONTROLLED'
+    ['NOT_BREATHING', 'ARREST'].includes(breathingStatus) ||
+    consciousStatus === 'UNCONSCIOUS' ||
+    bleedingStatus === 'SEVERE'
   ) {
     return 'CRITICAL'
   }
+
   if (
-    data.breathingStatus === 'DIFFICULTY' ||
-    data.bleedingStatus === 'SEVERE' ||
-    data.bleedingStatus === 'MINOR'
+    ['DIFFICULTY', 'DIFFICULT', 'LABORED'].includes(breathingStatus) ||
+    consciousStatus === 'SEMI_CONSCIOUS' ||
+    bleedingStatus === 'MILD' ||
+    bleedingStatus === 'MODERATE'
   ) {
     return 'HIGH'
   }
+
+  if (consciousStatus === 'CONSCIOUS' && breathingStatus === 'NORMAL' && bleedingStatus === 'NONE') {
+    return 'MEDIUM'
+  }
+
   return 'HIGH'
 }
 
@@ -356,39 +445,126 @@ export function resolveIncidentCategoryId(
   return match?.incidentCategoryId || match?.incidentCategory?.id || undefined
 }
 
-export function validateEmergencyForm(data: HireFormValues, context: ValidationContext): string | null {
+export type HireFormErrors = Partial<Record<keyof HireFormValues, string>>
+
+export function validateEmergencyFormFields(
+  data: HireFormValues,
+  context: ValidationContext,
+): HireFormErrors {
   const { t } = context
-  if (!data.patientName.trim()) return t.validation.patientName
-  if (!data.callerPhone.trim()) return t.validation.phone
-  if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
-  if (!data.emergencyType) return t.validation.emergencyType
-  if (isOtherEmergencyTypeValue(data.emergencyType) && !data.emergencyTypeOther.trim()) {
-    return t.validation.emergencyTypeOther
+  const errors: HireFormErrors = {}
+
+  if (!data.requestType) errors.requestType = t.validation.requestType
+  validateRequiredTextField(
+    data.patientName,
+    'patientName',
+    errors,
+    t.validation.patientName,
+    t.validation.invalidText,
+  )
+  if (!data.callerPhone.trim()) {
+    errors.callerPhone = t.validation.phone
+  } else if (!isValidSomaliaPhone(data.callerPhone)) {
+    errors.callerPhone = t.validation.phoneInvalid
   }
-  if (!data.regionId) return t.validation.region
-  if (!data.districtId) return t.validation.district
-  if (data.conditionDescription.length > 100) return t.validation.conditionMax
-  return null
+  if (!data.emergencyType) {
+    errors.emergencyType = t.validation.emergencyType
+  } else if (isOtherEmergencyTypeValue(data.emergencyType)) {
+    validateRequiredTextField(
+      data.emergencyTypeOther,
+      'emergencyTypeOther',
+      errors,
+      t.validation.emergencyTypeOther,
+      t.validation.invalidText,
+    )
+  }
+  if (!data.regionId) errors.regionId = t.validation.region
+  if (!data.districtId) errors.districtId = t.validation.district
+  if (!data.consciousStatus) errors.consciousStatus = t.validation.conscious
+  if (!data.breathingStatus) errors.breathingStatus = t.validation.breathing
+  if (!data.bleedingStatus) errors.bleedingStatus = t.validation.bleeding
+  validateOptionalTextField(data.areaName, 'areaName', errors, t.validation.invalidText)
+  if (data.conditionDescription.length > 100) {
+    errors.conditionDescription = t.validation.conditionMax
+  } else {
+    validateOptionalTextField(data.conditionDescription, 'conditionDescription', errors, t.validation.invalidText)
+  }
+
+  return errors
+}
+
+export function validateNonEmergencyFormFields(
+  data: HireFormValues,
+  context: ValidationContext,
+): HireFormErrors {
+  const { t } = context
+  const errors: HireFormErrors = {}
+
+  if (!data.requestType) errors.requestType = t.validation.requestType
+  validateRequiredTextField(
+    data.patientName,
+    'patientName',
+    errors,
+    t.validation.patientName,
+    t.validation.invalidText,
+  )
+  if (!data.callerPhone.trim()) {
+    errors.callerPhone = t.validation.phone
+  } else if (!isValidSomaliaPhone(data.callerPhone)) {
+    errors.callerPhone = t.validation.phoneInvalid
+  }
+  if (!data.transportType) {
+    errors.transportType = t.validation.transportType
+  } else if (isOtherTransportType(data.transportType)) {
+    validateRequiredTextField(
+      data.transportTypeOther,
+      'transportTypeOther',
+      errors,
+      t.validation.transportTypeOther,
+      t.validation.invalidText,
+    )
+  }
+  if (!data.regionId) errors.regionId = t.validation.region
+  if (!data.districtId) errors.districtId = t.validation.district
+  validateRequiredTextField(data.areaName, 'areaName', errors, t.validation.area, t.validation.invalidText)
+  validateRequiredTextField(
+    data.destinationHospital,
+    'destinationHospital',
+    errors,
+    t.validation.destinationHospital,
+    t.validation.invalidText,
+  )
+  validateOptionalTextField(data.specialInstructions, 'specialInstructions', errors, t.validation.invalidText)
+
+  const wantsBooking = data.scheduleMode === 'booking'
+  if (wantsBooking) {
+    if (!data.bookingDate) {
+      errors.bookingDate = t.validation.bookingDate
+    } else if (data.bookingDate < new Date().toISOString().slice(0, 10)) {
+      errors.bookingDate = t.validation.bookingDatePast
+    }
+    if (!data.bookingTime) {
+      errors.bookingTime = t.validation.bookingTime
+    } else if (data.bookingTime === 'custom' && !data.bookingTimeCustom.trim()) {
+      errors.bookingTimeCustom = t.validation.bookingTime
+    }
+  }
+  if (!data.consent) errors.consent = t.validation.consent
+
+  return errors
+}
+
+export function firstFormError(errors: HireFormErrors): string | null {
+  const values = Object.values(errors).filter(Boolean)
+  return values[0] ?? null
+}
+
+export function validateEmergencyForm(data: HireFormValues, context: ValidationContext): string | null {
+  return firstFormError(validateEmergencyFormFields(data, context))
 }
 
 export function validateNonEmergencyForm(data: HireFormValues, context: ValidationContext): string | null {
-  const { t } = context
-  if (!data.patientName.trim()) return t.validation.patientName
-  if (!data.callerPhone.trim()) return t.validation.phone
-  if (!isValidSomaliaPhone(data.callerPhone)) return t.validation.phoneInvalid
-  if (!data.transportType) return t.validation.transportType
-  if (isOtherTransportType(data.transportType) && !data.transportTypeOther.trim()) {
-    return t.validation.transportTypeOther
-  }
-  if (!data.regionId) return t.validation.region
-  if (!data.districtId) return t.validation.district
-  if (!data.areaName.trim()) return t.validation.area
-  if (!data.destinationHospital.trim()) return t.validation.destinationHospital
-  if (!data.bookingDate) return t.validation.bookingDate
-  const time = data.bookingTime === 'custom' ? data.bookingTimeCustom : data.bookingTime
-  if (!time) return t.validation.bookingTime
-  if (!data.consent) return t.validation.consent
-  return null
+  return firstFormError(validateNonEmergencyFormFields(data, context))
 }
 
 export function resolvedBookingTime(data: HireFormValues): string {
@@ -433,7 +609,9 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
       (isOtherTransportType(data.transportType) ? data.transportTypeOther.trim() : '')
     : ''
 
-  const bookingTime = resolvedBookingTime(data)
+  const wantsBooking = !emergency && data.scheduleMode === 'booking'
+  const bookingTime = wantsBooking ? resolvedBookingTime(data) : ''
+  const priority = emergency ? computePriority(data) : 'LOW'
 
   return {
     callerName: data.patientName.trim() || 'Unknown Caller',
@@ -441,17 +619,26 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     callerRelationship: 'OTHER',
     newPatient: {
       fullName: data.patientName.trim() || 'Unknown Patient',
-      gender: 'UNKNOWN',
       age: 0,
       phone: normalizePhone(data.callerPhone),
       nationalityType: 'LOCAL',
       country: 'Somalia',
+      ...(data.gender === 'MALE' || data.gender === 'FEMALE' ? { gender: data.gender } : {}),
     },
     patientCondition: emergency
       ? data.conditionDescription.trim() || `Emergency: ${typeLabel}`
       : `Non-emergency transport: ${transportLabel}`,
     destination: !emergency ? data.destinationHospital.trim() || undefined : undefined,
-    priority: emergency ? 'HIGH' : 'LOW',
+    priority,
+    ...(emergency
+      ? {
+          consciousStatus: data.consciousStatus,
+          breathingStatus: data.breathingStatus,
+          bleedingStatus: data.bleedingStatus,
+          needsOxygen: data.needsOxygen,
+          needsStretcher: data.needsStretcher,
+        }
+      : {}),
     incidentCategoryId,
     regionId: data.regionId || undefined,
     districtId: data.districtId || undefined,
@@ -460,12 +647,14 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
     notes: [
       `Request Type: ${emergency ? 'Emergency' : 'Non-Emergency'}`,
       emergency ? `Emergency Type: ${typeLabel}` : '',
+      emergency ? `Assessed Priority: ${priority}` : '',
       !emergency && transportLabel ? `Transport Type: ${transportLabel}` : '',
       !emergency && isOtherTransportType(data.transportType)
         ? `Transport Detail: ${data.transportTypeOther.trim()}`
         : '',
-      !emergency && data.bookingDate ? `Booking Date: ${data.bookingDate}` : '',
-      !emergency && bookingTime ? `Booking Time: ${bookingTime}` : '',
+      !emergency ? `Schedule: ${wantsBooking ? 'Booking' : 'Now'}` : '',
+      wantsBooking && data.bookingDate ? `Booking Date: ${data.bookingDate}` : '',
+      wantsBooking && bookingTime ? `Booking Time: ${bookingTime}` : '',
       !emergency ? `Special Instructions: ${data.specialInstructions.trim() || 'None'}` : '',
       emergency && data.conditionDescription.trim()
         ? `What happened: ${data.conditionDescription.trim()}`

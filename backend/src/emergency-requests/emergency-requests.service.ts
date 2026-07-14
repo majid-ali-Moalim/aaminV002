@@ -205,7 +205,7 @@ export class EmergencyRequestsService {
               fullName: String(data.newPatient.fullName),
               age: resolvedAge,
               dateOfBirth: resolvedDob,
-              gender: data.newPatient.gender || null,
+              gender: this.mapGender(data.newPatient.gender),
               bloodType: this.mapBloodType(data.newPatient.bloodType) as any || null,
               phone: String(data.newPatient.phone),
               alternatePhone: data.newPatient.alternatePhone || null,
@@ -1036,6 +1036,13 @@ export class EmergencyRequestsService {
 
     const fallback = `${prefix}${Date.now().toString().slice(-6)}`;
     return fallback;
+  }
+
+  private mapGender(gender?: string | null): 'MALE' | 'FEMALE' | null {
+    if (!gender) return null;
+    const normalized = gender.trim().toUpperCase();
+    if (normalized === 'MALE' || normalized === 'FEMALE') return normalized;
+    return null;
   }
 
   private mapBloodType(type: string): string | null {
