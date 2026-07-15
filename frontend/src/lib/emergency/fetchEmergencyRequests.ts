@@ -30,7 +30,7 @@ export function dispatcherQueueForPage(
     case 'my-cases':
       return 'my-cases'
     case 'critical':
-      return 'regional'
+      return 'my-active'
     default:
       return 'regional'
   }

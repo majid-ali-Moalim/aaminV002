@@ -8,15 +8,15 @@ export default function Home() {
   return (
     <div className={PUBLIC_HEADER_OFFSET}>
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-red-50 to-white overflow-hidden">
+      <section className="relative bg-gradient-to-br from-red-50 to-white dark:from-slate-900 dark:to-slate-950 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white leading-tight mb-6">
                 Welcome to
                 <span className="text-red-600"> Aamin Ambulance</span>
               </h1>
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              <p className="text-xl text-gray-600 dark:text-slate-400 mb-8 leading-relaxed">
                 Fast, Reliable, and Life-Saving Emergency Response. 
                 Professional ambulance services and emergency medical dispatch support available 24/7 across Somalia.
               </p>
@@ -29,7 +29,7 @@ export default function Home() {
                 </Link>
                 <Link
                   href="/login"
-                  className="bg-white text-red-600 px-8 py-4 rounded-xl font-semibold border-2 border-red-600 hover:bg-red-50 transition-colors"
+                  className="bg-white dark:bg-slate-800 text-red-600 px-8 py-4 rounded-xl font-semibold border-2 border-red-600 hover:bg-red-50 dark:hover:bg-slate-700 transition-colors"
                 >
                   Admin Portal
                 </Link>
@@ -47,29 +47,29 @@ export default function Home() {
 
             {/* Hero Visual */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-red-100 to-red-50 rounded-3xl p-8 shadow-xl">
+              <div className="bg-gradient-to-br from-red-100 to-red-50 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 shadow-xl">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
                     <Activity className="w-8 h-8 text-red-600 mb-3" />
-                    <h3 className="font-semibold text-gray-900 mb-1">Quick Response</h3>
-                    <p className="text-sm text-gray-600">Rapid dispatch when every minute counts</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Quick Response</h3>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">Rapid dispatch when every minute counts</p>
                   </div>
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
                     <Users className="w-8 h-8 text-red-600 mb-3" />
-                    <h3 className="font-semibold text-gray-900 mb-1">Field Crew</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Field Crew</h3>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       <HeroFleetSummary />
                     </p>
                   </div>
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
                     <Shield className="w-8 h-8 text-red-600 mb-3" />
-                    <h3 className="font-semibold text-gray-900 mb-1">Fully Equipped</h3>
-                    <p className="text-sm text-gray-600"><HeroAmbulanceSummary /></p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Fully Equipped</h3>
+                    <p className="text-sm text-gray-600 dark:text-slate-400"><HeroAmbulanceSummary /></p>
                   </div>
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
                     <MapPin className="w-8 h-8 text-red-600 mb-3" />
-                    <h3 className="font-semibold text-gray-900 mb-1">Wide Coverage</h3>
-                    <p className="text-sm text-gray-600">All major regions</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Wide Coverage</h3>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">All major regions</p>
                   </div>
                 </div>
               </div>
@@ -79,75 +79,75 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-gray-50 dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
               Why Choose Aamin Ambulance?
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-slate-400 max-w-3xl mx-auto">
               We provide comprehensive emergency medical services with a focus on speed, 
               professionalism, and patient care.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
               <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
                 <Activity className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 24/7 Emergency Service
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
                 Round-the-clock emergency medical response with dedicated dispatch team
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
               <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
                 <Users className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Drivers & Nurses
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
                 Active drivers and nurses providing emergency medical care in the field
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
               <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
                 <Shield className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Modern Fleet
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
                 State-of-the-art ambulances equipped with advanced medical equipment
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
               <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
                 <MapPin className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Wide Coverage
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
                 Serving all major cities and regions across Somalia
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
               <div className="bg-red-100 rounded-2xl p-4 inline-block mb-6">
                 <Phone className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Easy Booking
               </h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
                 Simple ambulance booking through our online request form
               </p>
             </div>
@@ -156,13 +156,13 @@ export default function Home() {
       </section>
 
       {/* Statistics Section */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-white dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
               Trusted by Thousands
             </h2>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-gray-600 dark:text-slate-400">
               Live operational statistics from the Aamin dispatch system
             </p>
           </div>

@@ -323,9 +323,13 @@ export const patientsService = {
 
 // Emergency requests service
 export const emergencyRequestsService = {
-  getAll: async () => {
+  getAll: async (filters?: { queue?: string; status?: string }) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests')
+    const params = new URLSearchParams()
+    if (filters?.queue) params.set('queue', filters.queue)
+    if (filters?.status) params.set('status', filters.status)
+    const qs = params.toString()
+    return await api.get(`/api/emergency-requests${qs ? `?${qs}` : ''}`)
   },
 
   getById: async (id: string) => {
@@ -948,6 +952,105 @@ export const notificationsService = {
     const api = new ApiService()
     return await api.post('/api/notifications/broadcast', data)
   },
+  sendDirect: async (data: {
+    userId?: string
+    employeeId?: string
+    title?: string
+    message: string
+    priority?: string
+    redirectUrl?: string
+    entityType?: string
+    entityId?: string
+  }) => {
+    const api = new ApiService()
+    return await api.post('/api/notifications/direct', data)
+  },
+}
+
+export interface ChatContact {
+  userId: string
+  name: string
+  role: string
+  avatar: string | null
+  online: boolean
+  lastMessage: string | null
+  lastMessageAt: string | null
+  lastMessageFromMe: boolean
+  unreadCount: number
+}
+
+export interface ChatMessage {
+  id: string
+  senderId: string
+  recipientId: string
+  content: string
+  attachmentUrl?: string | null
+  attachmentName?: string | null
+  attachmentType?: string | null
+  attachmentSize?: number | null
+  readAt: string | null
+  editedAt?: string | null
+  createdAt: string
+  senderName?: string | null
+  senderRole?: string | null
+  senderAvatar?: string | null
+}
+
+export interface ChatAttachment {
+  url: string
+  name: string
+  type: string
+  size: number
+}
+
+export const chatService = {
+  getContacts: async (): Promise<ChatContact[]> => {
+    const api = new ApiService()
+    return await api.get<ChatContact[]>('/api/chat/contacts')
+  },
+  getMessages: async (userId: string): Promise<{ contact: ChatContact; messages: ChatMessage[] }> => {
+    const api = new ApiService()
+    return await api.get(`/api/chat/messages/${userId}`)
+  },
+  sendMessage: async (
+    recipientId: string,
+    content: string,
+    attachment?: Partial<ChatAttachment> | null,
+  ): Promise<ChatMessage> => {
+    const api = new ApiService()
+    return await api.post<ChatMessage>('/api/chat/messages', {
+      recipientId,
+      content,
+      attachmentUrl: attachment?.url,
+      attachmentName: attachment?.name,
+      attachmentType: attachment?.type,
+      attachmentSize: attachment?.size,
+    })
+  },
+  editMessage: async (id: string, content: string): Promise<ChatMessage> => {
+    const api = new ApiService()
+    return await api.patch<ChatMessage>(`/api/chat/messages/${id}`, { content })
+  },
+  deleteMessage: async (id: string): Promise<{ id: string }> => {
+    const api = new ApiService()
+    return await api.delete(`/api/chat/messages/${id}`)
+  },
+  uploadAttachment: async (file: File): Promise<ChatAttachment> => {
+    const api = new ApiService()
+    const formData = new FormData()
+    formData.append('file', file)
+    return await api.post<ChatAttachment>('/api/chat/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  markRead: async (userId: string) => {
+    const api = new ApiService()
+    return await api.patch(`/api/chat/messages/${userId}/read`)
+  },
+  getUnreadCount: async (): Promise<{ total: number }> => {
+    const api = new ApiService()
+    return await api.get('/api/chat/unread-count')
+  },
 }
 
 export const mdmService = {
@@ -1154,6 +1257,13 @@ export const employeeAttendanceService = {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/shifts')
   },
+  assignEmployeeShift: async (employeeId: string, shiftCode: 'DAY' | 'NIGHT') => {
+    const api = new ApiService()
+    return await api.patch('/api/employee-attendance/shifts/assign-employee', {
+      employeeId,
+      shiftCode,
+    })
+  },
   getApprovals: async (status?: string) => {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/approvals', { params: { status } })
@@ -1182,6 +1292,14 @@ export const employeeAttendanceService = {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/analytics', { params })
   },
+  getScores: async (params?: { startDate?: string; endDate?: string; role?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/scores', { params })
+  },
+  getTodayPresence: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/today-presence')
+  },
   getRoleMonitoring: async (roleKey: string) => {
     const api = new ApiService()
     return await api.get(`/api/employee-attendance/roles/${roleKey}`)
@@ -1189,6 +1307,15 @@ export const employeeAttendanceService = {
   updateRecord: async (id: string, data: Record<string, unknown>) => {
     const api = new ApiService()
     return await api.patch(`/api/employee-attendance/records/${id}`, data)
+  },
+  markAttendance: async (data: {
+    employeeId: string
+    date?: string
+    action: 'present' | 'absent'
+    checkIn?: string
+  }) => {
+    const api = new ApiService()
+    return await api.post('/api/employee-attendance/mark', data)
   },
   exportReport: async (body: { type: string; startDate?: string; endDate?: string }) => {
     const api = new ApiService()
@@ -1281,6 +1408,10 @@ export const hospitalsService = {
   createHospital: async (data: Record<string, unknown>) => {
     const api = new ApiService()
     return await api.post<any>('/api/hospitals/create', data)
+  },
+  registerHospital: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post<any>('/api/hospitals/register', data)
   },
   create: async (data: any) => {
     const api = new ApiService()

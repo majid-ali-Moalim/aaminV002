@@ -114,7 +114,7 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
 
           {/* 1. Notifications */}
           <Link
-            href="/dispatcher/alerts/emergency"
+            href="/dispatcher/alerts/all"
             className="relative p-2 text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
             aria-label="Notifications"
           >

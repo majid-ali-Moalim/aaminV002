@@ -4,18 +4,20 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
-import { Menu, X, LogOut } from 'lucide-react'
+import { Menu, X, LogOut, Moon, Sun } from 'lucide-react'
 import NotificationBell from '../notifications/NotificationBell'
 import AuthPortalTopBar from '@/components/auth/AuthPortalTopBar'
 import AaminLogo from '@/components/brand/AaminLogo'
 import { EmployeeAvatar } from '@/components/employees/EmployeeAvatar'
 import { Role } from '@/types'
+import { usePublicUiStore } from '@/lib/stores/publicUiStore'
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const { theme, toggleTheme } = usePublicUiStore()
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10)
@@ -84,8 +86,8 @@ const Navbar = () => {
     <header className="fixed top-0 left-0 right-0 z-50">
         <AuthPortalTopBar />
         <nav
-          className={`site-nav-enter transition-all duration-300 border-b border-gray-100 ${
-            isScrolled ? 'bg-white/95 backdrop-blur-sm shadow-md' : 'bg-white'
+          className={`site-nav-enter transition-all duration-300 border-b border-gray-100 dark:border-slate-800 ${
+            isScrolled ? 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm shadow-md' : 'bg-white dark:bg-slate-900'
           }`}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -93,7 +95,7 @@ const Navbar = () => {
               <div className="flex items-center min-w-0">
                 <Link href="/" className="flex items-center gap-3 min-w-0">
                   <AaminLogo size="sm" priority />
-                  <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">Aamin Ambulance</span>
+                  <span className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">Aamin Ambulance</span>
                 </Link>
               </div>
 
@@ -103,7 +105,7 @@ const Navbar = () => {
                     key={item.href}
                     href={item.href}
                     className={`text-sm font-medium transition-colors relative ${
-                      isActive(item.href) ? 'text-red-600' : 'text-gray-700 hover:text-red-600'
+                      isActive(item.href) ? 'text-red-600' : 'text-gray-700 dark:text-slate-300 hover:text-red-600'
                     }`}
                   >
                     {item.label}
@@ -119,7 +121,7 @@ const Navbar = () => {
                   <>
                     <Link
                       href={getDashboardLink()}
-                      className="text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                      className="text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-red-600 transition-colors"
                     >
                       Dashboard
                     </Link>
@@ -137,7 +139,7 @@ const Navbar = () => {
                         gradient="from-red-600 to-red-700"
                         className="!w-8 !h-8 !rounded-full !text-xs ring-2 ring-red-100"
                       />
-                      <span className="text-sm font-medium text-gray-700 max-w-[120px] truncate">
+                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300 max-w-[120px] truncate">
                         {displayFirstName} {displayLastName}
                       </span>
                     </Link>
@@ -152,9 +154,17 @@ const Navbar = () => {
                   </>
                 ) : (
                   <>
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      className="p-2 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                      aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                    >
+                      {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    </button>
                     <Link
                       href="/login"
-                      className="text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                      className="text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-red-600 transition-colors"
                     >
                       Login
                     </Link>
@@ -172,7 +182,7 @@ const Navbar = () => {
                 <button
                   type="button"
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="p-2 rounded-md text-gray-700 hover:text-red-600 hover:bg-gray-100 transition-colors"
+                  className="p-2 rounded-md text-gray-700 dark:text-slate-300 hover:text-red-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                   aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
                 >
                   {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -182,15 +192,15 @@ const Navbar = () => {
 
             {isMenuOpen && (
               <div className="md:hidden pb-4">
-                <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
+                <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200 dark:border-slate-700">
                   {publicNavItems.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
                       className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
                         isActive(item.href)
-                          ? 'text-red-600 bg-red-50'
-                          : 'text-gray-700 hover:text-red-600 hover:bg-gray-50'
+                          ? 'text-red-600 bg-red-50 dark:bg-red-950/40'
+                          : 'text-gray-700 dark:text-slate-300 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-slate-800'
                       }`}
                       onClick={() => setIsMenuOpen(false)}
                     >
@@ -198,7 +208,7 @@ const Navbar = () => {
                     </Link>
                   ))}
 
-                  <div className="border-t border-gray-200 pt-4 mt-4">
+                  <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
                     {user ? (
                       <>
                         <div className="flex items-center gap-3 px-3 py-2">
@@ -241,6 +251,17 @@ const Navbar = () => {
                       </>
                     ) : (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggleTheme()
+                            setIsMenuOpen(false)
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-gray-700 dark:text-slate-300 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        >
+                          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                        </button>
                         <Link
                           href="/login"
                           className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"

@@ -177,15 +177,17 @@ export class AmbulancesService {
       },
     });
 
-    await this.notifications.create({
-      title: 'Ambulance Status Update',
-      message: `Ambulance ${result.ambulanceNumber} is now ${status}`,
-      type: 'AMBULANCE' as any,
-      priority: status === 'MAINTENANCE' ? 'HIGH' : 'MEDIUM',
-      relatedModule: 'Ambulance',
-      relatedId: result.id,
-      actionUrl: `/admin/ambulances?id=${result.id}`,
-    });
+    if (existing.status !== status) {
+      await this.notifications.create({
+        title: 'Ambulance Status Update',
+        message: `Ambulance ${result.ambulanceNumber} is now ${status}`,
+        type: 'AMBULANCE' as any,
+        priority: status === 'MAINTENANCE' || status === 'UNAVAILABLE' ? 'HIGH' : 'MEDIUM',
+        relatedModule: 'Ambulance',
+        relatedId: result.id,
+        actionUrl: `/admin/ambulances/availability`,
+      });
+    }
 
     return result;
   }
@@ -277,13 +279,9 @@ export class AmbulancesService {
     dbStatus: AmbulanceStatus,
     hasActiveCase: boolean,
     hasAssignedDriver: boolean,
-  ): 'available' | 'unavailable' {
-    if (
-      hasAssignedDriver &&
-      !hasActiveCase &&
-      dbStatus !== 'MAINTENANCE' &&
-      dbStatus !== 'UNAVAILABLE'
-    ) {
+  ): 'available' | 'unavailable' | 'maintenance' {
+    if (dbStatus === 'MAINTENANCE') return 'maintenance';
+    if (hasAssignedDriver && !hasActiveCase && dbStatus !== 'UNAVAILABLE') {
       return 'available';
     }
     return 'unavailable';
@@ -296,7 +294,6 @@ export class AmbulancesService {
   ): string | null {
     if (hasActiveCase) return 'Assigned to active case';
     if (!hasAssignedDriver) return 'No driver assigned';
-    if (dbStatus === 'MAINTENANCE') return 'Not working';
     if (dbStatus === 'UNAVAILABLE') return 'Out of service';
     return null;
   }
@@ -422,12 +419,14 @@ export class AmbulancesService {
       total: rows.length,
       available: rows.filter((r) => r.operationalStatus === 'available').length,
       unavailable: rows.filter((r) => r.operationalStatus === 'unavailable').length,
+      maintenance: rows.filter((r) => r.operationalStatus === 'maintenance').length,
       activeToday: new Set(todayCases.map((c) => c.ambulanceId).filter(Boolean)).size,
     };
 
     const statusCounts = {
       available: summary.available,
       unavailable: summary.unavailable,
+      maintenance: summary.maintenance,
     };
 
     const recentChanges = recentNotifications.map((n) => {
@@ -485,6 +484,7 @@ export class AmbulancesService {
       statusDistribution: [
         { name: 'Available', value: statusCounts.available, color: '#10B981' },
         { name: 'Unavailable', value: statusCounts.unavailable, color: '#EF4444' },
+        { name: 'Maintenance', value: statusCounts.maintenance, color: '#F59E0B' },
       ],
       activityTrend: Array.from(dailyUsageMap.entries()).map(([date, active]) => ({
         date,

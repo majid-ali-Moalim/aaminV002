@@ -70,6 +70,8 @@ const STEP_FIELDS: Record<DispatcherFormStep, (keyof DispatcherFormValues)[]> = 
   location: [
     'address',
     'regionId',
+    'districtId',
+    'stationId',
     'employeeCode',
     'departmentId',
     'employmentType',
@@ -78,8 +80,15 @@ const STEP_FIELDS: Record<DispatcherFormStep, (keyof DispatcherFormValues)[]> = 
     'relationship',
     'emergencyPhone',
   ],
-  credentials: ['qualification', 'yearsOfExperience', 'notes'],
-  account: ['email', 'password', 'confirmPassword'],
+  credentials: [
+    'licenseNumber',
+    'licenseExpiryDate',
+    'qualification',
+    'yearsOfExperience',
+    'certificationUpload',
+    'notes',
+  ],
+  account: ['email', 'username', 'password', 'confirmPassword'],
 }
 
 function parseDateOnly(value: string): Date | null {
@@ -149,6 +158,8 @@ function validateLocation(form: DispatcherFormValues, errors: DispatcherFormErro
     setError(errors, 'address', 'Address must be at least 5 characters')
   }
   if (!form.regionId) setError(errors, 'regionId', 'Region is required')
+  if (!form.districtId) setError(errors, 'districtId', 'District is required')
+  if (!form.stationId) setError(errors, 'stationId', 'Dispatch station is required')
   const code = form.employeeCode.trim()
   if (!code) setError(errors, 'employeeCode', 'Employee code is required')
   else if (!DISPATCHER_CODE_PATTERN.test(code)) setError(errors, 'employeeCode', 'Use format DIS-001')
@@ -167,8 +178,30 @@ function validateLocation(form: DispatcherFormValues, errors: DispatcherFormErro
 }
 
 function validateCredentials(form: DispatcherFormValues, errors: DispatcherFormErrors, ctx?: DispatcherFormContext) {
-  if (form.qualification.trim() && ctx?.qualificationIds?.length && !ctx.qualificationIds.includes(form.qualification)) {
+  const license = form.licenseNumber.trim()
+  if (!license) {
+    setError(errors, 'licenseNumber', 'Dispatch certification / training ID is required')
+  } else if (!LICENSE_PATTERN.test(license)) {
+    setError(errors, 'licenseNumber', 'Certification ID must be 5–25 characters')
+  }
+
+  if (!form.licenseExpiryDate) {
+    setError(errors, 'licenseExpiryDate', 'Certificate expiry date is required')
+  } else {
+    const expiry = parseDateOnly(form.licenseExpiryDate)
+    const today = startOfDay(new Date())
+    if (!expiry) setError(errors, 'licenseExpiryDate', 'Invalid expiry date')
+    else if (expiry <= today) setError(errors, 'licenseExpiryDate', 'Certificate must not be expired')
+  }
+
+  if (!form.qualification.trim()) {
+    setError(errors, 'qualification', 'Qualification is required')
+  } else if (ctx?.qualificationIds?.length && !ctx.qualificationIds.includes(form.qualification)) {
     setError(errors, 'qualification', 'Select a valid qualification')
+  }
+
+  if (!form.certificationUpload.trim()) {
+    setError(errors, 'certificationUpload', 'Upload dispatch certification document (PDF, JPG, or PNG)')
   }
 
   if (form.yearsOfExperience.trim()) {
@@ -192,6 +225,8 @@ function validateCredentials(form: DispatcherFormValues, errors: DispatcherFormE
 function validateAccount(form: DispatcherFormValues, errors: DispatcherFormErrors) {
   if (!form.email.trim()) setError(errors, 'email', 'Email is required')
   else if (!EMAIL_PATTERN.test(form.email.trim())) setError(errors, 'email', 'Enter a valid email')
+  if (!form.username.trim()) setError(errors, 'username', 'Username is required')
+  else if (!USERNAME_PATTERN.test(form.username.trim())) setError(errors, 'username', 'Username: 3–30 letters, numbers, underscore')
   if (!form.password) setError(errors, 'password', 'Password is required')
   else if (form.password.length < MIN_PASSWORD_LENGTH) {
     setError(errors, 'password', `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)

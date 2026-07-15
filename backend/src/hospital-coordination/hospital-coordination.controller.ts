@@ -41,6 +41,7 @@ export class HospitalCoordinationController {
     @Query('hospitalType') hospitalType?: string,
     @Query('status') status?: string,
     @Query('isActive') isActive?: string,
+    @Query('assignedCasesOnly') assignedCasesOnly?: string,
   ) {
     return this.coordination.listHospitals({
       search,
@@ -49,6 +50,7 @@ export class HospitalCoordinationController {
       hospitalType,
       status,
       isActive: isActive === undefined ? undefined : isActive === 'true',
+      assignedCasesOnly: assignedCasesOnly === 'true',
     });
   }
 

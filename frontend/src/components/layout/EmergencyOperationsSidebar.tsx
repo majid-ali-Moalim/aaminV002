@@ -18,13 +18,14 @@ import {
 import type { LucideIcon } from 'lucide-react'
 
 const SIDEBAR = {
-  bg: '#0B1220',
-  panel: '#111827',
-  primary: '#EF2D2D',
-  text: '#FFFFFF',
-  secondary: '#94A3B8',
-  muted: '#64748B',
-  border: 'rgba(255,255,255,0.06)',
+  bg: 'hsl(var(--sidebar-bg))',
+  panel: 'hsl(var(--sidebar-panel))',
+  primary: 'hsl(var(--sidebar-primary))',
+  text: 'hsl(var(--sidebar-text))',
+  textActive: 'hsl(var(--sidebar-text-active))',
+  secondary: 'hsl(var(--sidebar-secondary))',
+  muted: 'hsl(var(--sidebar-muted))',
+  border: 'hsl(var(--sidebar-border))',
   success: '#22C55E',
   warning: '#F59E0B',
   critical: '#EF4444',
@@ -139,7 +140,7 @@ export default function EmergencyOperationsSidebar({ isOpen, setOpen }: Emergenc
         className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-semibold rounded-lg"
         style={
           isSectionActive
-            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive }
             : { color: SIDEBAR.secondary }
         }
         onMouseEnter={(e) => {
@@ -158,19 +159,19 @@ export default function EmergencyOperationsSidebar({ isOpen, setOpen }: Emergenc
         <div className="flex items-center gap-2.5 min-w-0">
           <Siren
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
           <span className="truncate">Emergency Operations</span>
         </div>
         {isOpen ? (
           <ChevronDown
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         ) : (
           <ChevronRight
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         )}
       </button>
@@ -197,7 +198,7 @@ export default function EmergencyOperationsSidebar({ isOpen, setOpen }: Emergenc
               {section.workflow ? (
                 <div
                   className="ml-1 pl-3 space-y-0.5"
-                  style={{ borderLeft: `1px dashed rgba(255,255,255,0.12)` }}
+                  style={{ borderLeft: `1px dashed hsl(var(--sidebar-border))` }}
                 >
                   {section.items.map((item) => renderItem(item, { workflow: true }))}
                 </div>

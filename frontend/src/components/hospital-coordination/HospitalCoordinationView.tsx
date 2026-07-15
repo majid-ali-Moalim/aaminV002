@@ -16,10 +16,10 @@ import {
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
-import { hospitalCoordinationService, hospitalsService } from '@/lib/api'
+import { hospitalCoordinationService } from '@/lib/api'
 import { getCachedDistricts, getCachedRegions, loadLocationReferenceData } from '@/lib/cache/referenceData'
-import { AVAILABILITY_STATUSES, REFUSAL_REASONS, type CoordinationView } from '@/lib/hospital-coordination/constants'
-import HospitalForm from '@/components/features/system-setup/HospitalForm'
+import { AVAILABILITY_STATUSES, REFUSAL_REASONS, refusalReasonLabel, parseHospitalBranches, type CoordinationView } from '@/lib/hospital-coordination/constants'
+import { Stethoscope, GitBranch } from 'lucide-react'
 
 function KpiCard({ label, value, icon: Icon, accent = 'teal' }: { label: string; value: number | string; icon: React.ElementType; accent?: string }) {
   const colors: Record<string, string> = {
@@ -53,27 +53,13 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
   const [districtId, setDistrictId] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [hospitalType, setHospitalType] = useState('')
-  const [modalHospital, setModalHospital] = useState<any>(null)
-  const [availabilityModal, setAvailabilityModal] = useState<any>(null)
-  const [rejectModal, setRejectModal] = useState<any>(null)
-  const [rejectReason, setRejectReason] = useState('NO_BEDS')
   const [analyticsRange, setAnalyticsRange] = useState({ startDate: '', endDate: '' })
-  const [avForm, setAvForm] = useState({
-    beds: 0,
-    occupiedBeds: 0,
-    icuTotalBeds: 0,
-    icuOccupiedBeds: 0,
-    availabilityStatus: 'Available',
-  })
 
   const titles: Record<CoordinationView, { title: string; desc: string }> = {
-    'all-hospitals': { title: 'All Hospitals', desc: 'Central directory of registered healthcare facilities' },
-    availability: { title: 'Hospital Availability', desc: 'Real-time capacity and operational readiness' },
-    incoming: { title: 'Incoming Cases', desc: 'Ambulance cases pending hospital review and acceptance' },
-    handover: { title: 'Handover Queue', desc: 'Arriving ambulances awaiting patient handover' },
-    accepted: { title: 'Accepted Cases', desc: 'Patients accepted and under hospital care' },
-    refused: { title: 'Refused / Full Cases', desc: 'Cases declined due to capacity or operational limits' },
-    analytics: { title: 'Hospital Performance Analytics', desc: 'Acceptance rates, handover times, and capacity trends' },
+    'all-hospitals': { title: 'All Hospitals', desc: 'Hospitals with assigned emergency cases only' },
+    accepted: { title: 'Accepted Cases', desc: 'Patients accepted with nurse handover and receiving hospital details' },
+    refused: { title: 'Rejected Cases', desc: 'Cases declined with refusal reasons and hospital coordination history' },
+    analytics: { title: 'Hospital Performance', desc: 'Acceptance rates, handover times, and capacity trends' },
   }
 
   const load = useCallback(async () => {
@@ -97,10 +83,8 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           overviewPromise,
         ])
         setAnalytics(analyticsData)
-      } else if (['incoming', 'handover', 'accepted', 'refused'].includes(view)) {
+      } else if (view === 'accepted' || view === 'refused') {
         const stageMap: Record<string, string> = {
-          incoming: 'INCOMING',
-          handover: 'HANDOVER',
           accepted: 'ACCEPTED',
           refused: 'REFUSED',
         }
@@ -115,22 +99,15 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           overviewPromise,
         ])
         setCases(caseRows ?? [])
-      } else {
-        const params: Record<string, string | boolean | undefined> = {
-          search: search || undefined,
-          regionId: regionId || undefined,
-          districtId: districtId || undefined,
-          hospitalType: hospitalType || undefined,
-        }
-        if (view === 'availability') {
-          params.status = statusFilter || undefined
-        } else if (statusFilter === 'active') {
-          params.isActive = true
-        } else if (statusFilter === 'inactive') {
-          params.isActive = false
-        }
+      } else if (view === 'all-hospitals') {
         const [rows] = await Promise.all([
-          hospitalCoordinationService.listHospitals(params),
+          hospitalCoordinationService.listHospitals({
+            search: search || undefined,
+            regionId: regionId || undefined,
+            districtId: districtId || undefined,
+            hospitalType: hospitalType || undefined,
+            assignedCasesOnly: true,
+          }),
           locationPromise,
           overviewPromise,
         ])
@@ -159,45 +136,27 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
     }
     const map: Record<CoordinationView, typeof kpis> = {
       'all-hospitals': [
-        { label: 'Total Hospitals', value: k.totalHospitals ?? 0, icon: Building2, accent: 'teal' },
-        { label: 'Active', value: k.activeHospitals ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Inactive', value: k.inactiveHospitals ?? 0, icon: XCircle, accent: 'rose' },
-        { label: 'Emergency Centers', value: k.emergencyCenters ?? 0, icon: Activity, accent: 'amber' },
-      ],
-      availability: [
-        { label: 'Available', value: k.availableHospitals ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Full Capacity', value: k.fullHospitals ?? 0, icon: XCircle, accent: 'rose' },
-        { label: 'Busy', value: k.busyHospitals ?? 0, icon: AlertTriangle, accent: 'amber' },
-        { label: 'Total', value: k.totalHospitals ?? 0, icon: BarChart3, accent: 'blue' },
-      ],
-      incoming: [
-        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'teal' },
-        { label: 'Pending Review', value: k.pendingIncoming ?? 0, icon: Clock, accent: 'amber' },
+        { label: 'Hospitals with Cases', value: k.totalHospitals ?? 0, icon: Building2, accent: 'teal' },
         { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
         { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
-      ],
-      handover: [
-        { label: 'Current Queue', value: k.queueCount ?? 0, icon: Clock, accent: 'amber' },
-        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'teal' },
-        { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Full Hospitals', value: k.fullHospitals ?? 0, icon: Building2, accent: 'rose' },
+        { label: 'Pending Review', value: k.pendingIncoming ?? 0, icon: Clock, accent: 'amber' },
       ],
       accepted: [
         { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Pending Incoming', value: k.pendingIncoming ?? 0, icon: Clock, accent: 'amber' },
-        { label: 'Queue', value: k.queueCount ?? 0, icon: Activity, accent: 'teal' },
-        { label: 'Refused Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
+        { label: 'Total Accepted', value: cases.length || '—', icon: Building2, accent: 'teal' },
+        { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
+        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'blue' },
       ],
       refused: [
-        { label: 'Refused Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
+        { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
         { label: 'Full Hospitals', value: k.fullHospitals ?? 0, icon: Building2, accent: 'amber' },
-        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'teal' },
         { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
+        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'teal' },
       ],
       analytics: [],
     }
     return map[view] ?? []
-  }, [view, overview, analytics])
+  }, [view, overview, analytics, cases])
 
   const meta = titles[view]
 
@@ -240,8 +199,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           setHospitalType={setHospitalType}
           regions={regions}
           districts={districts}
-          showAvailability={view === 'availability'}
-          showActiveStatus={view === 'all-hospitals'}
+          showActiveStatus={false}
           showType={view === 'all-hospitals'}
           onApply={load}
         />
@@ -259,143 +217,22 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           regions={regions}
           loading={dataLoading && !analytics}
         />
-      ) : ['incoming', 'handover', 'accepted', 'refused'].includes(view) ? (
-        <div className="space-y-3">
+      ) : view === 'accepted' || view === 'refused' ? (
+        <div className="space-y-4">
           {dataLoading && cases.length === 0 ? (
             <ContentSkeleton rows={4} />
           ) : cases.length === 0 ? (
             <p className="text-center py-16 text-gray-500">No cases in this view</p>
           ) : (
             cases.map((c) => (
-              <CaseCard
-                key={c.id}
-                caseRow={c}
-                view={view}
-                onAction={load}
-                onReject={(row) => setRejectModal(row)}
-              />
+              <CaseCard key={c.id} caseRow={c} view={view} onAction={load} />
             ))
           )}
         </div>
       ) : (
-        <HospitalTable
-          hospitals={hospitals}
-          view={view}
-          loading={dataLoading && hospitals.length === 0}
-          onEdit={(h) => setModalHospital(h)}
-          onAvailability={(h) => {
-            setAvailabilityModal(h)
-            setAvForm({
-              beds: h.beds ?? 0,
-              occupiedBeds: h.occupiedBeds ?? 0,
-              icuTotalBeds: h.icuTotalBeds ?? 0,
-              icuOccupiedBeds: h.icuOccupiedBeds ?? 0,
-              availabilityStatus: h.availabilityStatus ?? 'Available',
-            })
-          }}
-          onToggleActive={async (h) => {
-            if (h.isActive) await hospitalCoordinationService.deactivateHospital(h.id)
-            else await hospitalCoordinationService.activateHospital(h.id)
-            load()
-          }}
-        />
+        <HospitalTable hospitals={hospitals} loading={dataLoading && hospitals.length === 0} />
       )}
       </div>
-
-      {modalHospital !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <HospitalForm
-            regions={regions}
-            districts={districts}
-            initialData={modalHospital.id ? modalHospital : undefined}
-            loading={false}
-            onCancel={() => setModalHospital(null)}
-            onSubmit={async (data) => {
-              try {
-                if (modalHospital?.id) await hospitalsService.update(modalHospital.id, data)
-                else await hospitalsService.create(data)
-                toast.success('Hospital saved')
-                setModalHospital(null)
-                load()
-              } catch {
-                toast.error('Save failed')
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {availabilityModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md space-y-4">
-            <h3 className="font-black">Update — {availabilityModal.name}</h3>
-            {(['beds', 'occupiedBeds', 'icuTotalBeds', 'icuOccupiedBeds'] as const).map((f) => (
-              <div key={f}>
-                <label className="text-xs font-bold text-gray-500 uppercase">{f}</label>
-                <input
-                  type="number"
-                  className="w-full h-10 rounded-xl border px-3 mt-1"
-                  value={avForm[f]}
-                  onChange={(e) => setAvForm({ ...avForm, [f]: Number(e.target.value) })}
-                />
-              </div>
-            ))}
-            <select
-              className="w-full h-10 rounded-xl border px-3"
-              value={avForm.availabilityStatus}
-              onChange={(e) => setAvForm({ ...avForm, availabilityStatus: e.target.value })}
-            >
-              {AVAILABILITY_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setAvailabilityModal(null)}>Cancel</Button>
-              <Button
-                onClick={async () => {
-                  await hospitalCoordinationService.updateAvailability(availabilityModal.id, avForm)
-                  toast.success('Updated')
-                  setAvailabilityModal(null)
-                  load()
-                }}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {rejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md space-y-4">
-            <h3 className="font-black">Reject Case — {rejectModal.caseNumber}</h3>
-            <select
-              className="w-full h-10 rounded-xl border px-3"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-            >
-              {REFUSAL_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setRejectModal(null)}>Cancel</Button>
-              <Button
-                variant="destructive"
-                onClick={async () => {
-                  await hospitalCoordinationService.rejectCase(rejectModal.id, rejectReason)
-                  toast.success('Case rejected')
-                  setRejectModal(null)
-                  load()
-                }}
-              >
-                Confirm Reject
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -462,39 +299,49 @@ function ContentSkeleton({ rows = 3 }: { rows?: number }) {
   )
 }
 
-function HospitalTable({ hospitals, view, loading, onEdit, onAvailability, onToggleActive }: any) {
-  if (loading) {
-    return <ContentSkeleton rows={5} />
+function HospitalTable({ hospitals, loading }: { hospitals: any[]; loading?: boolean }) {
+  if (loading) return <ContentSkeleton rows={5} />
+  if (!hospitals.length) {
+    return <p className="text-center py-16 text-gray-500">No hospitals with assigned cases yet</p>
   }
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-x-auto">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-x-auto shadow-sm">
       <table className="w-full text-sm">
         <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400">
           <tr>
             <th className="p-4 text-left">Hospital</th>
             <th className="p-4 text-left">Location</th>
-            <th className="p-4 text-left">Capacity</th>
-            <th className="p-4 text-left">Status</th>
-            <th className="p-4 text-right">Actions</th>
+            <th className="p-4 text-left">Contact</th>
+            <th className="p-4 text-left">Branches</th>
+            <th className="p-4 text-left">Assigned Cases</th>
           </tr>
         </thead>
         <tbody className="divide-y">
           {hospitals.map((h: any) => {
-            const cap = h.beds ? Math.round(((h.occupiedBeds ?? 0) / h.beds) * 100) : 0
+            const branches = parseHospitalBranches(h.branches)
             return (
-              <tr key={h.id}>
-                <td className="p-4 font-bold">{h.name}</td>
-                <td className="p-4 text-xs text-gray-500"><MapPin className="w-3 h-3 inline" /> {h.region?.name}/{h.district?.name}</td>
-                <td className="p-4 text-xs">{h.occupiedBeds ?? 0}/{h.beds} ({cap}%)</td>
-                <td className="p-4"><span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{h.isActive ? h.availabilityStatus : 'Inactive'}</span></td>
-                <td className="p-4 text-right gap-1">
-                  {view === 'availability' && <Button size="sm" variant="outline" onClick={() => onAvailability(h)}>Update</Button>}
-                  {view === 'all-hospitals' && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => onEdit(h)}>Edit</Button>
-                      <Button size="sm" variant="ghost" onClick={() => onToggleActive(h)}>{h.isActive ? 'Deactivate' : 'Activate'}</Button>
-                    </>
-                  )}
+              <tr key={h.id} className="hover:bg-gray-50/80">
+                <td className="p-4">
+                  <p className="font-bold text-gray-900">{h.name}</p>
+                  <p className="text-[10px] font-mono text-gray-400">{h.hospitalCode}</p>
+                </td>
+                <td className="p-4 text-xs text-gray-600">
+                  <MapPin className="w-3 h-3 inline mr-1" />
+                  {h.region?.name}/{h.district?.name}
+                  <p className="text-gray-400 mt-0.5">{h.address}</p>
+                </td>
+                <td className="p-4 text-xs text-gray-600">
+                  <p>{h.primaryPhone}</p>
+                  <p className="text-teal-700 font-bold">{h.emergencyShortCode || h.emergencyHotline}</p>
+                  <p>{h.email}</p>
+                </td>
+                <td className="p-4">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-700">
+                    <GitBranch className="w-3.5 h-3.5" /> {branches.length}
+                  </span>
+                </td>
+                <td className="p-4">
+                  <span className="text-lg font-black text-teal-700">{h.assignedCaseCount ?? 0}</span>
                 </td>
               </tr>
             )
@@ -584,64 +431,98 @@ function CaseCard({
   caseRow,
   view,
   onAction,
-  onReject,
 }: {
   caseRow: any
   view: CoordinationView
   onAction: () => void
-  onReject?: (row: any) => void
 }) {
   const req = caseRow.emergencyRequest
-  const waitingMins = caseRow.arrivalTime
-    ? Math.round((Date.now() - new Date(caseRow.arrivalTime).getTime()) / 60000)
-    : null
+  const accepted = caseRow.acceptedHospital
+  const rejected = caseRow.rejectedHospitals ?? []
+  const nurse = caseRow.nurseHandover
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b bg-gradient-to-r from-teal-50 to-white dark:from-teal-950/30 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black text-teal-600 uppercase">{caseRow.caseNumber}</p>
-          <h3 className="font-black text-lg">{req?.patient?.fullName ?? 'Patient'}</h3>
+          <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{caseRow.caseNumber}</p>
+          <h3 className="font-black text-lg text-gray-900 dark:text-white">{req?.patient?.fullName ?? 'Patient'}</h3>
           <p className="text-sm text-gray-500">
-            Mission {req?.trackingCode} · {caseRow.hospital?.name}
+            Mission {req?.trackingCode} · Priority {req?.priority ?? caseRow.priority}
           </p>
         </div>
-        <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-          {caseRow.status?.replace(/_/g, ' ')}
+        <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${view === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+          {view === 'accepted' ? 'Accepted' : 'Rejected'}
         </span>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-xs text-gray-500">
-        <p><strong className="text-gray-700">Severity:</strong> {req?.priority ?? caseRow.priority ?? '—'}</p>
-        <p><strong className="text-gray-700">Ambulance:</strong> {req?.ambulance?.plateNumber ?? '—'}</p>
-        <p><strong className="text-gray-700">Driver:</strong> {req?.driver?.fullName ?? '—'}</p>
-        {view === 'handover' && waitingMins !== null && (
-          <p><strong className="text-gray-700">Waiting:</strong> {waitingMins} min</p>
+
+      <div className="p-5 grid lg:grid-cols-3 gap-4">
+        <div className="space-y-2 text-sm">
+          <p className="text-[10px] font-black uppercase text-gray-400">Transport</p>
+          <p><strong>Ambulance:</strong> {req?.ambulance?.plateNumber ?? '—'}</p>
+          <p><strong>Driver:</strong> {req?.driver?.fullName ?? '—'}</p>
+          <p><strong>Nurse:</strong> {nurse?.nurseName ?? req?.nurse?.fullName ?? '—'}</p>
+          {caseRow.destinationBranchName && (
+            <p className="flex items-center gap-1"><GitBranch className="w-3.5 h-3.5" /><strong>Branch:</strong> {caseRow.destinationBranchName}</p>
+          )}
+        </div>
+
+        {accepted && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm">
+            <p className="text-[10px] font-black uppercase text-emerald-700 mb-2 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Accepted Hospital
+            </p>
+            <p className="font-bold text-emerald-900">{accepted.hospitalName}</p>
+            {accepted.receivingStaffName && <p className="text-xs mt-1">Receiving: {accepted.receivingStaffName}</p>}
+            {accepted.handoverCompletedAt && (
+              <p className="text-xs text-emerald-700 mt-1">Handover: {new Date(accepted.handoverCompletedAt).toLocaleString()}</p>
+            )}
+          </div>
         )}
-        {view === 'refused' && caseRow.refusalReason && (
-          <p><strong className="text-gray-700">Reason:</strong> {caseRow.refusalReason.replace(/_/g, ' ')}</p>
+
+        {(view === 'refused' || rejected.length > 0) && (
+          <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm">
+            <p className="text-[10px] font-black uppercase text-red-700 mb-2 flex items-center gap-1">
+              <XCircle className="w-3.5 h-3.5" /> Rejected Hospitals
+            </p>
+            {rejected.length === 0 ? (
+              <p className="text-xs text-red-800">
+                {refusalReasonLabel(caseRow.refusalReason)} — {caseRow.hospital?.name}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {rejected.map((r: any, i: number) => (
+                  <li key={`${r.hospitalId}-${i}`} className="text-xs border-b border-red-100 pb-2 last:border-0">
+                    <p className="font-bold text-red-900">{r.hospitalName}</p>
+                    <p className="text-red-700">{r.refusalReason}</p>
+                    {r.refusalNotes && <p className="text-gray-600 mt-0.5">{r.refusalNotes}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
-      <div className="flex gap-2 mt-4 flex-wrap">
-        {view === 'incoming' && (
-          <>
-            <Button size="sm" onClick={async () => { await hospitalCoordinationService.acceptCase(caseRow.id); toast.success('Accepted'); onAction() }}>Accept</Button>
-            <Button size="sm" variant="outline" onClick={() => onReject?.(caseRow)}>Reject</Button>
-            <Button size="sm" variant="ghost" onClick={async () => { await hospitalCoordinationService.moveToHandover(caseRow.id); onAction() }}>Mark Arriving</Button>
-          </>
-        )}
-        {view === 'handover' && caseRow.status === 'WAITING' && (
-          <Button size="sm" onClick={async () => { await hospitalCoordinationService.startHandover(caseRow.id); onAction() }}>Start Handover</Button>
-        )}
-        {view === 'handover' && caseRow.status === 'IN_PROGRESS' && (
-          <Button size="sm" onClick={async () => { await hospitalCoordinationService.completeHandover(caseRow.id); onAction() }}>Complete</Button>
-        )}
-        {view === 'accepted' && (
-          <>
-            <Button size="sm" variant="outline" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'ADMITTED'); onAction() }}>Mark Admitted</Button>
-            <Button size="sm" variant="ghost" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'DISCHARGED'); onAction() }}>Discharge</Button>
-          </>
-        )}
-      </div>
+
+      {nurse && (
+        <div className="px-5 pb-5">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm">
+            <p className="text-[10px] font-black uppercase text-blue-700 mb-2 flex items-center gap-1">
+              <Stethoscope className="w-3.5 h-3.5" /> Nurse Handover
+            </p>
+            <p><strong>Nurse:</strong> {nurse.nurseName ?? '—'}</p>
+            {nurse.interventions && <p className="mt-1"><strong>Interventions:</strong> {String(nurse.interventions)}</p>}
+            {nurse.notes && <p className="mt-1 text-gray-600">{nurse.notes}</p>}
+          </div>
+        </div>
+      )}
+
+      {view === 'accepted' && (
+        <div className="px-5 pb-5 flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'ADMITTED'); toast.success('Marked admitted'); onAction() }}>Mark Admitted</Button>
+          <Button size="sm" variant="ghost" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'DISCHARGED'); toast.success('Discharged'); onAction() }}>Discharge</Button>
+        </div>
+      )}
     </div>
   )
 }

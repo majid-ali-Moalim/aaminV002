@@ -76,7 +76,7 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
 export const DISPATCHER_PATIENTS_ITEMS: EmergencyCommandItem[] = [
   { href: '/dispatcher/patients', label: 'Patients', icon: Users, exact: true },
   { href: '/dispatcher/patients/cases', label: 'Cases', icon: Siren },
-  { href: '/dispatcher/patients/records-reports', label: 'Records & Reports', icon: FileText },
+  { href: '/dispatcher/patients/records-reports', label: 'Case Records', icon: FileText },
 ]
 
 export const DISPATCHER_DASHBOARD_ITEM: EmergencyCommandItem = {
@@ -88,13 +88,10 @@ export const DISPATCHER_DASHBOARD_ITEM: EmergencyCommandItem = {
 }
 
 export const DISPATCHER_RESOURCES_ITEMS: EmergencyCommandItem[] = [
-  { href: '/dispatcher/resources/availability', label: 'Ambulance Availability', icon: Truck },
-  { href: '/dispatcher/resources/ambulances', label: 'Ambulance Fleet', icon: Truck },
-  { href: '/dispatcher/resources/drivers', label: 'Driver Availability', icon: Users },
-  { href: '/dispatcher/resources/nurses', label: 'Nurse & Hospital Resources', icon: Stethoscope },
-  { href: '/dispatcher/hospital/hospitals', label: 'Hospitals', icon: Building2 },
-  { href: '/dispatcher/hospital/availability', label: 'Hospital Availability', icon: Building2 },
-  { href: '/dispatcher/monitoring/resources', label: 'Resource Status', icon: Activity },
+  { href: '/dispatcher/resources/ambulance-availability', label: 'Ambulance Availability', icon: Truck },
+  { href: '/dispatcher/resources/driver-availability', label: 'Driver Availability', icon: Users },
+  { href: '/dispatcher/resources/nurse-availability', label: 'Nurse Availability', icon: Stethoscope },
+  { href: '/dispatcher/resources/resource-status', label: 'Resource Status', icon: Activity },
 ]
 
 export function isDispatcherEmergencyOperationsPath(pathname: string) {
@@ -110,7 +107,7 @@ export function isDispatcherDashboardCommandPath(pathname: string) {
 }
 
 export function isDispatcherResourcesPath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources') || pathname.startsWith('/dispatcher/hospital')
+  return pathname.startsWith('/dispatcher/resources')
 }
 
 export function isDispatcherEmergencyCommandPath(pathname: string) {

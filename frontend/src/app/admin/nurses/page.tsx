@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { 
   Users, Search, Filter, Plus, Eye, Edit, MoreHorizontal, 
-  MapPin, Phone, Heart, Calendar, Activity, Shield, 
+  MapPin, Phone, Heart, Calendar, Activity, 
   CheckCircle2, AlertCircle, Clock, Loader2, Download,
   Stethoscope, GraduationCap, Briefcase
 } from 'lucide-react'
@@ -81,15 +81,6 @@ export default function NursesDashboard() {
 
   const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
 
-  const getClearanceBadge = (status: string) => {
-    switch (status) {
-      case 'CLEARED': return 'bg-green-100 text-green-700 border-green-200'
-      case 'PENDING': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      case 'REJECTED': return 'bg-red-100 text-red-700 border-red-200'
-      default: return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -114,12 +105,11 @@ export default function NursesDashboard() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           { label: 'Total Nurses', value: stats?.total || 0, icon: Users, iconClass: 'text-red-600', bgClass: 'bg-red-50' },
           { label: 'Available', value: stats?.available || 0, icon: CheckCircle2, iconClass: 'text-green-600', bgClass: 'bg-green-50' },
           { label: 'On Duty', value: stats?.onDuty || 0, icon: Activity, iconClass: 'text-orange-600', bgClass: 'bg-orange-50' },
-          { label: 'Pending Clearance', value: stats?.pendingClearance || 0, icon: Shield, iconClass: 'text-amber-600', bgClass: 'bg-amber-50' },
           { label: 'ICU Specialists', value: nurses.filter(n => (n as any).specialization?.includes('ICU')).length, icon: Stethoscope, iconClass: 'text-purple-600', bgClass: 'bg-purple-50' },
           { label: 'Expiring License', value: stats?.expiringLicenses || 0, icon: AlertCircle, iconClass: 'text-cyan-600', bgClass: 'bg-cyan-50' },
         ].map((stat, i) => (
@@ -202,7 +192,6 @@ export default function NursesDashboard() {
                   <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Qualification</th>
                   <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Specialization</th>
                   <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Shift Status</th>
-                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Clearance</th>
                   <th className="py-4 px-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
@@ -244,11 +233,6 @@ export default function NursesDashboard() {
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black border ${getStatusColor(nurse.shiftStatus || '')}`}>
                         {getStaffStatusLabel(nurse.shiftStatus || nurse.status || '')}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black border ${getClearanceBadge((nurse as any).medicalClearanceStatus || 'PENDING')}`}>
-                        {(nurse as any).medicalClearanceStatus || 'PENDING'}
                       </span>
                     </td>
                     <td className="py-4 px-6 text-right">

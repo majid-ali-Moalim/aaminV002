@@ -13,12 +13,14 @@ import {
   type DriverNavModule,
 } from '@/lib/driver/navigation'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { useChatStore } from '@/lib/stores/chatStore'
 import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
 import { DriverThemeToggle } from '@/components/driver/DriverThemeToggle'
 
 function NavSection({ module }: { module: DriverNavModule }) {
   const pathname = usePathname()
   const { unreadCount } = useDriverStore()
+  const chatUnread = useChatStore((s) => s.unreadTotal)
   const isActive = isModulePathActive(pathname, module)
   const [open, setOpen] = useState(isActive || module.id === 'dashboard')
   const Icon = module.icon
@@ -28,13 +30,14 @@ function NavSection({ module }: { module: DriverNavModule }) {
   if (isDashboard || isSingle) {
     const href = isDashboard ? moduleHref(module, module.items[0].slug) : module.basePath
     const active = isModulePathActive(pathname, module)
-    const showBadge = module.id === 'notifications' && unreadCount > 0
+    const badgeCount =
+      module.id === 'notifications' ? unreadCount : module.id === 'messages' ? chatUnread : 0
     return (
       <Link href={href} className={`driver-sidebar-link driver-sidebar-link--top${active ? ' active' : ''}`}>
         <Icon size={18} className="driver-sidebar-link-icon" />
         <span className="driver-sidebar-link-label">{module.label}</span>
-        {showBadge && (
-          <span className="driver-sidebar-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        {badgeCount > 0 && (
+          <span className="driver-sidebar-badge">{badgeCount > 9 ? '9+' : badgeCount}</span>
         )}
       </Link>
     )

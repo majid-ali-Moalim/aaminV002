@@ -77,26 +77,45 @@ export function regionalHospitalWhere(scope: DispatcherScope): Prisma.HospitalWh
   return { isActive: true, regionId: scope.regionId };
 }
 
+/** Cases this dispatcher handles or may assign (my cases + regional pending). */
+export function dispatcherRelevantCasesWhere(
+  scope: DispatcherScope,
+  extra: Prisma.EmergencyRequestWhereInput = {},
+): Prisma.EmergencyRequestWhereInput {
+  return {
+    OR: [
+      myCasesWhere(scope, extra),
+      regionalPendingCasesWhere(scope, extra),
+    ],
+  };
+}
+
 /** Notifications tied to cases the dispatcher handles. */
 export function dispatcherCaseNotificationWhere(
   scope: DispatcherScope,
   userId: string,
+  relevantCaseIds: string[],
 ): Prisma.NotificationWhereInput {
+  const caseCategories: NotificationCategory[] = [
+    NotificationCategory.MISSION,
+    NotificationCategory.COMMUNICATION,
+    NotificationCategory.HOSPITAL,
+    NotificationCategory.INCIDENT,
+  ];
+
   return {
     userId,
+    NOT: {
+      category: { in: [NotificationCategory.SYSTEM, NotificationCategory.BROADCAST, NotificationCategory.ATTENDANCE] },
+    },
     OR: [
-      { entityType: 'EmergencyRequest' },
+      ...(relevantCaseIds.length
+        ? [{ entityType: 'EmergencyRequest', entityId: { in: relevantCaseIds } }]
+        : []),
       {
-        category: {
-          in: [
-            NotificationCategory.MISSION,
-            NotificationCategory.COMMUNICATION,
-            NotificationCategory.HOSPITAL,
-            NotificationCategory.INCIDENT,
-          ],
-        },
+        category: { in: caseCategories },
+        type: NotificationType.EMERGENCY,
       },
-      { type: { in: [NotificationType.EMERGENCY] } },
     ],
   };
 }

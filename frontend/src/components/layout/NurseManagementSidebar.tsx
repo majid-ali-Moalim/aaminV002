@@ -8,19 +8,19 @@ import {
   ChevronRight,
   Users,
   UserCheck,
-  FileText,
-  History,
+  Activity,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 const SIDEBAR = {
-  bg: '#0B1220',
-  panel: '#111827',
-  primary: '#EF2D2D',
-  text: '#FFFFFF',
-  secondary: '#94A3B8',
-  muted: '#64748B',
-  border: 'rgba(255,255,255,0.06)',
+  bg: 'hsl(var(--sidebar-bg))',
+  panel: 'hsl(var(--sidebar-panel))',
+  primary: 'hsl(var(--sidebar-primary))',
+  text: 'hsl(var(--sidebar-text))',
+  textActive: 'hsl(var(--sidebar-text-active))',
+  secondary: 'hsl(var(--sidebar-secondary))',
+  muted: 'hsl(var(--sidebar-muted))',
+  border: 'hsl(var(--sidebar-border))',
   success: '#22C55E',
   warning: '#F59E0B',
   info: '#3B82F6',
@@ -37,8 +37,7 @@ type MenuItem = {
 const nurseMenuItems: MenuItem[] = [
   { href: '/admin/nurses', label: 'Nurses', icon: Users, exact: true },
   { href: '/admin/nurses/active', label: 'Active Nurses', icon: UserCheck },
-  { href: '/admin/nurses/clinical-records', label: 'Clinical Records', icon: FileText, accent: 'info' },
-  { href: '/admin/nurses/mission-history', label: 'Mission History', icon: History },
+  { href: '/admin/nurses/availability', label: 'Nurse Availability', icon: Activity },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {
@@ -48,7 +47,6 @@ function isItemActive(pathname: string, item: MenuItem) {
 
 export function isNurseManagementPath(pathname: string) {
   if (!pathname.startsWith('/admin/nurses')) return false
-  if (pathname.startsWith('/admin/nurses/availability')) return false
   return true
 }
 
@@ -84,7 +82,7 @@ export default function NurseManagementSidebar({ isOpen, setOpen }: NurseManagem
         className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-semibold rounded-lg"
         style={
           isSectionActive
-            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive }
             : { color: SIDEBAR.secondary }
         }
         onMouseEnter={(e) => {
@@ -103,19 +101,19 @@ export default function NurseManagementSidebar({ isOpen, setOpen }: NurseManagem
         <div className="flex items-center gap-2.5 min-w-0">
           <Stethoscope
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
           <span className="truncate">Nurse Management</span>
         </div>
         {isOpen ? (
           <ChevronDown
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         ) : (
           <ChevronRight
             className="w-4 h-4 shrink-0"
-            style={{ color: isSectionActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isSectionActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         )}
       </button>

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import {
   NotificationCategory,
   NotificationPriority,
@@ -253,6 +253,22 @@ export class NotificationsService {
     entityId?: string;
     redirectUrl?: string;
   }) {
+    // Guard against duplicate notifications: if an identical notification was
+    // just created for the same recipient (same title/message/entity), reuse it
+    // instead of inserting a second row.
+    const existing = await this.prisma.notification.findFirst({
+      where: {
+        userId: data.userId,
+        title: data.title,
+        message: data.message,
+        entityId: data.entityId ?? null,
+        deletedAt: null,
+        createdAt: { gte: new Date(Date.now() - 15_000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return existing;
+
     return this.prisma.notification.create({
       data: {
         title: data.title,
@@ -405,6 +421,56 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Direct admin/dispatcher-to-user message. Resolves an employeeId to its
+   * linked user account when needed and delivers a single COMMUNICATION
+   * notification to that recipient.
+   */
+  async sendDirectMessage(data: {
+    userId?: string;
+    employeeId?: string;
+    title?: string;
+    message: string;
+    createdById?: string;
+    senderName?: string;
+    priority?: NotificationPriority;
+    redirectUrl?: string;
+    entityType?: string;
+    entityId?: string;
+  }) {
+    let recipientUserId = data.userId;
+
+    if (!recipientUserId && data.employeeId) {
+      const employee = await this.prisma.employee.findUnique({
+        where: { id: data.employeeId },
+        select: { userId: true },
+      });
+      recipientUserId = employee?.userId ?? undefined;
+    }
+
+    if (!recipientUserId) {
+      throw new NotFoundException('Recipient user account could not be resolved for this dispatcher');
+    }
+
+    if (!data.message?.trim()) {
+      throw new BadRequestException('Message content is required');
+    }
+
+    return this.create({
+      userId: recipientUserId,
+      title: data.title?.trim() || 'New message',
+      message: data.message.trim(),
+      type: 'STAFF',
+      category: 'COMMUNICATION',
+      priority: data.priority ?? 'MEDIUM',
+      createdById: data.createdById,
+      senderName: data.senderName,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      actionUrl: data.redirectUrl ?? '/dispatcher/notifications',
+    });
+  }
+
   private inboxWhere(filters: InboxFilters): Prisma.NotificationWhereInput {
     const where: Prisma.NotificationWhereInput = { deletedAt: null };
 
@@ -446,10 +512,10 @@ export class NotificationsService {
 
     const [items, total] = await Promise.all([
       this.prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
         include: {
           createdBy: { select: { username: true, email: true } },
         } as any,

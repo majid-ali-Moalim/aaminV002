@@ -12,7 +12,7 @@ import DriverManagementSidebar, { isDriverManagementPath } from '@/components/la
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
 import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
 import AdminSidebarProfile from '@/components/layout/AdminSidebarProfile'
-import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
+import { useChatStore } from '@/lib/stores/chatStore'
 import {
   LayoutGrid,
   Users,
@@ -20,6 +20,7 @@ import {
   Activity,
   FileText,
   Bell,
+  MessageSquare,
   LogOut,
   ClipboardList,
   ChevronDown,
@@ -28,12 +29,8 @@ import {
   Radio,
   BarChart2,
   UserPlus,
-  Shuffle,
-  Stethoscope,
   MapPin,
-  Warehouse,
   Monitor,
-  Siren,
   Clock,
   Building2,
   UserCog,
@@ -47,13 +44,14 @@ import {
 } from 'lucide-react'
 
 const SIDEBAR = {
-  bg: '#0B1220',
-  panel: '#111827',
-  primary: '#EF2D2D',
-  text: '#FFFFFF',
-  secondary: '#94A3B8',
-  muted: '#64748B',
-  border: 'rgba(255,255,255,0.06)',
+  bg: 'hsl(var(--sidebar-bg))',
+  panel: 'hsl(var(--sidebar-panel))',
+  primary: 'hsl(var(--sidebar-primary))',
+  text: 'hsl(var(--sidebar-text))',
+  textActive: 'hsl(var(--sidebar-text-active))',
+  secondary: 'hsl(var(--sidebar-secondary))',
+  muted: 'hsl(var(--sidebar-muted))',
+  border: 'hsl(var(--sidebar-border))',
 } as const
 
 function SectionLabel({ label }: { label: string }) {
@@ -69,15 +67,6 @@ function SectionLabel({ label }: { label: string }) {
   )
 }
 
-const dispatchResourcesSubMenu = [
-  { href: '/admin/ambulances/availability', label: 'Ambulance Availability', icon: Truck },
-  { href: '/admin/ambulances/assignment-history', label: 'Ambulance Assignment', icon: Shuffle },
-  { href: '/admin/drivers/availability', label: 'Driver Availability', icon: Users },
-  { href: '/admin/nurses/availability', label: 'Nurse Availability', icon: Stethoscope },
-  { href: '/admin/dispatch-management/readiness', label: 'Readiness Status', icon: Activity },
-  { href: '/admin/system-setup/coverage', label: 'Area / Station Coverage', icon: MapPin },
-]
-
 const dispatcherManagementSubMenu = [
   { href: '/admin/dispatchers', label: 'All Dispatchers', icon: Users, exact: true },
   { href: '/admin/dispatchers/add', label: 'Add New Dispatcher', icon: UserPlus },
@@ -87,26 +76,21 @@ const dispatcherManagementSubMenu = [
 
 const dispatchCenterOperationsSubMenu = [
   { href: '/admin/dispatch-management', label: 'Live Dispatch Board', icon: Monitor, exact: true },
-  { href: '/admin/assignment-board', label: 'Assignment Board', icon: LayoutGrid },
-  { href: '/admin/emergency-requests/pending', label: 'Pending Case Queue', icon: Clock },
-  { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
 ]
 
 const hospitalCoordinationSubMenu = [
   { href: '/admin/hospitals', label: 'All Hospitals', icon: Building2, exact: true },
   { href: '/admin/hospitals/create', label: 'Create Hospital', icon: PlusCircle },
-  { href: '/admin/hospitals/availability', label: 'Hospital Availability', icon: Activity },
-  { href: '/admin/hospitals/incoming', label: 'Incoming Cases', icon: ListTodo },
-  { href: '/admin/hospitals/handover', label: 'Handover Queue', icon: Clock },
   { href: '/admin/hospitals/accepted', label: 'Accepted Cases', icon: ShieldCheck },
-  { href: '/admin/hospitals/refused', label: 'Refused / Full Cases', icon: XCircle },
-  { href: '/admin/hospitals/analytics', label: 'Hospital Performance Analytics', icon: BarChart2 },
+  { href: '/admin/hospitals/refused', label: 'Rejected Cases', icon: XCircle },
+  { href: '/admin/hospitals/analytics', label: 'Hospital Performance', icon: BarChart2 },
 ]
 
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
   { href: '/admin/employees/shifts', label: 'Shift Management', icon: Calendar },
   { href: '/admin/employees/attendance', label: 'Attendance Management', icon: Clock },
+  { href: '/admin/employees/attendance/scores', label: 'Attendance Scores', icon: BarChart2 },
 ]
 
 const analyticsSubMenu = [
@@ -131,23 +115,15 @@ export default function AdminSidebar() {
   const { logout } = useAuth()
   const pathname = usePathname()
   const { isActive: isNavActive } = useOptimisticNav()
+  const chatUnread = useChatStore((s) => s.unreadTotal)
 
   const isDashboardActive =
     pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
+  const isChatActive = pathname.startsWith('/admin/chat')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
   const isPatientsActive = isPatientsCaseRecordsPath(pathname)
-  const isDispatchResourcesActive =
-    pathname.startsWith('/admin/ambulances/availability') ||
-    pathname.startsWith('/admin/drivers/availability') ||
-    pathname.startsWith('/admin/nurses/availability') ||
-    pathname.startsWith('/admin/dispatch-management/readiness') ||
-    pathname.startsWith('/admin/system-setup/coverage')
-  const isDispatchCenterOperationsActive =
-    (pathname.startsWith('/admin/dispatch-management') && !pathname.includes('/readiness')) ||
-    pathname.startsWith('/admin/assignment-board') ||
-    pathname === '/admin/emergency-requests/pending' ||
-    pathname === '/admin/emergency-requests/active'
+  const isDispatchCenterOperationsActive = pathname.startsWith('/admin/dispatch-management')
   const isDispatcherManagementActive = pathname.startsWith('/admin/dispatchers')
   const isDriversActive = isDriverManagementPath(pathname)
   const isNursesActive = isNurseManagementPath(pathname)
@@ -161,7 +137,6 @@ export default function AdminSidebar() {
 
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
-  const [dispatchResourcesOpen, setDispatchResourcesOpen] = useState(isDispatchResourcesActive)
   const [dispatchCenterOperationsOpen, setDispatchCenterOperationsOpen] = useState(isDispatchCenterOperationsActive)
   const [dispatcherManagementOpen, setDispatcherManagementOpen] = useState(isDispatcherManagementActive)
   const [driversOpen, setDriversOpen] = useState(isDriversActive)
@@ -173,13 +148,19 @@ export default function AdminSidebar() {
   const [masterDataOpen, setMasterDataOpen] = useState(isMasterDataActive)
   const [accessControlOpen, setAccessControlOpen] = useState(isAccessControlActive)
 
-  const renderLink = (href: string, label: string, Icon: React.ElementType, isActive: boolean) => (
+  const renderLink = (
+    href: string,
+    label: string,
+    Icon: React.ElementType,
+    isActive: boolean,
+    badge?: number,
+  ) => (
     <SidebarNavLink
       navKey={`${label}-${href}`}
       href={href}
       exact={href === '/admin/dashboard'}
       className="flex items-center px-2.5 py-2 text-[13px] font-medium rounded-lg"
-      activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }}
+      activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive }}
       inactiveStyle={{ color: SIDEBAR.secondary }}
       onMouseEnter={(e) => {
         if (!isActive) {
@@ -196,9 +177,14 @@ export default function AdminSidebar() {
     >
       <Icon
         className="w-4 h-4 mr-2.5 shrink-0"
-        style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+        style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
       />
-      <span className="truncate">{label}</span>
+      <span className="truncate flex-1">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="ml-2 shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </SidebarNavLink>
   )
 
@@ -218,7 +204,7 @@ export default function AdminSidebar() {
         className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-medium rounded-lg"
         style={
           isActive
-            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text }
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive }
             : { color: SIDEBAR.secondary }
         }
         onMouseEnter={(e) => {
@@ -237,19 +223,19 @@ export default function AdminSidebar() {
         <div className="flex items-center min-w-0">
           <Icon
             className="w-4 h-4 mr-2.5 shrink-0"
-            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
           <span className="truncate">{label}</span>
         </div>
         {isOpen ? (
           <ChevronDown
             className="w-3.5 h-3.5 shrink-0 ml-1"
-            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         ) : (
           <ChevronRight
             className="w-3.5 h-3.5 shrink-0 ml-1"
-            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
         )}
       </button>
@@ -276,7 +262,7 @@ export default function AdminSidebar() {
                 href={sub.href}
                 exact={sub.exact}
                 className="flex items-center px-2.5 py-1.5 text-xs rounded-md"
-                activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.text, fontWeight: 600 }}
+                activeStyle={{ backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive, fontWeight: 600 }}
                 inactiveStyle={{ color: SIDEBAR.secondary }}
                 onMouseEnter={(e) => {
                   if (!active) {
@@ -293,7 +279,7 @@ export default function AdminSidebar() {
               >
                 <SubIcon
                   className="w-3.5 h-3.5 mr-2 shrink-0"
-                  style={{ color: active ? SIDEBAR.text : SIDEBAR.muted }}
+                  style={{ color: active ? SIDEBAR.textActive : SIDEBAR.muted }}
                 />
                 <span className="truncate">{sub.label}</span>
               </SidebarNavLink>
@@ -308,7 +294,7 @@ export default function AdminSidebar() {
     <div
       className="w-64 h-screen fixed left-0 top-0 flex flex-col z-30"
       style={{
-        background: `linear-gradient(180deg, ${SIDEBAR.bg} 0%, #0a101c 100%)`,
+        background: SIDEBAR.bg,
         borderRight: `1px solid ${SIDEBAR.border}`,
       }}
     >
@@ -318,6 +304,7 @@ export default function AdminSidebar() {
         <SectionLabel label="Modules" />
         {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
         {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
+        {renderLink('/admin/chat', 'Messages', MessageSquare, isChatActive, chatUnread)}
 
         <SectionLabel label="Emergency Command" />
         <div className="px-0.5">
@@ -329,14 +316,6 @@ export default function AdminSidebar() {
         <div className="px-0.5">
           <PatientsCaseRecordsSidebar isOpen={patientsOpen} setOpen={setPatientsOpen} />
         </div>
-        {renderCollapsible(
-          'Dispatch Resources',
-          Warehouse,
-          isDispatchResourcesActive,
-          dispatchResourcesOpen,
-          setDispatchResourcesOpen,
-          dispatchResourcesSubMenu,
-        )}
 
         <SectionLabel label="Field Operations" />
         <div className="px-0.5">
@@ -415,12 +394,9 @@ export default function AdminSidebar() {
         className="p-2.5 shrink-0 space-y-2"
         style={{
           borderTop: `1px solid ${SIDEBAR.border}`,
-          backgroundColor: 'rgba(17,24,39,0.5)',
+          backgroundColor: 'hsl(var(--sidebar-panel))',
         }}
       >
-        <div className="px-0.5">
-          <AdminThemeToggle onDark />
-        </div>
         <button
           type="button"
           onClick={() => logout()}
@@ -428,7 +404,7 @@ export default function AdminSidebar() {
           style={{ color: SIDEBAR.muted }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = SIDEBAR.primary
-            e.currentTarget.style.color = SIDEBAR.text
+            e.currentTarget.style.color = SIDEBAR.textActive
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'transparent'

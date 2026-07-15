@@ -1,8 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import {
+  BarChart3,
   Calendar,
   CheckCircle2,
   Clock,
@@ -13,6 +15,8 @@ import {
   Search,
   UserX,
   Users,
+  X,
+  AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
@@ -36,6 +40,36 @@ type AttendanceRow = {
   totalHours: number | null
   hoursInProgress?: boolean
   profilePhoto?: string | null
+}
+
+type MissedShiftAlert = {
+  alertKey: string
+  employeeId: string
+  employeeName: string
+  role: string
+  shiftName: string
+  shiftWindow: string
+  date: string
+  message: string
+}
+
+const DISMISSED_ALERTS_KEY = 'aamin-attendance-dismissed-alerts'
+
+function loadDismissedAlerts(): Set<string> {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = localStorage.getItem(DISMISSED_ALERTS_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw)
+    return new Set(Array.isArray(parsed) ? parsed : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function persistDismissedAlerts(keys: Set<string>) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify(Array.from(keys)))
 }
 
 function formatClock(value: string | null) {
@@ -185,13 +219,20 @@ export default function EmployeeAttendanceView() {
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(todayIso)
   const [rows, setRows] = useState<AttendanceRow[]>([])
-  const [summary, setSummary] = useState<{ total: number; present: number; absent: number } | null>(
-    null,
-  )
+  const [summary, setSummary] = useState<{
+    total: number
+    present: number
+    absent: number
+    presentPercentage?: number
+    absentPercentage?: number
+  } | null>(null)
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'Present' | 'Absent'>('all')
   const [editRow, setEditRow] = useState<AttendanceRow | null>(null)
+  const [markingId, setMarkingId] = useState<string | null>(null)
+  const [missedAlerts, setMissedAlerts] = useState<MissedShiftAlert[]>([])
+  const [dismissedAlertKeys, setDismissedAlertKeys] = useState<Set<string>>(() => loadDismissedAlerts())
 
   const loadDay = useCallback(async (date: string) => {
     setLoading(true)
@@ -199,6 +240,7 @@ export default function EmployeeAttendanceView() {
       const res = await employeeAttendanceService.getByDay(date)
       setRows(res.items ?? [])
       setSummary(res.summary ?? null)
+      setMissedAlerts(Array.isArray(res.missedShiftAlerts) ? res.missedShiftAlerts : [])
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
@@ -213,6 +255,50 @@ export default function EmployeeAttendanceView() {
   useEffect(() => {
     loadDay(selectedDate)
   }, [selectedDate, loadDay])
+
+  const visibleMissedAlerts = useMemo(
+    () => missedAlerts.filter((a) => !dismissedAlertKeys.has(a.alertKey)),
+    [missedAlerts, dismissedAlertKeys],
+  )
+
+  const dismissAlert = (alertKey: string) => {
+    setDismissedAlertKeys((prev) => {
+      const next = new Set(prev)
+      next.add(alertKey)
+      persistDismissedAlerts(next)
+      return next
+    })
+  }
+
+  const dismissAllAlerts = () => {
+    setDismissedAlertKeys((prev) => {
+      const next = new Set(prev)
+      for (const alert of missedAlerts) next.add(alert.alertKey)
+      persistDismissedAlerts(next)
+      return next
+    })
+  }
+
+  const markAttendance = async (row: AttendanceRow, action: 'present' | 'absent') => {
+    setMarkingId(row.employeeDbId)
+    try {
+      await employeeAttendanceService.markAttendance({
+        employeeId: row.employeeDbId,
+        date: selectedDate,
+        action,
+      })
+      toast.success(action === 'present' ? 'Marked present' : 'Marked absent')
+      await loadDay(selectedDate)
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(message || 'Failed to update attendance')
+    } finally {
+      setMarkingId(null)
+    }
+  }
 
   const filtered = useMemo(() => {
     let list = [...rows]
@@ -231,7 +317,7 @@ export default function EmployeeAttendanceView() {
   }, [rows, search, role, statusFilter])
 
   const roles = useMemo(
-    () => [...new Set(rows.map((r) => r.role).filter(Boolean))].sort(),
+    () => Array.from(new Set(rows.map((r) => r.role).filter(Boolean))).sort(),
     [rows],
   )
 
@@ -241,10 +327,16 @@ export default function EmployeeAttendanceView() {
         <div>
           <h1 className="text-2xl font-black text-gray-900">Employee Attendance</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Present or absent status with actual check-in and check-out times
+            Drivers, nurses, dispatchers, and admins — present or absent with check-in and check-out times
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/admin/employees/attendance/scores">
+            <Button variant="outline" className="rounded-xl h-10 border-violet-200 text-violet-700 hover:bg-violet-50">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Attendance scores
+            </Button>
+          </Link>
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10">
             <Calendar className="w-4 h-4 text-red-600" />
             <input
@@ -269,15 +361,56 @@ export default function EmployeeAttendanceView() {
         </div>
       </div>
 
+      {visibleMissedAlerts.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <p className="text-sm font-black text-amber-900">
+                Missed shift check-ins ({visibleMissedAlerts.length})
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-lg border-amber-200 text-amber-800 hover:bg-amber-100"
+              onClick={dismissAllAlerts}
+            >
+              Dismiss all
+            </Button>
+          </div>
+          <ul className="space-y-2 max-h-48 overflow-y-auto">
+            {visibleMissedAlerts.map((alert) => (
+              <li
+                key={alert.alertKey}
+                className="flex items-start gap-3 rounded-xl bg-white border border-amber-100 px-3 py-2.5 text-sm"
+              >
+                <p className="flex-1 text-amber-950 leading-relaxed">{alert.message}</p>
+                <button
+                  type="button"
+                  onClick={() => dismissAlert(alert.alertKey)}
+                  className="shrink-0 p-1.5 rounded-lg text-amber-600 hover:bg-amber-100 hover:text-amber-900"
+                  title="Dismiss"
+                  aria-label="Dismiss alert"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
             <div className="flex items-center justify-between">
               <p className="text-2xl font-black text-blue-900">{summary.total}</p>
               <Users className="w-5 h-5 text-blue-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mt-1">
-              Total Employees
+              Staff employees
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
@@ -286,7 +419,7 @@ export default function EmployeeAttendanceView() {
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mt-1">
-              Present
+              Present today
             </p>
           </div>
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
@@ -295,7 +428,29 @@ export default function EmployeeAttendanceView() {
               <UserX className="w-5 h-5 text-red-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-red-700 mt-1">
-              Absent
+              Absent today
+            </p>
+          </div>
+          <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-2xl font-black text-violet-900">
+                {summary.presentPercentage ?? 0}%
+              </p>
+              <BarChart3 className="w-5 h-5 text-violet-600" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-700 mt-1">
+              Present rate
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-2xl font-black text-slate-900">
+                {summary.absentPercentage ?? 0}%
+              </p>
+              <UserX className="w-5 h-5 text-slate-500" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mt-1">
+              Absence rate
             </p>
           </div>
         </div>
@@ -406,16 +561,38 @@ export default function EmployeeAttendanceView() {
                         <td className="p-3 font-bold text-gray-900">{formatHours(r)}</td>
                         <td className="p-3">{statusBadge(r.status)}</td>
                         <td className="p-3">
-                          {r.recordId && (
-                            <button
-                              type="button"
-                              onClick={() => setEditRow(r)}
-                              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-                              title="Edit times"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {!r.present && (
+                              <button
+                                type="button"
+                                disabled={markingId === r.employeeDbId}
+                                onClick={() => markAttendance(r, 'present')}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
+                              >
+                                Present
+                              </button>
+                            )}
+                            {r.present && (
+                              <button
+                                type="button"
+                                disabled={markingId === r.employeeDbId}
+                                onClick={() => markAttendance(r, 'absent')}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                              >
+                                Absent
+                              </button>
+                            )}
+                            {r.recordId && (
+                              <button
+                                type="button"
+                                onClick={() => setEditRow(r)}
+                                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                                title="Edit times"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )

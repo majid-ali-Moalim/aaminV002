@@ -429,9 +429,9 @@ export default function MissionExecutionDashboard({
           Go to Assigned Missions
         </Link>
         {isActivePage && (
-          <Link href="/driver/shifts" className="driver-btn-sm ghost mt-2">
-            Clock In / Shift Status
-          </Link>
+          <p className="driver-btn-sm ghost mt-2 text-zinc-400 text-sm">
+            Clock in from the dashboard to accept mission updates.
+          </p>
         )}
       </div>
     )
@@ -461,8 +461,8 @@ export default function MissionExecutionDashboard({
               </span>
             )}
             {!onDuty && (
-              <Link href="/driver/shifts" className="mew-status-link">
-                Clock in →
+              <Link href="/driver" className="mew-status-link">
+                Clock in on dashboard →
               </Link>
             )}
           </div>

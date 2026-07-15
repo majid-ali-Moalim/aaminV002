@@ -7,12 +7,11 @@ const VALID: DispatcherModuleId[] = [
   'resources',
   'hospital',
   'monitoring',
-  'reports',
   'alerts',
   'permissions',
 ]
 
-const REMOVED_MODULES = new Set(['communications', 'tools'])
+const REMOVED_MODULES = new Set(['communications', 'tools', 'reports'])
 
 export default function Page({
   params,

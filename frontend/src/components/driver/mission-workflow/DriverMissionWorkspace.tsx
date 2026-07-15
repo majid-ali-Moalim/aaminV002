@@ -6,7 +6,6 @@ import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import {
-  Activity,
   Building2,
   ChevronRight,
   Clock,
@@ -14,11 +13,14 @@ import {
   History,
   Loader2,
   MapPin,
+  Navigation2,
   RefreshCw,
   Siren,
   Truck,
   User,
+  CheckCircle2,
 } from 'lucide-react'
+import MissionHorizontalTimeline from '@/components/mission-workflow/MissionHorizontalTimeline'
 import { driverMissionsApi } from '@/lib/driverApi'
 import { useDriverStore, type DriverMission } from '@/lib/stores/driverStore'
 import { useDriverSocket } from '@/lib/useDriverSocket'
@@ -30,7 +32,6 @@ import {
   getDriverTimelineIndex,
   getStepTimestamp,
   getWorkflowMeta,
-  markCaseReviewed,
   MISSION_EXECUTION_STEPS,
   patchWorkflowMeta,
   setStoredPhase,
@@ -126,7 +127,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const currentStep = MISSION_EXECUTION_STEPS.find((s) => s.id === currentStepId) ?? MISSION_EXECUTION_STEPS[0]
   const missionClosed = currentStepId === 'MISSION_COMPLETED' || (mission ? CLOSED.includes(mission.status) : false)
   const readOnly = missionClosed
-  const caseReviewed = Boolean(meta.reviewedAt)
   const runReportSubmitted = Boolean(meta.runReportSubmitted)
   const enRouteStartedAt =
     meta.enRouteStartedAt || meta.timestamps.EN_ROUTE_SCENE || null
@@ -140,17 +140,16 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const onDuty = profile?.shiftStatus === 'ON_DUTY'
 
   const stickyPrimary = useMemo(() => {
-    const actions = currentStep.actions.filter((a) => a.id !== 'submit_report')
+    const actions = currentStep.actions.filter((a) => a.id !== 'submit_report' && a.id !== 'accept')
     return actions.find((a) => a.variant === 'primary') ?? actions[0] ?? null
   }, [currentStep.actions])
 
   const stickyPrimaryDisabled =
     stickyPrimary &&
-    ((stickyPrimary.id === 'accept' && !caseReviewed) ||
-      (!onDuty &&
-        ['accept', 'mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
-          stickyPrimary.id,
-        )))
+    (!onDuty &&
+      ['mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
+        stickyPrimary.id,
+      ))
 
   const refresh = async () => {
     setRefreshing(true)
@@ -185,63 +184,29 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     toast.success(`Stage: ${MISSION_EXECUTION_STEPS.find((s) => s.id === nextStep)?.label}`)
   }
 
-  const reviewCase = (id: string) => {
-    markCaseReviewed(id)
+  const openCase = (id: string) => {
+    setMissionId(id)
     setDetailId(id)
-    syncWorkflow()
-    toast.success('Case reviewed — you may now accept the assignment')
-  }
-
-  const acceptAssignment = async (id: string) => {
-    if (!onDuty) {
-      toast.error('Clock in under Shift & Attendance to accept assignments')
-      return
-    }
-    const reviewed = getWorkflowMeta(id).reviewedAt
-    if (!reviewed) {
-      toast.error('Review case details before accepting')
-      return
-    }
-    try {
-      setMissionId(id)
-      stampWorkflowStage(id, 'ACCEPTED', null)
-      setStoredPhase(id, 'ACCEPTED')
-      await driverMissionsApi.updateStatus(id, 'DISPATCHED', 'Driver accepted assignment')
-      emitMissionStatus(id, 'DISPATCHED', 'Driver accepted assignment')
-      setAssignedList((prev) => prev.filter((m) => m.id !== id))
-      await refreshMission(id)
-      syncWorkflow()
-      toast.success('Assignment accepted')
-      refresh()
-    } catch {
-      toast.error('Could not accept assignment')
-    }
   }
 
   const handleAction = async (actionId: WorkflowActionId) => {
     if (!mission || readOnly) return
 
     switch (actionId) {
-      case 'accept':
-        if (!caseReviewed) {
-          toast.error('Review case details before accepting')
-          return
-        }
-        acceptAssignment(mission.id)
-        break
       case 'view_details':
-        if (currentStepId === 'ASSIGNED' && !caseReviewed) {
-          reviewCase(mission.id)
-        } else {
-          setDetailId(mission.id)
-        }
+        setDetailId(mission.id)
         break
       case 'start_navigation':
         patchWorkflowMeta(mission.id, {
           enRouteStartedAt: new Date().toISOString(),
         })
-        await advanceStep('EN_ROUTE_SCENE', undefined, 'Driver en route to scene')
+        stampWorkflowStage(mission.id, 'EN_ROUTE_SCENE', null)
+        setStoredPhase(mission.id, 'EN_ROUTE_SCENE')
+        if (mission.status === 'ASSIGNED') {
+          await updateBackend('DISPATCHED', 'Driver en route to scene')
+        }
         syncWorkflow()
+        toast.success('En route to scene')
         break
       case 'update_eta': {
         const eta = prompt('Estimated arrival (minutes):')
@@ -336,7 +301,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       <div className="dcw-queue">
         <div className="dcw-queue-banner">
           <Siren size={18} />
-          <span>{assignedPending.length} assignment{assignedPending.length > 1 ? 's' : ''} awaiting acceptance</span>
+          <span>{assignedPending.length} new assignment{assignedPending.length > 1 ? 's' : ''} from dispatch</span>
         </div>
         <div className="dcw-queue-list">
           {assignedPending.map((m) => (
@@ -347,16 +312,8 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
               </div>
               <p className="text-sm text-zinc-400">{m.pickupLocation}</p>
               <div className="dcw-queue-actions">
-                <button type="button" className="driver-btn-sm ghost" onClick={() => reviewCase(m.id)}>
-                  Review Case
-                </button>
-                <button
-                  type="button"
-                  className="driver-btn-sm primary"
-                  disabled={!getWorkflowMeta(m.id).reviewedAt}
-                  onClick={() => acceptAssignment(m.id)}
-                >
-                  Accept Assignment
+                <button type="button" className="driver-btn-sm primary" onClick={() => openCase(m.id)}>
+                  Open Case Workspace
                 </button>
               </div>
             </article>
@@ -373,7 +330,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         <div className="dcw-empty-icon"><Truck size={32} /></div>
         <h3>No Active Case</h3>
         <p>When dispatch assigns you a run, your transport workflow will appear here.</p>
-        <Link href="/driver/shifts" className="driver-btn-sm primary">Shift & Attendance</Link>
+        <Link href="/driver" className="driver-btn-sm primary">Back to Dashboard</Link>
         <Link href="/driver/missions/history" className="driver-btn-sm ghost">
           <History size={14} /> Mission History
         </Link>
@@ -424,29 +381,37 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         <span><User size={14} /> Nurse: {nurseName}</span>
       </div>
 
-      <div className="dcw-grid">
-        <section className="dcw-card dcw-timeline-card">
-          <h3 className="dcw-card-title"><Activity size={16} /> Workflow Timeline</h3>
-          <ol className="dcw-timeline">
-            {DRIVER_TIMELINE_STEPS.map((step, i) => {
-              const done = missionClosed || i < timelineIndex
-              const active = !missionClosed && i === timelineIndex
-              const ts = step.stepIds.map((id) => meta.timestamps[id] || getStepTimestamp(mission, id)).find(Boolean)
-              return (
-                <li key={step.id} className={`dcw-timeline-item${done ? ' done' : ''}${active ? ' active' : ''}`}>
-                  <span className="dcw-timeline-dot">{i + 1}</span>
-                  <div>
-                    <p className="dcw-timeline-label">{step.label}</p>
-                    <p className="dcw-timeline-desc">{step.description}</p>
-                    {active && <p className="dcw-timeline-current">{currentStep.label}</p>}
-                    {ts && <p className="dcw-timeline-time">{format(new Date(ts), 'h:mm a')}</p>}
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
-        </section>
+      <section className="dcw-card dcw-timeline-card dcw-span-2">
+        <h3 className="dcw-card-title"><Navigation2 size={16} /> Mission Progress</h3>
+        <MissionHorizontalTimeline
+          classPrefix="dcw"
+          steps={DRIVER_TIMELINE_STEPS.map((s) => ({
+            id: s.id,
+            label: s.label,
+            shortLabel: s.shortLabel,
+            icon:
+              s.id === 'EN_ROUTE'
+                ? Navigation2
+                : s.id === 'ON_SCENE'
+                  ? MapPin
+                  : s.id === 'TRANSPORT'
+                    ? Truck
+                    : CheckCircle2,
+          }))}
+          activeIndex={timelineIndex}
+          completed={missionClosed}
+          currentStepLabel={currentStep.label}
+          getStepTime={(i) => {
+            const step = DRIVER_TIMELINE_STEPS[i]
+            const ts = step.stepIds
+              .map((id) => meta.timestamps[id] || getStepTimestamp(mission, id))
+              .find(Boolean)
+            return ts || null
+          }}
+        />
+      </section>
 
+      <div className="dcw-grid dcw-grid-stage">
         <section className="dcw-card dcw-stage-card">
           <h3 className="dcw-card-title"><ChevronRight size={16} /> Current Stage</h3>
           <p className="dcw-stage-name">{currentStep.label}</p>
@@ -461,10 +426,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           )}
 
           {!readOnly && !onDuty && (
-            <p className="dcw-warn">Clock in to accept assignments and update mission status.</p>
-          )}
-          {!readOnly && currentStepId === 'ASSIGNED' && !caseReviewed && (
-            <p className="dcw-warn">Review case details before you can accept this assignment.</p>
+            <p className="dcw-warn">Clock in to update mission status.</p>
           )}
           {!readOnly && currentStepId === 'ARRIVED_HOSPITAL' && (
             <p className="dcw-warn">Mission completion is handled by the nurse after clinical handover.</p>
@@ -472,17 +434,18 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
 
           {!readOnly && (
           <div className="dcw-action-grid">
-            {currentStep.actions.map((action) => (
+            {currentStep.actions
+              .filter((action) => action.id !== 'accept')
+              .map((action) => (
               <button
                 key={action.id}
                 type="button"
                 className={`dcw-action-btn${action.variant === 'primary' ? ' primary' : ''}${action.variant === 'danger' ? ' danger' : ''}`}
                 disabled={
-                  (action.id === 'accept' && !caseReviewed) ||
-                  (!onDuty &&
-                    ['accept', 'mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
-                      action.id,
-                    ))
+                  !onDuty &&
+                  ['mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
+                    action.id,
+                  )
                 }
                 onClick={() => handleAction(action.id)}
               >
@@ -493,7 +456,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           )}
         </section>
 
-        <section className="dcw-card dcw-span-2">
+        <section className="dcw-card">
           <h3 className="dcw-card-title">Case Details</h3>
           <div className="dcw-info-grid">
             <InfoItem label="Ambulance" value={mission.ambulance?.ambulanceNumber || profile?.assignedAmbulance?.ambulanceNumber} />
@@ -507,20 +470,20 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             )}
           </div>
         </section>
-
-        <section className="dcw-card dcw-span-2">
-          <h3 className="dcw-card-title">Activity Log</h3>
-          {activityLog.length === 0 ? (
-            <p className="dcw-empty-inline">Workflow activity will appear here.</p>
-          ) : (
-            <ul className="dcw-activity-list">
-              {activityLog.map((e, i) => (
-                <li key={i}><span>{e.time}</span> {e.text}</li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
+
+      <section className="dcw-card">
+        <h3 className="dcw-card-title">Activity Log</h3>
+        {activityLog.length === 0 ? (
+          <p className="dcw-empty-inline">Workflow activity will appear here.</p>
+        ) : (
+          <ul className="dcw-activity-list">
+            {activityLog.map((e, i) => (
+              <li key={i}><span>{e.time}</span> {e.text}</li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {activeCases.length > 1 && (
         <div className="dcw-case-switcher">
@@ -583,15 +546,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         missionId={detailId}
         open={Boolean(detailId)}
         onClose={() => setDetailId(null)}
-        showAccept={
-          Boolean(
-            detailId &&
-              mission?.status === 'ASSIGNED' &&
-              !readOnly &&
-              getWorkflowMeta(detailId).reviewedAt,
-          )
-        }
-        onAccept={acceptAssignment}
       />
     </div>
   )

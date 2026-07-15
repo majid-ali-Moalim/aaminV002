@@ -13,7 +13,10 @@ import {
   CheckCircle2,
   XCircle,
   Activity,
+  Trash2,
+  Pencil,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -21,6 +24,7 @@ import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
+import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -69,10 +73,27 @@ export default function PatientCaseRecordsView({
   const [searchTerm, setSearchTerm] = useState(patientFilter)
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
 
   useEffect(() => {
     if (patientFilter) setSearchTerm(patientFilter)
   }, [patientFilter])
+
+  const handleDelete = async (req: EmergencyRequest) => {
+    if (!window.confirm(`Delete case ${req.trackingCode}? This cannot be undone.`)) return
+    try {
+      setDeletingId(req.id)
+      await emergencyRequestsService.delete(req.id)
+      setRequests((prev) => prev.filter((r) => r.id !== req.id))
+      toast.success(`Case ${req.trackingCode} deleted`)
+    } catch (err) {
+      console.error('Failed to delete case:', err)
+      toast.error('Failed to delete case')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   useEffect(() => {
     emergencyRequestsService
@@ -338,12 +359,38 @@ export default function PatientCaseRecordsView({
                         )}
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <Link href={paths.emergencyCase(req.id)}>
-                          <Button variant="outline" size="sm" className="rounded-lg h-8 gap-1">
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Open
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-lg h-8 gap-1 border-blue-200 text-blue-700 hover:bg-blue-50"
+                            onClick={() => setUpdatingCase(req)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Update
                           </Button>
-                        </Link>
+                          <Link href={paths.emergencyCase(req.id)}>
+                            <Button variant="outline" size="sm" className="rounded-lg h-8 gap-1">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Open
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(req)}
+                            disabled={deletingId === req.id}
+                            className="rounded-lg h-8 gap-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            title="Delete case"
+                          >
+                            {deletingId === req.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -353,6 +400,18 @@ export default function PatientCaseRecordsView({
           </table>
         </div>
       </div>
+
+      {updatingCase && (
+        <UpdatePatientCaseModal
+          request={updatingCase}
+          onClose={() => setUpdatingCase(null)}
+          onSuccess={(updated) => {
+            setRequests((prev) =>
+              prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+            )
+          }}
+        />
+      )}
     </div>
   )
 }

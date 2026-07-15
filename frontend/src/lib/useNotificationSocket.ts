@@ -15,6 +15,7 @@ const SOCKET_URL = (
 ).replace(/\/$/, '')
 
 let globalSocket: Socket | null = null
+let socketHandlersBound = false
 
 function playAlertSound() {
   try {
@@ -40,59 +41,54 @@ function resolveLiveNotificationUrl(payload: AppNotification): string {
   return payload.redirectUrl || payload.actionUrl || '/admin/notifications'
 }
 
-export function useNotificationSocket() {
-  const { prependNotification, setStats, setConnected } = useNotificationStore()
+function ensureSocketListeners() {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+  if (!token) return
 
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-    if (!token) return
+  if (!globalSocket) {
+    globalSocket = io(`${SOCKET_URL}/notifications`, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    })
+  }
 
-    if (!globalSocket) {
-      globalSocket = io(`${SOCKET_URL}/notifications`, {
-        auth: { token },
-        transports: ['websocket', 'polling'],
-        reconnectionAttempts: 10,
-        reconnectionDelay: 2000,
+  if (socketHandlersBound) return
+  socketHandlersBound = true
+
+  const { prependNotification, setStats, setConnected } = useNotificationStore.getState()
+
+  globalSocket.on('connect', () => setConnected(true))
+  globalSocket.on('disconnect', () => setConnected(false))
+
+  globalSocket.on('notification', (payload: AppNotification) => {
+    prependNotification(payload)
+    const href = resolveLiveNotificationUrl(payload)
+    const toastOpts = {
+      duration: payload.priority === 'CRITICAL' ? 8000 : 5000,
+      onClick: () => {
+        window.location.href = href
+      },
+    }
+    if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
+      playAlertSound()
+      toast.error(`${payload.title}: ${payload.message}`, {
+        ...toastOpts,
+        icon: payload.category === 'BROADCAST' ? '📢' : '🚨',
       })
+    } else if (payload.priority === 'HIGH' || payload.category === 'MISSION') {
+      toast(`${payload.title}: ${payload.message}`, { ...toastOpts, icon: '🔔' })
     }
+  })
 
-    const onConnect = () => setConnected(true)
-    const onDisconnect = () => setConnected(false)
+  globalSocket.on('notification_stats', (stats: NotificationStats) => setStats(stats))
 
-    const onNotification = (payload: AppNotification) => {
-      prependNotification(payload)
-      const href = resolveLiveNotificationUrl(payload)
-      const toastOpts = {
-        duration: payload.priority === 'CRITICAL' ? 8000 : 5000,
-        onClick: () => {
-          window.location.href = href
-        },
-      }
-      if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
-        playAlertSound()
-        toast.error(`${payload.title}: ${payload.message}`, {
-          ...toastOpts,
-          icon: payload.category === 'BROADCAST' ? '📢' : '🚨',
-        })
-      } else if (payload.priority === 'HIGH' || payload.category === 'MISSION') {
-        toast(`${payload.title}: ${payload.message}`, { ...toastOpts, icon: '🔔' })
-      }
-    }
+  if (globalSocket.connected) setConnected(true)
+}
 
-    const onStats = (stats: NotificationStats) => setStats(stats)
-
-    globalSocket.on('connect', onConnect)
-    globalSocket.on('disconnect', onDisconnect)
-    globalSocket.on('notification', onNotification)
-    globalSocket.on('notification_stats', onStats)
-
-    if (globalSocket.connected) setConnected(true)
-
-    return () => {
-      globalSocket?.off('connect', onConnect)
-      globalSocket?.off('disconnect', onDisconnect)
-      globalSocket?.off('notification', onNotification)
-      globalSocket?.off('notification_stats', onStats)
-    }
-  }, [prependNotification, setStats, setConnected])
+export function useNotificationSocket() {
+  useEffect(() => {
+    ensureSocketListeners()
+  }, [])
 }

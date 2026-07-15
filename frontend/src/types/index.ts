@@ -309,6 +309,7 @@ export interface EmergencyRequest {
   patientId: string;
   dispatcherId?: string | null;
   driverId?: string | null;
+  nurseId?: string | null;
   ambulanceId?: string | null;
 
   incidentCategoryId?: string | null;
@@ -357,6 +358,7 @@ export interface EmergencyRequest {
   patient?: Patient;
   dispatcher?: Employee;
   driver?: Employee;
+  nurse?: Employee;
   ambulance?: Ambulance;
   incidentCategory?: IncidentCategory | null;
   region?: Region | null;

@@ -75,10 +75,8 @@ export default function PatientRegistryView({ portal = 'admin' }: PatientRegistr
   }, [patients, searchTerm, statusFilter])
 
   const stats = useMemo(() => {
-    const totalCases = patients.reduce((sum, p) => sum + (p.totalEmergencies ?? 0), 0)
     const withCases = patients.filter((p) => (p.totalEmergencies ?? 0) > 0).length
-    const active = patients.filter((p) => p.isActive).length
-    return { total: patients.length, totalCases, withCases, active }
+    return { total: patients.length, withCases }
   }, [patients])
 
   return (
@@ -107,12 +105,10 @@ export default function PatientRegistryView({ portal = 'admin' }: PatientRegistr
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
           { label: 'Total Patients', value: stats.total, icon: Users, tone: 'red' },
-          { label: 'Total Case History', value: stats.totalCases, icon: FileText, tone: 'blue' },
           { label: 'Patients with Cases', value: stats.withCases, icon: Activity, tone: 'amber' },
-          { label: 'Active Profiles', value: stats.active, icon: Activity, tone: 'emerald' },
         ].map((item) => {
           const Icon = item.icon
           const toneClass =

@@ -26,9 +26,30 @@ export const HOSPITAL_TYPES = [
 
 export type CoordinationView =
   | 'all-hospitals'
-  | 'availability'
-  | 'incoming'
-  | 'handover'
   | 'accepted'
   | 'refused'
   | 'analytics'
+
+export type HospitalBranchRecord = {
+  id: string
+  name: string
+  regionId: string
+  districtId: string
+  address: string
+  email: string
+  primaryPhone: string
+  emergencyShortCode?: string
+  emergencyHotline?: string
+}
+
+export function parseHospitalBranches(raw: unknown): HospitalBranchRecord[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((b) => b && typeof b === 'object' && 'id' in b && 'name' in b) as HospitalBranchRecord[]
+}
+
+export function refusalReasonLabel(code?: string | null) {
+  const found = REFUSAL_REASONS.find((r) => r.value === code)
+  if (found) return found.label
+  if (!code) return 'Not specified'
+  return code.replace(/_/g, ' ')
+}

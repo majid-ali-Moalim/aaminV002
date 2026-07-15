@@ -6,10 +6,8 @@ import {
   Stethoscope,
   Truck,
   Activity,
-  Radio,
   User,
   Lock,
-  BarChart2,
   Shield,
 } from 'lucide-react'
 
@@ -24,48 +22,43 @@ export type FieldOpsItem = {
 }
 
 export const DISPATCHER_DRIVER_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/drivers', label: 'All Drivers', icon: Users, exact: true },
-  { href: '/dispatcher/resources/availability', label: 'Availability Board', icon: Calendar, accent: 'info' },
+  { href: '/dispatcher/resources/driver-availability', label: 'Driver Availability', icon: Users, exact: true },
 ]
 
 export const DISPATCHER_NURSE_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/nurses', label: 'All Nurses', icon: Users, exact: true },
-  { href: '/dispatcher/resources/availability', label: 'Availability Board', icon: Activity, accent: 'info' },
+  { href: '/dispatcher/resources/nurse-availability', label: 'Nurse Availability', icon: Stethoscope, exact: true },
 ]
 
 export const DISPATCHER_AMBULANCE_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/ambulances', label: 'Ambulance Fleet', icon: Truck, exact: true },
-  { href: '/dispatcher/resources/availability', label: 'Availability Board', icon: Activity },
-  { href: '/dispatcher/monitoring/resources', label: 'Resource Status', icon: Activity, accent: 'info' },
+  { href: '/dispatcher/resources/ambulance-availability', label: 'Ambulance Availability', icon: Truck, exact: true },
+  { href: '/dispatcher/resources/resource-status', label: 'Resource Status', icon: Activity, accent: 'info' },
 ]
 
 export const DISPATCHER_MANAGEMENT_ITEMS: FieldOpsItem[] = [
   { href: '/dispatcher/profile', label: 'My Profile', icon: User, exact: true },
   { href: '/dispatcher/permissions', label: 'My Permissions', icon: Lock },
   { href: '/dispatcher/permissions/granted', label: 'Granted Access', icon: Shield },
-  { href: '/dispatcher/reports/emergency', label: 'Performance Reports', icon: BarChart2 },
 ]
 
 export function isDispatcherDriverPath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources/drivers') || pathname.startsWith('/dispatcher/add-driver')
+  return pathname.startsWith('/dispatcher/resources/driver') || pathname.startsWith('/dispatcher/add-driver')
 }
 
 export function isDispatcherNursePath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources/nurses') || pathname.startsWith('/dispatcher/add-nurse')
+  return pathname.startsWith('/dispatcher/resources/nurse') || pathname.startsWith('/dispatcher/add-nurse')
 }
 
 export function isDispatcherAmbulancePath(pathname: string) {
   return (
-    pathname.startsWith('/dispatcher/resources/ambulances') ||
-    pathname.startsWith('/dispatcher/monitoring/resources')
+    pathname.startsWith('/dispatcher/resources/ambulance') ||
+    pathname.startsWith('/dispatcher/resources/resource-status')
   )
 }
 
 export function isDispatcherManagementPath(pathname: string) {
   return (
     pathname === '/dispatcher/profile' ||
-    pathname.startsWith('/dispatcher/permissions') ||
-    pathname.startsWith('/dispatcher/reports')
+    pathname.startsWith('/dispatcher/permissions')
   )
 }
 

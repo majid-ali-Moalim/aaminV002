@@ -466,7 +466,7 @@ export default function DispatcherCaseAlerts({
           </div>
         ) : (
           <p className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
-            No active cases in your region.
+            No active cases you are handling.
           </p>
         )
       ) : filteredNotifications.length > 0 ? (
@@ -488,7 +488,7 @@ export default function DispatcherCaseAlerts({
       {filter !== 'cases' && cases.length > 0 ? (
         <section className="space-y-3 border-t border-gray-100 pt-6">
           <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
-            Live Regional Cases ({cases.length})
+            Live Cases You Handle ({cases.length})
           </h3>
           <div className="grid gap-4 lg:grid-cols-2">
             {cases.slice(0, 4).map((c) => (

@@ -3,5 +3,5 @@
 import PatientCaseRecordsView from '@/components/features/patients/PatientCaseRecordsView'
 
 export default function PatientCasesPage() {
-  return <PatientCaseRecordsView closedOnly />
+  return <PatientCaseRecordsView />
 }

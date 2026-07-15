@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { HospitalsService } from './hospitals.service';
 import { CreateHospitalDto } from './create-hospital.dto';
+import { RegisterHospitalInfoDto } from './register-hospital-info.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -23,6 +24,13 @@ import { Public } from '../auth/decorators/public.decorator';
 @ApiBearerAuth()
 export class HospitalsController {
   constructor(private readonly hospitalsService: HospitalsService) {}
+
+  @Post('register')
+  @RequirePermissions('hospital.manage')
+  @ApiOperation({ summary: 'Register hospital facility info and branches (no portal account)' })
+  registerHospitalInfo(@Body() dto: RegisterHospitalInfoDto) {
+    return this.hospitalsService.createHospitalInfo(dto);
+  }
 
   @Post('create')
   @RequirePermissions('hospital.manage')

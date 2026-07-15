@@ -1,25 +1,29 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Clock,
-  Truck,
   RefreshCw,
   Search,
   MapPin,
   User,
   ChevronRight,
   ClipboardCheck,
+  Siren,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmergencyRequest } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
-import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
 import AssignModal from '@/components/features/emergency/AssignModal'
 import DispatcherTriagePanel from '@/components/features/emergency/DispatcherTriagePanel'
 import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
-import { ESCALATION_DELAY_MINUTES, getWaitMinutes } from '@/lib/emergency/dateFilters'
+import {
+  formatLatency,
+  getDelayThresholdMinutes,
+  getWaitMinutes,
+  isNonEmergencyCase,
+} from '@/lib/emergency/dateFilters'
 import { useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
 import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
 
@@ -84,12 +88,15 @@ function PendingRequestsContent() {
     return () => clearInterval(interval)
   }, [fetchRequests])
 
-  const stats = {
-    total: requests.length,
-    active: requests.length,
-    pending: requests.length,
-    critical: requests.filter((r) => r.priority === 'CRITICAL').length,
-  }
+  const stats = useMemo(() => {
+    const emergencyPending = requests.filter((r) => !isNonEmergencyCase(r))
+    const nonEmergencyPending = requests.filter((r) => isNonEmergencyCase(r))
+    return {
+      total: requests.length,
+      emergency: emergencyPending.length,
+      nonEmergency: nonEmergencyPending.length,
+    }
+  }, [requests])
 
   const filteredRequests = requests
     .filter((request) => {
@@ -139,7 +146,46 @@ function PendingRequestsContent() {
         </div>
       </div>
 
-      <EmergencyStatsBar stats={stats} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          {
+            label: 'Total Pending Cases',
+            value: stats.total,
+            icon: ClipboardCheck,
+            tone: 'bg-red-50 text-red-600',
+          },
+          {
+            label: 'Emergency Pending Cases',
+            value: stats.emergency,
+            icon: Siren,
+            tone: 'bg-orange-50 text-orange-600',
+          },
+          {
+            label: 'Non-Emergency Pending Cases',
+            value: stats.nonEmergency,
+            icon: Clock,
+            tone: 'bg-blue-50 text-blue-600',
+          },
+        ].map((item) => {
+          const Icon = item.icon
+          return (
+            <div
+              key={item.label}
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between"
+            >
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  {item.label}
+                </p>
+                <p className="text-3xl font-black text-slate-900 mt-1">{item.value}</p>
+              </div>
+              <div className={`p-3 rounded-xl ${item.tone}`}>
+                <Icon className="w-6 h-6" />
+              </div>
+            </div>
+          )
+        })}
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-6 min-h-[680px]">
         {/* Queue list */}
@@ -173,8 +219,9 @@ function PendingRequestsContent() {
               filteredRequests.map((request) => {
                 const selected = selectedRequest?.id === request.id
                 const waitMin = getWaitMinutes(request.createdAt)
-                const isDelayed = waitMin >= ESCALATION_DELAY_MINUTES
-                const isWarning = waitMin >= Math.floor(ESCALATION_DELAY_MINUTES / 2)
+                const thresholdMin = getDelayThresholdMinutes(request)
+                const isDelayed = waitMin >= thresholdMin
+                const isWarning = waitMin >= Math.floor(thresholdMin / 2)
 
                 return (
                   <div
@@ -210,7 +257,7 @@ function PendingRequestsContent() {
                           isDelayed ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-slate-500'
                         }`}
                       >
-                        {waitMin}m wait
+                        {formatLatency(waitMin)} wait
                       </span>
                       {selected && <ChevronRight className="w-4 h-4 text-red-500" />}
                     </div>
@@ -228,7 +275,15 @@ function PendingRequestsContent() {
               <div className="mb-6 pb-6 border-b border-slate-100">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <PriorityBadge priority={selectedRequest.priority} size="lg" />
-                  <span className="text-xs font-bold text-slate-400 uppercase">Caller reported</span>
+                  <span
+                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      isNonEmergencyCase(selectedRequest)
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {isNonEmergencyCase(selectedRequest) ? 'Non-emergency' : 'Emergency'}
+                  </span>
                 </div>
                 <h2 className="text-2xl font-black text-slate-900">{selectedRequest.trackingCode}</h2>
                 <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">

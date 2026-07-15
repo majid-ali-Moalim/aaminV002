@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { DriverGuard } from '@/components/guards'
 import { DriverSidebar } from '@/components/driver/DriverSidebar'
 import { DriverNotificationProvider } from '@/components/driver/DriverNotificationProvider'
+import ChatAlerts from '@/components/chat/ChatAlerts'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import './driver.css'
 
@@ -22,6 +23,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
   return (
     <DriverGuard>
       <DriverNotificationProvider>
+        <ChatAlerts />
         <div className={shellClass}>
           <DriverSidebar />
           <div className="driver-viewport">{children}</div>

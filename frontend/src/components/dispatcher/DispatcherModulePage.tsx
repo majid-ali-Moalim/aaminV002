@@ -29,6 +29,12 @@ import DispatcherModuleShell, {
 import AssignModal from '@/components/features/emergency/AssignModal'
 import DispatcherCaseAlerts from '@/components/dispatcher/DispatcherCaseAlerts'
 import PortalPermissionsView from '@/components/permissions/PortalPermissionsView'
+import {
+  AmbulanceAvailabilityView,
+  DriverAvailabilityView,
+  NurseAvailabilityView,
+  ResourceStatusView,
+} from '@/components/dispatcher/DispatcherResourceViews'
 import toast from 'react-hot-toast'
 
 async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
@@ -38,35 +44,6 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
       return dispatcherDashboardApi.getEmergencies(apiView)
     }
     case 'resources': {
-      if (view === 'ambulances') {
-        return dispatcherDashboardApi.getAmbulances(RESOURCE_VIEW_API.ambulances ?? 'all')
-      }
-      if (view === 'drivers' || view === 'nurses') {
-        const crew = await dispatcherDashboardApi.getCrew(RESOURCE_VIEW_API[view] ?? view)
-        if (view === 'nurses') {
-          const [directory, capacity] = await Promise.all([
-            dispatcherDashboardApi.getHospitals('directory'),
-            dispatcherDashboardApi.getHospitals('capacity'),
-          ])
-          return {
-            ...crew,
-            hospitals: directory?.items ?? [],
-            hospitalCapacity: capacity?.items ?? [],
-          }
-        }
-        return crew
-      }
-      if (view === 'availability') {
-        const [crew, ambulances] = await Promise.all([
-          dispatcherDashboardApi.getCrew('available'),
-          dispatcherDashboardApi.getAmbulances('available'),
-        ])
-        return {
-          items: [...(crew.items ?? []), ...(ambulances.items ?? [])],
-          crew,
-          ambulances,
-        }
-      }
       if (view === 'ambulance-availability') {
         const [all, available, busy, maintenance] = await Promise.all([
           dispatcherDashboardApi.getAmbulances('all'),
@@ -91,6 +68,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
         )
         return {
           items: availDrivers,
+          onMission: onMission,
           stats: {
             total: drivers.length,
             available: availDrivers.length,
@@ -115,6 +93,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
         const availNurses = available.items ?? []
         return {
           items: availNurses,
+          onMission,
           stats: {
             total: nurses.length,
             available: availNurses.length,
@@ -128,22 +107,17 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
           region: available.region,
         }
       }
-      if (view === 'hospital-availability') {
-        const [capacity, directory] = await Promise.all([
-          dispatcherDashboardApi.getHospitals('capacity'),
-          dispatcherDashboardApi.getHospitals('directory'),
+      if (view === 'resource-status') {
+        const [ambulances, drivers, nurses] = await Promise.all([
+          dispatcherDashboardApi.getAmbulances('all'),
+          dispatcherDashboardApi.getCrew('drivers'),
+          dispatcherDashboardApi.getCrew('nurses'),
         ])
-        const items = capacity.items ?? []
         return {
-          items,
-          hospitals: directory.items ?? [],
-          stats: {
-            total: (directory.items ?? []).length,
-            receiving: items.filter((h: any) => h.erReady || h.acceptEmergencyCases).length,
-            full: items.filter((h: any) => ['Full', 'Overcapacity'].includes(h.status)).length,
-            icu: items.filter((h: any) => (h.icuTotalBeds ?? 0) > 0).length,
-          },
-          region: capacity.region,
+          ambulances: ambulances.items ?? [],
+          drivers: drivers.items ?? [],
+          nurses: nurses.items ?? [],
+          region: ambulances.region ?? drivers.region,
         }
       }
       return { items: [] }
@@ -178,10 +152,6 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
       const apiView = ALERTS_VIEW_API[view] ?? 'critical'
       return dispatcherDashboardApi.getNotifications(view === 'all' ? 'all' : view)
     }
-    case 'reports': {
-      const reportType = view || 'emergency'
-      return dispatcherDashboardApi.getReports(reportType)
-    }
     case 'permissions':
       return { items: [] }
     default:
@@ -203,7 +173,7 @@ export default function DispatcherModulePage({
   const canCreateDriver = hasGrantedPermission('driver.create')
   const [assignTarget, setAssignTarget] = useState<any>(null)
 
-  const { data, isLoading, mutate } = useSWR(
+  const { data, isLoading, isValidating, mutate } = useSWR(
     module && navItem ? `dispatcher-${moduleId}-${view}` : null,
     () => fetchModuleData(moduleId, view),
     { refreshInterval: 15000 },
@@ -248,7 +218,11 @@ export default function DispatcherModulePage({
       return (
         <DispatcherPanel title={navItem.label} empty={!items.length ? 'No cases in this queue' : undefined}>
           {(overview?.region) && (
-            <p className="text-xs text-gray-500 mb-3">Regional cases · {overview.region}</p>
+            <p className="text-xs text-gray-500 mb-3">
+              {view === 'pending-dispatch' || view === 'dispatch-board'
+                ? `Unassigned cases in your region · ${overview.region}`
+                : `Cases you handle · ${overview.region}`}
+            </p>
           )}
           <div className="flex justify-end mb-3">
             <Link
@@ -264,175 +238,66 @@ export default function DispatcherModulePage({
     }
 
     if (moduleId === 'resources') {
-      const regionLabel = (data as any)?.region ? ` · ${(data as any).region}` : ''
-
-      if (view === 'availability') {
-        const ambItems = (data as any)?.ambulances?.items ?? []
-        const crewItems = (data as any)?.crew?.items ?? []
-        return (
-          <DispatcherPanel title="Availability Board">
-            <p className="text-[10px] font-bold uppercase text-emerald-600 mb-2">Available ambulances ({ambItems.length})</p>
-            <AmbulanceGrid items={ambItems} />
-            <p className="text-[10px] font-bold uppercase text-blue-600 mt-4 mb-2">Available crew ({crewItems.length})</p>
-            <CrewGrid items={crewItems} />
-          </DispatcherPanel>
-        )
-      }
+      const regionLabel = (data as any)?.region
+      const refresh = () => void mutate()
 
       if (view === 'ambulance-availability') {
-        const avail = (data as any)?.available?.items ?? items
-        const busyItems = (data as any)?.busy?.items ?? []
-        const maintItems = (data as any)?.maintenance?.items ?? []
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional ambulance fleet{regionLabel}</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                ['Available', avail.length, 'text-emerald-600'],
-                ['On Duty', busyItems.length, 'text-amber-600'],
-                ['Maintenance', maintItems.length, 'text-orange-600'],
-                ['Total', ((data as any)?.all?.items ?? []).length, 'text-gray-700'],
-              ].map(([label, val, color]) => (
-                <div key={label as string} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <p className={`text-2xl font-black ${color}`}>{val}</p>
-                  <p className="text-xs font-bold text-gray-500 uppercase mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-            <DispatcherPanel title="Available Ambulances" empty={!avail.length ? 'No ambulances available' : undefined}>
-              <AmbulanceGrid items={avail} />
-            </DispatcherPanel>
-            {busyItems.length > 0 && (
-              <DispatcherPanel title="On Duty">
-                <AmbulanceGrid items={busyItems} />
-              </DispatcherPanel>
-            )}
-          </div>
+          <AmbulanceAvailabilityView
+            data={data as any}
+            region={regionLabel}
+            onRefresh={refresh}
+            refreshing={isValidating}
+          />
         )
       }
 
       if (view === 'driver-availability') {
-        const stats = (data as any)?.stats ?? {}
+        const onMissionDrivers = ((data as any)?.onMission?.items ?? []).filter((e: any) =>
+          String(e.employeeRole?.name ?? '').toLowerCase().includes('driver'),
+        )
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional driver availability{regionLabel}</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                ['Available', stats.available ?? items.length],
-                ['On Mission', stats.onMission ?? 0],
-                ['Off Duty', stats.offDuty ?? 0],
-                ['Total', stats.total ?? items.length],
-              ].map(([label, val]) => (
-                <div key={label as string} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <p className="text-2xl font-black text-blue-600">{val}</p>
-                  <p className="text-xs font-bold text-gray-500 uppercase mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-            <DispatcherPanel title="Available Drivers" empty={!items.length ? 'No drivers available' : undefined}>
-              <CrewGrid items={items} />
-            </DispatcherPanel>
-          </div>
+          <DriverAvailabilityView
+            items={items}
+            onMissionItems={onMissionDrivers}
+            stats={(data as any)?.stats ?? {}}
+            region={regionLabel}
+            onRefresh={refresh}
+            refreshing={isValidating}
+          />
         )
       }
 
       if (view === 'nurse-availability') {
-        const stats = (data as any)?.stats ?? {}
+        const onMissionNurses = ((data as any)?.onMission?.items ?? []).filter((e: any) =>
+          String(e.employeeRole?.name ?? '').toLowerCase().includes('nurse'),
+        )
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional nurse availability{regionLabel}</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                ['Available', stats.available ?? items.length],
-                ['On Mission', stats.onMission ?? 0],
-                ['Off Duty', stats.offDuty ?? 0],
-                ['Total', stats.total ?? items.length],
-              ].map(([label, val]) => (
-                <div key={label as string} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <p className="text-2xl font-black text-emerald-600">{val}</p>
-                  <p className="text-xs font-bold text-gray-500 uppercase mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-            <DispatcherPanel title="Available Nurses" empty={!items.length ? 'No nurses available' : undefined}>
-              <CrewGrid items={items} />
-            </DispatcherPanel>
-          </div>
+          <NurseAvailabilityView
+            items={items}
+            onMissionItems={onMissionNurses}
+            stats={(data as any)?.stats ?? {}}
+            region={regionLabel}
+            onRefresh={refresh}
+            refreshing={isValidating}
+          />
         )
       }
 
-      if (view === 'hospital-availability') {
-        const stats = (data as any)?.stats ?? {}
+      if (view === 'resource-status') {
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">Regional hospital capacity{regionLabel}</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                ['Hospitals', stats.total ?? items.length],
-                ['Receiving', stats.receiving ?? 0],
-                ['At Capacity', stats.full ?? 0],
-                ['With ICU', stats.icu ?? 0],
-              ].map(([label, val]) => (
-                <div key={label as string} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <p className="text-2xl font-black text-gray-900">{val}</p>
-                  <p className="text-xs font-bold text-gray-500 uppercase mt-1">{label}</p>
-                </div>
-              ))}
-            </div>
-            <DispatcherPanel title="Hospital Capacity" empty={!items.length ? 'No hospitals in your region' : undefined}>
-              <HospitalGrid items={items} />
-            </DispatcherPanel>
-          </div>
+          <ResourceStatusView
+            ambulances={(data as any)?.ambulances ?? []}
+            drivers={(data as any)?.drivers ?? []}
+            nurses={(data as any)?.nurses ?? []}
+            region={regionLabel}
+            onRefresh={refresh}
+            refreshing={isValidating}
+          />
         )
       }
 
-      if (view === 'ambulances') {
-        return (
-          <DispatcherPanel title={navItem.label} empty={!items.length ? 'No ambulances in this category' : undefined}>
-            <AmbulanceGrid items={items} />
-          </DispatcherPanel>
-        )
-      }
-      if (view === 'nurses') {
-        const hospitalItems = (data as any)?.hospitals ?? []
-        const capacityItems = (data as any)?.hospitalCapacity ?? []
-        const hospitals = hospitalItems.length ? hospitalItems : capacityItems
-        return (
-          <DispatcherPanel title="Nurse & Hospital Resources">
-            <p className="text-[10px] font-bold uppercase text-blue-600 mb-2">
-              Nurses ({items.length})
-            </p>
-            {items.length ? (
-              <CrewGrid items={items} />
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-6">No nurses found</p>
-            )}
-            <p className="text-[10px] font-bold uppercase text-emerald-600 mt-6 mb-2">
-              Hospitals ({hospitals.length})
-            </p>
-            {hospitals.length ? (
-              <HospitalGrid items={hospitals} />
-            ) : (
-              <p className="text-sm text-gray-400 text-center py-6">No hospitals found</p>
-            )}
-          </DispatcherPanel>
-        )
-      }
-      return (
-        <DispatcherPanel title={navItem.label} empty={!items.length ? 'No crew members found' : undefined}>
-          {view === 'drivers' && canCreateDriver && (
-            <div className="flex justify-end mb-3">
-              <Link
-                href="/dispatcher/add-driver"
-                className="inline-flex items-center text-xs font-bold text-red-600 hover:underline"
-              >
-                + Add Driver
-              </Link>
-            </div>
-          )}
-          <CrewGrid items={items} />
-        </DispatcherPanel>
-      )
+      return null
     }
 
     if (moduleId === 'hospital') {
@@ -517,79 +382,15 @@ export default function DispatcherModulePage({
       }
     }
 
-    if (moduleId === 'reports' && overview?.summary) {
-      const s = overview.summary
-      const cases = overview.cases ?? []
-      const breakdown = overview.statusBreakdown ?? []
-      return (
-        <div className="space-y-6">
-          <p className="text-sm text-gray-600">
-            Reports for cases you handle
-            {overview.region ? ` · ${overview.region}` : ''}
-          </p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              ['My Cases', s.totalCases],
-              ['Completed Today', s.completedToday],
-              ['Avg Response (min)', s.avgResponseMinutes ?? '—'],
-              ['Active Cases', s.activeCases],
-            ].map(([label, val]) => (
-              <div key={label as string} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                <p className="text-2xl font-black text-gray-900">{val}</p>
-                <p className="text-xs font-bold text-gray-500 uppercase mt-1">{label}</p>
-              </div>
-            ))}
-          </div>
-          {breakdown.length > 0 && (
-            <DispatcherPanel title="Status Breakdown">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {breakdown.map((b: any) => (
-                  <div key={b.status} className="bg-gray-50 rounded-lg p-3 text-center">
-                    <p className="text-xl font-black text-gray-900">{b.count}</p>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase">{b.status}</p>
-                  </div>
-                ))}
-              </div>
-            </DispatcherPanel>
-          )}
-          <DispatcherPanel title="Case Report Data" empty={!cases.length ? 'No cases in your scope' : undefined}>
-            <EmergencyTable items={cases} />
-          </DispatcherPanel>
-          {(overview.attendance?.length ?? 0) > 0 && (
-            <DispatcherPanel title="Regional Crew Attendance">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase text-gray-500 border-b">
-                      <th className="py-2">Staff</th>
-                      <th className="py-2">Role</th>
-                      <th className="py-2">Date</th>
-                      <th className="py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overview.attendance.map((a: any) => (
-                      <tr key={a.id} className="border-b border-gray-50">
-                        <td className="py-2">{a.employee?.firstName} {a.employee?.lastName}</td>
-                        <td className="py-2">{a.employee?.employeeRole?.name}</td>
-                        <td className="py-2">{new Date(a.date).toLocaleDateString()}</td>
-                        <td className="py-2">{a.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </DispatcherPanel>
-          )}
-        </div>
-      )
-    }
-
     return <PlaceholderView title={navItem.label} />
   }
 
   return (
-    <DispatcherModuleShell module={module} description={module.description}>
+    <DispatcherModuleShell
+      module={module}
+      description={moduleId === 'resources' ? undefined : module.description}
+      hideHeader={moduleId === 'resources'}
+    >
       {isLoading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="w-10 h-10 text-red-600 animate-spin" />

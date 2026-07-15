@@ -52,18 +52,11 @@ export type DriverTimelineStep = {
 
 export const DRIVER_TIMELINE_STEPS: DriverTimelineStep[] = [
   {
-    id: 'ACCEPT',
-    label: 'Accept Assignment',
-    shortLabel: 'Accept',
-    description: 'Review dispatch details and confirm you are responding.',
-    stepIds: ['ASSIGNED', 'ACCEPTED'],
-  },
-  {
     id: 'EN_ROUTE',
     label: 'En Route to Scene',
     shortLabel: 'En Route',
     description: 'Navigate to the incident location.',
-    stepIds: ['EN_ROUTE_SCENE'],
+    stepIds: ['ASSIGNED', 'ACCEPTED', 'EN_ROUTE_SCENE'],
   },
   {
     id: 'ON_SCENE',
@@ -93,19 +86,19 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     id: 'ASSIGNED',
     label: 'Assigned',
     shortLabel: 'Assigned',
-    description: 'New emergency assignment — review details and accept.',
+    description: 'Dispatch assigned this case — review details and start en route when ready.',
     backendStatus: 'ASSIGNED',
-    primaryAdvance: 'accept',
+    primaryAdvance: 'start_navigation',
     actions: [
-      { id: 'view_details', label: 'Review Case Details', variant: 'primary' },
-      { id: 'accept', label: 'Accept Assignment', variant: 'primary' },
+      { id: 'start_navigation', label: 'Start En Route to Scene', variant: 'primary' },
+      { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'ACCEPTED',
-    label: 'Accepted',
-    shortLabel: 'Accepted',
-    description: 'Assignment accepted — start en route to the scene.',
+    label: 'En Route',
+    shortLabel: 'En Route',
+    description: 'Proceed to the incident location.',
     backendStatus: 'DISPATCHED',
     primaryAdvance: 'start_navigation',
     actions: [
@@ -193,6 +186,7 @@ export type WorkflowStageMeta = {
   fuel?: string
   mileage?: string
   signature?: string
+  runReportSubmitted?: boolean
 }
 
 export function markCaseReviewed(missionId: string) {
@@ -261,11 +255,13 @@ export function resolveWorkflowStep(mission: DriverMission | null): WorkflowStep
     return 'ARRIVED_SCENE'
   }
   if (status === 'DISPATCHED' || status === 'EN_ROUTE') {
-    if (stored === 'ACCEPTED') return 'ACCEPTED'
     if (stored === 'EN_ROUTE_SCENE') return 'EN_ROUTE_SCENE'
     return 'EN_ROUTE_SCENE'
   }
-  if (status === 'ASSIGNED') return 'ASSIGNED'
+  if (status === 'ASSIGNED') {
+    if (stored === 'EN_ROUTE_SCENE' || stored === 'ACCEPTED') return 'EN_ROUTE_SCENE'
+    return 'ASSIGNED'
+  }
   return stored || 'ASSIGNED'
 }
 

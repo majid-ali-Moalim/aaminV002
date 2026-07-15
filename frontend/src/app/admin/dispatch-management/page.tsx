@@ -1,753 +1,552 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Search, Filter, Plus, Eye, Edit, Trash2, Truck, MapPin, User, Clock, AlertCircle, Phone, Navigation, Activity, Bell } from 'lucide-react'
+import { emergencyRequestsService } from '@/lib/api'
+import { buildDispatchChatUrl } from '@/lib/dispatchCaseMessage'
+import { EmergencyRequest, EmergencyRequestStatus } from '@/types'
+import {
+  Search,
+  Eye,
+  Truck,
+  MapPin,
+  Clock,
+  CheckCircle2,
+  Activity,
+  Gauge,
+  RefreshCw,
+  MessageSquare,
+  Loader2,
+  X,
+  Radio,
+  User,
+  HeartPulse,
+  ArrowRight,
+} from 'lucide-react'
+
+const ACTIVE_STATUSES: EmergencyRequestStatus[] = [
+  EmergencyRequestStatus.ASSIGNED,
+  EmergencyRequestStatus.DISPATCHED,
+  EmergencyRequestStatus.ARRIVED_SCENE,
+  EmergencyRequestStatus.TRANSPORTING,
+  EmergencyRequestStatus.ARRIVED_HOSPITAL,
+]
+
+const STATUS_CHIPS: { id: string; label: string }[] = [
+  { id: '', label: 'All' },
+  { id: 'PENDING', label: 'Pending' },
+  { id: 'ASSIGNED', label: 'Assigned' },
+  { id: 'DISPATCHED', label: 'Dispatched' },
+  { id: 'ARRIVED_SCENE', label: 'On Scene' },
+  { id: 'TRANSPORTING', label: 'Transporting' },
+  { id: 'ARRIVED_HOSPITAL', label: 'At Hospital' },
+  { id: 'COMPLETED', label: 'Completed' },
+  { id: 'CANCELLED', label: 'Cancelled' },
+]
+
+const PRIORITY_WEIGHT: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+
+const statusStyle = (status: string) => {
+  switch (status) {
+    case 'PENDING':
+      return { pill: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' }
+    case 'ASSIGNED':
+    case 'DISPATCHED':
+      return { pill: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500' }
+    case 'ARRIVED_SCENE':
+    case 'TRANSPORTING':
+    case 'ARRIVED_HOSPITAL':
+      return { pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' }
+    case 'COMPLETED':
+      return { pill: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' }
+    case 'CANCELLED':
+      return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' }
+    default:
+      return { pill: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' }
+  }
+}
+
+const priorityStyle = (priority: string) => {
+  switch (priority) {
+    case 'CRITICAL':
+      return { pill: 'bg-red-100 text-red-700', bar: 'bg-red-500' }
+    case 'HIGH':
+      return { pill: 'bg-orange-100 text-orange-700', bar: 'bg-orange-500' }
+    case 'MEDIUM':
+      return { pill: 'bg-amber-100 text-amber-700', bar: 'bg-amber-400' }
+    case 'LOW':
+      return { pill: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-400' }
+    default:
+      return { pill: 'bg-slate-100 text-slate-600', bar: 'bg-slate-300' }
+  }
+}
+
+const fmtStatus = (status: string) => status.replace(/_/g, ' ')
+
+const fmtTime = (value?: string | null) => {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const fullName = (person?: { firstName?: string | null; lastName?: string | null } | null) => {
+  if (!person) return null
+  const name = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim()
+  return name || null
+}
 
 export default function DispatchManagementPage() {
+  const router = useRouter()
+  const [dispatches, setDispatches] = useState<EmergencyRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
-  const [selectedDispatch, setSelectedDispatch] = useState<any>(null)
-  const [showDetails, setShowDetails] = useState(false)
 
-  const dispatches = [
-    {
-      id: 'DISP-001',
-      requestId: 'AAM-125',
-      patient: 'Hassan Omar',
-      phone: '+252 61 456 7890',
-      status: 'ACTIVE',
-      priority: 'CRITICAL',
-      pickupLocation: 'Yaqshid District, Mogadishu',
-      destination: 'Kalkal Hospital',
-      ambulance: 'AMB-002',
-      driver: 'Ahmed Yusuf',
-      nurse: 'Nur Abdullahi',
-      dispatcher: 'Ali Hassan',
-      dispatchTime: '10:25 AM',
-      estimatedArrival: '10:35 AM',
-      actualArrival: 'Pending',
-      distance: '3.2 km',
-      eta: '8 min',
-      currentLocation: '2.1 km from pickup',
-      route: 'Via Maka Al-Mukarama Road',
-      emergencyType: 'Car Accident',
-      patientCondition: 'Critical - Multiple injuries',
-      specialInstructions: 'Advanced life support required, notify ER',
-      teamStatus: 'En Route',
-      communication: 'Radio contact established',
-      escalationLevel: 'High'
-    },
-    {
-      id: 'DISP-002',
-      requestId: 'AAM-124',
-      patient: 'Fatima Ali',
-      phone: '+252 61 345 6789',
-      status: 'ACTIVE',
-      priority: 'MEDIUM',
-      pickupLocation: 'Wadajir District',
-      destination: 'Benadir Hospital',
-      ambulance: 'AMB-001',
-      driver: 'Mohamed Omar',
-      nurse: 'Aisha Mohamed',
-      dispatcher: 'Said Ali',
-      dispatchTime: '10:27 AM',
-      estimatedArrival: '10:40 AM',
-      actualArrival: '10:32 AM',
-      distance: '4.5 km',
-      eta: '5 min',
-      currentLocation: 'At patient location',
-      route: 'Via Industrial Road',
-      emergencyType: 'Fractured Leg',
-      patientCondition: 'Stable - Leg fracture',
-      specialInstructions: 'Immobilization required',
-      teamStatus: 'Patient Assessment',
-      communication: 'Regular updates',
-      escalationLevel: 'Normal'
-    },
-    {
-      id: 'DISP-003',
-      requestId: 'AAM-126',
-      patient: 'Amina Hassan',
-      phone: '+252 61 567 8901',
-      status: 'COMPLETED',
-      priority: 'MEDIUM',
-      pickupLocation: 'Bondhere District',
-      destination: 'Forlanini Hospital',
-      ambulance: 'AMB-003',
-      driver: 'Abdullahi Mohamed',
-      nurse: 'Khadija Ahmed',
-      dispatcher: 'Said Ali',
-      dispatchTime: '10:20 AM',
-      estimatedArrival: '10:30 AM',
-      actualArrival: '10:28 AM',
-      distance: '2.8 km',
-      eta: 'Completed',
-      currentLocation: 'Hospital',
-      route: 'Via Shangani Street',
-      emergencyType: 'Abdominal Pain',
-      patientCondition: 'Stable - Under observation',
-      specialInstructions: 'Monitor vitals',
-      teamStatus: 'Handover Complete',
-      communication: 'Mission completed',
-      escalationLevel: 'Normal'
-    },
-    {
-      id: 'DISP-004',
-      requestId: 'AAM-123',
-      patient: 'Ahmed Mohamed',
-      phone: '+252 61 234 5678',
-      status: 'PENDING',
-      priority: 'HIGH',
-      pickupLocation: 'Hodan District',
-      destination: 'Mogadishu General Hospital',
-      ambulance: 'Not Assigned',
-      driver: 'Not Assigned',
-      nurse: 'Not Assigned',
-      dispatcher: 'Ali Hassan',
-      dispatchTime: 'Pending',
-      estimatedArrival: 'Pending',
-      actualArrival: 'Pending',
-      distance: '0 km',
-      eta: 'Pending',
-      currentLocation: 'Dispatch Center',
-      route: 'Not Determined',
-      emergencyType: 'Chest Pain',
-      patientCondition: 'Unknown - Emergency call',
-      specialInstructions: 'Urgent response required',
-      teamStatus: 'Awaiting Assignment',
-      communication: 'Initial contact made',
-      escalationLevel: 'Medium'
+  const [selectedDispatch, setSelectedDispatch] = useState<EmergencyRequest | null>(null)
+
+  const load = useCallback(async (initial = false) => {
+    if (initial) setLoading(true)
+    else setRefreshing(true)
+    try {
+      const data = (await emergencyRequestsService.getAll()) as EmergencyRequest[]
+      setDispatches(Array.isArray(data) ? data : [])
+      setLastUpdated(new Date())
+    } catch (err) {
+      console.error('Failed to load dispatches:', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-  ]
+  }, [])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return 'bg-green-100 text-green-800'
-      case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-      case 'COMPLETED': return 'bg-gray-100 text-gray-800'
-      case 'ESCALATED': return 'bg-red-100 text-red-800'
-      case 'CANCELLED': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+  useEffect(() => {
+    load(true)
+    const interval = setInterval(() => load(false), 15000)
+    return () => clearInterval(interval)
+  }, [load])
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'LOW': return 'bg-green-100 text-green-800'
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
-      case 'HIGH': return 'bg-orange-100 text-orange-800'
-      case 'CRITICAL': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
+  const stats = useMemo(() => {
+    const active = dispatches.filter((d) => ACTIVE_STATUSES.includes(d.status)).length
+    const pending = dispatches.filter((d) => d.status === EmergencyRequestStatus.PENDING).length
+    const criticalActive = dispatches.filter(
+      (d) => ACTIVE_STATUSES.includes(d.status) && d.priority === 'CRITICAL',
+    ).length
+    const today = new Date().toDateString()
+    const completedToday = dispatches.filter(
+      (d) =>
+        d.status === EmergencyRequestStatus.COMPLETED &&
+        d.completedAt &&
+        new Date(d.completedAt).toDateString() === today,
+    ).length
+    const responseValues = dispatches
+      .map((d) => d.responseMinutes)
+      .filter((v): v is number => typeof v === 'number' && v > 0)
+    const avgResponse = responseValues.length
+      ? Math.round(responseValues.reduce((a, b) => a + b, 0) / responseValues.length)
+      : null
+    return { active, pending, criticalActive, completedToday, avgResponse }
+  }, [dispatches])
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return <Activity className="w-4 h-4" />
-      case 'PENDING': return <Clock className="w-4 h-4" />
-      case 'COMPLETED': return <AlertCircle className="w-4 h-4" />
-      case 'ESCALATED': return <Bell className="w-4 h-4" />
-      default: return <Clock className="w-4 h-4" />
-    }
-  }
+  const filteredDispatches = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    const rows = dispatches.filter((d) => {
+      const matchesStatus = statusFilter === '' || d.status === statusFilter
+      const matchesPriority = priorityFilter === '' || d.priority === priorityFilter
+      if (!matchesStatus || !matchesPriority) return false
+      if (!q) return true
+      const hay = [
+        d.trackingCode,
+        d.patient?.fullName ?? '',
+        d.callerName ?? '',
+        d.callerPhone ?? '',
+        d.patient?.phone ?? '',
+        d.ambulance?.ambulanceNumber ?? '',
+        d.pickupLocation ?? '',
+        fullName(d.dispatcher) ?? '',
+      ]
+        .join(' ')
+        .toLowerCase()
+      return hay.includes(q)
+    })
 
-  const filteredDispatches = dispatches.filter(dispatch => {
-    const matchesSearch = searchTerm === '' || 
-      dispatch.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dispatch.requestId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dispatch.patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      dispatch.phone.includes(searchTerm) ||
-      dispatch.ambulance.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesStatus = statusFilter === '' || dispatch.status === statusFilter
-    const matchesPriority = priorityFilter === '' || dispatch.priority === priorityFilter
-    
-    return matchesSearch && matchesStatus && matchesPriority
-  })
+    const bucket = (s: EmergencyRequestStatus) =>
+      s === EmergencyRequestStatus.PENDING ? 0 : ACTIVE_STATUSES.includes(s) ? 1 : 2
 
-  const handleViewDetails = (dispatch: any) => {
-    setSelectedDispatch(dispatch)
-    setShowDetails(true)
-  }
+    return rows.sort((a, b) => {
+      const bk = bucket(a.status) - bucket(b.status)
+      if (bk !== 0) return bk
+      const pw = (PRIORITY_WEIGHT[a.priority] ?? 9) - (PRIORITY_WEIGHT[b.priority] ?? 9)
+      if (pw !== 0) return pw
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+  }, [dispatches, searchTerm, statusFilter, priorityFilter])
 
-  const handleAssignTeam = (dispatchId: string) => {
-    console.log('Assign team for dispatch:', dispatchId)
-  }
-
-  const handleUpdateStatus = (dispatchId: string, newStatus: string) => {
-    console.log('Update status for dispatch:', dispatchId, 'to:', newStatus)
-  }
-
-  const handleEscalate = (dispatchId: string) => {
-    console.log('Escalate dispatch:', dispatchId)
-  }
-
-  const handleCommunicate = (dispatchId: string) => {
-    console.log('Communicate with team:', dispatchId)
+  const openCaseMessage = (dispatch: EmergencyRequest) => {
+    router.push(buildDispatchChatUrl(dispatch))
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       {/* Header */}
-      <div>
-        <div className="flex items-center justify-between">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-red-900 p-7 text-white shadow-xl">
+        <div className="absolute -right-8 -top-10 opacity-10">
+          <Radio className="w-48 h-48" />
+        </div>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dispatch Management</h1>
-            <p className="text-gray-600 mt-2">Control ambulance dispatch operations in real-time</p>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300">Live</span>
+            </div>
+            <h1 className="text-3xl font-black tracking-tight">Live Dispatch Board</h1>
+            <p className="text-slate-300 mt-2 text-sm max-w-xl">
+              Real-time command view of every active case, crew and ambulance across the network.
+            </p>
           </div>
-          <div className="flex space-x-3">
-            <Button variant="outline">
-              Export
-            </Button>
-            <Button className="bg-red-600 hover:bg-red-700">
-              <Plus className="w-4 h-4 mr-2" />
-              New Dispatch
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Last updated</p>
+              <p className="text-sm font-bold text-white">{lastUpdated ? fmtTime(lastUpdated.toISOString()) : '—'}</p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => load(false)}
+              disabled={refreshing}
+              className="rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Real-time Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Dispatches</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">2</p>
-              <p className="text-sm text-green-600 mt-2">1 critical</p>
-            </div>
-            <div className="bg-green-100 p-3 rounded-xl">
-              <Activity className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pending Assignment</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">1</p>
-              <p className="text-sm text-yellow-600 mt-2">High priority</p>
-            </div>
-            <div className="bg-yellow-100 p-3 rounded-xl">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Avg Response Time</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">8 min</p>
-              <p className="text-sm text-green-600 mt-2">-2 min today</p>
-            </div>
-            <div className="bg-blue-100 p-3 rounded-xl">
-              <Navigation className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Completed Today</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">12</p>
-              <p className="text-sm text-gray-600 mt-2">On target</p>
-            </div>
-            <div className="bg-purple-100 p-3 rounded-xl">
-              <AlertCircle className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-red-50 rounded-xl p-6 border border-red-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Button className="bg-red-600 hover:bg-red-700">
-            <Truck className="w-4 h-4 mr-2" />
-            Assign Nearest Ambulance
-          </Button>
-          <Button variant="outline">
-            <Phone className="w-4 h-4 mr-2" />
-            Contact All Teams
-          </Button>
-          <Button variant="outline">
-            <Bell className="w-4 h-4 mr-2" />
-            Emergency Alert
-          </Button>
-          <Button variant="outline">
-            <MapPin className="w-4 h-4 mr-2" />
-            View Live Map
-          </Button>
-        </div>
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="Active Dispatches" value={stats.active} sub={`${stats.criticalActive} critical`} tone="emerald" icon={Activity} />
+        <KpiCard label="Pending Assignment" value={stats.pending} sub="Awaiting crew" tone="amber" icon={Clock} />
+        <KpiCard label="Avg Response" value={stats.avgResponse != null ? `${stats.avgResponse}m` : '—'} sub="All cases" tone="blue" icon={Gauge} />
+        <KpiCard label="Completed Today" value={stats.completedToday} sub="Handover done" tone="violet" icon={CheckCircle2} />
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-        <div className="flex flex-col space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
+      <div className="bg-white rounded-2xl shadow-sm p-4 border border-slate-100 space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search tracking code, patient, phone, ambulance, dispatcher…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300"
+            />
+          </div>
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+          >
+            <option value="">All Priority</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {STATUS_CHIPS.map((chip) => (
+            <button
+              key={chip.id || 'all'}
+              type="button"
+              onClick={() => setStatusFilter(chip.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                statusFilter === chip.id ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
-              <Filter className="w-4 h-4 mr-2" />
-              {showFilters ? 'Hide' : 'Show'} Filters
-            </Button>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search by dispatch ID, request ID, patient, ambulance..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <select 
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="">All Status</option>
-                <option value="ACTIVE">Active</option>
-                <option value="PENDING">Pending</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="ESCALATED">Escalated</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select 
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                <option value="">All Priority</option>
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="CRITICAL">Critical</option>
-              </select>
-            </div>
-          </div>
-
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dispatcher</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                  <option value="">All Dispatchers</option>
-                  <option value="Ali Hassan">Ali Hassan</option>
-                  <option value="Said Ali">Said Ali</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Type</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                  <option value="">All Types</option>
-                  <option value="Car Accident">Car Accident</option>
-                  <option value="Medical Emergency">Medical Emergency</option>
-                  <option value="Trauma">Trauma</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time Range</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                  <option value="">All Time</option>
-                  <option value="last-hour">Last Hour</option>
-                  <option value="today">Today</option>
-                  <option value="this-week">This Week</option>
-                </select>
-              </div>
-            </div>
-          )}
+              {chip.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Results Summary */}
-      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-        <p className="text-sm text-blue-800">
-          Showing <span className="font-semibold">{filteredDispatches.length}</span> of{' '}
-          <span className="font-semibold">{dispatches.length}</span> dispatches
-        </p>
-      </div>
-
-      {/* Dispatch Board */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Dispatch Info
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Patient
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Assigned Team
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location & Route
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Timing
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredDispatches.map((dispatch) => (
-                <tr key={dispatch.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{dispatch.id}</div>
-                      <div className="text-sm text-gray-500">{dispatch.requestId}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {dispatch.emergencyType}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      <div className="font-medium">{dispatch.patient}</div>
-                      <div className="flex items-center text-xs text-gray-500 mt-1">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {dispatch.phone}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {dispatch.patientCondition}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <div className={`p-1 rounded ${getStatusColor(dispatch.status)}`}>
-                        {getStatusIcon(dispatch.status)}
-                      </div>
-                      <div>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(dispatch.status)}`}>
-                          {dispatch.status}
-                        </span>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {dispatch.teamStatus}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {dispatch.driver === 'Not Assigned' ? (
-                        <span className="text-gray-400">Not Assigned</span>
-                      ) : (
-                        <div>
-                          <div className="flex items-center">
-                            <Truck className="w-3 h-3 mr-1 text-gray-400" />
-                            {dispatch.ambulance}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Driver: {dispatch.driver}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Nurse: {dispatch.nurse}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Dispatcher: {dispatch.dispatcher}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      <div className="flex items-center">
-                        <MapPin className="w-3 h-3 mr-1 text-gray-400" />
-                        {dispatch.pickupLocation}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        To: {dispatch.destination}
-                      </div>
-                      <div className="text-xs text-blue-600 mt-1">
-                        {dispatch.currentLocation}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Route: {dispatch.route}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      <div>ETA: {dispatch.eta}</div>
-                      <div className="text-xs text-gray-500">
-                        Distance: {dispatch.distance}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Dispatch: {dispatch.dispatchTime}
-                      </div>
-                      {dispatch.actualArrival !== 'Pending' && (
-                        <div className="text-xs text-green-600 mt-1">
-                          Arrived: {dispatch.actualArrival}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewDetails(dispatch)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      {dispatch.status === 'PENDING' && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleAssignTeam(dispatch.id)}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <User className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleCommunicate(dispatch.id)}
-                        className="text-green-600 hover:text-green-700"
-                      >
-                        <Phone className="w-4 h-4" />
-                      </Button>
-                      {dispatch.priority === 'CRITICAL' && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEscalate(dispatch.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Bell className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleUpdateStatus(dispatch.id, 'COMPLETED')}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
+      {/* Board */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-black text-slate-800">Dispatch Queue</h2>
+          <span className="text-xs text-slate-500">{filteredDispatches.length} of {dispatches.length} shown</span>
+        </div>
+        {loading ? (
+          <div className="py-24 flex flex-col items-center justify-center text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-3 text-red-500" />
+            <span className="text-sm font-medium">Loading live dispatches…</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3">Case</th>
+                  <th className="px-5 py-3">Patient</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Crew & Unit</th>
+                  <th className="px-5 py-3">Location</th>
+                  <th className="px-5 py-3">Timing</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredDispatches.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-16 text-center text-slate-500">
+                      No dispatches match your filters
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDispatches.map((dispatch) => {
+                    const driverName = fullName(dispatch.driver)
+                    const nurseName = fullName(dispatch.nurse)
+                    const dispatcherName = fullName(dispatch.dispatcher)
+                    const st = statusStyle(dispatch.status)
+                    const pr = priorityStyle(dispatch.priority)
+                    return (
+                      <tr key={dispatch.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-5 py-4">
+                          <div className="flex items-start gap-3">
+                            <span className={`mt-0.5 w-1 h-10 rounded-full ${pr.bar}`} />
+                            <div>
+                              <div className="font-bold text-slate-900">{dispatch.trackingCode}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">{dispatch.incidentCategory?.name ?? 'Emergency'}</div>
+                              <span className={`inline-flex mt-1 items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${pr.pill}`}>
+                                {dispatch.priority}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="font-semibold text-slate-800">{dispatch.patient?.fullName ?? dispatch.callerName ?? '—'}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{dispatch.patient?.phone ?? dispatch.callerPhone ?? '—'}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.pill}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                            {fmtStatus(dispatch.status)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          {dispatch.ambulance || driverName || nurseName ? (
+                            <div className="space-y-1">
+                              {dispatch.ambulance && (
+                                <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
+                                  <Truck className="w-3.5 h-3.5 text-slate-400" /> {dispatch.ambulance.ambulanceNumber}
+                                </div>
+                              )}
+                              {driverName && (
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                  <User className="w-3 h-3" /> {driverName}
+                                </div>
+                              )}
+                              {nurseName && (
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                  <HeartPulse className="w-3 h-3" /> {nurseName}
+                                </div>
+                              )}
+                              {dispatcherName && (
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                  <Radio className="w-3 h-3" /> {dispatcherName}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs font-medium">Not assigned</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5 text-slate-700">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="max-w-[190px] truncate">{dispatch.pickupLocation}</span>
+                          </div>
+                          {dispatch.destination && (
+                            <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                              <ArrowRight className="w-3 h-3" /> <span className="max-w-[190px] truncate">{dispatch.destination}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-xs text-slate-500">Created {fmtTime(dispatch.createdAt)}</div>
+                          {dispatch.assignedAt && <div className="text-xs text-slate-500">Assigned {fmtTime(dispatch.assignedAt)}</div>}
+                          {dispatch.responseMinutes != null && (
+                            <div className="text-xs text-emerald-600 font-semibold mt-0.5">{dispatch.responseMinutes} min response</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDispatch(dispatch)}
+                              className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                              title="View details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openCaseMessage(dispatch)}
+                              title={
+                                dispatch.dispatcherId
+                                  ? `Message dispatcher about case ${dispatch.trackingCode}`
+                                  : `Open Messages to follow up on case ${dispatch.trackingCode}`
+                              }
+                              className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}
-      {showDetails && selectedDispatch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Dispatch Details</h2>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowDetails(false)}
-              >
-                Close
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Dispatch Information</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-600">Dispatch ID</p>
-                    <p className="font-medium">{selectedDispatch.id}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Request ID</p>
-                    <p className="font-medium">{selectedDispatch.requestId}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Status</p>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedDispatch.status)}`}>
-                      {selectedDispatch.status}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Priority</p>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(selectedDispatch.priority)}`}>
-                      {selectedDispatch.priority}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Emergency Type</p>
-                    <p className="font-medium">{selectedDispatch.emergencyType}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Team Status</p>
-                    <p className="font-medium">{selectedDispatch.teamStatus}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Information</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-600">Patient Name</p>
-                    <p className="font-medium">{selectedDispatch.patient}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Phone</p>
-                    <p className="font-medium">{selectedDispatch.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Condition</p>
-                    <p className="font-medium">{selectedDispatch.patientCondition}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Special Instructions</p>
-                    <p className="font-medium">{selectedDispatch.specialInstructions}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assigned Team</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-600">Ambulance</p>
-                    <p className="font-medium">{selectedDispatch.ambulance}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Driver</p>
-                    <p className="font-medium">{selectedDispatch.driver}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Nurse</p>
-                    <p className="font-medium">{selectedDispatch.nurse}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Dispatcher</p>
-                    <p className="font-medium">{selectedDispatch.dispatcher}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Location & Timing</h3>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-600">Pickup Location</p>
-                    <p className="font-medium">{selectedDispatch.pickupLocation}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Destination</p>
-                    <p className="font-medium">{selectedDispatch.destination}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Current Location</p>
-                    <p className="font-medium">{selectedDispatch.currentLocation}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Route</p>
-                    <p className="font-medium">{selectedDispatch.route}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Distance</p>
-                    <p className="font-medium">{selectedDispatch.distance}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Dispatch Time</p>
-                    <p className="text-xs text-gray-500">{selectedDispatch.dispatchTime}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Estimated Arrival</p>
-                    <p className="text-xs text-gray-500">{selectedDispatch.estimatedArrival}</p>
-                  </div>
-                </div>
-                {selectedDispatch.actualArrival !== 'Pending' && (
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">Actual Arrival</p>
-                      <p className="text-xs text-gray-500">{selectedDispatch.actualArrival}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Communication</h3>
-              <div className="space-y-3">
+      {selectedDispatch && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`w-1.5 h-10 rounded-full ${priorityStyle(selectedDispatch.priority).bar}`} />
                 <div>
-                  <p className="text-sm text-gray-600">Status</p>
-                  <p className="font-medium">{selectedDispatch.communication}</p>
+                  <h2 className="text-xl font-black text-slate-900">Dispatch Details</h2>
+                  <p className="text-sm text-slate-500">{selectedDispatch.trackingCode}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600">Escalation Level</p>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    selectedDispatch.escalationLevel === 'High' ? 'bg-red-100 text-red-800' : 
-                    selectedDispatch.escalationLevel === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    {selectedDispatch.escalationLevel}
+              </div>
+              <button onClick={() => setSelectedDispatch(null)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-7 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+              <DetailBlock title="Case Information">
+                <DetailRow label="Status">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${statusStyle(selectedDispatch.status).pill}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusStyle(selectedDispatch.status).dot}`} />
+                    {fmtStatus(selectedDispatch.status)}
                   </span>
-                </div>
-              </div>
+                </DetailRow>
+                <DetailRow label="Priority">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${priorityStyle(selectedDispatch.priority).pill}`}>
+                    {selectedDispatch.priority}
+                  </span>
+                </DetailRow>
+                <DetailRow label="Type" value={selectedDispatch.incidentCategory?.name ?? 'Emergency'} />
+                <DetailRow label="Source" value={selectedDispatch.requestSource} />
+              </DetailBlock>
+
+              <DetailBlock title="Patient">
+                <DetailRow label="Name" value={selectedDispatch.patient?.fullName ?? selectedDispatch.callerName ?? '—'} />
+                <DetailRow label="Phone" value={selectedDispatch.patient?.phone ?? selectedDispatch.callerPhone ?? '—'} />
+                <DetailRow label="Condition" value={selectedDispatch.patientCondition ?? '—'} />
+                <DetailRow label="Symptoms" value={selectedDispatch.symptoms ?? '—'} />
+              </DetailBlock>
+
+              <DetailBlock title="Assigned Team">
+                <DetailRow label="Ambulance" value={selectedDispatch.ambulance?.ambulanceNumber ?? 'Not assigned'} />
+                <DetailRow label="Driver" value={fullName(selectedDispatch.driver) ?? 'Not assigned'} />
+                <DetailRow label="Nurse" value={fullName(selectedDispatch.nurse) ?? 'Not assigned'} />
+                <DetailRow label="Dispatcher" value={fullName(selectedDispatch.dispatcher) ?? 'Not assigned'} />
+              </DetailBlock>
+
+              <DetailBlock title="Location & Timing">
+                <DetailRow label="Pickup" value={selectedDispatch.pickupLocation} />
+                <DetailRow label="Destination" value={selectedDispatch.destination ?? '—'} />
+                <DetailRow label="Created" value={fmtTime(selectedDispatch.createdAt)} />
+                <DetailRow label="Assigned" value={fmtTime(selectedDispatch.assignedAt)} />
+              </DetailBlock>
             </div>
 
-            <div className="mt-6 flex space-x-3">
-              <Button className="bg-red-600 hover:bg-red-700">
-                Update Status
-              </Button>
-              <Button variant="outline">
-                Contact Team
-              </Button>
-              <Button variant="outline">
-                Escalate
-              </Button>
-              <Button variant="outline">
-                View Map
-              </Button>
-              <Button variant="outline">
-                Print Report
+            <div className="px-7 py-5 border-t border-slate-100 flex flex-wrap gap-3">
+              <Link href={`/admin/emergency-requests/${selectedDispatch.id}`}>
+                <Button className="bg-red-600 hover:bg-red-700 rounded-xl">Open Full Case</Button>
+              </Link>
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  const target = selectedDispatch
+                  setSelectedDispatch(null)
+                  openCaseMessage(target)
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" /> Message about Case
               </Button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  tone,
+  icon: Icon,
+}: {
+  label: string
+  value: number | string
+  sub: string
+  tone: 'emerald' | 'amber' | 'blue' | 'violet'
+  icon: React.ElementType
+}) {
+  const tones = {
+    emerald: 'text-emerald-600 bg-emerald-50',
+    amber: 'text-amber-600 bg-amber-50',
+    blue: 'text-blue-600 bg-blue-50',
+    violet: 'text-violet-600 bg-violet-50',
+  }
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center justify-between">
+      <div>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-3xl font-black text-slate-900 mt-1">{value}</p>
+        <p className="text-xs text-slate-500 mt-1">{sub}</p>
+      </div>
+      <div className={`p-3 rounded-xl ${tones[tone]}`}>
+        <Icon className="w-6 h-6" />
+      </div>
+    </div>
+  )
+}
+
+function DetailBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
+function DetailRow({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+      {children ?? <p className="font-semibold text-slate-800 mt-0.5">{value}</p>}
     </div>
   )
 }

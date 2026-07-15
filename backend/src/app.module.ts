@@ -28,6 +28,7 @@ import { EmployeeAttendanceModule } from './employee-attendance/employee-attenda
 import { HospitalAppModule } from './hospital-app/hospital-app.module';
 import { PublicModule } from './public/public.module';
 import { HealthModule } from './health/health.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { HealthModule } from './health/health.module';
     EmployeeAttendanceModule,
     HospitalAppModule,
     PublicModule,
+    ChatModule,
   ],
   controllers: [],
   providers: [],
