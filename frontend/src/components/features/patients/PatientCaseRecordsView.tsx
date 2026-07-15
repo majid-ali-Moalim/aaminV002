@@ -14,6 +14,7 @@ import {
   XCircle,
   Activity,
   Trash2,
+  Pencil,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { emergencyRequestsService } from '@/lib/api'
@@ -23,6 +24,7 @@ import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import StatusBadge from '@/components/features/emergency/StatusBadge'
 import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
+import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -72,6 +74,7 @@ export default function PatientCaseRecordsView({
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
 
   useEffect(() => {
     if (patientFilter) setSearchTerm(patientFilter)
@@ -357,6 +360,15 @@ export default function PatientCaseRecordsView({
                       </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-lg h-8 gap-1 border-blue-200 text-blue-700 hover:bg-blue-50"
+                            onClick={() => setUpdatingCase(req)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Update
+                          </Button>
                           <Link href={paths.emergencyCase(req.id)}>
                             <Button variant="outline" size="sm" className="rounded-lg h-8 gap-1">
                               <ExternalLink className="w-3.5 h-3.5" />
@@ -388,6 +400,18 @@ export default function PatientCaseRecordsView({
           </table>
         </div>
       </div>
+
+      {updatingCase && (
+        <UpdatePatientCaseModal
+          request={updatingCase}
+          onClose={() => setUpdatingCase(null)}
+          onSuccess={(updated) => {
+            setRequests((prev) =>
+              prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+            )
+          }}
+        />
+      )}
     </div>
   )
 }

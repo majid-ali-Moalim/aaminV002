@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   Search,
@@ -17,12 +17,20 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  AlertCircle,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { chatService, type ChatContact, type ChatMessage } from '@/lib/api'
 import { useChatSocket } from '@/lib/useChatSocket'
 import { useChatStore } from '@/lib/stores/chatStore'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
+import {
+  ensureCasePrefix,
+  formatCaseMessagePreview,
+  parseDispatchCaseFromSearchParams,
+  type DispatchCaseMessageContext,
+} from '@/lib/dispatchCaseMessage'
+import CaseLinkedMessageText from '@/components/chat/CaseLinkedMessageText'
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/)
@@ -122,6 +130,7 @@ function AttachmentView({ msg }: { msg: ChatMessage }) {
 
 export default function ChatWorkspace() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const myId = user?.id ?? ''
   const setUnreadTotal = useChatStore((s) => s.setUnreadTotal)
@@ -137,6 +146,7 @@ export default function ChatWorkspace() {
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [caseContext, setCaseContext] = useState<DispatchCaseMessageContext | null>(null)
 
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingPreview, setPendingPreview] = useState<string | null>(null)
@@ -149,6 +159,7 @@ export default function ChatWorkspace() {
   activeIdRef.current = activeId
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dispatchCaseHandledRef = useRef(false)
 
   const loadContacts = useCallback(async () => {
     try {
@@ -191,6 +202,28 @@ export default function ChatWorkspace() {
     }
   }, [])
 
+  useEffect(() => {
+    if (dispatchCaseHandledRef.current || loadingContacts) return
+    const parsed = parseDispatchCaseFromSearchParams(searchParams)
+    if (!parsed) return
+
+    dispatchCaseHandledRef.current = true
+    setCaseContext(parsed)
+
+    if (parsed.dispatcherUserId) {
+      const contact = contacts.find((c) => c.userId === parsed.dispatcherUserId)
+      if (contact) {
+        openConversation(contact)
+      } else {
+        setSearch('dispatcher')
+      }
+    } else {
+      setSearch('dispatcher')
+    }
+
+    router.replace('/admin/chat', { scroll: false })
+  }, [contacts, loadingContacts, openConversation, router, searchParams])
+
   const isForActive = useCallback(
     (senderId: string, recipientId: string) => {
       const other = activeIdRef.current
@@ -206,7 +239,7 @@ export default function ChatWorkspace() {
     (msg: ChatMessage) => {
       const otherId = msg.senderId === myId ? msg.recipientId : msg.senderId
       const preview = msg.content?.trim()
-        ? msg.content
+        ? formatCaseMessagePreview(msg.content)
         : msg.attachmentUrl
           ? `📎 ${msg.attachmentName || 'Attachment'}`
           : ''
@@ -276,8 +309,12 @@ export default function ChatWorkspace() {
   }
 
   const handleSend = async () => {
-    const text = input.trim()
-    if ((!text && !pendingFile) || !activeId || sending) return
+    const rawText = input.trim()
+    if ((!rawText && !pendingFile) || !activeId || sending) return
+    const text = caseContext
+      ? ensureCasePrefix(rawText, caseContext.trackingCode, caseContext.caseId)
+      : rawText
+    if (!text && !pendingFile) return
     setSending(true)
     try {
       let attachment = null
@@ -353,6 +390,26 @@ export default function ChatWorkspace() {
           </button>
           <h2 className="text-lg font-bold text-slate-900 flex-1">Messages</h2>
         </div>
+
+        {caseContext && (
+          <div className="mx-3 mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">Live dispatch case {caseContext.trackingCode}</p>
+              <p className="text-amber-800/90 mt-0.5">
+                Type your message — the case number is attached automatically before you send.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCaseContext(null)}
+              className="p-1 rounded-md hover:bg-amber-100 text-amber-700"
+              aria-label="Dismiss case reminder"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <div className="p-3 border-b border-slate-100">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -419,11 +476,20 @@ export default function ChatWorkspace() {
       {/* Conversation panel */}
       <section className={`flex-1 flex-col bg-[#efeae2] ${activeId ? 'flex' : 'hidden md:flex'}`}>
         {!activeContact ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 px-6 text-center">
             <div className="w-20 h-20 rounded-full bg-white/70 flex items-center justify-center mb-4">
               <MessageSquare className="w-10 h-10 text-emerald-500" />
             </div>
-            <p className="text-sm font-medium">Select a conversation to start chatting</p>
+            {caseContext ? (
+              <>
+                <p className="text-sm font-medium text-slate-600">Select a dispatcher for case {caseContext.trackingCode}</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                  Type your message — Case {caseContext.trackingCode} is added automatically when you send.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-medium">Select a conversation to start chatting</p>
+            )}
           </div>
         ) : (
           <>
@@ -546,7 +612,12 @@ export default function ChatWorkspace() {
                             </div>
                           </div>
                         ) : (
-                          m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                          m.content && (
+                            <CaseLinkedMessageText
+                              content={m.content}
+                              className="whitespace-pre-wrap break-words"
+                            />
+                          )
                         )}
                         {!editing && (
                           <div className="flex items-center justify-end gap-1 mt-0.5">
@@ -621,7 +692,11 @@ export default function ChatWorkspace() {
                   }
                 }}
                 rows={1}
-                placeholder="Type a message…"
+                placeholder={
+                  caseContext
+                    ? `Type your message (Case ${caseContext.trackingCode} will be added when you send)…`
+                    : 'Type a message…'
+                }
                 className="flex-1 resize-none max-h-32 px-4 py-2.5 rounded-2xl border border-slate-200 focus:border-emerald-300 focus:outline-none text-sm bg-white"
               />
               <button

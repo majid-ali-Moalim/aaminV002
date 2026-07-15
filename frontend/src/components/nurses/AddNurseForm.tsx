@@ -47,6 +47,7 @@ import {
 } from '@/lib/api'
 import { Station, Department, Region, District } from '@/types'
 import { mapStaffShiftStatus } from '@/lib/staff/status'
+import { EMPLOYMENT_SHIFT_OPTIONS, shiftTimesForEmploymentType } from '@/lib/employment/shiftTypes'
 import {
   NurseFormErrors,
   NurseFormValues,
@@ -150,7 +151,7 @@ export default function AddNurseForm() {
     relationship: '',
     employeeCode: '',
     departmentId: '',
-    employmentType: 'Full-time',
+    employmentType: 'Day time',
     joinDate: new Date().toISOString().split('T')[0],
     shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
@@ -224,7 +225,7 @@ export default function AddNurseForm() {
         ...f,
         employeeCode: code,
         departmentId: f.departmentId || opsDept?.id || '',
-        employmentType: f.employmentType || data.employmentTypes[0]?.id || 'Full-time',
+        employmentType: f.employmentType || 'Day time',
       }))
     } catch {
       setMasterDataError('Failed to load form data. Check that the backend is running.')
@@ -357,6 +358,7 @@ export default function AddNurseForm() {
       : form.firstName.trim()
 
     const address = form.address.trim() || undefined
+    const shift = shiftTimesForEmploymentType(form.employmentType)
 
     return {
       role: 'EMPLOYEE' as const,
@@ -387,7 +389,8 @@ export default function AddNurseForm() {
       medicalClearanceStatus: 'CLEARED',
       bloodGroup: form.bloodGroup || undefined,
       employmentDate: form.joinDate || undefined,
-      defaultShift: form.employmentType,
+      defaultShift: shift.defaultShift,
+      typicalStartTime: shift.typicalStartTime,
       shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
       certificationUpload: form.certificationUpload || undefined,
@@ -514,7 +517,7 @@ export default function AddNurseForm() {
                     relationship: '',
                     employeeCode: nurseCode,
                     departmentId: form.departmentId,
-                    employmentType: 'Full-time',
+                    employmentType: 'Day time',
                     joinDate: new Date().toISOString().split('T')[0],
                     shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
@@ -891,7 +894,7 @@ export default function AddNurseForm() {
                       <FormSelect
                         label="Employment Type"
                         required
-                        options={employmentTypeOptions}
+                        options={EMPLOYMENT_SHIFT_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
                         value={form.employmentType}
                         error={fieldErrors.employmentType}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>

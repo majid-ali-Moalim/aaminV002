@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import {
   Stethoscope, Search, RefreshCw, Plus, Download, FileSpreadsheet, FileText,
-  Eye, X, Loader2, AlertCircle, ExternalLink, Clock, Activity, ChevronRight,
+  Eye, X, Loader2, AlertCircle, ExternalLink, Clock, ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { nursesService } from '@/lib/api'
@@ -29,11 +29,6 @@ const STATUS_TABS: { id: NurseStatusFilterTab; label: string }[] = [
   { id: 'unavailable', label: 'Unavailable' },
 ]
 
-const SHIFT_FOR_OPERATIONAL: Record<OperationalNurseStatus, string> = {
-  available: 'AVAILABLE',
-  unavailable: 'UNAVAILABLE',
-}
-
 export default function NurseAvailabilityView() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<NurseStatusFilterTab>('all')
@@ -45,8 +40,6 @@ export default function NurseAvailabilityView() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailData, setDetailData] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [statusModal, setStatusModal] = useState<Pick<NurseAvailabilityRow, 'id' | 'fullName'> | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
   const { data, isLoading, isValidating, mutate, error } = useSWR<NurseAvailabilityOverview>(
     'nurse-availability',
@@ -67,20 +60,6 @@ export default function NurseAvailabilityView() {
   }
 
   const closeDetail = () => { setDetailId(null); setDetailData(null) }
-
-  const handleStatusChange = async (id: string, operational: OperationalNurseStatus) => {
-    try {
-      setSubmitting(true)
-      await nursesService.updateShift(id, SHIFT_FOR_OPERATIONAL[operational])
-      setStatusModal(null)
-      mutate()
-      if (detailId === id) openDetail(id)
-    } catch {
-      alert('Failed to update nurse status')
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   const filteredRows = useMemo(() => {
     if (!data?.nurses) return []
@@ -262,7 +241,6 @@ export default function NurseAvailabilityView() {
                     <td className="px-4 py-3 print:hidden">
                       <div className="flex gap-1">
                         <button type="button" onClick={() => openDetail(row.id)} className="p-1.5 rounded-lg hover:bg-slate-100"><Eye className="w-4 h-4" /></button>
-                        <button type="button" onClick={() => setStatusModal({ id: row.id, fullName: row.fullName })} className="p-1.5 rounded-lg hover:bg-slate-100"><Activity className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -337,7 +315,6 @@ export default function NurseAvailabilityView() {
                 <InfoField label="Specialization" value={detailData.nurse.specialization ?? '—'} />
                 <InfoField label="Current Status"><StatusBadge status={detailData.nurse.operationalStatus} /></InfoField>
                 <InfoField label="Reason" value={detailData.nurse.unavailableReason ?? 'Ready for dispatch'} />
-                <InfoField label="Medical Clearance" value={detailData.nurse.medicalClearanceStatus ?? '—'} />
                 <InfoField label="Station" value={detailData.nurse.station?.name ?? '—'} />
               </div>
               {detailData.currentCase && (
@@ -361,24 +338,10 @@ export default function NurseAvailabilityView() {
                 )) : <p className="text-sm text-slate-500">No shift history</p>}
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setStatusModal({ id: detailData.nurse.id, fullName: `${detailData.nurse.firstName} ${detailData.nurse.lastName}`.trim() })}>Change Status</Button>
                 {detailData.currentCase && <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}><Button size="sm" className="rounded-xl bg-violet-600 hover:bg-violet-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>}
               </div>
             </div>
           ) : <p className="text-center py-8 text-slate-500">Could not load details</p>}
-        </Modal>
-      )}
-
-      {statusModal && (
-        <Modal onClose={() => setStatusModal(null)} title={`Change Status — ${statusModal.fullName}`}>
-          <div className="space-y-2">
-            {(Object.keys(NURSE_STATUS_CONFIG) as OperationalNurseStatus[]).map((key) => (
-              <button key={key} type="button" disabled={submitting} onClick={() => handleStatusChange(statusModal.id, key)} className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-violet-200 hover:bg-violet-50 text-left">
-                <span className="text-xl">{NURSE_STATUS_CONFIG[key].emoji}</span>
-                <div><p className="font-bold">{NURSE_STATUS_CONFIG[key].label}</p><p className="text-xs text-slate-500">{key === 'available' ? 'Ready for case assignment' : 'Not available for dispatch'}</p></div>
-              </button>
-            ))}
-          </div>
         </Modal>
       )}
 

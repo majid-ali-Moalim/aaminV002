@@ -33,7 +33,6 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
-  Activity,
   ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -54,11 +53,6 @@ const STATUS_TABS: { id: DriverStatusFilterTab; label: string }[] = [
   { id: 'unavailable', label: 'Unavailable' },
 ]
 
-const SHIFT_FOR_OPERATIONAL: Record<OperationalDriverStatus, string> = {
-  available: 'AVAILABLE',
-  unavailable: 'UNAVAILABLE',
-}
-
 export default function DriverAvailabilityView() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DriverStatusFilterTab>('all')
@@ -70,7 +64,6 @@ export default function DriverAvailabilityView() {
   const [detailData, setDetailData] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const [statusModal, setStatusModal] = useState<Pick<DriverAvailabilityRow, 'id' | 'fullName'> | null>(null)
   const [assignAmbulanceModal, setAssignAmbulanceModal] = useState<Pick<DriverAvailabilityRow, 'id' | 'fullName'> | null>(null)
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -100,20 +93,6 @@ export default function DriverAvailabilityView() {
   const closeDetail = () => {
     setDetailId(null)
     setDetailData(null)
-  }
-
-  const handleStatusChange = async (id: string, operational: OperationalDriverStatus) => {
-    try {
-      setSubmitting(true)
-      await driversService.updateShift(id, SHIFT_FOR_OPERATIONAL[operational])
-      setStatusModal(null)
-      mutate()
-      if (detailId === id) openDetail(id)
-    } catch {
-      alert('Failed to update driver status')
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   const handleAssignAmbulance = async (driverId: string, ambulanceId: string | null) => {
@@ -314,7 +293,6 @@ export default function DriverAvailabilityView() {
                     <td className="px-4 py-3 print:hidden">
                       <div className="flex gap-1">
                         <button type="button" onClick={() => openDetail(row.id)} className="p-1.5 rounded-lg hover:bg-slate-100"><Eye className="w-4 h-4" /></button>
-                        <button type="button" onClick={() => setStatusModal({ id: row.id, fullName: row.fullName })} className="p-1.5 rounded-lg hover:bg-slate-100"><Activity className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -439,7 +417,6 @@ export default function DriverAvailabilityView() {
                 )) : <p className="text-sm text-slate-500">No shift history</p>}
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setStatusModal({ id: detailData.driver.id, fullName: `${detailData.driver.firstName} ${detailData.driver.lastName}`.trim() })}>Change Status</Button>
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignAmbulanceModal({ id: detailData.driver.id, fullName: `${detailData.driver.firstName} ${detailData.driver.lastName}`.trim() })}><Truck className="w-4 h-4 mr-1" /> Assign Ambulance</Button>
                 {detailData.currentCase && (
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}>
@@ -449,29 +426,6 @@ export default function DriverAvailabilityView() {
               </div>
             </div>
           ) : <p className="text-center py-8 text-slate-500">Could not load details</p>}
-        </Modal>
-      )}
-
-      {statusModal && (
-        <Modal onClose={() => setStatusModal(null)} title={`Change Status — ${statusModal.fullName}`}>
-          <div className="space-y-2">
-            {(Object.keys(DRIVER_STATUS_CONFIG) as OperationalDriverStatus[]).map((key) => {
-              const cfg = DRIVER_STATUS_CONFIG[key]
-              return (
-                <button key={key} type="button" disabled={submitting} onClick={() => handleStatusChange(statusModal.id, key)} className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-red-200 hover:bg-red-50 text-left">
-                  <span className="text-xl">{cfg.emoji}</span>
-                  <div>
-                    <p className="font-bold">{cfg.label}</p>
-                    <p className="text-xs text-slate-500">
-                      {key === 'available'
-                        ? 'Availability is confirmed when the driver has an ambulance and no active case.'
-                        : 'Unavailable means no ambulance, inactive, or assigned to a case.'}
-                    </p>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
         </Modal>
       )}
 

@@ -11,49 +11,100 @@ import {
   Truck,
   AlertTriangle,
   Clock,
-  CheckCircle2,
-  Timer,
   Radio,
   Users,
-  Building2,
-  Bell,
-  Activity,
+  Stethoscope,
   ChevronRight,
+  Plus,
+  Activity,
+  UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { reportsService } from '@/lib/api'
 import AssignModal from '@/components/features/emergency/AssignModal'
+import PriorityBadge from '@/components/features/emergency/PriorityBadge'
+import StatusBadge from '@/components/features/emergency/StatusBadge'
 import type { EmergencyRequest } from '@/types'
 import type { UnifiedDashboardData } from '@/lib/dashboard/unifiedDashboard'
-import { filterOperationalCases } from '@/lib/emergency/dateFilters'
+import {
+  filterOperationalCases,
+  isActiveOngoingCase,
+  isDelayedPendingCase,
+  isUnassignedPendingCase,
+} from '@/lib/emergency/dateFilters'
 import toast from 'react-hot-toast'
 
-const ADMIN_LINKS = {
-  activeEmergencies: '/admin/emergency-requests/active',
-  availableAmbulances: '/admin/ambulances/availability',
-  onCaseAmbulances: '/admin/ambulances',
-  critical: '/admin/emergency-requests/critical',
+const LINKS = {
   pending: '/admin/emergency-requests/pending',
-  escalated: '/admin/emergency-requests/escalated',
-  completed: '/admin/emergency-requests/completed',
-  responseTime: '/admin/reports/response-time',
-  allCases: '/admin/emergency-requests',
-  notifications: '/admin/notifications',
-  hospitals: '/admin/hospitals/availability',
-  readiness: '/admin/dispatch-management/readiness',
+  delayed: '/admin/emergency-requests/escalated',
+  critical: '/admin/emergency-requests/critical',
+  active: '/admin/emergency-requests/active',
+  ambulances: '/admin/ambulances/availability',
+  drivers: '/admin/drivers',
+  nurses: '/admin/nurses',
+  newCase: '/admin/emergency-requests/new',
   dispatchBoard: '/admin/dispatch-management',
 } as const
 
-function MiniCase({ item }: { item: EmergencyRequest }) {
+type StatCardConfig = {
+  key: string
+  label: string
+  hint: string
+  href: string
+  icon: typeof Siren
+  accent: string
+  iconBg: string
+  value: number | string
+}
+
+function CaseRow({
+  item,
+  onAssign,
+}: {
+  item: EmergencyRequest
+  onAssign?: () => void
+}) {
+  const patient = item.patient?.fullName || item.callerName || 'Unknown'
   return (
-    <div className="py-2.5 border-b border-slate-50 last:border-0">
-      <div className="flex justify-between gap-2">
-        <span className="font-bold text-sm text-slate-900">{item.trackingCode}</span>
-        <span className="text-[10px] font-bold text-red-600">{item.priority}</span>
+    <div className="flex items-start justify-between gap-3 py-3 border-b border-slate-100 last:border-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <span className="font-mono text-xs font-black text-red-600">{item.trackingCode}</span>
+          <PriorityBadge priority={item.priority} size="sm" />
+          <StatusBadge status={item.status} size="sm" />
+        </div>
+        <p className="text-sm font-semibold text-slate-800 truncate">{patient}</p>
       </div>
-      <p className="text-xs text-slate-500 truncate">{item.patient?.fullName || item.callerName}</p>
-      <span className="text-[10px] uppercase font-bold text-slate-400">{item.status}</span>
+      {onAssign && (
+        <button
+          type="button"
+          onClick={onAssign}
+          className="shrink-0 text-[10px] font-black uppercase text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg"
+        >
+          Assign
+        </button>
+      )}
     </div>
+  )
+}
+
+function StatCard({ card }: { card: StatCardConfig }) {
+  const Icon = card.icon
+  return (
+    <Link
+      href={card.href}
+      className={`group relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 ${card.accent}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${card.iconBg}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors mt-1" />
+      </div>
+      <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-3 leading-none">{card.value}</p>
+      <p className="text-[11px] font-black uppercase tracking-wide text-slate-700 mt-2">{card.label}</p>
+      <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{card.hint}</p>
+    </Link>
   )
 }
 
@@ -76,272 +127,278 @@ export default function AdminDispatcherCommandCenter() {
         pendingQueue: [] as EmergencyRequest[],
         activeMissions: [] as EmergencyRequest[],
         criticalCases: [] as EmergencyRequest[],
-        delayedMissions: [] as EmergencyRequest[],
-        liveCases: [] as EmergencyRequest[],
       }
     }
     const requests = data.operational.requests
     const operational = filterOperationalCases(requests)
-    const pendingQueue = requests.filter((r) => r.status === 'PENDING')
-    const activeMissions = operational.filter((r) => r.status !== 'PENDING')
+    const pendingQueue = requests.filter(isUnassignedPendingCase)
+    const activeMissions = operational.filter(isActiveOngoingCase)
     const criticalCases = operational.filter((r) => r.priority === 'CRITICAL')
-    const delayedMissions = pendingQueue.filter((r) => {
-      const waitMin = Math.floor((Date.now() - new Date(r.createdAt).getTime()) / 60000)
-      return waitMin >= 15
-    })
+    return { pendingQueue, activeMissions, criticalCases }
+  }, [data])
+
+  const stats = useMemo(() => {
+    if (!data) return null
+    const summary = data.summary
+    const requests = data.operational?.requests ?? []
+    const pending = requests.filter(isUnassignedPendingCase).length
+    const delayed = requests.filter(isDelayedPendingCase).length
+    const active = requests.filter(isActiveOngoingCase).length
     return {
-      pendingQueue,
-      activeMissions,
-      criticalCases,
-      delayedMissions,
-      liveCases: operational.slice(0, 12),
+      pending,
+      delayed,
+      critical: summary.criticalCases,
+      active,
+      ambulances: summary.availableAmbulances,
+      drivers: summary.availableDrivers,
+      nurses: summary.availableNurses,
     }
   }, [data])
 
+  const statCards = useMemo((): StatCardConfig[] => {
+    if (!stats) return []
+    return [
+      {
+        key: 'pending',
+        label: 'Pending Cases',
+        hint: 'Awaiting triage or assignment',
+        href: LINKS.pending,
+        icon: Clock,
+        accent: 'border-orange-200 hover:border-orange-300',
+        iconBg: 'bg-orange-100 text-orange-600',
+        value: stats.pending,
+      },
+      {
+        key: 'delayed',
+        label: 'Delay Cases',
+        hint: 'Past response-time threshold',
+        href: LINKS.delayed,
+        icon: AlertTriangle,
+        accent: 'border-amber-200 hover:border-amber-300',
+        iconBg: 'bg-amber-100 text-amber-700',
+        value: stats.delayed,
+      },
+      {
+        key: 'critical',
+        label: 'Critical Cases',
+        hint: 'Priority 1 — immediate attention',
+        href: LINKS.critical,
+        icon: Siren,
+        accent: 'border-red-200 hover:border-red-300',
+        iconBg: 'bg-red-100 text-red-600',
+        value: stats.critical,
+      },
+      {
+        key: 'active',
+        label: 'Active Cases',
+        hint: 'Assigned crew & in progress',
+        href: LINKS.active,
+        icon: Radio,
+        accent: 'border-blue-200 hover:border-blue-300',
+        iconBg: 'bg-blue-100 text-blue-600',
+        value: stats.active,
+      },
+      {
+        key: 'ambulances',
+        label: 'Available Ambulances',
+        hint: 'Ready to dispatch now',
+        href: LINKS.ambulances,
+        icon: Truck,
+        accent: 'border-emerald-200 hover:border-emerald-300',
+        iconBg: 'bg-emerald-100 text-emerald-600',
+        value: stats.ambulances,
+      },
+      {
+        key: 'nurses',
+        label: 'Available Nurses',
+        hint: 'On shift and ready',
+        href: LINKS.nurses,
+        icon: Stethoscope,
+        accent: 'border-violet-200 hover:border-violet-300',
+        iconBg: 'bg-violet-100 text-violet-600',
+        value: stats.nurses,
+      },
+      {
+        key: 'drivers',
+        label: 'Available Drivers',
+        hint: 'On shift and ready',
+        href: LINKS.drivers,
+        icon: UserCheck,
+        accent: 'border-cyan-200 hover:border-cyan-300',
+        iconBg: 'bg-cyan-100 text-cyan-600',
+        value: stats.drivers,
+      },
+    ]
+  }, [stats])
+
   if (isLoading && !data) {
     return (
-      <div className="flex items-center justify-center py-32">
+      <div className="flex flex-col items-center justify-center py-32 gap-3">
         <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+        <p className="text-sm font-medium text-slate-500">Loading dispatch overview…</p>
       </div>
     )
   }
 
-  const summary = data!.summary
-  const hospitals = data!.hospitals ?? []
-
-  const topStats = [
-    { label: 'Active Emergencies', value: summary.activeCases, icon: Siren, color: 'text-red-600', href: ADMIN_LINKS.activeEmergencies },
-    { label: 'On Case Ambulances', value: summary.ambulancesOnCase, icon: Truck, color: 'text-amber-600', href: ADMIN_LINKS.onCaseAmbulances },
-    { label: 'Available Ambulances', value: summary.availableAmbulances, icon: Truck, color: 'text-emerald-600', href: ADMIN_LINKS.availableAmbulances },
-    { label: 'Critical Cases', value: summary.criticalCases, icon: AlertTriangle, color: 'text-red-700', href: ADMIN_LINKS.critical },
-    { label: 'Pending Dispatches', value: summary.pendingCases, icon: Clock, color: 'text-orange-600', href: ADMIN_LINKS.pending },
-    { label: 'Delayed Missions', value: summary.delayedCases, icon: AlertTriangle, color: 'text-amber-700', href: ADMIN_LINKS.escalated },
-    { label: "Today's Completed", value: summary.completedCases, icon: CheckCircle2, color: 'text-emerald-700', href: ADMIN_LINKS.completed },
-    {
-      label: 'Avg Response Time',
-      value: summary.averageResponseTimeMinutes != null ? `${summary.averageResponseTimeMinutes} min` : '—',
-      icon: Timer,
-      color: 'text-violet-600',
-      href: ADMIN_LINKS.responseTime,
-    },
-  ]
-
   return (
-    <div className="space-y-5 pb-10">
+    <div className="space-y-6 pb-10">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">
               Emergency Command
             </p>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Dispatcher Dashboard</h1>
-            <p className="text-red-100/80 mt-2 text-sm max-w-2xl">
-              Real-time dispatch overview — pending queue, active missions, crew readiness, and hospital capacity.
+            <p className="text-red-100/90 mt-2 text-sm max-w-xl">
+              System-wide overview — pending queue, active missions, and crew readiness.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[10px] font-bold text-emerald-300 bg-white/10 px-2 py-1 rounded-full border border-white/20">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-300 bg-white/10 px-3 py-1.5 rounded-full border border-white/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               {isValidating ? 'Syncing…' : 'Live'}
             </span>
             <Button
               variant="outline"
               onClick={handleRefresh}
-              className="rounded-xl h-9 border-white/30 bg-white/10 text-white hover:bg-white/20"
+              className="rounded-xl h-10 border-white/30 bg-white/10 text-white hover:bg-white/20"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isValidating ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Link href={ADMIN_LINKS.dispatchBoard}>
-              <Button className="rounded-xl h-9 bg-white text-red-700 hover:bg-red-50 font-bold">
-                Open Dispatch Board
+            <Link href={LINKS.newCase}>
+              <Button className="rounded-xl h-10 bg-white text-red-700 hover:bg-red-50 font-bold gap-2">
+                <Plus className="w-4 h-4" />
+                New Case
+              </Button>
+            </Link>
+            <Link href={LINKS.dispatchBoard}>
+              <Button
+                variant="outline"
+                className="rounded-xl h-10 border-white/30 bg-white/10 text-white hover:bg-white/20 font-bold"
+              >
+                Dispatch Board
               </Button>
             </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 sm:gap-3">
-        {topStats.map((s) => {
-          const Icon = s.icon
-          return (
-            <Link
-              key={s.label}
-              href={s.href}
-              className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-red-200 hover:shadow-md transition-all"
-            >
-              <Icon className={`w-4 h-4 ${s.color} mb-1.5`} />
-              <p className="text-lg sm:text-xl font-black text-slate-900 leading-none">{s.value}</p>
-              <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase mt-1 leading-tight">
-                {s.label}
-              </p>
-            </Link>
-          )
-        })}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3 sm:gap-4">
+        {statCards.map((card) => (
+          <StatCard key={card.key} card={card} />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <div className="xl:col-span-8 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        <div className="xl:col-span-8">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/60">
+              <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
                 <Radio className="w-4 h-4 text-red-600" />
                 Live Dispatch Board
               </h2>
-              <Link
-                href={ADMIN_LINKS.pending}
-                className="text-[10px] font-bold text-red-600 flex items-center gap-0.5"
-              >
-                Full board <ChevronRight className="w-3 h-3" />
+              <Link href={LINKS.pending} className="text-xs font-bold text-red-600 flex items-center gap-1">
+                Open full queue <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
-            <div className="p-4 grid sm:grid-cols-2 gap-4 max-h-[320px] overflow-y-auto">
-              {lists.pendingQueue.length === 0 && lists.activeMissions.length === 0 ? (
-                <p className="text-sm text-slate-400 col-span-2 text-center py-8">No active dispatch activity</p>
-              ) : (
-                <>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-orange-600 mb-2">
-                      Pending ({lists.pendingQueue.length})
+            <div className="p-5 grid md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-xs font-black uppercase text-orange-600 mb-3">
+                  Pending ({lists.pendingQueue.length})
+                </p>
+                <div className="max-h-[360px] overflow-y-auto">
+                  {lists.pendingQueue.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-10 bg-slate-50 rounded-xl">
+                      No pending cases
                     </p>
-                    {lists.pendingQueue.slice(0, 5).map((c) => (
-                      <div key={c.id} className="flex justify-between items-start py-1 border-b border-slate-50">
-                        <div className="flex-1 min-w-0">
-                          <MiniCase item={c} />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setAssignTarget(c)}
-                          className="text-[10px] font-bold text-red-600 shrink-0 ml-2 mt-2"
-                        >
-                          Assign
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-blue-600 mb-2">
-                      Active ({lists.activeMissions.length})
-                    </p>
-                    {lists.activeMissions.slice(0, 5).map((c) => (
-                      <MiniCase key={c.id} item={c} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-3">
-                Active Mission Queue
-              </h3>
-              <div className="max-h-48 overflow-y-auto">
-                {lists.activeMissions.slice(0, 8).map((c) => (
-                  <MiniCase key={c.id} item={c} />
-                ))}
-                {!lists.activeMissions.length && (
-                  <p className="text-sm text-slate-400 text-center py-6">No active missions</p>
-                )}
+                  ) : (
+                    lists.pendingQueue.slice(0, 8).map((c) => (
+                      <CaseRow key={c.id} item={c} onAssign={() => setAssignTarget(c)} />
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="bg-red-50 rounded-2xl border border-red-100 shadow-sm p-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-red-700 mb-3 flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4" /> Critical Alerts
-              </h3>
-              <div className="max-h-48 overflow-y-auto">
-                {lists.criticalCases.slice(0, 6).map((c) => (
-                  <MiniCase key={c.id} item={c} />
-                ))}
-                {!lists.criticalCases.length && (
-                  <p className="text-sm text-red-400/80 text-center py-6">No critical alerts</p>
-                )}
+              <div>
+                <p className="text-xs font-black uppercase text-blue-600 mb-3">
+                  Active ({lists.activeMissions.length})
+                </p>
+                <div className="max-h-[360px] overflow-y-auto">
+                  {lists.activeMissions.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-10 bg-slate-50 rounded-xl">
+                      No active missions
+                    </p>
+                  ) : (
+                    lists.activeMissions.slice(0, 8).map((c) => <CaseRow key={c.id} item={c} />)
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="xl:col-span-4 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-2">
-              Recent Emergencies
-            </h3>
-            <div className="max-h-40 overflow-y-auto">
-              {lists.liveCases.slice(0, 6).map((c) => (
-                <MiniCase key={c.id} item={c} />
-              ))}
+        <div className="xl:col-span-4 space-y-5">
+          <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border border-red-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black uppercase tracking-widest text-red-800 flex items-center gap-2">
+                <Siren className="w-4 h-4" />
+                Critical Alerts
+              </h3>
+              <Link href={LINKS.critical} className="text-[10px] font-bold text-red-600">
+                View all
+              </Link>
+            </div>
+            <div className="max-h-[220px] overflow-y-auto">
+              {lists.criticalCases.length === 0 ? (
+                <p className="text-sm text-red-400/80 text-center py-6">No critical cases</p>
+              ) : (
+                lists.criticalCases.slice(0, 5).map((c) => <CaseRow key={c.id} item={c} />)
+              )}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-3 flex items-center gap-2">
-              <Users className="w-4 h-4 text-red-600" /> Crew Status
+              <Users className="w-4 h-4 text-red-600" />
+              Crew Readiness
             </h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-slate-50 rounded-lg p-2">
-                <p className="text-lg font-black text-slate-900">{summary.availableDrivers}</p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">Drivers ready</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-center">
+                <p className="text-xl font-black text-emerald-700">{stats?.ambulances ?? 0}</p>
+                <p className="text-[9px] font-bold uppercase text-emerald-600 mt-1">Ambulances</p>
               </div>
-              <div className="bg-slate-50 rounded-lg p-2">
-                <p className="text-lg font-black text-slate-900">{summary.availableNurses}</p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">Nurses ready</p>
+              <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-3 text-center">
+                <p className="text-xl font-black text-cyan-700">{stats?.drivers ?? 0}</p>
+                <p className="text-[9px] font-bold uppercase text-cyan-600 mt-1">Drivers</p>
+              </div>
+              <div className="rounded-xl bg-violet-50 border border-violet-100 p-3 text-center">
+                <p className="text-xl font-black text-violet-700">{stats?.nurses ?? 0}</p>
+                <p className="text-[9px] font-bold uppercase text-violet-600 mt-1">Nurses</p>
               </div>
             </div>
-            <Link href={ADMIN_LINKS.readiness} className="text-[10px] font-bold text-red-600 mt-2 inline-block">
-              Manage resources →
-            </Link>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-2 flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> Hospital Capacity
-            </h3>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
-              {hospitals.slice(0, 4).map((h) => (
-                <div key={h.id} className="flex justify-between text-xs">
-                  <span className="font-bold text-slate-800 truncate pr-2">{h.name}</span>
-                  <span
-                    className={`font-bold shrink-0 ${h.availabilityStatus === 'Available' ? 'text-emerald-600' : 'text-amber-600'}`}
-                  >
-                    {h.availabilityStatus}
-                  </span>
-                </div>
-              ))}
-              {!hospitals.length && <p className="text-xs text-slate-400">No hospital data</p>}
+          {(data?.recentActivity ?? []).length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-600" />
+                Recent Activity
+              </h3>
+              <div className="max-h-44 overflow-y-auto space-y-2">
+                {(data?.recentActivity ?? []).slice(0, 6).map((a: { id?: string; title?: string; action?: string; message?: string; details?: string; createdAt?: string }) => (
+                  <div key={a.id} className="text-xs border-b border-slate-50 pb-2">
+                    <span className="font-bold text-slate-800">{a.title || a.action}</span>
+                    <span className="text-slate-500 block truncate">{a.message || a.details}</span>
+                    {a.createdAt && (
+                      <span className="text-[10px] text-slate-400">
+                        {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-2 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-500" /> Notifications
-            </h3>
-            <p className="text-sm text-slate-600">
-              <span className="font-black text-red-600">{summary.pendingCases}</span> pending ·{' '}
-              <span className="font-black text-amber-600">{summary.delayedCases}</span> delayed
-            </p>
-            <Link href={ADMIN_LINKS.notifications} className="text-[10px] font-bold text-red-600 mt-2 inline-block">
-              View all alerts →
-            </Link>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 mb-2 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-600" /> Activity Feed
-            </h3>
-            <div className="max-h-44 overflow-y-auto space-y-2">
-              {(data?.recentActivity ?? []).slice(0, 8).map((a: any) => (
-                <div key={a.id} className="text-xs border-b border-slate-50 pb-1.5">
-                  <span className="font-bold text-slate-800">{a.title || a.action}</span>
-                  <span className="text-slate-500 block truncate">{a.message || a.details}</span>
-                  {a.createdAt && (
-                    <span className="text-[10px] text-slate-400">
-                      {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

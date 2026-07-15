@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { EmergencyRequestStatus, RequestSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmployeeAttendanceService } from '../employee-attendance/employee-attendance.service';
+import { isStaffEmployeeRole } from '../employee-attendance/shift-types';
 
 type ReportPeriod = {
   start: Date;
@@ -34,7 +36,10 @@ const AMBULANCE_STATUS_OPTIONS = ['AVAILABLE', 'ON_DUTY', 'MAINTENANCE', 'UNAVAI
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attendance: EmployeeAttendanceService,
+  ) {}
 
   // ─── Dashboard Overview Stats ───
   async getDashboardStats() {
@@ -1170,7 +1175,7 @@ export class ReportsService {
     const employeeWhere: any = { status: 'ACTIVE' };
     if (filters.staffRole) employeeWhere.employeeRoleId = filters.staffRole;
 
-    const [employees, activeStaff, attendance, completed] = await Promise.all([
+    const [allEmployees, completed, todayPresence, periodScores] = await Promise.all([
       this.prisma.employee.findMany({
         where: employeeWhere,
         orderBy: [{ employeeRole: { name: 'asc' } }, { firstName: 'asc' }],
@@ -1189,10 +1194,19 @@ export class ReportsService {
           },
         },
       }),
-      this.prisma.employee.count({ where: { ...employeeWhere, shiftStatus: { not: 'OFF_DUTY' } } }),
-      this.prisma.attendanceRecord.count({ where: { date: { gte: period.start, lte: period.end } } }),
       this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
+      this.attendance.getTodayStaffPresence(),
+      this.attendance.getAttendanceScores({
+        startDate: period.start.toISOString().slice(0, 10),
+        endDate: period.end.toISOString().slice(0, 10),
+      }),
     ]);
+
+    const employees = allEmployees.filter((e) => isStaffEmployeeRole(e.employeeRole?.name));
+    const presentTodayIds = new Set(todayPresence.presentEmployeesList.map((e) => e.id));
+    const scoreByEmployeeId = Object.fromEntries(
+      (periodScores.employees ?? []).map((e) => [e.employeeId, e]),
+    );
 
     const periodCompletedByEmployee = await this.prisma.emergencyRequest.groupBy({
       by: ['driverId'],
@@ -1203,38 +1217,69 @@ export class ReportsService {
       periodCompletedByEmployee.map((r) => [r.driverId!, r._count]),
     );
 
+    const activeStaff = employees.filter((e) => presentTodayIds.has(e.id)).length;
+    const { byRole, fieldStaff } = todayPresence;
+
     return {
       title: 'Staff Performance Reports',
-      subtitle: 'Complete staff scorecard with missions, attendance, and role breakdown.',
+      subtitle: 'Staff scorecard with today\'s attendance, period scores, missions, and role breakdown.',
       period,
       summary: [
         { label: 'Total Staff', value: employees.length },
-        { label: 'Active on Shift', value: activeStaff },
-        { label: 'Attendance Records', value: attendance },
+        { label: 'Present Today', value: todayPresence.presentEmployees },
+        { label: 'Absent Today', value: todayPresence.absentEmployees },
+        { label: 'Drivers Present', value: byRole.drivers.present },
+        { label: 'Nurses Present', value: byRole.nurses.present },
+        { label: 'Dispatchers Present', value: byRole.dispatchers.present },
+        { label: 'Drivers Absent', value: byRole.drivers.absent },
+        { label: 'Nurses Absent', value: byRole.nurses.absent },
+        { label: 'Dispatchers Absent', value: byRole.dispatchers.absent },
+        { label: 'Field Staff Present', value: fieldStaff.present },
+        { label: 'Period Avg Attendance', value: periodScores.summary?.averageAttendanceRate ?? 0, suffix: '%' },
         { label: 'Completed Cases (period)', value: completed },
-        { label: 'Staff Utilization', value: this.percent(activeStaff, employees.length), suffix: '%' },
-        { label: 'Avg Missions / Staff', value: employees.length ? Math.round(completed / employees.length) : 0 },
+        { label: 'Staff Utilization (today)', value: this.percent(activeStaff, employees.length), suffix: '%' },
       ],
       table: {
         title: 'Staff Performance Detail',
         columns: [
-          'Employee', 'Role', 'Department', 'Station', 'Shift', 'Status',
-          'Driver Cases', 'Nurse Cases', 'Dispatch Cases', 'Period Driver Completions', 'Attendance Records', 'Email',
+          'Employee', 'Role', 'Department', 'Station', 'Present Today', 'Period Present Days',
+          'Period Absent Days', 'Attendance Score', 'Driver Cases', 'Nurse Cases', 'Dispatch Cases',
+          'Period Driver Completions', 'Email',
         ],
-        rows: employees.map((e) => [
-          this.employeeDisplayName(e),
-          e.employeeRole?.name ?? 'Unassigned',
-          e.department?.name ?? '—',
-          e.station?.name ?? '—',
-          e.shiftStatus ?? '—',
-          e.status,
-          e._count.drivenRequests,
-          e._count.nurseRequests,
-          e._count.dispatchedRequests,
-          driverCompletedMap[e.id] ?? 0,
-          e._count.attendanceRecords,
-          e.user?.email ?? e.user?.username ?? '—',
-        ]),
+        rows: employees.map((e) => {
+          const score = scoreByEmployeeId[e.id];
+          return [
+            this.employeeDisplayName(e),
+            e.employeeRole?.name ?? 'Unassigned',
+            e.department?.name ?? '—',
+            e.station?.name ?? '—',
+            presentTodayIds.has(e.id) ? 'Yes' : 'No',
+            score?.presentDays ?? 0,
+            score?.absentDays ?? 0,
+            score ? `${score.attendancePercentage}%` : '—',
+            e._count.drivenRequests,
+            e._count.nurseRequests,
+            e._count.dispatchedRequests,
+            driverCompletedMap[e.id] ?? 0,
+            e.user?.email ?? e.user?.username ?? '—',
+          ];
+        }),
+      },
+      secondaryTable: {
+        title: `Today's Attendance by Role (${todayPresence.date})`,
+        columns: ['Role', 'Total Staff', 'Present', 'Absent', 'Present Rate'],
+        rows: [
+          ['Drivers', byRole.drivers.total, byRole.drivers.present, byRole.drivers.absent,
+            `${byRole.drivers.total ? this.percent(byRole.drivers.present, byRole.drivers.total) : 0}%`],
+          ['Nurses', byRole.nurses.total, byRole.nurses.present, byRole.nurses.absent,
+            `${byRole.nurses.total ? this.percent(byRole.nurses.present, byRole.nurses.total) : 0}%`],
+          ['Dispatchers', byRole.dispatchers.total, byRole.dispatchers.present, byRole.dispatchers.absent,
+            `${byRole.dispatchers.total ? this.percent(byRole.dispatchers.present, byRole.dispatchers.total) : 0}%`],
+          ['Admins', byRole.admins.total, byRole.admins.present, byRole.admins.absent,
+            `${byRole.admins.total ? this.percent(byRole.admins.present, byRole.admins.total) : 0}%`],
+          ['Field staff (D+N+Disp)', fieldStaff.total, fieldStaff.present, fieldStaff.absent,
+            `${fieldStaff.total ? fieldStaff.presentPercentage : 0}%`],
+        ],
       },
     };
   }

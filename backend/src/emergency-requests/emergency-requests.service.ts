@@ -15,6 +15,11 @@ import {
   regionalCasesWhere,
   regionalPendingCasesWhere,
 } from '../dispatchers-app/dispatcher-scope.util';
+import {
+  assertDispatchEligibleStaff,
+  filterDispatchEligibleEmployees,
+  getPresentEmployeeIdsToday,
+} from '../employee-attendance/dispatch-staff-eligibility';
 
 type AuthUser = {
   sub?: string;
@@ -243,6 +248,8 @@ export class EmergencyRequestsService {
       if (data.regionId) finalPayload.region = { connect: { id: data.regionId } };
       if (data.districtId) finalPayload.district = { connect: { id: data.districtId } };
       if (data.destinationHospitalId) finalPayload.destinationHospital = { connect: { id: data.destinationHospitalId } };
+      if (data.destinationHospitalBranchId) finalPayload.destinationHospitalBranchId = String(data.destinationHospitalBranchId);
+      if (data.destinationHospitalBranchName) finalPayload.destinationHospitalBranchName = String(data.destinationHospitalBranchName);
 
       // Add optional string fields
       const optionalStrings = [
@@ -543,6 +550,13 @@ export class EmergencyRequestsService {
 
     if (!data.driverId || !data.nurseId) {
       throw new BadRequestException('Both a driver and a nurse must be assigned before dispatch');
+    }
+
+    if (data.driverId) {
+      await assertDispatchEligibleStaff(this.prisma, data.driverId, 'Driver');
+    }
+    if (data.nurseId) {
+      await assertDispatchEligibleStaff(this.prisma, data.nurseId, 'Nurse');
     }
 
     if (data.nurseId) {
@@ -850,6 +864,7 @@ export class EmergencyRequestsService {
       data: {
         status: 'CANCELLED',
         cancelledAt: new Date(),
+        cancellationReason: reason,
         statusLogs: {
           create: {
             fromStatus: existing.status,
@@ -1091,31 +1106,34 @@ export class EmergencyRequestsService {
 
     const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
     
-    // Find drivers currently on a mission
-    const busyDriverIds = (await this.prisma.emergencyRequest.findMany({
-      where: { status: { in: activeStatuses as any } },
-      select: { driverId: true }
-    })).map(r => r.driverId).filter(Boolean);
-
-    return this.prisma.employee.findMany({
-      where: {
-        employeeRoleId: driverRole.id,
-        status: 'ACTIVE',
-        shiftStatus: 'AVAILABLE',
-        id: { notIn: busyDriverIds as string[] },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
+    const [busyDriverIds, presentIds, drivers] = await Promise.all([
+      this.prisma.emergencyRequest.findMany({
+        where: { status: { in: activeStatuses as any } },
+        select: { driverId: true },
+      }).then((rows) => rows.map((r) => r.driverId).filter(Boolean) as string[]),
+      getPresentEmployeeIdsToday(this.prisma),
+      this.prisma.employee.findMany({
+        where: {
+          employeeRoleId: driverRole.id,
+          status: 'ACTIVE',
+          shiftStatus: 'AVAILABLE',
         },
-        employeeRole: true,
-        assignedAmbulance: { include: { equipmentLevel: true } },
-      },
-    });
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
+          employeeRole: true,
+          assignedAmbulance: { include: { equipmentLevel: true } },
+        },
+      }),
+    ]);
+
+    const available = drivers.filter((d) => !busyDriverIds.includes(d.id));
+    return filterDispatchEligibleEmployees(available, presentIds);
   }
 
   async getAvailableNurses() {
@@ -1127,31 +1145,34 @@ export class EmergencyRequestsService {
 
     const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
     
-    // Find nurses currently on a mission
-    const busyNurseIds = (await this.prisma.emergencyRequest.findMany({
-      where: { status: { in: activeStatuses as any } },
-      select: { nurseId: true }
-    })).map(r => r.nurseId).filter(Boolean);
-
-    return this.prisma.employee.findMany({
-      where: {
-        employeeRoleId: nurseRole.id,
-        status: 'ACTIVE',
-        shiftStatus: 'AVAILABLE',
-        id: { notIn: busyNurseIds as string[] },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
+    const [busyNurseIds, presentIds, nurses] = await Promise.all([
+      this.prisma.emergencyRequest.findMany({
+        where: { status: { in: activeStatuses as any } },
+        select: { nurseId: true },
+      }).then((rows) => rows.map((r) => r.nurseId).filter(Boolean) as string[]),
+      getPresentEmployeeIdsToday(this.prisma),
+      this.prisma.employee.findMany({
+        where: {
+          employeeRoleId: nurseRole.id,
+          status: 'ACTIVE',
+          shiftStatus: 'AVAILABLE',
         },
-        employeeRole: true,
-        assignedAmbulance: { include: { equipmentLevel: true } },
-      },
-    });
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
+          employeeRole: true,
+          assignedAmbulance: { include: { equipmentLevel: true } },
+        },
+      }),
+    ]);
+
+    const available = nurses.filter((n) => !busyNurseIds.includes(n.id));
+    return filterDispatchEligibleEmployees(available, presentIds);
   }
   async getDashboardStats() {
     const total = await this.prisma.emergencyRequest.count();

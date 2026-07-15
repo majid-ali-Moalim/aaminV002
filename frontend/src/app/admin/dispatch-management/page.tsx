@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { emergencyRequestsService, notificationsService } from '@/lib/api'
+import { emergencyRequestsService } from '@/lib/api'
+import { buildDispatchChatUrl } from '@/lib/dispatchCaseMessage'
 import { EmergencyRequest, EmergencyRequestStatus } from '@/types'
 import {
   Search,
@@ -18,7 +20,6 @@ import {
   MessageSquare,
   Loader2,
   X,
-  Send,
   Radio,
   User,
   HeartPulse,
@@ -98,6 +99,7 @@ const fullName = (person?: { firstName?: string | null; lastName?: string | null
 }
 
 export default function DispatchManagementPage() {
+  const router = useRouter()
   const [dispatches, setDispatches] = useState<EmergencyRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -107,12 +109,6 @@ export default function DispatchManagementPage() {
   const [priorityFilter, setPriorityFilter] = useState('')
 
   const [selectedDispatch, setSelectedDispatch] = useState<EmergencyRequest | null>(null)
-
-  const [chatTarget, setChatTarget] = useState<EmergencyRequest | null>(null)
-  const [chatMessage, setChatMessage] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sentOk, setSentOk] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
 
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true)
@@ -191,34 +187,8 @@ export default function DispatchManagementPage() {
     })
   }, [dispatches, searchTerm, statusFilter, priorityFilter])
 
-  const openChat = (dispatch: EmergencyRequest) => {
-    setChatTarget(dispatch)
-    setChatMessage('')
-    setSentOk(false)
-    setSendError(null)
-  }
-
-  const sendMessage = async () => {
-    if (!chatTarget?.dispatcherId || !chatMessage.trim()) return
-    try {
-      setSending(true)
-      setSendError(null)
-      await notificationsService.sendDirect({
-        employeeId: chatTarget.dispatcherId,
-        title: `Message about case ${chatTarget.trackingCode}`,
-        message: chatMessage.trim(),
-        priority: chatTarget.priority === 'CRITICAL' ? 'HIGH' : 'MEDIUM',
-        entityType: 'EmergencyRequest',
-        entityId: chatTarget.id,
-        redirectUrl: `/dispatcher/emergency/active?id=${chatTarget.id}`,
-      })
-      setSentOk(true)
-      setChatMessage('')
-    } catch (err: any) {
-      setSendError(err?.response?.data?.message || err?.message || 'Failed to send message')
-    } finally {
-      setSending(false)
-    }
+  const openCaseMessage = (dispatch: EmergencyRequest) => {
+    router.push(buildDispatchChatUrl(dispatch))
   }
 
   return (
@@ -429,10 +399,13 @@ export default function DispatchManagementPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => openChat(dispatch)}
-                              disabled={!dispatch.dispatcherId}
-                              title={dispatch.dispatcherId ? 'Chat with dispatcher' : 'No dispatcher assigned'}
-                              className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                              onClick={() => openCaseMessage(dispatch)}
+                              title={
+                                dispatch.dispatcherId
+                                  ? `Message dispatcher about case ${dispatch.trackingCode}`
+                                  : `Open Messages to follow up on case ${dispatch.trackingCode}`
+                              }
+                              className="p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50"
                             >
                               <MessageSquare className="w-4 h-4" />
                             </button>
@@ -508,80 +481,17 @@ export default function DispatchManagementPage() {
               <Link href={`/admin/emergency-requests/${selectedDispatch.id}`}>
                 <Button className="bg-red-600 hover:bg-red-700 rounded-xl">Open Full Case</Button>
               </Link>
-              {selectedDispatch.dispatcherId && (
-                <Button
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => {
-                    const target = selectedDispatch
-                    setSelectedDispatch(null)
-                    openChat(target)
-                  }}
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" /> Message Dispatcher
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chat with Dispatcher Modal */}
-      {chatTarget && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-xl">
-                  <Radio className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold">Message Dispatcher</h2>
-                  <p className="text-xs text-blue-100">
-                    {fullName(chatTarget.dispatcher) ?? 'Dispatcher'} · {chatTarget.trackingCode}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => setChatTarget(null)} className="p-1.5 rounded-lg hover:bg-white/20">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {sentOk && (
-                <div className="flex items-center gap-2 text-sm rounded-xl px-3 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  Message delivered and dispatcher notified.
-                </div>
-              )}
-              {sendError && (
-                <div className="flex items-center gap-2 text-sm rounded-xl px-3 py-2.5 bg-red-50 text-red-700 border border-red-200">
-                  <X className="w-4 h-4 shrink-0" /> {sendError}
-                </div>
-              )}
-              <textarea
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                rows={4}
-                placeholder="Type your message to the dispatcher…"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 text-sm"
-              />
-              <p className="text-xs text-slate-400">
-                Delivered instantly as an in-app notification (and email if enabled). Linked to case {chatTarget.trackingCode}.
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button variant="ghost" className="rounded-xl" onClick={() => setChatTarget(null)}>
-                  Close
-                </Button>
-                <Button
-                  onClick={sendMessage}
-                  disabled={sending || !chatMessage.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 rounded-xl disabled:opacity-50"
-                >
-                  {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                  Send
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  const target = selectedDispatch
+                  setSelectedDispatch(null)
+                  openCaseMessage(target)
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" /> Message about Case
+              </Button>
             </div>
           </div>
         </div>

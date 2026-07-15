@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { Search, Filter, Plus, Edit, Trash2, User, Mail, Phone, Shield, Activity, Clock, AlertCircle, X, Loader2, Briefcase, Key, ClipboardList, Lock, RefreshCw, Download, Users, Building2, MapPin, Truck, Stethoscope, CheckCircle2, UserCog, Eye } from 'lucide-react'
 import { employeesService, systemSetupService } from '@/lib/api'
+import { isStaffEmployeeRole } from '@/lib/employment/shiftTypes'
 import { Employee, Role, EmployeeRole, Department, Region } from '@/types'
 import { EmployeeAvatar } from '@/components/employees/EmployeeAvatar'
 import { EmployeeProfileModal } from '@/components/employees/EmployeeProfileModal'
@@ -169,8 +170,18 @@ export default function EmployeesPage() {
     return <User className="w-4 h-4" />
   }
 
+  const staffRoles = useMemo(
+    () => availableRoles.filter((role) => isStaffEmployeeRole(role.name)),
+    [availableRoles],
+  )
+
+  const staffEmployees = useMemo(
+    () => employees.filter((e) => isStaffEmployeeRole(e.employeeRole?.name)),
+    [employees],
+  )
+
   const filteredEmployees = useMemo(() => {
-    return employees.filter(employee => {
+    return staffEmployees.filter(employee => {
       const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.toLowerCase()
       const deptName = employee.department?.name?.toLowerCase() || ''
       const roleName = employee.employeeRole?.name?.toLowerCase() || ''
@@ -191,25 +202,25 @@ export default function EmployeesPage() {
       
       return matchesSearch && matchesRole && matchesStatus && matchesDepartment && matchesRegion
     })
-  }, [employees, searchTerm, roleFilter, statusFilter, departmentFilter, regionFilter])
+  }, [staffEmployees, searchTerm, roleFilter, statusFilter, departmentFilter, regionFilter])
 
   const roleStats = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const employee of employees) {
+    for (const employee of staffEmployees) {
       const label = employee.employeeRole?.name || 'Unassigned'
       counts[label] = (counts[label] || 0) + 1
     }
     return counts
-  }, [employees])
+  }, [staffEmployees])
 
   const stats = useMemo(() => {
     return {
-      total: employees.length,
-      active: employees.filter(e => e.status === 'ACTIVE').length,
-      onDuty: employees.filter(e => e.status === 'ACTIVE' && ON_DUTY_SHIFT_STATUSES.has(e.shiftStatus || '')).length,
-      departments: new Set(employees.map(e => e.departmentId).filter(Boolean)).size
+      total: staffEmployees.length,
+      active: staffEmployees.filter(e => e.status === 'ACTIVE').length,
+      onDuty: staffEmployees.filter(e => e.status === 'ACTIVE' && ON_DUTY_SHIFT_STATUSES.has(e.shiftStatus || '')).length,
+      departments: new Set(staffEmployees.map(e => e.departmentId).filter(Boolean)).size
     }
-  }, [employees])
+  }, [staffEmployees])
 
   const handleViewDetails = (employee: Employee) => {
     setSelectedEmployee(employee)
@@ -413,7 +424,7 @@ export default function EmployeesPage() {
               onChange={(e) => setRoleFilter(e.target.value)}
             >
               <option value="">All Roles</option>
-              {availableRoles.map((role) => (
+              {staffRoles.map((role) => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
             </select>
@@ -474,7 +485,7 @@ export default function EmployeesPage() {
         )}
 
         <p className="text-xs text-slate-500 mt-4 font-medium">
-          Showing <span className="font-bold text-red-600">{filteredEmployees.length}</span> of {employees.length} employees
+          Showing <span className="font-bold text-red-600">{filteredEmployees.length}</span> of {staffEmployees.length} staff employees
         </p>
       </div>
 
@@ -490,14 +501,14 @@ export default function EmployeesPage() {
             <Users className="w-10 h-10 text-red-200" />
           </div>
           <h3 className="text-xl font-black text-slate-800 mb-2">
-            {employees.length === 0 && !fetchError ? 'No employees yet' : 'No matches found'}
+            {staffEmployees.length === 0 && !fetchError ? 'No staff employees yet' : 'No matches found'}
           </h3>
           <p className="text-slate-500 max-w-md mx-auto mb-6">
-            {employees.length === 0 && !fetchError
+            {staffEmployees.length === 0 && !fetchError
               ? 'Register your first team member to start building your workforce.'
               : 'Try clearing filters or broadening your search.'}
           </p>
-          {employees.length === 0 && !fetchError && (
+          {staffEmployees.length === 0 && !fetchError && (
             <Button className="bg-red-600 hover:bg-red-700 rounded-xl font-bold" onClick={() => setIsAddModalOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Employee

@@ -4,11 +4,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   Building2,
   Phone,
-  HeartPulse,
-  Settings2,
+  MapPin,
   Loader2,
   CheckCircle2,
   Hash,
+  Plus,
+  Trash2,
+  GitBranch,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
@@ -18,10 +20,11 @@ import {
   HOSPITAL_TYPES,
   OWNERSHIP_TYPES,
   CREATE_OPERATIONAL_STATUSES,
-  MEDICAL_CAPABILITIES,
   INITIAL_HOSPITAL_FORM,
   validateCreateHospitalForm,
+  emptyBranch,
   type CreateHospitalFormData,
+  type HospitalBranchForm,
   COMMON_EMERGENCY_SHORT_CODES,
 } from '@/lib/hospital-registration/constants'
 
@@ -107,18 +110,11 @@ export default function CreateHospitalForm() {
     })
   }
 
-  const toggleCapability = (cap: string) => {
-    set(
-      'medicalCapabilities',
-      form.medicalCapabilities.includes(cap)
-        ? form.medicalCapabilities.filter((c) => c !== cap)
-        : [...form.medicalCapabilities, cap],
-    )
-    setErrors((prev) => {
-      const next = { ...prev }
-      delete next.medicalCapabilities
-      return next
-    })
+  const updateBranch = (index: number, patch: Partial<HospitalBranchForm>) => {
+    setForm((prev) => ({
+      ...prev,
+      branches: prev.branches.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,27 +144,23 @@ export default function CreateHospitalForm() {
         email: form.email.trim(),
         website: form.website.trim() || undefined,
         acceptEmergencyCases: form.acceptEmergencyCases,
-        medicalCapabilities: form.medicalCapabilities,
-        beds: Number(form.beds) || 0,
-        icuTotalBeds: Number(form.icuTotalBeds) || 0,
-        emergencyBeds: Number(form.emergencyBeds) || 0,
-        operatingRooms: Number(form.operatingRooms) || 0,
-        capacityStatus: form.capacityStatus,
         operationalStatus: form.operationalStatus,
-        available24_7: form.available24_7,
-        acceptAmbulanceTransfers: form.acceptAmbulanceTransfers,
-        acceptWalkInPatients: INITIAL_HOSPITAL_FORM.acceptWalkInPatients,
-        accountUsername: form.accountUsername.trim(),
-        accountEmail: form.accountEmail.trim(),
-        accountPassword: form.accountPassword,
-        hospitalRole: INITIAL_HOSPITAL_FORM.hospitalRole,
-        accountStatus: form.accountStatus,
-        forcePasswordChange: form.forcePasswordChange,
+        branches: form.branches.map((b) => ({
+          id: b.id,
+          name: b.name.trim(),
+          regionId: b.regionId,
+          districtId: b.districtId,
+          address: b.address.trim(),
+          email: b.email.trim(),
+          primaryPhone: b.primaryPhone.trim(),
+          emergencyShortCode: b.emergencyShortCode.trim() || undefined,
+          emergencyHotline: b.emergencyHotline.trim() || undefined,
+        })),
       }
-      const result = await hospitalsService.createHospital(payload)
+      const result = await hospitalsService.registerHospital(payload)
       setSuccessCode(result.hospitalCode ?? result.id)
       toast.success(`Hospital registered — ${result.hospitalCode}`)
-      setForm(INITIAL_HOSPITAL_FORM)
+      setForm({ ...INITIAL_HOSPITAL_FORM, branches: [emptyBranch()] })
     } catch (err: any) {
       const msg = err?.response?.data?.message
       toast.error(Array.isArray(msg) ? msg.join(', ') : msg || 'Registration failed')
@@ -186,33 +178,29 @@ export default function CreateHospitalForm() {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white">Create Hospital</h1>
-            <p className="text-sm text-gray-500">Register a healthcare facility for emergency dispatch operations</p>
+            <p className="text-sm text-gray-500">
+              Register facility information and branches for dispatch — no portal login created here
+            </p>
           </div>
         </div>
         <Button type="submit" disabled={loading} className="rounded-xl font-bold h-11 px-6">
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Register Hospital
+          Save Hospital
         </Button>
       </div>
 
       {successCode && (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-900 text-green-800 dark:text-green-200">
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <p className="text-sm font-medium">
-            Hospital saved successfully. System ID: <strong>{successCode}</strong>
+            Hospital saved. Code: <strong>{successCode}</strong>
           </p>
         </div>
       )}
 
-      <SectionCard title="Basic Information" icon={Building2}>
+      <SectionCard title="Organization" icon={Building2}>
         <Field label="Hospital Name" required error={errors.name} className="md:col-span-2">
           <input className={inputCls} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Mogadishu General Hospital" />
-        </Field>
-        <Field label="Hospital Code">
-          <div className="relative">
-            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input className={`${inputCls} pl-10 bg-gray-50 dark:bg-gray-900 text-gray-500`} readOnly value="Auto-generated on save (e.g. HSP-2026-00001)" />
-          </div>
         </Field>
         <Field label="Hospital Type" required error={errors.hospitalType}>
           <select className={inputCls} value={form.hospitalType} onChange={(e) => set('hospitalType', e.target.value)}>
@@ -222,7 +210,7 @@ export default function CreateHospitalForm() {
             ))}
           </select>
         </Field>
-        <Field label="Ownership Type" required error={errors.ownershipType}>
+        <Field label="Ownership" required error={errors.ownershipType}>
           <select className={inputCls} value={form.ownershipType} onChange={(e) => set('ownershipType', e.target.value)}>
             <option value="">Select ownership</option>
             {OWNERSHIP_TYPES.map((t) => (
@@ -230,15 +218,15 @@ export default function CreateHospitalForm() {
             ))}
           </select>
         </Field>
-        <Field label="Region" required error={errors.regionId}>
-          <select className={inputCls} value={form.regionId} onChange={(e) => { set('regionId', e.target.value); set('districtId', '') }} disabled={refsLoading}>
-            <option value="">{refsLoading ? 'Loading regions…' : 'Select region'}</option>
+        <Field label="Head Office Region" required error={errors.regionId}>
+          <select className={inputCls} value={form.regionId} onChange={(e) => set('regionId', e.target.value)} disabled={refsLoading}>
+            <option value="">Select region</option>
             {regions.map((r) => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
         </Field>
-        <Field label="District" required error={errors.districtId}>
+        <Field label="Head Office District" required error={errors.districtId}>
           <select className={inputCls} value={form.districtId} onChange={(e) => set('districtId', e.target.value)} disabled={!form.regionId}>
             <option value="">Select district</option>
             {filteredDistricts.map((d) => (
@@ -246,152 +234,128 @@ export default function CreateHospitalForm() {
             ))}
           </select>
         </Field>
-        <Field label="Full Address" required error={errors.address} className="md:col-span-2">
-          <textarea className={`${inputCls} h-24 py-3 resize-none`} value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, area, city" />
+        <Field label="Head Office Address" required error={errors.address} className="md:col-span-2">
+          <input className={inputCls} value={form.address} onChange={(e) => set('address', e.target.value)} />
         </Field>
       </SectionCard>
 
-      <SectionCard title="Contact Information" icon={Phone}>
-        <Field label="Contact Person Name" required error={errors.contactPersonName}>
+      <SectionCard title="Primary Contact" icon={Phone}>
+        <Field label="Contact Person" required error={errors.contactPersonName}>
           <input className={inputCls} value={form.contactPersonName} onChange={(e) => set('contactPersonName', e.target.value)} />
         </Field>
-        <Field label="Contact Person Role" required error={errors.contactPersonRole}>
-          <input className={inputCls} value={form.contactPersonRole} onChange={(e) => set('contactPersonRole', e.target.value)} placeholder="e.g. Hospital Administrator" />
+        <Field label="Contact Role" required error={errors.contactPersonRole}>
+          <input className={inputCls} value={form.contactPersonRole} onChange={(e) => set('contactPersonRole', e.target.value)} />
         </Field>
-        <Field label="Primary Phone Number" required error={errors.primaryPhone}>
-          <input className={inputCls} value={form.primaryPhone} onChange={(e) => set('primaryPhone', e.target.value)} placeholder="+252 61 000 0000" />
+        <Field label="Primary Phone" required error={errors.primaryPhone}>
+          <input className={inputCls} value={form.primaryPhone} onChange={(e) => set('primaryPhone', e.target.value)} />
         </Field>
-        <Field label="Secondary Phone Number" error={errors.secondaryPhone}>
+        <Field label="Secondary Phone" error={errors.secondaryPhone}>
           <input className={inputCls} value={form.secondaryPhone} onChange={(e) => set('secondaryPhone', e.target.value)} />
-        </Field>
-        <Field label="Emergency Short Code" error={errors.emergencyShortCode}>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {COMMON_EMERGENCY_SHORT_CODES.map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => set('emergencyShortCode', code)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
-                  form.emergencyShortCode === code
-                    ? 'bg-teal-600 text-white border-teal-600'
-                    : 'bg-gray-50 border-gray-200 text-gray-600'
-                }`}
-              >
-                {code}
-              </button>
-            ))}
-          </div>
-          <input className={inputCls} value={form.emergencyShortCode} onChange={(e) => set('emergencyShortCode', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="999, 112, 997" maxLength={5} />
-          <p className="text-xs text-gray-400 mt-1">Short dial code (2–5 digits). Required if no full hotline.</p>
-        </Field>
-        <Field label="Emergency Hotline (full number)" error={errors.emergencyHotline}>
-          <input className={inputCls} value={form.emergencyHotline} onChange={(e) => set('emergencyHotline', e.target.value)} placeholder="+252 61 000 0000 (optional if short code set)" />
         </Field>
         <Field label="Email" required error={errors.email}>
           <input type="email" className={inputCls} value={form.email} onChange={(e) => set('email', e.target.value)} />
         </Field>
-        <Field label="Website">
-          <input className={inputCls} value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" />
-        </Field>
-      </SectionCard>
-
-      <SectionCard title="Emergency Eligibility" icon={HeartPulse}>
-        <div className="md:col-span-2 flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-950/30">
-          <div>
-            <p className="font-bold text-sm text-gray-900 dark:text-white">Accept Emergency Cases</p>
-            <p className="text-xs text-gray-500 mt-0.5">When disabled, hospital is hidden from emergency assignment lists</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.acceptEmergencyCases}
-            onClick={() => set('acceptEmergencyCases', !form.acceptEmergencyCases)}
-            className={`relative w-12 h-7 rounded-full transition-colors ${form.acceptEmergencyCases ? 'bg-teal-600' : 'bg-gray-300 dark:bg-gray-600'}`}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${form.acceptEmergencyCases ? 'translate-x-5' : ''}`} />
-          </button>
-        </div>
-      </SectionCard>
-
-      <section className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3 bg-gray-50/80 dark:bg-gray-950/50">
-          <div className="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-950 flex items-center justify-center">
-            <HeartPulse className="w-4 h-4 text-teal-700 dark:text-teal-300" />
-          </div>
-          <h2 className="text-sm font-black uppercase tracking-widest text-gray-700 dark:text-gray-200">Medical Capability Tags</h2>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {MEDICAL_CAPABILITIES.map((cap) => (
-              <label key={cap} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-950/50">
-                <input
-                  type="checkbox"
-                  checked={form.medicalCapabilities.includes(cap)}
-                  onChange={() => toggleCapability(cap)}
-                  className="w-4 h-4 rounded accent-teal-600"
-                />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{cap}</span>
-              </label>
+        <Field label="Emergency Short Code" error={errors.emergencyShortCode}>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {COMMON_EMERGENCY_SHORT_CODES.map((code) => (
+              <button key={code} type="button" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700" onClick={() => set('emergencyShortCode', code)}>
+                {code}
+              </button>
             ))}
           </div>
-          {errors.medicalCapabilities && <p className="text-xs text-red-600 mt-3">{errors.medicalCapabilities}</p>}
-        </div>
-      </section>
-
-      <SectionCard title="Capacity Information" icon={Settings2}>
-        <Field label="Emergency Beds"><input type="number" className={inputCls} value={form.emergencyBeds} onChange={(e) => set('emergencyBeds', e.target.value)} /></Field>
-        <Field label="ICU Beds"><input type="number" className={inputCls} value={form.icuTotalBeds} onChange={(e) => set('icuTotalBeds', e.target.value)} /></Field>
-        <Field label="Total Beds"><input type="number" className={inputCls} value={form.beds} onChange={(e) => set('beds', e.target.value)} /></Field>
-        <Field label="Operating Rooms"><input type="number" className={inputCls} value={form.operatingRooms} onChange={(e) => set('operatingRooms', e.target.value)} /></Field>
-        <Field label="Current Capacity Status" className="md:col-span-2">
-          <select className={inputCls} value={form.capacityStatus} onChange={(e) => set('capacityStatus', e.target.value)}>
-            {['Available', 'Limited Capacity', 'Full Capacity'].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <input className={inputCls} value={form.emergencyShortCode} onChange={(e) => set('emergencyShortCode', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="999" />
         </Field>
-      </SectionCard>
-
-      <SectionCard title="Operational Settings" icon={Settings2}>
-        <Field label="Operational Status" required className="md:col-span-2">
+        <Field label="Emergency Hotline" error={errors.emergencyHotline}>
+          <input className={inputCls} value={form.emergencyHotline} onChange={(e) => set('emergencyHotline', e.target.value)} placeholder="+252 ..." />
+        </Field>
+        <Field label="Status" className="md:col-span-2">
           <div className="flex flex-wrap gap-3">
             {CREATE_OPERATIONAL_STATUSES.map((s) => (
-              <label key={s} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer text-sm font-bold transition-colors ${form.operationalStatus === s ? 'border-teal-600 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200' : 'border-gray-200 dark:border-gray-700 text-gray-600'}`}>
-                <input type="radio" name="operationalStatus" value={s} checked={form.operationalStatus === s} onChange={() => set('operationalStatus', s)} className="accent-teal-600" />
+              <label key={s} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border cursor-pointer text-sm font-bold ${form.operationalStatus === s ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-gray-200 text-gray-600'}`}>
+                <input type="radio" checked={form.operationalStatus === s} onChange={() => set('operationalStatus', s)} />
                 {s}
               </label>
             ))}
           </div>
         </Field>
-        {[
-          ['available24_7', 'Available 24/7'],
-          ['acceptAmbulanceTransfers', 'Accept Ambulance Transfers'],
-        ].map(([key, label]) => (
-          <label key={key} className="md:col-span-2 flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={form[key as keyof CreateHospitalFormData] as boolean} onChange={(e) => set(key as keyof CreateHospitalFormData, e.target.checked as any)} />
-            {label}
-          </label>
-        ))}
       </SectionCard>
 
-      <SectionCard title="Hospital Portal Account" icon={Settings2}>
-        <Field label="Username" required error={errors.accountUsername}><input className={inputCls} value={form.accountUsername} onChange={(e) => set('accountUsername', e.target.value)} /></Field>
-        <Field label="Email Login" required error={errors.accountEmail}><input type="email" className={inputCls} value={form.accountEmail} onChange={(e) => set('accountEmail', e.target.value)} /></Field>
-        <Field label="Temporary Password" required error={errors.accountPassword}><input type="password" className={inputCls} value={form.accountPassword} onChange={(e) => set('accountPassword', e.target.value)} /></Field>
-        <Field label="Confirm Password" required error={errors.accountPasswordConfirm}><input type="password" className={inputCls} value={form.accountPasswordConfirm} onChange={(e) => set('accountPasswordConfirm', e.target.value)} /></Field>
-        <Field label="Account Status">
-          <select className={inputCls} value={form.accountStatus} onChange={(e) => set('accountStatus', e.target.value)}>
-            {['Active', 'Suspended', 'Pending Activation'].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </Field>
-        <label className="md:col-span-2 flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" checked={form.forcePasswordChange} onChange={(e) => set('forcePasswordChange', e.target.checked)} />
-          Force password change on first login
-        </label>
-      </SectionCard>
+      <section className="bg-white dark:bg-gray-900 rounded-2xl border shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50/80">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center">
+              <GitBranch className="w-4 h-4 text-teal-700" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-gray-700">Branches & Locations</h2>
+              <p className="text-xs text-gray-500">Used when dispatchers select destination hospital and branch</p>
+            </div>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => set('branches', [...form.branches, emptyBranch()])}>
+            <Plus className="w-4 h-4 mr-1" /> Add branch
+          </Button>
+        </div>
+        {errors.branches && <p className="px-6 pt-4 text-xs text-red-600">{errors.branches}</p>}
+        <div className="p-6 space-y-6">
+          {form.branches.map((branch, index) => {
+            const branchDistricts = districts.filter((d) => d.regionId === branch.regionId)
+            const prefix = `branch_${index}_`
+            return (
+              <div key={branch.id} className="rounded-xl border border-gray-200 p-4 space-y-4 bg-gray-50/50">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-black text-gray-800">Branch {index + 1}</p>
+                  {form.branches.length > 1 && (
+                    <button type="button" className="text-red-600 p-1" onClick={() => set('branches', form.branches.filter((_, i) => i !== index))}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Field label="Branch Name" required error={errors[`${prefix}name`]}>
+                    <input className={inputCls} value={branch.name} onChange={(e) => updateBranch(index, { name: e.target.value })} placeholder="e.g. Hodan Branch" />
+                  </Field>
+                  <Field label="Branch Email" required error={errors[`${prefix}email`]}>
+                    <input type="email" className={inputCls} value={branch.email} onChange={(e) => updateBranch(index, { email: e.target.value })} />
+                  </Field>
+                  <Field label="Region" required error={errors[`${prefix}regionId`]}>
+                    <select className={inputCls} value={branch.regionId} onChange={(e) => updateBranch(index, { regionId: e.target.value, districtId: '' })}>
+                      <option value="">Select region</option>
+                      {regions.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="District" required error={errors[`${prefix}districtId`]}>
+                    <select className={inputCls} value={branch.districtId} onChange={(e) => updateBranch(index, { districtId: e.target.value })} disabled={!branch.regionId}>
+                      <option value="">Select district</option>
+                      {branchDistricts.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Address" required error={errors[`${prefix}address`]} className="md:col-span-2">
+                    <input className={inputCls} value={branch.address} onChange={(e) => updateBranch(index, { address: e.target.value })} />
+                  </Field>
+                  <Field label="Phone" required error={errors[`${prefix}primaryPhone`]}>
+                    <input className={inputCls} value={branch.primaryPhone} onChange={(e) => updateBranch(index, { primaryPhone: e.target.value })} />
+                  </Field>
+                  <Field label="Hotline / Short Code" error={errors[`${prefix}emergencyShortCode`] || errors[`${prefix}emergencyHotline`]}>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input className={inputCls} value={branch.emergencyShortCode} onChange={(e) => updateBranch(index, { emergencyShortCode: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="999" />
+                      <input className={inputCls} value={branch.emergencyHotline} onChange={(e) => updateBranch(index, { emergencyHotline: e.target.value })} placeholder="Full hotline" />
+                    </div>
+                  </Field>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
 
       <div className="flex justify-end pb-8">
         <Button type="submit" disabled={loading} className="rounded-xl font-bold h-11 px-8">
           {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Register Hospital
+          Save Hospital
         </Button>
       </div>
     </form>

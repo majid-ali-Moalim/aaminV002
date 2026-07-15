@@ -149,25 +149,53 @@ export class HospitalCoordinationService {
     hospitalType?: string;
     status?: string;
     isActive?: boolean;
+    assignedCasesOnly?: boolean;
   }) {
-    const where: Prisma.HospitalWhereInput = {};
-    if (filters?.regionId) where.regionId = filters.regionId;
-    if (filters?.districtId) where.districtId = filters.districtId;
-    if (filters?.hospitalType) where.hospitalType = filters.hospitalType;
-    if (filters?.status) where.availabilityStatus = filters.status;
-    if (filters?.isActive !== undefined) where.isActive = filters.isActive;
+    const and: Prisma.HospitalWhereInput[] = [];
+    if (filters?.regionId) and.push({ regionId: filters.regionId });
+    if (filters?.districtId) and.push({ districtId: filters.districtId });
+    if (filters?.hospitalType) and.push({ hospitalType: filters.hospitalType });
+    if (filters?.status) and.push({ availabilityStatus: filters.status });
+    if (filters?.isActive !== undefined) and.push({ isActive: filters.isActive });
+    if (filters?.assignedCasesOnly) {
+      and.push({
+        OR: [
+          { coordinationCases: { some: { deletedAt: null } } },
+          { requests: { some: { destinationHospitalId: { not: null } } } },
+        ],
+      });
+    }
     if (filters?.search?.trim()) {
-      where.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { hospitalCode: { contains: filters.search, mode: 'insensitive' } },
-      ];
+      const q = filters.search.trim();
+      and.push({
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { hospitalCode: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
 
-    return this.prisma.hospital.findMany({
+    const where: Prisma.HospitalWhereInput = and.length ? { AND: and } : {};
+
+    const rows = await this.prisma.hospital.findMany({
       where,
-      include: { region: true, district: true },
+      include: {
+        region: true,
+        district: true,
+        _count: {
+          select: {
+            coordinationCases: { where: { deletedAt: null } },
+            requests: { where: { destinationHospitalId: { not: null } } },
+          },
+        },
+      },
       orderBy: { name: 'asc' },
     });
+
+    return rows.map(({ _count, ...h }) => ({
+      ...h,
+      assignedCaseCount: _count.coordinationCases + _count.requests,
+    }));
   }
 
   async updateAvailability(
@@ -252,6 +280,99 @@ export class HospitalCoordinationService {
   }
 
   async listCases(filters: {
+    stage?: HospitalCaseStage;
+    status?: HospitalCaseStatus | HospitalCaseStatus[];
+    hospitalId?: string;
+    search?: string;
+    regionId?: string;
+    districtId?: string;
+  }) {
+    const rows = await this.listCasesRaw(filters);
+    return this.enrichCasesWithCoordinationContext(rows);
+  }
+
+  private refusalReasonLabel(reason?: string | null) {
+    if (!reason) return 'Not specified';
+    return reason.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  private async enrichCasesWithCoordinationContext(
+    cases: Awaited<ReturnType<HospitalCoordinationService['listCasesRaw']>>,
+  ) {
+    if (!cases.length) return [];
+
+    const requestIds = [...new Set(cases.map((c) => c.emergencyRequestId))];
+    const timeline = await this.prisma.hospitalCoordinationCase.findMany({
+      where: { emergencyRequestId: { in: requestIds }, deletedAt: null },
+      include: { hospital: { include: { region: true, district: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const byRequest = new Map<string, typeof timeline>();
+    for (const row of timeline) {
+      const list = byRequest.get(row.emergencyRequestId) ?? [];
+      list.push(row);
+      byRequest.set(row.emergencyRequestId, list);
+    }
+
+    return cases.map((c) => {
+      const history = byRequest.get(c.emergencyRequestId) ?? [];
+      const rejectedHospitals = history
+        .filter((h) => h.stage === 'REFUSED')
+        .map((h) => ({
+          hospitalId: h.hospitalId,
+          hospitalName: h.hospital?.name ?? '—',
+          branchName: c.emergencyRequest?.destinationHospitalBranchName ?? null,
+          refusalReason: this.refusalReasonLabel(h.refusalReason),
+          refusalReasonCode: h.refusalReason,
+          refusalNotes: h.refusalNotes,
+          rejectedAt: h.updatedAt,
+        }));
+      const acceptedEntry =
+        history.find((h) => h.stage === 'ACCEPTED' || h.status === 'ACCEPTED') ?? null;
+      const nurseRecord = c.emergencyRequest?.patientCareRecords?.[0];
+      const nurseName = nurseRecord?.nurse
+        ? `${nurseRecord.nurse.firstName ?? ''} ${nurseRecord.nurse.lastName ?? ''}`.trim()
+        : c.emergencyRequest?.nurse
+          ? `${c.emergencyRequest.nurse.firstName ?? ''} ${c.emergencyRequest.nurse.lastName ?? ''}`.trim()
+          : null;
+
+      return {
+        ...c,
+        acceptedHospital: acceptedEntry
+          ? {
+              hospitalId: acceptedEntry.hospitalId,
+              hospitalName: acceptedEntry.hospital?.name ?? c.hospital?.name,
+              receivingStaffName: acceptedEntry.receivingStaffName,
+              handoverCompletedAt: acceptedEntry.handoverCompletedAt,
+              acceptedAt: acceptedEntry.updatedAt,
+            }
+          : c.stage === 'ACCEPTED'
+            ? {
+                hospitalId: c.hospitalId,
+                hospitalName: c.hospital?.name,
+                receivingStaffName: c.receivingStaffName,
+                handoverCompletedAt: c.handoverCompletedAt,
+                acceptedAt: c.updatedAt,
+              }
+            : null,
+        rejectedHospitals,
+        nurseHandover: nurseRecord
+          ? {
+              nurseName,
+              interventions: nurseRecord.treatmentGiven,
+              notes: nurseRecord.clinicalNotes ?? nurseRecord.treatmentGiven,
+              recordedAt: nurseRecord.createdAt,
+            }
+          : nurseName
+            ? { nurseName, notes: c.notes, recordedAt: c.handoverCompletedAt ?? c.updatedAt }
+            : null,
+        destinationBranchName: c.emergencyRequest?.destinationHospitalBranchName ?? null,
+      };
+    });
+  }
+
+  private async listCasesRaw(filters: {
     stage?: HospitalCaseStage;
     status?: HospitalCaseStatus | HospitalCaseStatus[];
     hospitalId?: string;

@@ -7,7 +7,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, Role } from '@prisma/client';
 import { CreateHospitalDto } from './create-hospital.dto';
+import { RegisterHospitalInfoDto } from './register-hospital-info.dto';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class HospitalsService {
@@ -55,6 +57,96 @@ export class HospitalsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async createHospitalInfo(dto: RegisterHospitalInfoDto) {
+    const name = dto.name.trim();
+    const primaryPhone = dto.primaryPhone.trim();
+
+    const [nameExists, phoneExists] = await Promise.all([
+      this.prisma.hospital.findUnique({ where: { name } }),
+      this.prisma.hospital.findUnique({ where: { primaryPhone } }),
+    ]);
+
+    if (nameExists) throw new ConflictException('Hospital name already exists');
+    if (phoneExists) throw new ConflictException('Primary phone number already registered');
+
+    const emergencyShortCode = dto.emergencyShortCode?.trim() || null;
+    const emergencyHotline = dto.emergencyHotline?.trim() || null;
+    if (!emergencyShortCode && !emergencyHotline) {
+      throw new BadRequestException(
+        'Provide an emergency short code (e.g. 999) and/or a full emergency hotline number',
+      );
+    }
+    const emergencyContact = emergencyHotline || emergencyShortCode!;
+
+    const branches =
+      dto.branches?.length > 0
+        ? dto.branches.map((b) => ({
+            id: b.id || randomUUID(),
+            name: b.name.trim(),
+            regionId: b.regionId,
+            districtId: b.districtId,
+            address: b.address.trim(),
+            email: b.email.trim(),
+            primaryPhone: b.primaryPhone.trim(),
+            emergencyShortCode: b.emergencyShortCode?.trim() || null,
+            emergencyHotline: b.emergencyHotline?.trim() || null,
+          }))
+        : [
+            {
+              id: randomUUID(),
+              name: `${name} — Main Branch`,
+              regionId: dto.regionId,
+              districtId: dto.districtId,
+              address: dto.address.trim(),
+              email: dto.email.trim(),
+              primaryPhone,
+              emergencyShortCode,
+              emergencyHotline,
+            },
+          ];
+
+    const hospitalCode = await this.nextHospitalCode();
+    const operationalStatus = dto.operationalStatus || 'Active';
+    const isActive = operationalStatus === 'Active';
+
+    return this.prisma.hospital.create({
+      data: {
+        hospitalCode,
+        name,
+        hospitalType: dto.hospitalType,
+        ownershipType: dto.ownershipType,
+        regionId: dto.regionId,
+        districtId: dto.districtId,
+        address: dto.address.trim(),
+        contactPersonName: dto.contactPersonName.trim(),
+        contactPersonRole: dto.contactPersonRole.trim(),
+        primaryPhone,
+        secondaryPhone: dto.secondaryPhone?.trim() || null,
+        emergencyShortCode,
+        emergencyHotline,
+        emergencyContact,
+        email: dto.email.trim(),
+        website: dto.website?.trim() || null,
+        acceptEmergencyCases: dto.acceptEmergencyCases ?? true,
+        medicalCapabilities: dto.medicalCapabilities?.length ? dto.medicalCapabilities : ['General Care'],
+        capacityStatus: dto.capacityStatus || 'Available',
+        availabilityStatus: dto.capacityStatus || 'Available',
+        operationalStatus,
+        status: dto.capacityStatus || 'Available',
+        isActive,
+        erReady: dto.acceptEmergencyCases ?? true,
+        branches: branches as Prisma.InputJsonValue,
+      },
+      include: { region: true, district: true },
+    });
+  }
+
+  parseBranches(hospital: { branches?: unknown }) {
+    if (!hospital.branches) return [];
+    if (Array.isArray(hospital.branches)) return hospital.branches;
+    return [];
   }
 
   async findOne(id: string) {

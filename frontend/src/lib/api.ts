@@ -1257,6 +1257,13 @@ export const employeeAttendanceService = {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/shifts')
   },
+  assignEmployeeShift: async (employeeId: string, shiftCode: 'DAY' | 'NIGHT') => {
+    const api = new ApiService()
+    return await api.patch('/api/employee-attendance/shifts/assign-employee', {
+      employeeId,
+      shiftCode,
+    })
+  },
   getApprovals: async (status?: string) => {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/approvals', { params: { status } })
@@ -1285,6 +1292,14 @@ export const employeeAttendanceService = {
     const api = new ApiService()
     return await api.get('/api/employee-attendance/analytics', { params })
   },
+  getScores: async (params?: { startDate?: string; endDate?: string; role?: string }) => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/scores', { params })
+  },
+  getTodayPresence: async () => {
+    const api = new ApiService()
+    return await api.get('/api/employee-attendance/today-presence')
+  },
   getRoleMonitoring: async (roleKey: string) => {
     const api = new ApiService()
     return await api.get(`/api/employee-attendance/roles/${roleKey}`)
@@ -1292,6 +1307,15 @@ export const employeeAttendanceService = {
   updateRecord: async (id: string, data: Record<string, unknown>) => {
     const api = new ApiService()
     return await api.patch(`/api/employee-attendance/records/${id}`, data)
+  },
+  markAttendance: async (data: {
+    employeeId: string
+    date?: string
+    action: 'present' | 'absent'
+    checkIn?: string
+  }) => {
+    const api = new ApiService()
+    return await api.post('/api/employee-attendance/mark', data)
   },
   exportReport: async (body: { type: string; startDate?: string; endDate?: string }) => {
     const api = new ApiService()
@@ -1384,6 +1408,10 @@ export const hospitalsService = {
   createHospital: async (data: Record<string, unknown>) => {
     const api = new ApiService()
     return await api.post<any>('/api/hospitals/create', data)
+  },
+  registerHospital: async (data: Record<string, unknown>) => {
+    const api = new ApiService()
+    return await api.post<any>('/api/hospitals/register', data)
   },
   create: async (data: any) => {
     const api = new ApiService()

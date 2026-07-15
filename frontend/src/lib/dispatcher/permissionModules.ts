@@ -32,8 +32,6 @@ export const PERMISSION_ACTION_LINKS: Record<string, { href: string; label: stri
   'nurse.create': { href: '/dispatcher/add-nurse', label: 'Register new nurse' },
   'case.create': { href: '/dispatcher/emergency-requests/new', label: 'Create emergency case' },
   'dispatch.board': { href: '/dispatcher/emergency-requests/pending', label: 'Open dispatch board' },
-  'report.view': { href: '/dispatcher/reports/emergency', label: 'View reports' },
-  'report.kpi': { href: '/dispatcher/reports/performance', label: 'KPI dashboard' },
   'hospital.manage': { href: '/dispatcher/hospital/hospitals', label: 'Manage hospitals' },
   'employee.attendance': { href: '/dispatcher/permissions/attendance', label: 'Attendance' },
 }
@@ -63,18 +61,6 @@ export const GRANTED_SIDEBAR_UNLOCKS: GrantedSidebarUnlock[] = [
       defaultSlug: 'register',
       standalone: true,
       items: [{ slug: 'register', label: 'Register Nurse', icon: Stethoscope, exact: true }],
-    },
-  },
-  {
-    permissionKey: 'report.kpi',
-    module: {
-      id: 'reports' as NavModule['id'],
-      label: 'Advanced Analytics',
-      icon: BarChart2,
-      basePath: '/dispatcher/reports',
-      description: 'KPI and performance analytics',
-      defaultSlug: 'performance',
-      items: [{ slug: 'performance', label: 'Performance KPIs', icon: BarChart2 }],
     },
   },
   {

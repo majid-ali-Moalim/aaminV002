@@ -56,6 +56,7 @@ import {
   ADMIN_STAFF_STATUS_OPTIONS,
   mapStaffShiftStatus,
 } from '@/lib/staff/status'
+import { EMPLOYMENT_SHIFT_OPTIONS, shiftTimesForEmploymentType } from '@/lib/employment/shiftTypes'
 import {
   SOMALIA_DRIVER_LICENSE_CLASSES,
   SOMALIA_LICENSE_NUMBER_HINT,
@@ -165,7 +166,7 @@ export default function AddDriverForm({
     relationship: '',
     employeeCode: '',
     departmentId: '',
-    employmentType: 'Full-time',
+    employmentType: 'Day time',
     joinDate: new Date().toISOString().split('T')[0],
     shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
@@ -408,6 +409,8 @@ export default function AddDriverForm({
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
+    const shift = shiftTimesForEmploymentType(form.employmentType)
+
     return {
       role: 'EMPLOYEE' as const,
       username: form.username.trim(),
@@ -438,7 +441,8 @@ export default function AddDriverForm({
       licenseStatus: 'VALID',
       medicalFitness: 'FIT',
       employmentDate: form.joinDate || undefined,
-      defaultShift: form.employmentType,
+      defaultShift: shift.defaultShift,
+      typicalStartTime: shift.typicalStartTime,
       assignedAmbulanceId: form.assignedAmbulanceId || undefined,
       shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
@@ -564,7 +568,7 @@ export default function AddDriverForm({
                     relationship: '',
                     employeeCode: driverCode,
                     departmentId: form.departmentId,
-                    employmentType: 'Full-time',
+                    employmentType: 'Day time',
                     joinDate: new Date().toISOString().split('T')[0],
                     shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
@@ -917,11 +921,8 @@ export default function AddDriverForm({
                       />
                       <FormSelect
                         label="Employment Type"
-                        options={[
-                          { id: 'Full-time', label: 'Full-time' },
-                          { id: 'Part-time', label: 'Part-time' },
-                          { id: 'Contract', label: 'Contract' },
-                        ]}
+                        required
+                        options={EMPLOYMENT_SHIFT_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
                         value={form.employmentType}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           patch({ employmentType: e.target.value })

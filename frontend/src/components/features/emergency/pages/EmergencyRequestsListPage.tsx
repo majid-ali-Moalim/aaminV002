@@ -200,13 +200,16 @@ export default function EmergencyRequestsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { label: 'Total Cases', value: stats.total, color: 'blue' },
-            { label: 'Active', value: stats.active, color: 'emerald' },
+            { label: 'Active Cases', value: stats.active, color: 'emerald', hint: 'Assigned & ongoing' },
             { label: 'Pending', value: stats.pending, color: 'amber' },
             { label: 'Critical', value: stats.critical, color: 'red' },
           ].map((item) => (
             <div key={item.label} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{item.label}</p>
+                {'hint' in item && item.hint ? (
+                  <p className="text-[10px] font-semibold text-slate-400 mb-1">{item.hint}</p>
+                ) : null}
                 <p className="text-3xl font-black text-slate-900">{item.value}</p>
               </div>
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -216,7 +219,7 @@ export default function EmergencyRequestsPage() {
                 'bg-red-50 text-red-600'
               }`}>
                 {item.label === 'Total Cases' && <Truck className="w-6 h-6" />}
-                {item.label === 'Active' && <RefreshCw className="w-6 h-6" />}
+                {item.label === 'Active Cases' && <RefreshCw className="w-6 h-6" />}
                 {item.label === 'Pending' && <Clock className="w-6 h-6" />}
                 {item.label === 'Critical' && <AlertTriangle className="w-6 h-6" />}
               </div>

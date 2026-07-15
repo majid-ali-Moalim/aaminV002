@@ -81,18 +81,16 @@ const dispatchCenterOperationsSubMenu = [
 const hospitalCoordinationSubMenu = [
   { href: '/admin/hospitals', label: 'All Hospitals', icon: Building2, exact: true },
   { href: '/admin/hospitals/create', label: 'Create Hospital', icon: PlusCircle },
-  { href: '/admin/hospitals/availability', label: 'Hospital Availability', icon: Activity },
-  { href: '/admin/hospitals/incoming', label: 'Incoming Cases', icon: ListTodo },
-  { href: '/admin/hospitals/handover', label: 'Handover Queue', icon: Clock },
   { href: '/admin/hospitals/accepted', label: 'Accepted Cases', icon: ShieldCheck },
-  { href: '/admin/hospitals/refused', label: 'Refused / Full Cases', icon: XCircle },
-  { href: '/admin/hospitals/analytics', label: 'Hospital Performance Analytics', icon: BarChart2 },
+  { href: '/admin/hospitals/refused', label: 'Rejected Cases', icon: XCircle },
+  { href: '/admin/hospitals/analytics', label: 'Hospital Performance', icon: BarChart2 },
 ]
 
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
   { href: '/admin/employees/shifts', label: 'Shift Management', icon: Calendar },
   { href: '/admin/employees/attendance', label: 'Attendance Management', icon: Clock },
+  { href: '/admin/employees/attendance/scores', label: 'Attendance Scores', icon: BarChart2 },
 ]
 
 const analyticsSubMenu = [

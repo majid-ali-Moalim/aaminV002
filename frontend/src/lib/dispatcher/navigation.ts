@@ -32,7 +32,6 @@ export type DispatcherModuleId =
   | 'hospital'
   | 'monitoring'
   | 'alerts'
-  | 'reports'
   | 'permissions'
   | 'profile'
   | 'driver-registration'
@@ -90,16 +89,13 @@ export const DISPATCHER_MODULES: NavModule[] = [
     label: 'Resource Operations',
     icon: Truck,
     basePath: '/dispatcher/resources',
-    description: 'Ambulances, drivers, nurses, and availability',
-    defaultSlug: 'ambulances',
+    description: 'Ambulance, driver, and nurse availability for dispatch',
+    defaultSlug: 'ambulance-availability',
     items: [
-      { slug: 'ambulances', label: 'Ambulances', icon: Truck },
-      { slug: 'drivers', label: 'Drivers', icon: Users },
-      { slug: 'nurses', label: 'Nurses', icon: Stethoscope },
-      { slug: 'ambulance-availability', label: 'Ambulance Availability', icon: Activity },
+      { slug: 'ambulance-availability', label: 'Ambulance Availability', icon: Truck },
       { slug: 'driver-availability', label: 'Driver Availability', icon: Users },
       { slug: 'nurse-availability', label: 'Nurse Availability', icon: Stethoscope },
-      { slug: 'hospital-availability', label: 'Hospital Availability', icon: Building2 },
+      { slug: 'resource-status', label: 'Resource Status', icon: Activity },
     ],
   },
   {
@@ -144,20 +140,6 @@ export const DISPATCHER_MODULES: NavModule[] = [
       { slug: 'hospital', label: 'Hospital', icon: Building2 },
       { slug: 'resource', label: 'Resource', icon: Truck },
       { slug: 'system', label: 'System', icon: Activity },
-    ],
-  },
-  {
-    id: 'reports',
-    label: 'Reports & Analytics',
-    icon: BarChart2,
-    basePath: '/dispatcher/reports',
-    description: 'KPIs, charts, and exportable reports',
-    defaultSlug: 'emergency',
-    items: [
-      { slug: 'emergency', label: 'Emergency Reports', icon: Siren },
-      { slug: 'dispatch', label: 'Dispatch Reports', icon: Radio },
-      { slug: 'hospital', label: 'Hospital Reports', icon: Building2 },
-      { slug: 'performance', label: 'Performance Reports', icon: BarChart2 },
     ],
   },
   {
@@ -246,14 +228,10 @@ export const HOSPITAL_VIEW_API: Record<string, string> = {
 }
 
 export const RESOURCE_VIEW_API: Record<string, string> = {
-  ambulances: 'all',
-  drivers: 'drivers',
-  nurses: 'nurses',
-  availability: 'available',
   'ambulance-availability': 'available',
   'driver-availability': 'drivers-available',
   'nurse-availability': 'nurses-available',
-  'hospital-availability': 'capacity',
+  'resource-status': 'all',
 }
 
 export const MONITORING_VIEW_API: Record<string, string> = {
@@ -282,10 +260,21 @@ export const LEGACY_DISPATCHER_REDIRECTS: Record<string, string> = {
   '/dispatcher/emergency/pending': '/dispatcher/emergency-requests/pending',
   '/dispatcher/emergency/active': '/dispatcher/emergency-requests/active',
   '/dispatcher/emergency/closed': '/dispatcher/emergency-requests/completed',
-  '/dispatcher/fleet': '/dispatcher/resources/ambulances',
-  '/dispatcher/ambulances': '/dispatcher/resources/ambulances',
-  '/dispatcher/staff': '/dispatcher/resources/drivers',
-  '/dispatcher/crew': '/dispatcher/resources/drivers',
+  '/dispatcher/fleet': '/dispatcher/resources/ambulance-availability',
+  '/dispatcher/ambulances': '/dispatcher/resources/ambulance-availability',
+  '/dispatcher/staff': '/dispatcher/resources/driver-availability',
+  '/dispatcher/crew': '/dispatcher/resources/driver-availability',
+  '/dispatcher/resources': '/dispatcher/resources/ambulance-availability',
+  '/dispatcher/resources/ambulances': '/dispatcher/resources/ambulance-availability',
+  '/dispatcher/resources/drivers': '/dispatcher/resources/driver-availability',
+  '/dispatcher/resources/nurses': '/dispatcher/resources/nurse-availability',
+  '/dispatcher/resources/availability': '/dispatcher/resources/ambulance-availability',
+  '/dispatcher/monitoring/resources': '/dispatcher/resources/resource-status',
+  '/dispatcher/reports': '/dispatcher/dashboard',
+  '/dispatcher/reports/emergency': '/dispatcher/dashboard',
+  '/dispatcher/reports/dispatch': '/dispatcher/dashboard',
+  '/dispatcher/reports/hospital': '/dispatcher/dashboard',
+  '/dispatcher/reports/performance': '/dispatcher/dashboard',
   '/dispatcher/map': '/dispatcher/monitoring/missions',
   '/dispatcher/tracking': '/dispatcher/monitoring/missions',
   '/dispatcher/incidents': '/dispatcher/monitoring/incidents',

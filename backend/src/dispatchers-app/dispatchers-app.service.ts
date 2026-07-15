@@ -18,6 +18,10 @@ import {
   dispatcherCaseNotificationWhere,
   dispatcherRelevantCasesWhere,
 } from './dispatcher-scope.util';
+import {
+  filterDispatchEligibleEmployees,
+  getPresentEmployeeIdsToday,
+} from '../employee-attendance/dispatch-staff-eligibility';
 
 const ACTIVE_MISSION_STATUSES: EmergencyRequestStatus[] = [
   'REVIEWING',
@@ -1048,7 +1052,7 @@ export class DispatchersAppService {
       where: { name: { contains: 'Nurse', mode: 'insensitive' } },
     });
 
-    const [ambulances, drivers, nurses] = await Promise.all([
+    const [ambulances, driversRaw, nursesRaw, presentIds] = await Promise.all([
       this.prisma.ambulance.findMany({
         where: {
           ...regionalAmbulanceWhere(scope),
@@ -1081,7 +1085,11 @@ export class DispatchersAppService {
             include: { assignedAmbulance: { include: { equipmentLevel: true } } },
           })
         : [],
+      getPresentEmployeeIdsToday(this.prisma),
     ]);
+
+    const drivers = filterDispatchEligibleEmployees(driversRaw, presentIds);
+    const nurses = filterDispatchEligibleEmployees(nursesRaw, presentIds);
 
     return { ambulances, drivers, nurses, region: scope.regionName };
   }

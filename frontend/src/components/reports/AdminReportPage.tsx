@@ -19,6 +19,7 @@ import {
   type AdminReportFilterOptions,
 } from '@/lib/reports/adminReportsApi'
 import { downloadMultiReportPdf, downloadReportPdf } from '@/lib/reports/exportPdf'
+import toast from 'react-hot-toast'
 
 type SummaryItem = {
   label: string
@@ -159,6 +160,7 @@ export default function AdminReportPage({ type }: { type: string }) {
   const [report, setReport] = useState<ReportData | null>(null)
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
     getAdminReportFilterOptions().then(setFilterOptions).catch(() => {})
@@ -231,53 +233,77 @@ export default function AdminReportPage({ type }: { type: string }) {
     downloadText(`${name}-${range}.json`, JSON.stringify(data, null, 2), 'application/json')
   }
 
-  const downloadPdf = () => {
-    if (!report?.table) return
-    downloadReportPdf(
-      {
-        title: report.title,
-        subtitle: report.subtitle,
-        periodLabel: report.period?.label,
-        summary: report.summary,
-        table: {
-          ...report.table,
-          rows: visibleRows,
+  const downloadPdf = async () => {
+    if (!report?.table || pdfExporting) return
+    setPdfExporting(true)
+    try {
+      await downloadReportPdf(
+        {
+          title: report.title,
+          subtitle: report.subtitle,
+          periodLabel: report.period?.label,
+          summary: report.summary,
+          table: {
+            ...report.table,
+            rows: visibleRows,
+          },
+          secondaryTable: report.secondaryTable
+            ? { ...report.secondaryTable }
+            : undefined,
         },
-        secondaryTable: report.secondaryTable
-          ? { ...report.secondaryTable }
-          : undefined,
-      },
-      `${type}-${range}.pdf`,
-    )
+        `${type}-${range}.pdf`,
+      )
+      toast.success('PDF report downloaded')
+    } catch {
+      toast.error('Failed to generate PDF')
+    } finally {
+      setPdfExporting(false)
+    }
   }
 
-  const downloadExportBundlePdf = (key: string) => {
+  const downloadExportBundlePdf = async (key: string) => {
     const child = report?.reports?.[key]
-    if (!child?.table) return
-    downloadReportPdf(
-      {
-        title: child.title,
-        subtitle: child.subtitle,
-        periodLabel: child.period?.label,
-        summary: child.summary,
-        table: child.table,
-        secondaryTable: child.secondaryTable,
-      },
-      `${key}-${range}.pdf`,
-    )
+    if (!child?.table || pdfExporting) return
+    setPdfExporting(true)
+    try {
+      await downloadReportPdf(
+        {
+          title: child.title,
+          subtitle: child.subtitle,
+          periodLabel: child.period?.label,
+          summary: child.summary,
+          table: child.table,
+          secondaryTable: child.secondaryTable,
+        },
+        `${key}-${range}.pdf`,
+      )
+      toast.success('PDF report downloaded')
+    } catch {
+      toast.error('Failed to generate PDF')
+    } finally {
+      setPdfExporting(false)
+    }
   }
 
-  const downloadAllExportPdf = () => {
-    if (!report?.reports) return
-    const tables = Object.values(report.reports)
-      .filter((r) => r.table)
-      .map((r) => r.table!)
-    downloadMultiReportPdf(
-      'Aamin EMS — Full Analytics Export',
-      report.period?.label ?? range,
-      tables,
-      `all-reports-${range}.pdf`,
-    )
+  const downloadAllExportPdf = async () => {
+    if (!report?.reports || pdfExporting) return
+    setPdfExporting(true)
+    try {
+      const tables = Object.values(report.reports)
+        .filter((r) => r.table)
+        .map((r) => r.table!)
+      await downloadMultiReportPdf(
+        'Aamin EMS — Full Analytics Export',
+        report.period?.label ?? range,
+        tables,
+        `all-reports-${range}.pdf`,
+      )
+      toast.success('Combined PDF export downloaded')
+    } catch {
+      toast.error('Failed to generate PDF')
+    } finally {
+      setPdfExporting(false)
+    }
   }
 
   return (
@@ -327,10 +353,10 @@ export default function AdminReportPage({ type }: { type: string }) {
             <button
               type="button"
               onClick={downloadPdf}
-              disabled={!report?.table}
+              disabled={!report?.table || pdfExporting}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Download className="h-4 w-4" />
+              {pdfExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               PDF
             </button>
             <button
@@ -346,10 +372,10 @@ export default function AdminReportPage({ type }: { type: string }) {
               <button
                 type="button"
                 onClick={downloadAllExportPdf}
-                disabled={!report?.reports}
+                disabled={!report?.reports || pdfExporting}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download className="h-4 w-4" />
+                {pdfExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 All PDF
               </button>
             )}
@@ -501,8 +527,10 @@ export default function AdminReportPage({ type }: { type: string }) {
                       <button
                         type="button"
                         onClick={() => downloadExportBundlePdf(bundle.key)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                        disabled={pdfExporting}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
                       >
+                        {pdfExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                         PDF
                       </button>
                     </div>

@@ -65,6 +65,14 @@ export class EmployeeAttendanceController {
     return this.service.getShiftManagement();
   }
 
+  @Patch('shifts/assign-employee')
+  assignEmployeeShift(
+    @Body() body: { employeeId: string; shiftCode: 'DAY' | 'NIGHT' },
+    @Request() req: { user: { sub: string } },
+  ) {
+    return this.service.assignEmployeeShift(body.employeeId, body.shiftCode, req.user.sub);
+  }
+
   @Get('work-shifts')
   listWorkShifts() {
     return this.service.listWorkShifts(false);
@@ -144,12 +152,26 @@ export class EmployeeAttendanceController {
     return this.service.reviewOvertime(id, body.action, req.user.sub);
   }
 
+  @Get('today-presence')
+  getTodayPresence() {
+    return this.service.getTodayStaffPresence();
+  }
+
   @Get('analytics')
   getAnalytics(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
     return this.service.getAnalytics({ startDate, endDate });
+  }
+
+  @Get('scores')
+  getAttendanceScores(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('role') role?: string,
+  ) {
+    return this.service.getAttendanceScores({ startDate, endDate, role });
   }
 
   @Get('roles/:roleKey')
@@ -164,6 +186,21 @@ export class EmployeeAttendanceController {
     @Request() req: { user: { sub: string } },
   ) {
     return this.service.updateRecord(id, body, req.user.sub);
+  }
+
+  @Post('mark')
+  markAttendance(
+    @Body()
+    body: { employeeId: string; date?: string; action: 'present' | 'absent'; checkIn?: string },
+    @Request() req: { user: { sub: string } },
+  ) {
+    return this.service.markManualAttendance(
+      body.employeeId,
+      body.date,
+      body.action,
+      req.user.sub,
+      body.checkIn,
+    );
   }
 
   @Post('export')

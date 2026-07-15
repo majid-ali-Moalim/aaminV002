@@ -4,15 +4,12 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Activity, ExternalLink, X } from 'lucide-react'
 import Link from 'next/link'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
-import { useNotificationSocket } from '@/lib/useNotificationSocket'
 import type { AppNotification } from '@/lib/notifications/types'
 
 export default function LiveToastContainer() {
   const [mounted, setMounted] = useState(false)
   const [toasts, setToasts] = useState<AppNotification[]>([])
   const { recent } = useNotificationStore()
-
-  useNotificationSocket()
 
   useEffect(() => {
     setMounted(true)

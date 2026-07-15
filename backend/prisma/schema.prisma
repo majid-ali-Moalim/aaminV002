@@ -538,6 +538,8 @@ model EmergencyRequest {
   pickupLongitude      Float?
   destination          String?
   destinationHospitalId String?
+  destinationHospitalBranchId String?
+  destinationHospitalBranchName String?
   destinationLandmark  String?
   patientCondition     String?
   symptoms             String?
@@ -660,6 +662,7 @@ model Hospital {
   operationalStatus      String                      @default("Active")
   status                 String                      @default("Available")
   color                  String                      @default("green")
+  branches               Json                        @default("[]")
   isActive               Boolean                     @default(true)
   lastAvailabilityUpdate DateTime?
   createdAt              DateTime                    @default(now())

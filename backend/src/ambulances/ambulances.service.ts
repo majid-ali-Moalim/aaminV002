@@ -177,15 +177,17 @@ export class AmbulancesService {
       },
     });
 
-    await this.notifications.create({
-      title: 'Ambulance Status Update',
-      message: `Ambulance ${result.ambulanceNumber} is now ${status}`,
-      type: 'AMBULANCE' as any,
-      priority: status === 'MAINTENANCE' ? 'HIGH' : 'MEDIUM',
-      relatedModule: 'Ambulance',
-      relatedId: result.id,
-      actionUrl: `/admin/ambulances?id=${result.id}`,
-    });
+    if (existing.status !== status) {
+      await this.notifications.create({
+        title: 'Ambulance Status Update',
+        message: `Ambulance ${result.ambulanceNumber} is now ${status}`,
+        type: 'AMBULANCE' as any,
+        priority: status === 'MAINTENANCE' || status === 'UNAVAILABLE' ? 'HIGH' : 'MEDIUM',
+        relatedModule: 'Ambulance',
+        relatedId: result.id,
+        actionUrl: `/admin/ambulances/availability`,
+      });
+    }
 
     return result;
   }

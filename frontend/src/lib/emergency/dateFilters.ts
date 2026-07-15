@@ -120,24 +120,82 @@ export function filterLiveDispatchCases(requests: EmergencyRequest[]): Emergency
   return requests.filter(isLiveDispatchCase)
 }
 
+export function isActiveOngoingCase(request: EmergencyRequest): boolean {
+  const ongoingStatuses = [
+    'ASSIGNED',
+    'DISPATCHED',
+    'EN_ROUTE',
+    'ARRIVED_SCENE',
+    'PATIENT_STABILIZED',
+    'TRANSPORTING',
+    'ARRIVED_HOSPITAL',
+    'ON_SCENE',
+    'ON_THE_WAY',
+  ]
+  return ongoingStatuses.includes(request.status)
+}
+
 export function computeEmergencyStats(requests: EmergencyRequest[]) {
   return {
     total: requests.length,
-    active: requests.filter((r) => !['COMPLETED', 'CANCELLED', 'FAILED'].includes(r.status)).length,
-    pending: requests.filter((r) => r.status === 'PENDING').length,
+    active: requests.filter(isActiveOngoingCase).length,
+    pending: requests.filter((r) => r.status === 'PENDING' || r.status === 'REVIEWING').length,
     critical: requests.filter((r) => r.priority === 'CRITICAL').length,
   }
 }
 
-/** Pending cases waiting at least this many minutes without assignment */
-export const ESCALATION_DELAY_MINUTES = 15
+/** Emergency pending cases: delayed after 1 hour without assignment */
+export const EMERGENCY_DELAY_MINUTES = 60
+
+/** Non-emergency pending cases: delayed after 3 hours without assignment */
+export const NON_EMERGENCY_DELAY_MINUTES = 180
+
+/** @deprecated Prefer getDelayThresholdMinutes(request) */
+export const ESCALATION_DELAY_MINUTES = EMERGENCY_DELAY_MINUTES
 
 export function getWaitMinutes(createdAt: string): number {
   return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000)
 }
 
+/** Standard latency display: minutes below 1 hour, then hours (+ optional minutes). */
+export function formatLatency(waitMinutes: number): string {
+  if (waitMinutes < 60) return `${waitMinutes}m`
+  const hours = Math.floor(waitMinutes / 60)
+  const minutes = waitMinutes % 60
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+export function isNonEmergencyCase(request: EmergencyRequest): boolean {
+  const text = `${request.notes ?? ''} ${request.patientCondition ?? ''}`.toLowerCase()
+  if (text.includes('non-emergency') || text.includes('non emergency')) return true
+  if (text.includes('non-emergency transport')) return true
+  if (request.priority === 'LOW' && !text.includes('emergency type:')) return true
+  return false
+}
+
+export function getDelayThresholdMinutes(request: EmergencyRequest): number {
+  return isNonEmergencyCase(request) ? NON_EMERGENCY_DELAY_MINUTES : EMERGENCY_DELAY_MINUTES
+}
+
+export function isUnassignedPendingCase(request: EmergencyRequest): boolean {
+  if (request.status !== 'PENDING' && request.status !== 'REVIEWING') return false
+  return (
+    !request.ambulanceId &&
+    !request.driverId &&
+    !request.nurseId &&
+    !request.ambulance &&
+    !request.driver &&
+    !request.nurse
+  )
+}
+
+export function isDelayedPendingCase(request: EmergencyRequest): boolean {
+  if (!isUnassignedPendingCase(request)) return false
+  return getWaitMinutes(request.createdAt) >= getDelayThresholdMinutes(request)
+}
+
 export function isEscalatedPendingCase(request: EmergencyRequest): boolean {
-  return request.status === 'PENDING' && getWaitMinutes(request.createdAt) >= ESCALATION_DELAY_MINUTES
+  return isDelayedPendingCase(request)
 }
 
 export function isTodayCriticalCase(request: EmergencyRequest): boolean {

@@ -9,18 +9,21 @@ import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
 interface Props {
   module: NavModule
   description?: string
+  hideHeader?: boolean
   children: React.ReactNode
 }
 
-export default function DispatcherModuleShell({ module, description, children }: Props) {
+export default function DispatcherModuleShell({ module, description, hideHeader, children }: Props) {
   const pathname = usePathname()
 
   return (
     <div className="space-y-6 pb-16">
-      <div>
-        <h1 className="text-2xl font-black text-slate-900">{module.label}</h1>
-        {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
-      </div>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">{module.label}</h1>
+          {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
+        </div>
+      )}
 
       <div className="overflow-x-auto -mx-1 px-1 pb-1">
         <nav className="flex gap-1 min-w-max bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
