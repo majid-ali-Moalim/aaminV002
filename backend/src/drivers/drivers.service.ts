@@ -400,7 +400,6 @@ export class DriversService {
         this.prisma.attendanceRecord.findMany({
           where: {
             date: { gte: todayStart, lt: todayEnd },
-            checkIn: { not: null },
           },
           select: { employeeId: true },
         }),
@@ -596,7 +595,6 @@ export class DriversService {
       where: {
         employeeId: driver.id,
         date: { gte: todayStart, lt: todayEnd },
-        checkIn: { not: null },
       },
       select: { id: true },
     });

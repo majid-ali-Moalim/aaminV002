@@ -14,7 +14,9 @@ import {
   myActiveCasesWhere,
   regionalCasesWhere,
   regionalPendingCasesWhere,
+  isCaseInDispatcherPendingScope,
 } from '../dispatchers-app/dispatcher-scope.util';
+import { StationCoverageService } from '../station-coverage/station-coverage.service';
 import {
   assertDispatchEligibleStaff,
   filterDispatchEligibleEmployees,
@@ -37,7 +39,8 @@ export class EmergencyRequestsService {
     private notifications: NotificationsService,
     private trackingGateway: TrackingGateway,
     private trackingService: TrackingService,
-    private auditLog: AuditLogService
+    private auditLog: AuditLogService,
+    private stationCoverage: StationCoverageService,
   ) {}
 
   private async teamUserIds(requestId: string): Promise<string[]> {
@@ -56,7 +59,9 @@ export class EmergencyRequestsService {
     );
   }
 
-  private async resolveDispatcherScope(userId: string): Promise<DispatcherScope | null> {
+  private async resolveDispatcherScope(
+    userId: string,
+  ): Promise<(DispatcherScope & { stationScoped: boolean }) | null> {
     const employee = await this.prisma.employee.findFirst({
       where: {
         userId,
@@ -65,12 +70,14 @@ export class EmergencyRequestsService {
       include: { station: { include: { region: true } } },
     });
     if (!employee) return null;
+    const stationScoped = await this.stationCoverage.usesStationScoping();
     return {
       dispatcherId: employee.id,
       regionId: employee.station?.regionId ?? null,
       districtId: employee.station?.districtId ?? null,
       stationId: employee.stationId ?? null,
       regionName: employee.station?.region?.name ?? null,
+      stationScoped,
     };
   }
 
@@ -86,21 +93,27 @@ export class EmergencyRequestsService {
     const q = (queue || 'regional') as EmergencyQueue;
     switch (q) {
       case 'pending':
-        return regionalPendingCasesWhere(scope);
+        return regionalPendingCasesWhere(scope, {}, scope.stationScoped);
       case 'my-active':
         return myActiveCasesWhere(scope);
       case 'my-cases':
         return myCasesWhere(scope);
       case 'regional':
       default:
-        return regionalCasesWhere(scope);
+        return regionalCasesWhere(scope, {}, scope.stationScoped);
     }
   }
 
   async assertDispatcherCanAccessCase(
     user: AuthUser | undefined,
-    caseRow: { id: string; dispatcherId: string | null; regionId: string | null; status: string },
-    action: 'read' | 'assign' | 'mutate' = 'read',
+    caseRow: {
+      id: string;
+      dispatcherId: string | null;
+      regionId: string | null;
+      stationId: string | null;
+      status: string;
+    },
+    action: 'read' | 'assign' | 'mutate' | 'transfer' = 'read',
   ) {
     if (!this.isDispatcherUser(user) || !user?.sub) return;
 
@@ -110,17 +123,21 @@ export class EmergencyRequestsService {
     }
 
     const isMine = caseRow.dispatcherId === scope.dispatcherId;
-    const isRegionalPending =
-      !caseRow.dispatcherId &&
-      ['PENDING', 'REVIEWING'].includes(caseRow.status) &&
-      (!scope.regionId || caseRow.regionId === scope.regionId);
+    const isRegionalPending = isCaseInDispatcherPendingScope(scope, caseRow, scope.stationScoped);
 
     if (action === 'assign') {
       if (caseRow.dispatcherId && caseRow.dispatcherId !== scope.dispatcherId) {
         throw new ForbiddenException('This case is assigned to another dispatcher');
       }
       if (!isMine && !isRegionalPending) {
-        throw new ForbiddenException('You can only assign cases in your region pending queue');
+        throw new ForbiddenException('You can only assign cases in your station pending queue');
+      }
+      return;
+    }
+
+    if (action === 'transfer') {
+      if (!isMine && !isRegionalPending) {
+        throw new ForbiddenException('You can only transfer cases within your dispatch scope');
       }
       return;
     }
@@ -247,6 +264,16 @@ export class EmergencyRequestsService {
       if (data.incidentCategoryId) finalPayload.incidentCategory = { connect: { id: data.incidentCategoryId } };
       if (data.regionId) finalPayload.region = { connect: { id: data.regionId } };
       if (data.districtId) finalPayload.district = { connect: { id: data.districtId } };
+
+      const resolvedStationId = await this.stationCoverage.resolveStationIdForCase({
+        stationId: data.stationId,
+        districtId: data.districtId,
+        regionId: data.regionId,
+      });
+      if (resolvedStationId) {
+        finalPayload.station = { connect: { id: resolvedStationId } };
+      }
+
       if (data.destinationHospitalId) finalPayload.destinationHospital = { connect: { id: data.destinationHospitalId } };
       if (data.destinationHospitalBranchId) finalPayload.destinationHospitalBranchId = String(data.destinationHospitalBranchId);
       if (data.destinationHospitalBranchName) finalPayload.destinationHospitalBranchName = String(data.destinationHospitalBranchName);
@@ -341,6 +368,7 @@ export class EmergencyRequestsService {
         context: {
           createdById: data.createdByUserId ?? data.dispatcherUserId,
           regionId: request.regionId ?? data.regionId ?? null,
+          stationId: request.stationId ?? resolvedStationId ?? null,
           assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
           includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
         },
@@ -432,9 +460,18 @@ export class EmergencyRequestsService {
         },
         region: true,
         district: true,
+        station: { select: { id: true, name: true, regionId: true } },
         destinationHospital: true,
         incidentCategory: true,
         referrals: true,
+        caseTransfers: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            fromStation: { select: { id: true, name: true } },
+            toStation: { select: { id: true, name: true } },
+            transferredBy: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
         statusLogs: {
           orderBy: { createdAt: 'desc' },
           include: {
@@ -1174,6 +1211,106 @@ export class EmergencyRequestsService {
     const available = nurses.filter((n) => !busyNurseIds.includes(n.id));
     return filterDispatchEligibleEmployees(available, presentIds);
   }
+
+  async transferCaseStation(
+    id: string,
+    dto: { toStationId: string; reason: string },
+    user?: AuthUser,
+  ) {
+    const existing = await this.prisma.emergencyRequest.findUnique({
+      where: { id },
+      include: { station: true, patient: true },
+    });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    await this.assertDispatcherCanAccessCase(user, existing, 'transfer');
+
+    const reason = String(dto.reason ?? '').trim();
+    if (!reason) throw new BadRequestException('Transfer reason is required');
+    if (!dto.toStationId) throw new BadRequestException('Receiving station is required');
+
+    const toStation = await this.prisma.station.findFirst({
+      where: { id: dto.toStationId, isActive: true },
+    });
+    if (!toStation) throw new BadRequestException('Target station not found or inactive');
+    if (existing.stationId === dto.toStationId) {
+      throw new BadRequestException('Case is already assigned to this station');
+    }
+
+    const transferredById = user?.employeeId;
+    if (!transferredById) {
+      throw new ForbiddenException('Employee profile required to transfer cases');
+    }
+
+    const hadAssignment = Boolean(existing.ambulanceId || existing.driverId || existing.nurseId);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.emergencyCaseTransfer.create({
+        data: {
+          emergencyRequestId: id,
+          fromStationId: existing.stationId,
+          toStationId: dto.toStationId,
+          transferredById,
+          reason,
+        },
+      });
+
+      return tx.emergencyRequest.update({
+        where: { id },
+        data: {
+          stationId: dto.toStationId,
+          dispatcherId: null,
+          status: 'PENDING',
+          ambulanceId: null,
+          driverId: null,
+          nurseId: null,
+          assignedAt: null,
+          statusLogs: {
+            create: {
+              fromStatus: existing.status,
+              toStatus: 'PENDING',
+              changedByEmployeeId: transferredById,
+              notes: `Transferred to ${toStation.name}. Reason: ${reason}`,
+            },
+          },
+        },
+        include: {
+          patient: true,
+          station: { select: { id: true, name: true } },
+          caseTransfers: {
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            include: {
+              fromStation: { select: { id: true, name: true } },
+              toStation: { select: { id: true, name: true } },
+              transferredBy: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      });
+    });
+
+    const actorUserId = user?.sub;
+    await this.notifications.dispatchEvent({
+      eventKey: 'CASE_STATION_TRANSFER',
+      title: 'Case transferred to your station',
+      message: `Case ${existing.trackingCode} transferred to ${toStation.name}${hadAssignment ? ' (crew unassigned)' : ''}. Reason: ${reason}`,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: existing.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/dispatcher/emergency/pending?id=${existing.id}`,
+      context: {
+        createdById: actorUserId,
+        stationId: dto.toStationId,
+        regionId: toStation.regionId,
+      },
+    });
+
+    return updated;
+  }
+
   async getDashboardStats() {
     const total = await this.prisma.emergencyRequest.count();
     const pending = await this.prisma.emergencyRequest.count({

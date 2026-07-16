@@ -257,9 +257,9 @@ export default function DispatchRequestCreator({
 
   const handleRegionChange = (regionId: string, form: 'emergency' | 'nonEmergency' | 'referral') => {
     setActiveRegionId(regionId)
-    if (form === 'emergency') patchEmergency({ regionId, districtId: '' })
-    if (form === 'nonEmergency') patchNonEmergency({ regionId, districtId: '' })
-    if (form === 'referral') patchReferral({ regionId, districtId: '' })
+    if (form === 'emergency') patchEmergency({ regionId, districtId: '', stationId: '' })
+    if (form === 'nonEmergency') patchNonEmergency({ regionId, districtId: '', stationId: '' })
+    if (form === 'referral') patchReferral({ regionId, districtId: '', stationId: '' })
   }
 
   const handleSaveDraft = () => {

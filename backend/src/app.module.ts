@@ -29,6 +29,7 @@ import { HospitalAppModule } from './hospital-app/hospital-app.module';
 import { PublicModule } from './public/public.module';
 import { HealthModule } from './health/health.module';
 import { ChatModule } from './chat/chat.module';
+import { StationCoverageModule } from './station-coverage/station-coverage.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ChatModule } from './chat/chat.module';
     HospitalAppModule,
     PublicModule,
     ChatModule,
+    StationCoverageModule,
   ],
   controllers: [],
   providers: [],

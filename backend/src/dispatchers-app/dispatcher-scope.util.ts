@@ -24,31 +24,46 @@ export function myActiveCasesWhere(
   });
 }
 
-/** Unassigned cases waiting in the dispatcher's region (pending queue). */
-export function regionalPendingCasesWhere(
-  scope: DispatcherScope,
-  extra: Prisma.EmergencyRequestWhereInput = {},
-): Prisma.EmergencyRequestWhereInput {
-  return regionalCasesWhere(scope, {
-    dispatcherId: null,
-    status: { in: ['PENDING', 'REVIEWING'] },
-    ...extra,
-  });
-}
-
-/** Emergency cases in the dispatcher's region. */
+/** Emergency cases in the dispatcher's region or station (when multi-station). */
 export function regionalCasesWhere(
   scope: DispatcherScope,
   extra: Prisma.EmergencyRequestWhereInput = {},
+  stationScoped = false,
 ): Prisma.EmergencyRequestWhereInput {
+  if (stationScoped && scope.stationId) {
+    return { stationId: scope.stationId, ...extra };
+  }
   if (!scope.regionId) {
     return myCasesWhere(scope, extra);
   }
   return { regionId: scope.regionId, ...extra };
 }
 
-/** Drivers/nurses in dispatcher region (via station). */
-export function regionalEmployeeWhere(scope: DispatcherScope): Prisma.EmployeeWhereInput {
+/** Unassigned cases waiting in the dispatcher's region or station (pending queue). */
+export function regionalPendingCasesWhere(
+  scope: DispatcherScope,
+  extra: Prisma.EmergencyRequestWhereInput = {},
+  stationScoped = false,
+): Prisma.EmergencyRequestWhereInput {
+  return regionalCasesWhere(
+    scope,
+    {
+      dispatcherId: null,
+      status: { in: ['PENDING', 'REVIEWING'] },
+      ...extra,
+    },
+    stationScoped,
+  );
+}
+
+/** Drivers/nurses in dispatcher region or station (via station). */
+export function regionalEmployeeWhere(
+  scope: DispatcherScope,
+  stationScoped = false,
+): Prisma.EmployeeWhereInput {
+  if (stationScoped && scope.stationId) {
+    return { status: 'ACTIVE', stationId: scope.stationId };
+  }
   if (!scope.regionId) {
     return { id: scope.dispatcherId };
   }
@@ -58,8 +73,14 @@ export function regionalEmployeeWhere(scope: DispatcherScope): Prisma.EmployeeWh
   };
 }
 
-/** Ambulances in dispatcher region. */
-export function regionalAmbulanceWhere(scope: DispatcherScope): Prisma.AmbulanceWhereInput {
+/** Ambulances in dispatcher region or station. */
+export function regionalAmbulanceWhere(
+  scope: DispatcherScope,
+  stationScoped = false,
+): Prisma.AmbulanceWhereInput {
+  if (stationScoped && scope.stationId) {
+    return { isActive: true, stationId: scope.stationId };
+  }
   if (!scope.regionId) {
     return { id: { in: [] } };
   }
@@ -81,11 +102,12 @@ export function regionalHospitalWhere(scope: DispatcherScope): Prisma.HospitalWh
 export function dispatcherRelevantCasesWhere(
   scope: DispatcherScope,
   extra: Prisma.EmergencyRequestWhereInput = {},
+  stationScoped = false,
 ): Prisma.EmergencyRequestWhereInput {
   return {
     OR: [
       myCasesWhere(scope, extra),
-      regionalPendingCasesWhere(scope, extra),
+      regionalPendingCasesWhere(scope, extra, stationScoped),
     ],
   };
 }
@@ -118,4 +140,22 @@ export function dispatcherCaseNotificationWhere(
       },
     ],
   };
+}
+
+export function isCaseInDispatcherPendingScope(
+  scope: DispatcherScope,
+  caseRow: {
+    dispatcherId: string | null;
+    regionId: string | null;
+    stationId: string | null;
+    status: string;
+  },
+  stationScoped: boolean,
+): boolean {
+  if (caseRow.dispatcherId) return false;
+  if (!['PENDING', 'REVIEWING'].includes(caseRow.status)) return false;
+  if (stationScoped && scope.stationId) {
+    return caseRow.stationId === scope.stationId;
+  }
+  return !scope.regionId || caseRow.regionId === scope.regionId;
 }

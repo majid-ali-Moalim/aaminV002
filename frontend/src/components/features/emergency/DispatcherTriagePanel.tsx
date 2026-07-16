@@ -19,6 +19,7 @@ import { emergencyRequestsService } from '@/lib/api'
 import type { EmergencyRequest, Priority } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
+import CaseStationTransferPanel from '@/components/features/emergency/CaseStationTransferPanel'
 import {
   buildCallerReport,
   BREATHING_UI_OPTIONS,
@@ -369,6 +370,8 @@ export default function DispatcherTriagePanel({ request, onSaved, onAssign }: Pr
           {triageOptionLabel(BLEEDING_STATUS_OPTIONS, intake.bleedingStatus)}
         </div>
       </section>
+
+      <CaseStationTransferPanel request={request} onTransferred={onSaved} />
 
       <PickupGpsPanel request={request} variant="compact" />
 

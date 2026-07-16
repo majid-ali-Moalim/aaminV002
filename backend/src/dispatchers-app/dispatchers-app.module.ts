@@ -6,10 +6,13 @@ import { DispatcherAuthGuard } from './dispatchers-app.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccessControlModule } from '../access-control/access-control.module';
 
+import { StationCoverageModule } from '../station-coverage/station-coverage.module';
+
 @Module({
   imports: [
     PrismaModule,
     AccessControlModule,
+    StationCoverageModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
     }),

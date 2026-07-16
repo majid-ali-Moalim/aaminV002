@@ -3,6 +3,7 @@
 import { Truck } from 'lucide-react'
 import { BOOKING_TIME_SLOTS, TRANSPORT_TYPES } from '@/components/public/hire-ambulance/constants'
 import type { District, Region } from '@/types'
+import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard } from './ui'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { DispatchFormErrors, NonEmergencyDispatchForm } from './types'
@@ -96,7 +97,7 @@ export default function NonEmergencyDispatchFormView({
             <select
               className={fieldInputClass(errors.districtId)}
               value={form.districtId}
-              onChange={(e) => onChange({ districtId: e.target.value })}
+              onChange={(e) => onChange({ districtId: e.target.value, stationId: '' })}
               disabled={!form.regionId || loadingDistricts}
             >
               <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
@@ -107,6 +108,13 @@ export default function NonEmergencyDispatchFormView({
               ))}
             </select>
           </div>
+          <StationAssignmentField
+            regionId={form.regionId}
+            districtId={form.districtId}
+            stationId={form.stationId}
+            error={errors.stationId}
+            onChange={(stationId) => onChange({ stationId })}
+          />
           <div className="sm:col-span-2">
             <FieldLabel required error={errors.pickupAddress}>Pickup Address</FieldLabel>
             <input

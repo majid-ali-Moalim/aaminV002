@@ -4,6 +4,7 @@ import { AlertTriangle, Building2, Clock, Flag, CheckCircle } from 'lucide-react
 import { Priority } from '@/types'
 import type { District, Region } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
+import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard } from './ui'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { DispatchFormErrors, ReferralDispatchForm } from './types'
@@ -128,7 +129,7 @@ export default function ReferralDispatchFormView({
             <select
               className={fieldInputClass(errors.districtId)}
               value={form.districtId}
-              onChange={(e) => onChange({ districtId: e.target.value })}
+              onChange={(e) => onChange({ districtId: e.target.value, stationId: '' })}
               disabled={!form.regionId || loadingDistricts}
             >
               <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
@@ -139,6 +140,13 @@ export default function ReferralDispatchFormView({
               ))}
             </select>
           </div>
+          <StationAssignmentField
+            regionId={form.regionId}
+            districtId={form.districtId}
+            stationId={form.stationId}
+            error={errors.stationId}
+            onChange={(stationId) => onChange({ stationId })}
+          />
           <div>
             <FieldLabel error={errors.referringDoctor}>Referring Doctor</FieldLabel>
             <input

@@ -572,7 +572,6 @@ export class NursesService {
         this.prisma.attendanceRecord.findMany({
           where: {
             date: { gte: todayStart, lt: todayEnd },
-            checkIn: { not: null },
           },
           select: { employeeId: true },
         }),
@@ -761,7 +760,6 @@ export class NursesService {
       where: {
         employeeId: nurse.id,
         date: { gte: todayStart, lt: todayEnd },
-        checkIn: { not: null },
       },
       select: { id: true },
     });

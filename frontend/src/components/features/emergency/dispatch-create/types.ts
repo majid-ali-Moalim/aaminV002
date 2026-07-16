@@ -8,6 +8,7 @@ export type EmergencyDispatchForm = {
   emergencyTypeId: string
   regionId: string
   districtId: string
+  stationId: string
   landmark: string
   priority: Priority
   briefDescription: string
@@ -24,6 +25,7 @@ export type NonEmergencyDispatchForm = {
   transportType: string
   regionId: string
   districtId: string
+  stationId: string
   pickupAddress: string
   destination: string
   destinationHospitalId: string
@@ -49,6 +51,7 @@ export type ReferralDispatchForm = {
   priority: Priority
   regionId: string
   districtId: string
+  stationId: string
   referringDoctor: string
   patientConditionSummary: string
   medicalNotes: string
@@ -71,6 +74,7 @@ export const defaultEmergencyForm = (): EmergencyDispatchForm => ({
   emergencyTypeId: '',
   regionId: '',
   districtId: '',
+  stationId: '',
   landmark: '',
   priority: Priority.HIGH,
   briefDescription: '',
@@ -87,6 +91,7 @@ export const defaultNonEmergencyForm = (): NonEmergencyDispatchForm => ({
   transportType: '',
   regionId: '',
   districtId: '',
+  stationId: '',
   pickupAddress: '',
   destination: '',
   destinationHospitalId: '',
@@ -112,6 +117,7 @@ export const defaultReferralForm = (): ReferralDispatchForm => ({
   priority: Priority.MEDIUM,
   regionId: '',
   districtId: '',
+  stationId: '',
   referringDoctor: '',
   patientConditionSummary: '',
   medicalNotes: '',

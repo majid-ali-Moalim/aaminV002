@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
+import { StationCoverageService } from '../station-coverage/station-coverage.service';
 import { EmergencyRequestStatus, NotificationCategory, NotificationType, Prisma } from '@prisma/client';
 import {
   DispatcherScope,
@@ -49,6 +50,7 @@ export class DispatchersAppService {
   constructor(
     private prisma: PrismaService,
     private accessControl: AccessControlService,
+    private stationCoverage: StationCoverageService,
   ) {}
 
   private async getDispatcherByUserId(userId: string) {
@@ -76,14 +78,16 @@ export class DispatchersAppService {
     return employee;
   }
 
-  private async resolveScope(userId: string): Promise<DispatcherScope> {
+  private async resolveScope(userId: string): Promise<DispatcherScope & { stationScoped: boolean }> {
     const dispatcher = await this.getDispatcherByUserId(userId);
+    const stationScoped = await this.stationCoverage.usesStationScoping();
     return {
       dispatcherId: dispatcher.id,
       regionId: dispatcher.station?.regionId ?? null,
       districtId: dispatcher.station?.districtId ?? null,
       stationId: dispatcher.stationId ?? null,
       regionName: dispatcher.station?.region?.name ?? null,
+      stationScoped,
     };
   }
 
@@ -124,11 +128,11 @@ export class DispatchersAppService {
   async getDashboardStats(userId: string) {
     const scope = await this.resolveScope(userId);
     const caseBase = myCasesWhere(scope);
-    const regionalEmp = regionalEmployeeWhere(scope);
+    const regionalEmp = regionalEmployeeWhere(scope, scope.stationScoped);
 
     const [pending, active, myCases, ambulances, drivers, nurses] = await Promise.all([
       this.prisma.emergencyRequest.count({
-        where: regionalPendingCasesWhere(scope),
+        where: regionalPendingCasesWhere(scope, {}, scope.stationScoped),
       }),
       this.prisma.emergencyRequest.count({
         where: myCasesWhere(scope, {
@@ -139,7 +143,7 @@ export class DispatchersAppService {
         where: myCasesWhere(scope, { status: { notIn: ['COMPLETED', 'CANCELLED'] } }),
       }),
       this.prisma.ambulance.count({
-        where: { ...regionalAmbulanceWhere(scope), status: 'AVAILABLE' },
+        where: { ...regionalAmbulanceWhere(scope, scope.stationScoped), status: 'AVAILABLE' },
       }),
       this.prisma.employee.count({
         where: {
@@ -170,6 +174,7 @@ export class DispatchersAppService {
       station: dispatcher.station?.name ?? null,
       region: scope.regionName,
       scopedToRegion: Boolean(scope.regionId),
+      scopedToStation: scope.stationScoped && Boolean(scope.stationId),
     };
   }
 
@@ -213,7 +218,7 @@ export class DispatchersAppService {
       this.prisma.emergencyRequest.count({
         where: { ...caseWhere, status: { in: ACTIVE_MISSION_STATUSES } },
       }),
-      this.prisma.emergencyRequest.count({ where: regionalPendingCasesWhere(scope) }),
+      this.prisma.emergencyRequest.count({ where: regionalPendingCasesWhere(scope, {}, scope.stationScoped) }),
       this.prisma.emergencyRequest.count({
         where: {
           ...caseWhere,
@@ -244,7 +249,7 @@ export class DispatchersAppService {
         take: 12,
       }),
       this.prisma.emergencyRequest.findMany({
-        where: regionalPendingCasesWhere(scope),
+        where: regionalPendingCasesWhere(scope, {}, scope.stationScoped),
         include: { patient: { select: { id: true, fullName: true } } },
         orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
         take: 10,
@@ -284,7 +289,7 @@ export class DispatchersAppService {
         take: 10,
       }),
       this.prisma.ambulance.findMany({
-        where: regionalAmbulanceWhere(scope),
+        where: regionalAmbulanceWhere(scope, scope.stationScoped),
         select: { id: true, ambulanceNumber: true, plateNumber: true, status: true, location: true },
       }),
       this.prisma.hospital.findMany({
@@ -532,7 +537,7 @@ export class DispatchersAppService {
   async getPendingQueue(userId: string) {
     const scope = await this.resolveScope(userId);
     return this.prisma.emergencyRequest.findMany({
-      where: regionalPendingCasesWhere(scope),
+      where: regionalPendingCasesWhere(scope, {}, scope.stationScoped),
       include: { patient: true },
       orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
     });
@@ -556,7 +561,7 @@ export class DispatchersAppService {
   async getFleetOverview(userId: string) {
     const scope = await this.resolveScope(userId);
     return this.prisma.ambulance.findMany({
-      where: regionalAmbulanceWhere(scope),
+      where: regionalAmbulanceWhere(scope, scope.stationScoped),
       include: {
         station: true,
         equipmentLevel: true,
@@ -572,7 +577,7 @@ export class DispatchersAppService {
 
   async getStaffOverview(userId: string) {
     const scope = await this.resolveScope(userId);
-    const regional = regionalEmployeeWhere(scope);
+    const regional = regionalEmployeeWhere(scope, scope.stationScoped);
 
     const [drivers, nurses, dispatchers] = await Promise.all([
       this.prisma.employee.findMany({
@@ -658,19 +663,19 @@ export class DispatchersAppService {
     ]);
 
     const scopeWhere = pendingViews.has(view)
-      ? regionalPendingCasesWhere(scope, filters[view] ?? {})
+      ? regionalPendingCasesWhere(scope, filters[view] ?? {}, scope.stationScoped)
       : myCaseViews.has(view)
         ? myCasesWhere(scope, filters[view] ?? {})
         : view === 'critical' || view === 'escalated'
           ? {
               OR: [
-                regionalPendingCasesWhere(scope, filters[view] ?? {}),
+                regionalPendingCasesWhere(scope, filters[view] ?? {}, scope.stationScoped),
                 myCasesWhere(scope, filters[view] ?? {}),
               ],
             }
           : view === 'all-cases'
-            ? regionalPendingCasesWhere(scope)
-            : { ...regionalCasesWhere(scope), ...(filters[view] ?? filters['all-cases']) };
+            ? regionalPendingCasesWhere(scope, {}, scope.stationScoped)
+            : { ...regionalCasesWhere(scope, filters[view] ?? filters['all-cases'], scope.stationScoped) };
 
     const where = scopeWhere;
 
@@ -702,7 +707,7 @@ export class DispatchersAppService {
     const scope = await this.resolveScope(userId);
 
     const activeMissions = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }),
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
       select: {
         id: true,
         trackingCode: true,
@@ -757,7 +762,7 @@ export class DispatchersAppService {
     const missionByEmployee = new Map<string, { trackingCode: string; status: string; id: string }>();
 
     const active = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }),
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
       select: {
         id: true,
         trackingCode: true,
@@ -851,7 +856,7 @@ export class DispatchersAppService {
 
   async getAlertsByView(userId: string, view: string) {
     const scope = await this.resolveScope(userId);
-    const relevantWhere = dispatcherRelevantCasesWhere(scope);
+    const relevantWhere = dispatcherRelevantCasesWhere(scope, {}, scope.stationScoped);
     const now = new Date();
     const pendingDelay = new Date(now.getTime() - 30 * 60 * 1000);
 
@@ -878,11 +883,11 @@ export class DispatchersAppService {
           take: 20,
         }),
         this.prisma.emergencyRequest.findMany({
-          where: regionalPendingCasesWhere(scope),
+          where: regionalPendingCasesWhere(scope, {}, scope.stationScoped),
           take: 20,
         }),
         this.prisma.ambulance.findMany({
-          where: { ...regionalAmbulanceWhere(scope), status: 'MAINTENANCE' },
+          where: { ...regionalAmbulanceWhere(scope, scope.stationScoped), status: 'MAINTENANCE' },
           take: 20,
         }),
         this.prisma.hospital.findMany({
@@ -961,7 +966,7 @@ export class DispatchersAppService {
         }),
         this.prisma.attendanceRecord.findMany({
           where: {
-            employee: regionalEmployeeWhere(scope),
+            employee: regionalEmployeeWhere(scope, scope.stationScoped),
             date: { gte: monthStart },
           },
           include: {
@@ -1038,7 +1043,7 @@ export class DispatchersAppService {
     const scope = await this.resolveScope(userId);
 
     const busy = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }),
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
       select: { driverId: true, nurseId: true, ambulanceId: true },
     });
     const busyDriverIds = busy.map((b) => b.driverId).filter(Boolean) as string[];
@@ -1055,7 +1060,7 @@ export class DispatchersAppService {
     const [ambulances, driversRaw, nursesRaw, presentIds] = await Promise.all([
       this.prisma.ambulance.findMany({
         where: {
-          ...regionalAmbulanceWhere(scope),
+          ...regionalAmbulanceWhere(scope, scope.stationScoped),
           status: 'AVAILABLE',
           id: { notIn: busyAmbulanceIds },
         },
@@ -1064,7 +1069,7 @@ export class DispatchersAppService {
       driverRole
         ? this.prisma.employee.findMany({
             where: {
-              ...regionalEmployeeWhere(scope),
+              ...regionalEmployeeWhere(scope, scope.stationScoped),
               employeeRoleId: driverRole.id,
               status: 'ACTIVE',
               shiftStatus: 'AVAILABLE',
@@ -1076,7 +1081,7 @@ export class DispatchersAppService {
       nurseRole
         ? this.prisma.employee.findMany({
             where: {
-              ...regionalEmployeeWhere(scope),
+              ...regionalEmployeeWhere(scope, scope.stationScoped),
               employeeRoleId: nurseRole.id,
               status: 'ACTIVE',
               shiftStatus: 'AVAILABLE',
@@ -1113,7 +1118,7 @@ export class DispatchersAppService {
       this.prisma.emergencyRequest.findMany({
         where: dispatcherRelevantCasesWhere(scope, {
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
-        }),
+        }, scope.stationScoped),
         include: caseInclude,
         orderBy: [{ priority: 'asc' }, { updatedAt: 'desc' }],
         take: 50,
@@ -1121,7 +1126,7 @@ export class DispatchersAppService {
     ]);
 
     const pendingIds = await this.prisma.emergencyRequest.findMany({
-      where: regionalPendingCasesWhere(scope),
+      where: regionalPendingCasesWhere(scope, {}, scope.stationScoped),
       select: { id: true },
     });
     const relevantCaseIds = [

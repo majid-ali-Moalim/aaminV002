@@ -143,6 +143,17 @@ export class EmergencyRequestsController {
     return this.emergencyRequestsService.escalateRequest(id, escalateDto.reason);
   }
 
+  @Patch(':id/transfer-station')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Transfer case to another ambulance station' })
+  transferStation(
+    @Param('id') id: string,
+    @Body() dto: { toStationId: string; reason: string },
+    @Request() req,
+  ) {
+    return this.emergencyRequestsService.transferCaseStation(id, dto, req.user);
+  }
+
   @Patch(':id')
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Update emergency request' })
