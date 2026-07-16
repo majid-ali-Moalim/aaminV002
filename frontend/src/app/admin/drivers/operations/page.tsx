@@ -3,32 +3,28 @@
 import { Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import SectionTabs from '@/components/features/access-control/SectionTabs'
-import DriverAssignmentsPage from '../assignments/page'
 import DriverMissionHistoryPage from '../mission-history/page'
 import { Loader2 } from 'lucide-react'
 
 function DriverOperationsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const tab = searchParams.get('tab') === 'history' ? 'history' : 'assignments'
+  const tab = searchParams.get('tab') === 'history' ? 'history' : 'history'
 
-  const setTab = (id: string) => {
-    router.replace(`/admin/drivers/operations?tab=${id === 'history' ? 'history' : 'assignments'}`)
+  const setTab = () => {
+    router.replace('/admin/drivers/operations?tab=history')
   }
 
   return (
     <div className="space-y-4">
       <div className="px-6 pt-6 max-w-[1600px] mx-auto">
         <SectionTabs
-          tabs={[
-            { id: 'assignments', label: 'Assignments' },
-            { id: 'history', label: 'Mission History' },
-          ]}
+          tabs={[{ id: 'history', label: 'Mission History' }]}
           active={tab}
           onChange={setTab}
         />
       </div>
-      {tab === 'assignments' ? <DriverAssignmentsPage /> : <DriverMissionHistoryPage />}
+      <DriverMissionHistoryPage />
     </div>
   )
 }

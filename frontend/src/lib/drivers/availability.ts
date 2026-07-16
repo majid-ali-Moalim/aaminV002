@@ -2,6 +2,7 @@ export type OperationalDriverStatus = 'available' | 'unavailable'
 
 export interface DriverAvailabilityRow {
   id: string
+  userId?: string | null
   employeeCode?: string | null
   firstName?: string | null
   lastName?: string | null
@@ -9,6 +10,7 @@ export interface DriverAvailabilityRow {
   phone?: string | null
   shiftStatus: string
   employmentStatus: string
+  attendanceStatus?: 'present' | 'absent'
   operationalStatus: OperationalDriverStatus
   unavailableReason?: string | null
   assignedAmbulance: {
@@ -26,6 +28,7 @@ export interface DriverAvailabilityRow {
     trackingCode: string
     status: string
     patientName?: string | null
+    ambulanceNumber?: string | null
   } | null
   updatedAt: string
 }

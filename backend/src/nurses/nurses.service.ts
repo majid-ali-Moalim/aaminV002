@@ -496,58 +496,27 @@ export class NursesService {
     'REVIEWING',
   ] as const;
 
-  private resolveOperationalStatus(
-    shiftStatus: string,
-    employmentStatus: string,
-    hasActiveCase: boolean,
-    medicalClearanceStatus?: string | null,
-  ): 'available' | 'unavailable' {
-    if (
-      employmentStatus === 'ACTIVE' &&
-      shiftStatus === 'AVAILABLE' &&
-      !hasActiveCase &&
-      medicalClearanceStatus !== 'PENDING'
-    ) {
-      return 'available';
-    }
-    return 'unavailable';
+  private resolveOperationalStatus(isPresentToday: boolean): 'available' | 'unavailable' {
+    return isPresentToday ? 'available' : 'unavailable';
   }
 
-  private getUnavailableReason(
-    shiftStatus: string,
-    employmentStatus: string,
-    hasActiveCase: boolean,
-    medicalClearanceStatus?: string | null,
-  ): string | null {
-    if (hasActiveCase) return 'Assigned to active case';
-    if (medicalClearanceStatus === 'PENDING') return 'Pending clearance';
-    if (employmentStatus !== 'ACTIVE') return 'Inactive';
-    switch (shiftStatus) {
-      case 'ON_DUTY':
-      case 'TRANSPORTING':
-        return 'On duty';
-      case 'ON_BREAK':
-        return 'On break';
-      case 'UNAVAILABLE':
-        return 'Unavailable';
-      case 'OFF_DUTY':
-        return 'Off duty';
-      default:
-        return shiftStatus !== 'AVAILABLE' ? shiftStatus.replace(/_/g, ' ') : null;
-    }
+  private getUnavailableReason(isPresentToday: boolean): string | null {
+    return isPresentToday ? null : 'Absent — not marked present in attendance';
   }
 
   async getAvailabilityOverview() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [nurses, activeCases, todayCases, monthCases, recentShifts] =
+    const [nurses, activeCases, todayCases, monthCases, recentShifts, attendanceRecords] =
       await Promise.all([
         this.prisma.employee.findMany({
           where: { employeeRole: { name: { equals: 'Nurse', mode: 'insensitive' } } },
           include: {
-            user: { select: { username: true, email: true } },
+            user: { select: { id: true, username: true, email: true } },
             employeeRole: true,
             station: { include: { region: true, district: true } },
             nurseRequests: {
@@ -558,6 +527,7 @@ export class NursesService {
                 status: true,
                 updatedAt: true,
                 patient: { select: { fullName: true } },
+                ambulance: { select: { ambulanceNumber: true, plateNumber: true } },
               },
               take: 1,
               orderBy: { updatedAt: 'desc' },
@@ -577,6 +547,7 @@ export class NursesService {
             status: true,
             updatedAt: true,
             patient: { select: { fullName: true } },
+            ambulance: { select: { ambulanceNumber: true, plateNumber: true } },
           },
         }),
         this.prisma.emergencyRequest.findMany({
@@ -598,31 +569,29 @@ export class NursesService {
             employee: { select: { firstName: true, lastName: true, employeeCode: true } },
           },
         }),
+        this.prisma.attendanceRecord.findMany({
+          where: {
+            date: { gte: todayStart, lt: todayEnd },
+            checkIn: { not: null },
+          },
+          select: { employeeId: true },
+        }),
       ]);
 
+    const presentEmployeeIds = new Set(attendanceRecords.map((r) => r.employeeId));
     const activeCaseByNurse = new Map(activeCases.map((c) => [c.nurseId!, c]));
 
     const rows = nurses.map((nurse) => {
       const activeCase =
         nurse.nurseRequests?.[0] ?? activeCaseByNurse.get(nurse.id) ?? null;
-      const operationalStatus = this.resolveOperationalStatus(
-        nurse.shiftStatus,
-        nurse.status,
-        !!activeCase,
-        nurse.medicalClearanceStatus,
-      );
+      const isPresentToday = presentEmployeeIds.has(nurse.id);
+      const operationalStatus = this.resolveOperationalStatus(isPresentToday);
       const unavailableReason =
-        operationalStatus === 'unavailable'
-          ? this.getUnavailableReason(
-              nurse.shiftStatus,
-              nurse.status,
-              !!activeCase,
-              nurse.medicalClearanceStatus,
-            )
-          : null;
+        operationalStatus === 'unavailable' ? this.getUnavailableReason(isPresentToday) : null;
 
       return {
         id: nurse.id,
+        userId: nurse.user?.id ?? null,
         employeeCode: nurse.employeeCode,
         firstName: nurse.firstName,
         lastName: nurse.lastName,
@@ -632,6 +601,7 @@ export class NursesService {
         shiftStatus: nurse.shiftStatus,
         employmentStatus: nurse.status,
         medicalClearanceStatus: nurse.medicalClearanceStatus,
+        attendanceStatus: isPresentToday ? 'present' : 'absent',
         operationalStatus,
         unavailableReason,
         station: nurse.station ? { id: nurse.station.id, name: nurse.station.name } : null,
@@ -649,6 +619,7 @@ export class NursesService {
               trackingCode: activeCase.trackingCode,
               status: activeCase.status,
               patientName: (activeCase as any).patient?.fullName ?? null,
+              ambulanceNumber: (activeCase as any).ambulance?.ambulanceNumber ?? null,
             }
           : null,
         updatedAt: nurse.updatedAt.toISOString(),
@@ -756,7 +727,7 @@ export class NursesService {
         employeeRole: { name: { equals: 'Nurse', mode: 'insensitive' } },
       },
       include: {
-        user: { select: { username: true, email: true } },
+        user: { select: { id: true, username: true, email: true } },
         employeeRole: true,
         station: { include: { region: true, district: true } },
         nurseRequests: {
@@ -782,6 +753,20 @@ export class NursesService {
 
     if (!nurse) throw new NotFoundException('Nurse not found');
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    const attendance = await this.prisma.attendanceRecord.findFirst({
+      where: {
+        employeeId: nurse.id,
+        date: { gte: todayStart, lt: todayEnd },
+        checkIn: { not: null },
+      },
+      select: { id: true },
+    });
+    const isPresentToday = Boolean(attendance);
+
     const activeCase = nurse.nurseRequests.find((r) =>
       this.ACTIVE_CASE_STATUSES.includes(r.status as any),
     );
@@ -789,6 +774,7 @@ export class NursesService {
     return {
       nurse: {
         id: nurse.id,
+        userId: nurse.user?.id ?? null,
         employeeCode: nurse.employeeCode,
         firstName: nurse.firstName,
         lastName: nurse.lastName,
@@ -797,24 +783,9 @@ export class NursesService {
         shiftStatus: nurse.shiftStatus,
         employmentStatus: nurse.status,
         medicalClearanceStatus: nurse.medicalClearanceStatus,
-        operationalStatus: this.resolveOperationalStatus(
-          nurse.shiftStatus,
-          nurse.status,
-          !!activeCase,
-          nurse.medicalClearanceStatus,
-        ),
-        unavailableReason:
-          activeCase ||
-          nurse.shiftStatus !== 'AVAILABLE' ||
-          nurse.status !== 'ACTIVE' ||
-          nurse.medicalClearanceStatus === 'PENDING'
-            ? this.getUnavailableReason(
-                nurse.shiftStatus,
-                nurse.status,
-                !!activeCase,
-                nurse.medicalClearanceStatus,
-              )
-            : null,
+        attendanceStatus: isPresentToday ? 'present' : 'absent',
+        operationalStatus: this.resolveOperationalStatus(isPresentToday),
+        unavailableReason: isPresentToday ? null : this.getUnavailableReason(isPresentToday),
         licenseStatus: nurse.licenseStatus,
         licenseExpiryDate: nurse.licenseExpiryDate?.toISOString() ?? null,
         station: nurse.station,

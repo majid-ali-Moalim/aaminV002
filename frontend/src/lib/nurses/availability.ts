@@ -2,6 +2,7 @@ export type OperationalNurseStatus = 'available' | 'unavailable'
 
 export interface NurseAvailabilityRow {
   id: string
+  userId?: string | null
   employeeCode?: string | null
   firstName?: string | null
   lastName?: string | null
@@ -11,6 +12,7 @@ export interface NurseAvailabilityRow {
   shiftStatus: string
   employmentStatus: string
   medicalClearanceStatus?: string | null
+  attendanceStatus?: 'present' | 'absent'
   operationalStatus: OperationalNurseStatus
   unavailableReason?: string | null
   station: { id: string; name: string } | null
@@ -23,6 +25,7 @@ export interface NurseAvailabilityRow {
     trackingCode: string
     status: string
     patientName?: string | null
+    ambulanceNumber?: string | null
   } | null
   updatedAt: string
 }

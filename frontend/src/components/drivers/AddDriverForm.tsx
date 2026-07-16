@@ -443,7 +443,6 @@ export default function AddDriverForm({
       employmentDate: form.joinDate || undefined,
       defaultShift: shift.defaultShift,
       typicalStartTime: shift.typicalStartTime,
-      assignedAmbulanceId: form.assignedAmbulanceId || undefined,
       shiftStatus: mapStaffShiftStatus(form.shiftStatus),
       yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : undefined,
       certificationUpload: form.certificationUpload || undefined,
@@ -982,7 +981,7 @@ export default function AddDriverForm({
                     </div>
 
                     <div className="mt-8 pt-8 border-t border-red-50">
-                      <SectionHeader icon={Truck} title="Operational" subtitle="Shift & ambulance" color="red" />
+                      <SectionHeader icon={Truck} title="Operational" subtitle="Shift status" color="red" />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormSelect
                           label="Initial Shift Status"
@@ -992,29 +991,10 @@ export default function AddDriverForm({
                             patch({ shiftStatus: e.target.value })
                           }
                         />
-                        <FormSelect
-                          label="Assigned Ambulance"
-                          icon={Truck}
-                          options={filteredAmbulances}
-                          value={form.assignedAmbulanceId}
-                          emptyHint={
-                            form.stationId && filteredAmbulances.length === 0
-                              ? 'No ambulances at this station'
-                              : form.stationId
-                                ? 'Optional — select ambulance'
-                                : 'Select station to filter ambulances'
-                          }
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                            patch({ assignedAmbulanceId: e.target.value })
-                          }
-                        />
-                        {form.stationId && filteredAmbulances.length > 0 && (
-                          <p className="md:col-span-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                            Showing {filteredAmbulances.length} ambulance
-                            {filteredAmbulances.length !== 1 ? 's' : ''} for selected station
-                          </p>
-                        )}
                       </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Ambulance assignment is handled only when a dispatcher assigns a case crew.
+                      </p>
                     </div>
                   </>
                 )}

@@ -1,24 +1,10 @@
 'use client'
 
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import {
   Users,
   Search,
@@ -28,15 +14,17 @@ import {
   FileSpreadsheet,
   FileText,
   Eye,
-  Truck,
   X,
   Loader2,
   AlertCircle,
   ExternalLink,
   ChevronRight,
+  MessageSquare,
+  User,
+  Truck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { driversService, ambulancesService } from '@/lib/api'
+import { driversService } from '@/lib/api'
 import {
   type DriverAvailabilityOverview,
   type DriverAvailabilityRow,
@@ -45,7 +33,7 @@ import {
   DRIVER_STATUS_CONFIG,
   formatTimeAgo,
 } from '@/lib/drivers/availability'
-import { Ambulance } from '@/types'
+import { buildStaffChatUrl } from '@/lib/staffChat'
 
 const STATUS_TABS: { id: DriverStatusFilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -54,6 +42,7 @@ const STATUS_TABS: { id: DriverStatusFilterTab; label: string }[] = [
 ]
 
 export default function DriverAvailabilityView() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DriverStatusFilterTab>('all')
   const [stationFilter, setStationFilter] = useState('')
@@ -64,19 +53,11 @@ export default function DriverAvailabilityView() {
   const [detailData, setDetailData] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const [assignAmbulanceModal, setAssignAmbulanceModal] = useState<Pick<DriverAvailabilityRow, 'id' | 'fullName'> | null>(null)
-  const [ambulances, setAmbulances] = useState<Ambulance[]>([])
-  const [submitting, setSubmitting] = useState(false)
-
   const { data, isLoading, isValidating, mutate, error } = useSWR<DriverAvailabilityOverview>(
     'driver-availability',
     () => driversService.getAvailabilityOverview(),
     { refreshInterval: 15000, revalidateOnFocus: true },
   )
-
-  useEffect(() => {
-    ambulancesService.getAll().then(setAmbulances).catch(() => setAmbulances([]))
-  }, [])
 
   const openDetail = async (id: string) => {
     setDetailId(id)
@@ -95,18 +76,15 @@ export default function DriverAvailabilityView() {
     setDetailData(null)
   }
 
-  const handleAssignAmbulance = async (driverId: string, ambulanceId: string | null) => {
-    try {
-      setSubmitting(true)
-      await driversService.assignAmbulance(driverId, ambulanceId)
-      setAssignAmbulanceModal(null)
-      mutate()
-      if (detailId === driverId) openDetail(driverId)
-    } catch (error: any) {
-      alert(error?.response?.data?.message || error?.message || 'Failed to assign ambulance')
-    } finally {
-      setSubmitting(false)
-    }
+  const openDriverChat = (row: DriverAvailabilityRow) => {
+    if (!row.userId) return
+    router.push(
+      buildStaffChatUrl({
+        userId: row.userId,
+        caseId: row.currentCase?.id,
+        trackingCode: row.currentCase?.trackingCode,
+      }),
+    )
   }
 
   const filteredRows = useMemo(() => {
@@ -122,8 +100,8 @@ export default function DriverAvailabilityView() {
         row.fullName,
         row.employeeCode ?? '',
         row.phone ?? '',
-        row.assignedAmbulance?.ambulanceNumber ?? '',
         row.currentCase?.trackingCode ?? '',
+        row.currentCase?.patientName ?? '',
         row.station?.name ?? '',
       ].join(' ').toLowerCase()
       return hay.includes(q)
@@ -131,15 +109,20 @@ export default function DriverAvailabilityView() {
   }, [data?.drivers, search, statusFilter, stationFilter, regionFilter, districtFilter])
 
   const summary = data?.summary ?? { total: 0, available: 0, unavailable: 0, activeToday: 0 }
+  const onCaseCount = useMemo(
+    () => (data?.drivers ?? []).filter((d) => d.currentCase).length,
+    [data?.drivers],
+  )
 
   const exportRows = filteredRows.map((r) => ({
     'Driver ID': r.employeeCode ?? r.id.slice(0, 8),
     Name: r.fullName,
     Phone: r.phone ?? '—',
+    Attendance: r.attendanceStatus === 'present' ? 'Present' : 'Absent',
     Status: DRIVER_STATUS_CONFIG[r.operationalStatus].label,
-    Reason: r.unavailableReason ?? '—',
-    Ambulance: r.assignedAmbulance?.ambulanceNumber ?? '—',
     'Current Case': r.currentCase?.trackingCode ?? '—',
+    Patient: r.currentCase?.patientName ?? '—',
+    Ambulance: r.currentCase?.ambulanceNumber ?? '—',
     Station: r.station?.name ?? '—',
     Region: r.region?.name ?? '—',
     District: r.district?.name ?? '—',
@@ -182,7 +165,8 @@ export default function DriverAvailabilityView() {
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">Dispatch Operations</p>
             <h1 className="text-3xl font-black tracking-tight">Driver Availability</h1>
             <p className="text-red-100/80 mt-2 max-w-xl text-sm">
-              See which drivers can be assigned to emergency cases. Only drivers marked Available are dispatch-ready.
+              Availability follows today&apos;s attendance — present drivers are available; absent drivers are unavailable.
+              Message drivers directly when they are on an active case.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -215,15 +199,15 @@ export default function DriverAvailabilityView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Total Drivers" value={summary.total} icon={Users} tone="slate" />
-        <KpiCard label="Available" value={summary.available} icon={Users} tone="emerald" />
-        <KpiCard label="Unavailable" value={summary.unavailable} icon={AlertCircle} tone="red" />
+        <KpiCard label="Available (Present)" value={summary.available} icon={Users} tone="emerald" />
+        <KpiCard label="On Active Case" value={onCaseCount} icon={Truck} tone="violet" />
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 print:hidden">
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search driver name, ID, phone, ambulance, case…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search driver name, ID, phone, case, patient…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
           </div>
           <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)} className="lg:w-44 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
             <option value="">All Stations</option>
@@ -255,44 +239,48 @@ export default function DriverAvailabilityView() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3">Driver ID</th>
-                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Driver</th>
                   <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Ambulance</th>
+                  <th className="px-4 py-3">Attendance</th>
                   <th className="px-4 py-3">Current Case</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Ambulance</th>
                   <th className="px-4 py-3">Station</th>
-                  <th className="px-4 py-3">Region</th>
-                  <th className="px-4 py-3">District</th>
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 print:hidden">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.length === 0 ? (
-                  <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-500">No drivers match your filters</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">No drivers match your filters</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3 font-mono text-slate-600">{row.employeeCode ?? '—'}</td>
-                    <td className="px-4 py-3 font-bold">{row.fullName}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold">{row.fullName}</p>
+                      <p className="text-[10px] font-mono text-slate-500">{row.employeeCode ?? '—'}</p>
+                    </td>
                     <td className="px-4 py-3">{row.phone ?? '—'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.operationalStatus} />
-                      {row.unavailableReason && <p className="text-[10px] text-slate-500 mt-0.5">{row.unavailableReason}</p>}
+                      <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{row.attendanceStatus ?? 'absent'}</p>
                     </td>
-                    <td className="px-4 py-3">{row.assignedAmbulance?.ambulanceNumber ?? '—'}</td>
                     <td className="px-4 py-3">
                       {row.currentCase ? (
                         <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link>
                       ) : '—'}
                     </td>
+                    <td className="px-4 py-3">{row.currentCase?.patientName ?? '—'}</td>
+                    <td className="px-4 py-3">{row.currentCase?.ambulanceNumber ?? '—'}</td>
                     <td className="px-4 py-3">{row.station?.name ?? '—'}</td>
-                    <td className="px-4 py-3">{row.region?.name ?? '—'}</td>
-                    <td className="px-4 py-3">{row.district?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatTimeAgo(row.updatedAt)}</td>
                     <td className="px-4 py-3 print:hidden">
                       <div className="flex gap-1">
-                        <button type="button" onClick={() => openDetail(row.id)} className="p-1.5 rounded-lg hover:bg-slate-100"><Eye className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => openDetail(row.id)} className="p-1.5 rounded-lg hover:bg-slate-100" title="View details"><Eye className="w-4 h-4" /></button>
+                        {row.currentCase && row.userId && (
+                          <button type="button" onClick={() => openDriverChat(row)} className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Message driver about case">
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -322,57 +310,6 @@ export default function DriverAvailabilityView() {
         </aside>
       </div>
 
-      {data?.analytics && (
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Analytics</h2>
-          <div className="grid lg:grid-cols-2 gap-4">
-            <ChartCard title="Daily Driver Usage">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.analytics.dailyUsage}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#EF4444" radius={[6, 6, 0, 0]} name="Cases" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Cases Per Driver (30 days)">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.analytics.casesPerDriver} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="driverName" tick={{ fontSize: 10 }} width={90} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Cases" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Available vs Unavailable">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={data.analytics.statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`}>
-                    {data.analytics.statusDistribution.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip /><Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Driver Activity Trend">
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={data.analytics.activityTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="active" stroke="#8B5CF6" strokeWidth={2} dot={{ r: 4 }} name="Active cases" />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </div>
-        </section>
-      )}
-
       {detailId && (
         <Modal onClose={closeDetail} title={detailData?.driver ? `${detailData.driver.firstName ?? ''} ${detailData.driver.lastName ?? ''}`.trim() : 'Driver Details'}>
           {detailLoading ? (
@@ -382,20 +319,24 @@ export default function DriverAvailabilityView() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <InfoField label="Driver ID" value={detailData.driver.employeeCode ?? '—'} />
                 <InfoField label="Phone" value={detailData.driver.phone ?? '—'} />
-                <InfoField label="Current Status"><StatusBadge status={detailData.driver.operationalStatus} /></InfoField>
-                <InfoField label="Reason" value={detailData.driver.unavailableReason ?? 'Ready for dispatch'} />
+                <InfoField label="Attendance"><StatusBadge status={detailData.driver.operationalStatus} /></InfoField>
+                <InfoField label="Today's attendance" value={detailData.driver.attendanceStatus === 'present' ? 'Present' : 'Absent'} />
                 <InfoField label="Station" value={detailData.driver.station?.name ?? '—'} />
                 <InfoField label="Region" value={detailData.driver.region?.name ?? '—'} />
-                <InfoField label="District" value={detailData.driver.district?.name ?? '—'} />
                 <InfoField label="License" value={detailData.driver.licenseStatus ?? '—'} />
-                <InfoField label="Assigned Ambulance" value={detailData.assignedAmbulance?.ambulanceNumber ?? '—'} />
               </div>
               {detailData.currentCase && (
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 space-y-2">
                   <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Current Case</p>
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`} className="text-blue-700 font-bold hover:underline flex items-center gap-1">
                     {detailData.currentCase.trackingCode} <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
+                  {detailData.currentCase.patient?.fullName && (
+                    <p className="text-sm text-slate-700"><User className="w-3.5 h-3.5 inline mr-1" />{detailData.currentCase.patient.fullName}</p>
+                  )}
+                  {detailData.currentCase.ambulance?.ambulanceNumber && (
+                    <p className="text-sm text-slate-700"><Truck className="w-3.5 h-3.5 inline mr-1" />{detailData.currentCase.ambulance.ambulanceNumber}</p>
+                  )}
                 </div>
               )}
               <div>
@@ -407,17 +348,12 @@ export default function DriverAvailabilityView() {
                   </Link>
                 )) : <p className="text-sm text-slate-500">No case history</p>}
               </div>
-              <div>
-                <h3 className="text-xs font-black text-slate-500 uppercase mb-2">Shift History</h3>
-                {detailData.shiftHistory?.length ? detailData.shiftHistory.map((s: any) => (
-                  <div key={s.id} className="text-sm p-2.5 rounded-lg bg-slate-50 mb-1">
-                    <p className="font-medium">{s.status.replace(/_/g, ' ')}</p>
-                    <p className="text-xs text-slate-500">{formatTimeAgo(s.startTime)}</p>
-                  </div>
-                )) : <p className="text-sm text-slate-500">No shift history</p>}
-              </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignAmbulanceModal({ id: detailData.driver.id, fullName: `${detailData.driver.firstName} ${detailData.driver.lastName}`.trim() })}><Truck className="w-4 h-4 mr-1" /> Assign Ambulance</Button>
+                {detailData.currentCase && detailData.driver.userId && (
+                  <Button size="sm" variant="outline" className="rounded-xl" onClick={() => router.push(buildStaffChatUrl({ userId: detailData.driver.userId, caseId: detailData.currentCase.id, trackingCode: detailData.currentCase.trackingCode }))}>
+                    <MessageSquare className="w-4 h-4 mr-1" /> Message Driver
+                  </Button>
+                )}
                 {detailData.currentCase && (
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}>
                     <Button size="sm" className="rounded-xl bg-red-600 hover:bg-red-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button>
@@ -426,20 +362,6 @@ export default function DriverAvailabilityView() {
               </div>
             </div>
           ) : <p className="text-center py-8 text-slate-500">Could not load details</p>}
-        </Modal>
-      )}
-
-      {assignAmbulanceModal && (
-        <Modal onClose={() => setAssignAmbulanceModal(null)} title={`Assign Ambulance — ${assignAmbulanceModal.fullName}`}>
-          <div className="max-h-72 overflow-y-auto space-y-2">
-            <button type="button" disabled={submitting} onClick={() => handleAssignAmbulance(assignAmbulanceModal.id, null)} className="w-full p-3 rounded-xl border text-left text-sm text-slate-600 hover:bg-slate-50">Remove assignment</button>
-            {ambulances.map((amb) => (
-              <button key={amb.id} type="button" disabled={submitting} onClick={() => handleAssignAmbulance(assignAmbulanceModal.id, amb.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-red-200 hover:bg-red-50 text-left">
-                <div className="p-2 rounded-lg bg-red-100 text-red-600"><Truck className="w-4 h-4" /></div>
-                <div><p className="text-sm font-bold">{amb.ambulanceNumber}</p><p className="text-xs text-slate-500">{amb.plateNumber}</p></div>
-              </button>
-            ))}
-          </div>
         </Modal>
       )}
     </div>
@@ -459,10 +381,6 @@ function KpiCard({ label, value, icon: Icon, tone }: { label: string; value: num
 function StatusBadge({ status }: { status: OperationalDriverStatus }) {
   const cfg = DRIVER_STATUS_CONFIG[status]
   return <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${cfg.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}</span>
-}
-
-function ChartCard({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"><h3 className="text-sm font-bold mb-4">{title}</h3>{children}</div>
 }
 
 function InfoField({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
