@@ -41,6 +41,13 @@ export class EmployeesController {
     return this.employeesService.findAll(employeeRoleId, departmentId);
   }
 
+  @Get('next-code')
+  @Roles('ADMIN', 'DISPATCHER', 'NURSE')
+  @ApiOperation({ summary: 'Get next incremental employee code for a role prefix' })
+  getNextCode(@Query('prefix') prefix: string) {
+    return this.employeesService.getNextEmployeeCode(prefix || 'DIS');
+  }
+
   @Get(':id')
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Get employee by ID' })

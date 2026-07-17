@@ -47,7 +47,11 @@ import {
 } from '@/lib/api'
 import { Station, Department, Region, District } from '@/types'
 import { mapStaffShiftStatus } from '@/lib/staff/status'
-import { EMPLOYMENT_SHIFT_OPTIONS, shiftTimesForEmploymentType } from '@/lib/employment/shiftTypes'
+import {
+  formatResidentialAddress,
+  shiftTimesFromWorkShift,
+  type WorkShiftOption,
+} from '@/lib/employment/staffFormHelpers'
 import {
   NurseFormErrors,
   NurseFormValues,
@@ -124,6 +128,7 @@ export default function AddNurseForm() {
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
   const [specializationOptions, setSpecializationOptions] = useState<SelectOption[]>([])
   const [employmentTypeOptions, setEmploymentTypeOptions] = useState<SelectOption[]>([])
+  const [workShiftOptions, setWorkShiftOptions] = useState<WorkShiftOption[]>([])
   const [shiftStatusOptions, setShiftStatusOptions] = useState<SelectOption[]>([])
   const [nurseRoleId, setNurseRoleId] = useState('')
   const [nurseCode, setNurseCode] = useState('NUR-001')
@@ -151,7 +156,7 @@ export default function AddNurseForm() {
     relationship: '',
     employeeCode: '',
     departmentId: '',
-    employmentType: 'Day time',
+    employmentType: '',
     joinDate: new Date().toISOString().split('T')[0],
     shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
@@ -202,6 +207,7 @@ export default function AddNurseForm() {
     setQualificationOptions(data.qualifications)
     setSpecializationOptions(data.specializations)
     setEmploymentTypeOptions(data.employmentTypes)
+    setWorkShiftOptions(data.workShiftOptions)
     setShiftStatusOptions(data.shiftStatusOptions)
 
     const issues = validateMasterData(data)
@@ -217,7 +223,7 @@ export default function AddNurseForm() {
     setMasterDataError(null)
     try {
       const data = applyMasterData(await fetchNurseFormMasterData())
-      const code = nextNurseCode(data.nurseStatsTotal)
+      const code = nextNurseCode(data.nurseStatsTotal, data.nurseNextCode)
       setNurseCode(code)
       const opsDept = suggestNurseDepartment(data.departments)
 
@@ -225,7 +231,7 @@ export default function AddNurseForm() {
         ...f,
         employeeCode: code,
         departmentId: f.departmentId || opsDept?.id || '',
-        employmentType: f.employmentType || 'Day time',
+        employmentType: f.employmentType || data.employmentTypes[0]?.id || '',
       }))
     } catch {
       setMasterDataError('Failed to load form data. Check that the backend is running.')
@@ -315,16 +321,9 @@ export default function AddNurseForm() {
   }
 
   const handleStationChange = (stationId: string) => {
-    const station = allStations.find((s) => s.id === stationId)
     patch({
       stationId,
       assignedAmbulanceId: '',
-      ...(station
-        ? {
-            regionId: station.regionId || form.regionId,
-            districtId: station.districtId || form.districtId,
-          }
-        : {}),
     })
   }
 
@@ -357,8 +356,12 @@ export default function AddNurseForm() {
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
-    const address = form.address.trim() || undefined
-    const shift = shiftTimesForEmploymentType(form.employmentType)
+    const address = formatResidentialAddress(
+      form.address,
+      selectedDistrict?.name,
+      selectedRegion?.name,
+    )
+    const shift = shiftTimesFromWorkShift(form.employmentType, workShiftOptions)
 
     return {
       role: 'EMPLOYEE' as const,
@@ -517,7 +520,7 @@ export default function AddNurseForm() {
                     relationship: '',
                     employeeCode: nurseCode,
                     departmentId: form.departmentId,
-                    employmentType: 'Day time',
+                    employmentType: '',
                     joinDate: new Date().toISOString().split('T')[0],
                     shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
@@ -767,16 +770,19 @@ export default function AddNurseForm() {
 
                 {step === 'location' && (
                   <>
-                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Station assignment" color="red" />
+                    <SectionHeader icon={MapPin} title="Home & Work Assignment" subtitle="Home address vs work station" color="red" />
 
-                    {(selectedRegion || selectedDistrict || selectedStation) && (
-                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
+                    <div className="mb-6 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                      <p className="font-bold text-slate-800 mb-1">Home location</p>
+                      <p>Region and district are where the nurse lives. Station is where they work and receive cases from covered districts.</p>
+                    </div>
+
+                    {(selectedRegion || selectedDistrict) && (
+                      <div className="mb-4 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
                         <MapPin className="w-4 h-4 text-red-500 shrink-0" />
                         <span>{selectedRegion?.name || '—'}</span>
                         <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span>{selectedDistrict?.name || 'Select district'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
+                        <span>{selectedDistrict?.name || 'Select home district'}</span>
                       </div>
                     )}
 
@@ -794,6 +800,39 @@ export default function AddNurseForm() {
                         />
                       </div>
                       <FormSelect
+                        label="Home Region"
+                        required
+                        icon={MapPin}
+                        options={regions}
+                        value={form.regionId}
+                        error={fieldErrors.regionId}
+                        emptyHint={regions.length ? 'Select home region' : 'No regions — add in System Setup'}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
+                      />
+                      <FormSelect
+                        label="Home District"
+                        required
+                        icon={MapPin}
+                        options={districtsForRegion}
+                        value={form.districtId}
+                        error={fieldErrors.districtId}
+                        disabled={!form.regionId || loading}
+                        loading={loading}
+                        emptyHint={
+                          !form.regionId
+                            ? 'Select home region first'
+                            : districtsForRegion.length
+                              ? 'Select home district'
+                              : 'No districts in this region'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-red-50">
+                      <SectionHeader icon={Building2} title="Work Assignment" subtitle="Station and department for clinical operations" color="red" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormSelect
                         label="Assigned Station"
                         required
                         icon={Building2}
@@ -804,57 +843,13 @@ export default function AddNurseForm() {
                         loading={loading}
                         emptyHint={
                           stationOptions.length
-                            ? 'Select Station'
-                            : 'No stations — add in System Setup'
+                            ? 'Select work station'
+                            : 'No stations — add in Master Data → Stations'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           handleStationChange(e.target.value)
                         }
                       />
-                      <FormSelect
-                        label="Region"
-                        required
-                        icon={MapPin}
-                        options={regions}
-                        value={form.regionId}
-                        error={fieldErrors.regionId}
-                        emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="District"
-                        required
-                        icon={MapPin}
-                        options={districtsForRegion}
-                        value={form.districtId}
-                        error={fieldErrors.districtId}
-                        disabled={!form.regionId || loading}
-                        loading={loading}
-                        emptyHint={
-                          !form.regionId
-                            ? 'Select a region first'
-                            : districtsForRegion.length
-                              ? 'Select District'
-                              : 'No districts in this region'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-
-                      {selectedStation && (
-                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
-                            Selected Station
-                          </p>
-                          <p className="text-sm font-bold text-slate-800">{selectedStation.name}</p>
-                          {selectedStation.address && (
-                            <p className="text-xs text-slate-600 mt-1">{selectedStation.address}</p>
-                          )}
-                          {selectedStation.phone && (
-                            <p className="text-xs text-slate-500 mt-1">Tel: {selectedStation.phone}</p>
-                          )}
-                        </div>
-                      )}
-
                       <FormInput
                         label="Employee Code"
                         required
@@ -875,28 +870,22 @@ export default function AddNurseForm() {
                           loading && !departments.length
                             ? 'Loading departments…'
                             : departments.length
-                              ? 'Select Department'
+                              ? 'Medical / clinical departments only'
                               : 'No departments — add in System Setup'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ departmentId: e.target.value })}
                       />
-                      {selectedDepartment && (
-                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
-                            Selected Department
-                          </p>
-                          <p className="text-sm font-bold text-slate-800">{selectedDepartment.name}</p>
-                          {selectedDepartment.description && (
-                            <p className="text-xs text-slate-600 mt-1">{selectedDepartment.description}</p>
-                          )}
-                        </div>
-                      )}
                       <FormSelect
-                        label="Employment Type"
+                        label="Work Shift"
                         required
-                        options={EMPLOYMENT_SHIFT_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+                        options={employmentTypeOptions}
                         value={form.employmentType}
                         error={fieldErrors.employmentType}
+                        emptyHint={
+                          employmentTypeOptions.length
+                            ? 'Shifts from Shift Management'
+                            : 'No shifts configured — add in Shift Management'
+                        }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           patch({ employmentType: e.target.value })
                         }
@@ -911,6 +900,7 @@ export default function AddNurseForm() {
                         max={todayStr}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ joinDate: e.target.value })}
                       />
+                      </div>
                     </div>
 
                     <div className="mt-8 pt-8 border-t border-red-50">

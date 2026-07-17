@@ -14,6 +14,7 @@ import {
   activeShiftLabel,
   shiftAssignmentForCode,
   isEmployeeOnActiveShift,
+  getAttendanceShiftBlockReason,
 } from './shift-types';
 import { getPresentEmployeeIdsToday } from './dispatch-staff-eligibility';
 
@@ -472,6 +473,10 @@ export class EmployeeAttendanceService {
       const present = Boolean(rec?.checkIn);
       const status = present ? 'Present' : 'Absent';
       const openSession = present && !rec?.checkOut && isToday;
+      const onCurrentShift = isEmployeeOnActiveShift(e.defaultShift, e.typicalStartTime);
+      const requiresShiftMatch = isFieldShiftRole(e.employeeRole?.name);
+      const canMarkAttendance =
+        !isToday || !requiresShiftMatch || onCurrentShift;
 
       return {
         recordId: rec?.id ?? null,
@@ -493,6 +498,16 @@ export class EmployeeAttendanceService {
         hoursInProgress: openSession,
         shiftStatus: e.shiftStatus,
         profilePhoto: e.profilePhoto,
+        onCurrentShift,
+        requiresShiftMatch,
+        canMarkAttendance,
+        attendanceBlockReason: canMarkAttendance
+          ? null
+          : getAttendanceShiftBlockReason(
+              e.employeeRole?.name,
+              e.defaultShift,
+              e.typicalStartTime,
+            ),
       };
     });
 
@@ -513,6 +528,9 @@ export class EmployeeAttendanceService {
     return {
       items,
       date: dayStart.toISOString().slice(0, 10),
+      isToday,
+      activeShiftLabel: activeShiftLabel(),
+      activeShiftCode: getActiveShiftCodeAt(),
       summary: {
         total: items.length,
         present: presentCount,
@@ -1014,6 +1032,21 @@ export class EmployeeAttendanceService {
           return new Date(y, m - 1, d);
         })()
       : new Date();
+    const markAt = checkInIso ? new Date(checkInIso) : new Date();
+    const markingToday = startOfDay(day).getTime() === startOfDay(new Date()).getTime();
+
+    if (markingToday) {
+      const blockReason = getAttendanceShiftBlockReason(
+        employee.employeeRole?.name,
+        employee.defaultShift,
+        employee.typicalStartTime,
+        markAt,
+      );
+      if (blockReason) {
+        throw new BadRequestException(blockReason);
+      }
+    }
+
     const dayStart = startOfDay(day);
     const dayEnd = endOfDay(day);
 

@@ -56,7 +56,14 @@ import {
   ADMIN_STAFF_STATUS_OPTIONS,
   mapStaffShiftStatus,
 } from '@/lib/staff/status'
-import { EMPLOYMENT_SHIFT_OPTIONS, shiftTimesForEmploymentType } from '@/lib/employment/shiftTypes'
+import {
+  formatResidentialAddress,
+  filterDepartmentsForRole,
+  fetchWorkShiftEmploymentOptions,
+  shiftTimesFromWorkShift,
+  suggestDepartmentForRole,
+  type WorkShiftOption,
+} from '@/lib/employment/staffFormHelpers'
 import {
   SOMALIA_DRIVER_LICENSE_CLASSES,
   SOMALIA_LICENSE_NUMBER_HINT,
@@ -142,6 +149,8 @@ export default function AddDriverForm({
   const [allStations, setAllStations] = useState<Station[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [employmentTypeOptions, setEmploymentTypeOptions] = useState<{ id: string; label: string }[]>([])
+  const [workShiftOptions, setWorkShiftOptions] = useState<WorkShiftOption[]>([])
   const [driverRoleId, setDriverRoleId] = useState('')
   const [driverCode, setDriverCode] = useState('DR-001')
   const [masterDataError, setMasterDataError] = useState<string | null>(null)
@@ -166,7 +175,7 @@ export default function AddDriverForm({
     relationship: '',
     employeeCode: '',
     departmentId: '',
-    employmentType: 'Day time',
+    employmentType: '',
     joinDate: new Date().toISOString().split('T')[0],
     shiftStatus: 'UNAVAILABLE',
     assignedAmbulanceId: '',
@@ -221,7 +230,7 @@ export default function AddDriverForm({
     setLoading(true)
     setMasterDataError(null)
     try {
-      const [regs, dists, stns, depts, roles, ambs, stats] = await Promise.all([
+      const [regs, dists, stns, depts, roles, ambs, stats, workShifts] = await Promise.all([
         systemSetupService.getRegions(),
         systemSetupService.getDistricts().catch(() => []),
         systemSetupService.getStations().catch(() => []),
@@ -229,10 +238,10 @@ export default function AddDriverForm({
         systemSetupService.getRoles(),
         ambulancesService.getAll().catch(() => emergencyRequestsService.getAvailableAmbulances()),
         driversService.getStats().catch(() => ({ total: 0 })),
+        fetchWorkShiftEmploymentOptions(),
       ])
 
       const regionsList = Array.isArray(regs) ? regs : []
-      const deptList = Array.isArray(depts) ? depts : []
       const rolesList = Array.isArray(roles) ? roles : []
       let districtList = Array.isArray(dists) ? dists : []
       if (!districtList.length) {
@@ -257,7 +266,13 @@ export default function AddDriverForm({
       setRegions(regionsList)
       setAllDistricts(districtList.filter((d) => d.isActive !== false))
       setAllStations(stationList.filter((s) => s.isActive !== false))
+      const deptList = filterDepartmentsForRole(
+        Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : [],
+        'driver',
+      )
       setDepartments(deptList)
+      setEmploymentTypeOptions(workShifts.map((s) => ({ id: s.id, label: s.label })))
+      setWorkShiftOptions(workShifts)
 
       const driverRole = rolesList.find((r: EmployeeRole) => r.name === 'Driver')
       if (!driverRole?.id) {
@@ -265,13 +280,10 @@ export default function AddDriverForm({
       }
       setDriverRoleId(driverRole?.id || '')
 
-      const opsDept =
-        deptList.find((d: Department) => d.name === 'Field Emergency') ||
-        deptList.find((d: Department) => d.name === 'Dispatch Operations') ||
-        deptList[0]
+      const opsDept = suggestDepartmentForRole(deptList, 'driver')
 
-      const nextNum = String((stats?.total ?? 0) + 1).padStart(3, '0')
-      const code = `DR-${nextNum}`
+      const nextNum = (stats as { nextCode?: string })?.nextCode
+      const code = nextNum || `DR-${String((stats?.total ?? 0) + 1).padStart(3, '0')}`
       setDriverCode(code)
 
       setAmbulances(
@@ -288,6 +300,7 @@ export default function AddDriverForm({
         patch({
           employeeCode: code,
           departmentId: opsDept?.id || '',
+          employmentType: workShifts[0]?.id || '',
         })
       } else {
         try {
@@ -359,16 +372,9 @@ export default function AddDriverForm({
   }
 
   const handleStationChange = (stationId: string) => {
-    const station = allStations.find((s) => s.id === stationId)
     patch({
       stationId,
       assignedAmbulanceId: '',
-      ...(station
-        ? {
-            regionId: station.regionId || form.regionId,
-            districtId: station.districtId || form.districtId,
-          }
-        : {}),
     })
   }
 
@@ -409,7 +415,7 @@ export default function AddDriverForm({
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
-    const shift = shiftTimesForEmploymentType(form.employmentType)
+    const shift = shiftTimesFromWorkShift(form.employmentType, workShiftOptions)
 
     return {
       role: 'EMPLOYEE' as const,
@@ -432,7 +438,11 @@ export default function AddDriverForm({
       emergencyContactName: form.emergencyContactName.trim() || undefined,
       emergencyPhone: form.emergencyPhone.trim() || undefined,
       relationship: form.relationship.trim() || undefined,
-      address: form.address.trim() || undefined,
+      address: formatResidentialAddress(
+        form.address,
+        selectedDistrict?.name,
+        selectedRegion?.name,
+      ),
       licenseNumber: form.licenseNumber.trim() || undefined,
       licenseClass: form.licenseClass || undefined,
       licenseType: `Class ${form.licenseClass}`,
@@ -567,7 +577,7 @@ export default function AddDriverForm({
                     relationship: '',
                     employeeCode: driverCode,
                     departmentId: form.departmentId,
-                    employmentType: 'Day time',
+                    employmentType: employmentTypeOptions[0]?.id || '',
                     joinDate: new Date().toISOString().split('T')[0],
                     shiftStatus: 'UNAVAILABLE',
                     assignedAmbulanceId: '',
@@ -812,16 +822,19 @@ export default function AddDriverForm({
 
                 {step === 'location' && (
                   <>
-                    <SectionHeader icon={MapPin} title="Location & Employment" subtitle="Station assignment" color="red" />
+                    <SectionHeader icon={MapPin} title="Home & Work Assignment" subtitle="Home address vs work station" color="red" />
 
-                    {(selectedRegion || selectedDistrict || selectedStation) && (
-                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
+                    <div className="mb-6 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                      <p className="font-bold text-slate-800 mb-1">Home location</p>
+                      <p>Region and district are where the driver lives. Station is where they are based and receive missions.</p>
+                    </div>
+
+                    {(selectedRegion || selectedDistrict) && (
+                      <div className="mb-4 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
                         <MapPin className="w-4 h-4 text-red-500 shrink-0" />
                         <span>{selectedRegion?.name || '—'}</span>
                         <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span>{selectedDistrict?.name || 'Select district'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
+                        <span>{selectedDistrict?.name || 'Select home district'}</span>
                       </div>
                     )}
 
@@ -839,6 +852,39 @@ export default function AddDriverForm({
                         />
                       </div>
                       <FormSelect
+                        label="Home Region"
+                        required
+                        icon={MapPin}
+                        options={regions}
+                        value={form.regionId}
+                        error={fieldErrors.regionId}
+                        emptyHint={regions.length ? 'Select home region' : 'No regions — add in System Setup'}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
+                      />
+                      <FormSelect
+                        label="Home District"
+                        required
+                        icon={MapPin}
+                        options={districtsForRegion}
+                        value={form.districtId}
+                        error={fieldErrors.districtId}
+                        disabled={!form.regionId || loading}
+                        loading={loading}
+                        emptyHint={
+                          !form.regionId
+                            ? 'Select home region first'
+                            : districtsForRegion.length
+                              ? 'Select home district'
+                              : 'No districts in this region'
+                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-red-50">
+                      <SectionHeader icon={Building2} title="Work Assignment" subtitle="Station, department, and shift" color="red" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormSelect
                         label="Assigned Station"
                         required
                         icon={Building2}
@@ -849,57 +895,13 @@ export default function AddDriverForm({
                         loading={loading}
                         emptyHint={
                           stationOptions.length
-                            ? 'Select Station'
-                            : 'No stations — add in System Setup'
+                            ? 'Select work station'
+                            : 'No stations — add in Master Data → Stations'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           handleStationChange(e.target.value)
                         }
                       />
-                      <FormSelect
-                        label="Region"
-                        required
-                        icon={MapPin}
-                        options={regions}
-                        value={form.regionId}
-                        error={fieldErrors.regionId}
-                        emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
-                      />
-                      <FormSelect
-                        label="District"
-                        required
-                        icon={MapPin}
-                        options={districtsForRegion}
-                        value={form.districtId}
-                        error={fieldErrors.districtId}
-                        disabled={!form.regionId || loading}
-                        loading={loading}
-                        emptyHint={
-                          !form.regionId
-                            ? 'Select a region first'
-                            : districtsForRegion.length
-                              ? 'Select District'
-                              : 'No districts in this region'
-                        }
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
-                      />
-
-                      {selectedStation && (
-                        <div className="md:col-span-2 p-4 rounded-xl bg-slate-50 border border-red-100">
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">
-                            Selected Station
-                          </p>
-                          <p className="text-sm font-bold text-slate-800">{selectedStation.name}</p>
-                          {selectedStation.address && (
-                            <p className="text-xs text-slate-600 mt-1">{selectedStation.address}</p>
-                          )}
-                          {selectedStation.phone && (
-                            <p className="text-xs text-slate-500 mt-1">Tel: {selectedStation.phone}</p>
-                          )}
-                        </div>
-                      )}
-
                       <FormInput
                         label="Employee Code"
                         required
@@ -915,14 +917,19 @@ export default function AddDriverForm({
                         options={departments}
                         value={form.departmentId}
                         error={fieldErrors.departmentId}
-                        emptyHint={departments.length ? 'Select Department' : 'No departments loaded'}
+                        emptyHint={departments.length ? 'Field / operations departments only' : 'No departments loaded'}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ departmentId: e.target.value })}
                       />
                       <FormSelect
-                        label="Employment Type"
+                        label="Work Shift"
                         required
-                        options={EMPLOYMENT_SHIFT_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+                        options={employmentTypeOptions}
                         value={form.employmentType}
+                        emptyHint={
+                          employmentTypeOptions.length
+                            ? 'Shifts from Shift Management'
+                            : 'No shifts configured — add in Shift Management'
+                        }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           patch({ employmentType: e.target.value })
                         }
@@ -937,6 +944,7 @@ export default function AddDriverForm({
                         max={todayStr}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ joinDate: e.target.value })}
                       />
+                      </div>
                     </div>
 
                     <div className="mt-8 pt-8 border-t border-red-50">

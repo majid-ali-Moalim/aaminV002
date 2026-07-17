@@ -109,3 +109,45 @@ export function getActiveShiftCodeAt(at = new Date()): 'DAY' | 'NIGHT' {
 export function activeShiftLabel(at = new Date()): string {
   return getActiveShiftCodeAt(at) === 'DAY' ? 'Day time (06:00 – 18:00)' : 'Night time (18:00 – 06:00)'
 }
+
+export function resolveShiftForEmployee(
+  defaultShift?: string | null,
+  typicalStartTime?: string | null,
+) {
+  const label = (defaultShift || typicalStartTime || '').toLowerCase()
+  if (label.includes('night')) return NIGHT_SHIFT
+  return DAY_SHIFT
+}
+
+export function isFieldShiftRole(roleName?: string | null): boolean {
+  const bucket = staffRoleBucket(roleName)
+  return bucket === 'drivers' || bucket === 'nurses' || bucket === 'dispatchers'
+}
+
+export function isEmployeeOnActiveShift(
+  defaultShift?: string | null,
+  typicalStartTime?: string | null,
+  at = new Date(),
+): boolean {
+  const empShift = resolveShiftForEmployee(defaultShift, typicalStartTime)
+  return empShift.code === getActiveShiftCodeAt(at)
+}
+
+export function getAttendanceShiftBlockReason(
+  roleName?: string | null,
+  defaultShift?: string | null,
+  typicalStartTime?: string | null,
+  at = new Date(),
+): string | null {
+  if (!isFieldShiftRole(roleName)) return null
+  if (isEmployeeOnActiveShift(defaultShift, typicalStartTime, at)) return null
+
+  const empShift = resolveShiftForEmployee(defaultShift, typicalStartTime)
+  const activeWindow = getActiveShiftCodeAt(at) === 'DAY' ? DAY_SHIFT : NIGHT_SHIFT
+
+  return (
+    `${empShift.name} staff (${empShift.startTime} – ${empShift.endTime}) can only be marked ` +
+    `present or absent during their shift. Current window: ${activeShiftLabel(at)} ` +
+    `(${activeWindow.startTime} – ${activeWindow.endTime}).`
+  )
+}

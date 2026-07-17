@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateNextEmployeeCode } from '../employees/employee-code.util';
 
 @Injectable()
 export class DispatchersService {
@@ -49,6 +50,8 @@ export class DispatchersService {
       select: { status: true, shiftStatus: true },
     });
 
+    const nextCode = await generateNextEmployeeCode(this.prisma, 'DIS');
+
     return {
       total: dispatchers.length,
       active: dispatchers.filter((d) => d.status === 'ACTIVE').length,
@@ -56,6 +59,7 @@ export class DispatchersService {
         (d) => d.shiftStatus === 'ON_DUTY' || d.shiftStatus === 'AVAILABLE',
       ).length,
       inactive: dispatchers.filter((d) => d.status === 'INACTIVE').length,
+      nextCode,
     };
   }
 }

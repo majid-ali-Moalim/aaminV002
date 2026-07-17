@@ -102,20 +102,141 @@ export class StationCoverageService implements OnModuleInit {
     districtId?: string | null;
     regionId?: string | null;
   }): Promise<string | null> {
-    if (input.stationId) return input.stationId;
-
     const defaultId = await this.getDefaultStationId();
-    if (defaultId) return defaultId;
+    const multiStation = !defaultId;
 
     if (input.districtId) {
       const result = await this.suggestStationForDistrict(
         input.districtId,
         input.regionId ?? undefined,
       );
-      return result.suggested?.id ?? null;
+      const covering = result.alternatives.filter((station) => station.coversDistrict);
+      if (covering[0]?.id) return covering[0].id;
+      if (!multiStation && result.suggested?.id) return result.suggested.id;
+    }
+
+    if (!multiStation) {
+      if (input.stationId) return input.stationId;
+      return defaultId;
     }
 
     return null;
+  }
+
+  async resolveCaseStationRouting(input: {
+    districtId?: string | null;
+    regionId?: string | null;
+    submitterEmployeeId?: string | null;
+  }): Promise<{
+    stationId: string | null;
+    stationName: string | null;
+    submitterStationId: string | null;
+    crossStationRoute: boolean;
+  }> {
+    const stationId = await this.resolveStationIdForCase({
+      districtId: input.districtId,
+      regionId: input.regionId,
+    });
+
+    let stationName: string | null = null;
+    if (stationId) {
+      const station = await this.prisma.station.findUnique({
+        where: { id: stationId },
+        select: { name: true },
+      });
+      stationName = station?.name ?? null;
+    }
+
+    let submitterStationId: string | null = null;
+    if (input.submitterEmployeeId) {
+      const submitter = await this.prisma.employee.findUnique({
+        where: { id: input.submitterEmployeeId },
+        select: { stationId: true },
+      });
+      submitterStationId = submitter?.stationId ?? null;
+    }
+
+    const crossStationRoute = Boolean(
+      stationId &&
+        submitterStationId &&
+        submitterStationId !== stationId,
+    );
+
+    return {
+      stationId,
+      stationName,
+      submitterStationId,
+      crossStationRoute,
+    };
+  }
+
+  /** @deprecated Cases are station-owned; dispatchers claim cases when assigning crew. */
+  async findOwningDispatcherId(input: {
+    stationId: string;
+    districtId?: string | null;
+    submitterEmployeeId?: string | null;
+  }): Promise<{
+    dispatcherId: string | null;
+    autoRouted: boolean;
+    fromStationId: string | null;
+  }> {
+    const { stationId, districtId, submitterEmployeeId } = input;
+    let autoRouted = false;
+    let fromStationId: string | null = null;
+
+    const coveringStation = await this.prisma.station.findUnique({
+      where: { id: stationId },
+    });
+    if (!coveringStation) {
+      return { dispatcherId: null, autoRouted: false, fromStationId: null };
+    }
+
+    if (submitterEmployeeId) {
+      const submitter = await this.prisma.employee.findFirst({
+        where: {
+          id: submitterEmployeeId,
+          status: 'ACTIVE',
+          employeeRole: { name: { contains: 'Dispatcher', mode: 'insensitive' } },
+        },
+        include: { station: true },
+      });
+
+      if (submitter) {
+        if (submitter.stationId && submitter.stationId !== stationId) {
+          autoRouted = true;
+          fromStationId = submitter.stationId;
+        } else if (
+          submitter.stationId === stationId &&
+          (!districtId || this.stationCoversDistrict(coveringStation, districtId))
+        ) {
+          return {
+            dispatcherId: submitter.id,
+            autoRouted: false,
+            fromStationId: null,
+          };
+        }
+      }
+    }
+
+    const dispatchers = await this.prisma.employee.findMany({
+      where: {
+        status: 'ACTIVE',
+        stationId,
+        employeeRole: { name: { contains: 'Dispatcher', mode: 'insensitive' } },
+      },
+      orderBy: [{ updatedAt: 'asc' }],
+    });
+
+    const shiftRank = (status: string | null | undefined) => {
+      if (status === 'AVAILABLE' || status === 'ON_DUTY') return 0;
+      if (status === 'OFF_DUTY') return 2;
+      return 1;
+    };
+
+    dispatchers.sort((a, b) => shiftRank(a.shiftStatus) - shiftRank(b.shiftStatus));
+    const chosen = dispatchers[0]?.id ?? null;
+
+    return { dispatcherId: chosen, autoRouted, fromStationId };
   }
 
   async validateCoverageDistrictIds(regionId: string, districtIds: string[]) {

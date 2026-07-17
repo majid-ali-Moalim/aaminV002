@@ -15,6 +15,7 @@ import {
   regionalCasesWhere,
   regionalPendingCasesWhere,
   isCaseInDispatcherPendingScope,
+  isCaseAtDispatcherStation,
 } from '../dispatchers-app/dispatcher-scope.util';
 import { StationCoverageService } from '../station-coverage/station-coverage.service';
 import {
@@ -29,6 +30,14 @@ type AuthUser = {
   employeeId?: string;
   employeeRole?: string;
 };
+
+function caseRequiresNurse(caseRow: {
+  notes?: string | null;
+  manualDispatchNotes?: string | null;
+}): boolean {
+  const blob = `${caseRow.notes ?? ''}\n${caseRow.manualDispatchNotes ?? ''}`.toUpperCase();
+  return blob.includes('REQUIRES NURSE: YES') || blob.includes('NURSE REQUIRED');
+}
 
 type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional';
 
@@ -124,6 +133,11 @@ export class EmergencyRequestsService {
 
     const isMine = caseRow.dispatcherId === scope.dispatcherId;
     const isRegionalPending = isCaseInDispatcherPendingScope(scope, caseRow, scope.stationScoped);
+    const inStationScope = isCaseAtDispatcherStation(scope, caseRow, scope.stationScoped);
+
+    if (!inStationScope) {
+      throw new ForbiddenException('Case belongs to another station');
+    }
 
     if (action === 'assign') {
       if (caseRow.dispatcherId && caseRow.dispatcherId !== scope.dispatcherId) {
@@ -146,8 +160,20 @@ export class EmergencyRequestsService {
       throw new ForbiddenException('You can only update cases assigned to you');
     }
 
+    if (action === 'read') {
+      return;
+    }
+
     if (!isMine && !isRegionalPending) {
       throw new ForbiddenException('Case is outside your dispatch scope');
+    }
+  }
+
+  private assertValidSomaliaPhone(value: string | undefined | null, label: string) {
+    if (!value?.trim()) return;
+    const digits = String(value).replace(/\D/g, '').replace(/^252/, '');
+    if (!/^[67]\d{7,8}$/.test(digits)) {
+      throw new BadRequestException(`Invalid Somali ${label}`);
     }
   }
 
@@ -166,6 +192,11 @@ export class EmergencyRequestsService {
         }
       };
       sanitize(data);
+
+      this.assertValidSomaliaPhone(data.callerPhone, 'phone number');
+      if (data.newPatient?.phone) {
+        this.assertValidSomaliaPhone(data.newPatient.phone, 'patient phone');
+      }
 
       let patientId = data.patientId;
 
@@ -265,14 +296,28 @@ export class EmergencyRequestsService {
       if (data.regionId) finalPayload.region = { connect: { id: data.regionId } };
       if (data.districtId) finalPayload.district = { connect: { id: data.districtId } };
 
-      const resolvedStationId = await this.stationCoverage.resolveStationIdForCase({
-        stationId: data.stationId,
+      const stationRouting = await this.stationCoverage.resolveCaseStationRouting({
         districtId: data.districtId,
         regionId: data.regionId,
+        submitterEmployeeId: data.submitterEmployeeId,
       });
+      const resolvedStationId = stationRouting.stationId;
+      const stationScoped = await this.stationCoverage.usesStationScoping();
+
+      if (stationScoped && !resolvedStationId) {
+        throw new BadRequestException(
+          'No station covers the selected district. Configure station coverage or choose a covered district.',
+        );
+      }
+
       if (resolvedStationId) {
         finalPayload.station = { connect: { id: resolvedStationId } };
       }
+
+      // Cases belong to the responsible station pending queue — no dispatcher owner at create.
+      const autoRouteFromStationId = stationRouting.crossStationRoute
+        ? stationRouting.submitterStationId
+        : null;
 
       if (data.destinationHospitalId) finalPayload.destinationHospital = { connect: { id: data.destinationHospitalId } };
       if (data.destinationHospitalBranchId) finalPayload.destinationHospitalBranchId = String(data.destinationHospitalBranchId);
@@ -313,7 +358,15 @@ export class EmergencyRequestsService {
       if (isAssigned) {
         finalPayload.status = 'ASSIGNED';
         finalPayload.assignedAt = new Date();
+      } else {
+        finalPayload.status = 'PENDING';
       }
+
+      const autoRouteMeta = {
+        fromStationId: autoRouteFromStationId,
+        stationName: stationRouting.stationName,
+        crossStationRoute: stationRouting.crossStationRoute,
+      };
 
       let request:
         | (Awaited<ReturnType<typeof this.prisma.emergencyRequest.create>> & {
@@ -330,7 +383,12 @@ export class EmergencyRequestsService {
         try {
           request = await this.prisma.emergencyRequest.create({
             data: finalPayload,
-            include: { patient: true, driver: true, nurse: true },
+            include: {
+              patient: true,
+              driver: true,
+              nurse: true,
+              station: { select: { id: true, name: true } },
+            },
           });
           break;
         } catch (createError: any) {
@@ -349,32 +407,57 @@ export class EmergencyRequestsService {
         throw new BadRequestException('Could not generate a unique tracking code. Please try again.');
       }
 
+      if (
+        autoRouteMeta.crossStationRoute &&
+        autoRouteMeta.fromStationId &&
+        resolvedStationId
+      ) {
+        const transferredById = data.submitterEmployeeId;
+        if (transferredById) {
+          await this.prisma.emergencyCaseTransfer.create({
+            data: {
+              emergencyRequestId: request.id,
+              fromStationId: autoRouteMeta.fromStationId,
+              toStationId: resolvedStationId,
+              reason: 'Auto-routed to covering station based on patient district',
+              transferredById,
+            },
+          });
+        }
+      }
+
       const assignedAtCreate = [request.driver?.userId, request.nurse?.userId].filter(Boolean) as string[];
 
+      const stationLabel = autoRouteMeta.stationName || 'the responsible station';
       await this.notifications.dispatchEvent({
         eventKey: 'EMERGENCY_CREATED',
-        title: 'New Emergency Case',
-        message: `Case ${request.trackingCode} created for ${request.patient.fullName} at ${request.pickupLocation}${
-          request.pickupLatitude != null && request.pickupLongitude != null
-            ? ` (GPS: ${request.pickupLatitude}, ${request.pickupLongitude})`
-            : ''
-        }`,
+        title: 'New emergency request assigned to your station',
+        message: `Case ${request.trackingCode} for ${request.patient.fullName} at ${request.pickupLocation} is waiting in the ${stationLabel} pending queue.`,
         type: 'EMERGENCY',
         category: 'MISSION',
         priority: request.priority as any,
         entityType: 'EmergencyRequest',
         entityId: request.id,
-        redirectUrl: `/dispatcher/emergency/pending?id=${request.id}`,
+        redirectUrl: `/dispatcher/emergency-requests/pending`,
         context: {
           createdById: data.createdByUserId ?? data.dispatcherUserId,
           regionId: request.regionId ?? data.regionId ?? null,
           stationId: request.stationId ?? resolvedStationId ?? null,
           assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
           includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
+          directOnly: false,
         },
       });
 
-      return request;
+      return {
+        ...request,
+        routing: {
+          stationId: resolvedStationId,
+          stationName: autoRouteMeta.stationName,
+          crossStationRoute: autoRouteMeta.crossStationRoute,
+          submitterCanAccess: !autoRouteMeta.crossStationRoute,
+        },
+      };
     } catch (error: any) {
       console.error('STRICT DISPATCH ERROR:', error);
       let detail = error.message;
@@ -585,8 +668,13 @@ export class EmergencyRequestsService {
 
     const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
 
-    if (!data.driverId || !data.nurseId) {
-      throw new BadRequestException('Both a driver and a nurse must be assigned before dispatch');
+    if (!data.driverId) {
+      throw new BadRequestException('A driver must be assigned before dispatch');
+    }
+    if (caseRequiresNurse(existing) && !data.nurseId) {
+      throw new BadRequestException(
+        'Nurse required — assign a nurse to this case before dispatch can proceed',
+      );
     }
 
     if (data.driverId) {

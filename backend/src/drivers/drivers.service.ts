@@ -1,6 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateNextEmployeeCode } from '../employees/employee-code.util';
+import { getAttendanceShiftBlockReason } from '../employee-attendance/shift-types';
 
 @Injectable()
 export class DriversService {
@@ -108,6 +110,7 @@ export class DriversService {
       onBreak,
       unavailable,
       expiringLicenses,
+      nextCode: await generateNextEmployeeCode(this.prisma, 'DR'),
     };
   }
 
@@ -212,8 +215,22 @@ export class DriversService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+      include: { employeeRole: true },
+    });
     if (!employee) throw new Error('Employee not found');
+
+    const checkInTime = new Date();
+    const blockReason = getAttendanceShiftBlockReason(
+      employee.employeeRole?.name,
+      employee.defaultShift,
+      employee.typicalStartTime,
+      checkInTime,
+    );
+    if (blockReason) {
+      throw new BadRequestException(blockReason);
+    }
 
     // Check if already checked in today
     const existing = await this.prisma.attendanceRecord.findFirst({
@@ -227,10 +244,7 @@ export class DriversService {
       throw new Error('Already checked in today');
     }
 
-    const checkInTime = new Date();
     let status = 'ON_TIME';
-    
-    // Logic: if after typicalStartTime, it's LATE
     if (employee.typicalStartTime) {
       const [hours, minutes] = employee.typicalStartTime.split(':').map(Number);
       const scheduledTime = new Date();

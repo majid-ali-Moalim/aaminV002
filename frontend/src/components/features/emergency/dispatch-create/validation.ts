@@ -1,4 +1,8 @@
 import { isValidSomaliaPhone } from '@/lib/driverFormValidation'
+import { isValidDispatchPatientName } from '@/lib/emergency/patientName'
+import { isOtherEmergencyType } from '@/lib/emergency/emergencyTypes'
+import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
+import { Priority } from '@/types'
 import type {
   DispatchFormErrors,
   DispatchRequestType,
@@ -7,10 +11,18 @@ import type {
   ReferralDispatchForm,
 } from './types'
 
-const NAME_MIN = 2
-
 function req(errors: DispatchFormErrors, field: string, value: string, label: string) {
   if (!value.trim()) errors[field] = `${label} is required`
+}
+
+function patientName(errors: DispatchFormErrors, field: string, value: string) {
+  if (!value.trim()) {
+    errors[field] = 'Patient name is required'
+    return
+  }
+  if (!isValidDispatchPatientName(value)) {
+    errors[field] = 'Enter a valid patient name or use UNKNOWN'
+  }
 }
 
 function phone(errors: DispatchFormErrors, field: string, value: string) {
@@ -23,59 +35,72 @@ function phone(errors: DispatchFormErrors, field: string, value: string) {
   }
 }
 
-export function validateEmergencyDispatchForm(data: EmergencyDispatchForm): DispatchFormErrors {
+function needsNurseCheck(errors: DispatchFormErrors, needsNurse: boolean | null) {
+  if (needsNurse === null) errors.needsNurse = 'Select Yes or No for nurse required'
+}
+
+export function validateEmergencyDispatchForm(
+  data: EmergencyDispatchForm,
+  emergencyTypes: EmergencyTypeOption[] = [],
+): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
-  req(errors, 'patientName', data.patientName, 'Patient name')
+  patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
   if (!data.emergencyTypeId) errors.emergencyTypeId = 'Emergency type is required'
+  const selectedType = emergencyTypes.find((t) => t.id === data.emergencyTypeId)
+  if (selectedType && isOtherEmergencyType(selectedType) && !data.emergencyTypeOther.trim()) {
+    errors.emergencyTypeOther = 'Describe the other emergency type'
+  }
   if (!data.regionId) errors.regionId = 'Region is required'
   if (!data.districtId) errors.districtId = 'District is required'
-  req(errors, 'landmark', data.landmark, 'Landmark')
   if (!data.priority) errors.priority = 'Priority is required'
-  req(errors, 'briefDescription', data.briefDescription, 'Brief description')
-  if (!data.destinationHospitalId) errors.destinationHospitalId = 'Destination hospital is required'
-  if (data.destinationHospitalId && !data.destinationHospitalBranchId) {
-    errors.destinationHospitalBranchId = 'Select a hospital branch'
+  if (data.priority === Priority.MEDIUM || data.priority === Priority.LOW) {
+    errors.priority = 'Only Critical or High priority is available for emergencies'
   }
+  req(errors, 'briefDescription', data.briefDescription, 'Brief description')
   return errors
 }
 
 export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
-  req(errors, 'patientName', data.patientName, 'Patient name')
+  patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
   if (!data.transportType) errors.transportType = 'Transport type is required'
+  if (data.transportType === 'OTHER' && !data.transportTypeOther.trim()) {
+    errors.transportTypeOther = 'Describe the transport type'
+  }
   if (!data.regionId) errors.regionId = 'Pickup region is required'
   if (!data.districtId) errors.districtId = 'Pickup district is required'
   req(errors, 'pickupAddress', data.pickupAddress, 'Pickup address')
-  if (!data.destinationHospitalId) errors.destinationHospitalId = 'Destination hospital is required'
-  if (data.destinationHospitalId && !data.destinationHospitalBranchId) {
-    errors.destinationHospitalBranchId = 'Select a hospital branch'
+  const hasHospital =
+    Boolean(data.destinationHospitalId) || Boolean(data.destinationHospitalName.trim())
+  if (!hasHospital) errors.destinationHospitalId = 'Destination hospital or place is required'
+  if (!data.bookingDateTime) errors.bookingDateTime = 'Booking date and time is required'
+  else {
+    const booking = new Date(data.bookingDateTime)
+    if (Number.isNaN(booking.getTime())) {
+      errors.bookingDateTime = 'Enter a valid booking date and time'
+    } else if (booking.getTime() < Date.now() - 60_000) {
+      errors.bookingDateTime = 'Booking cannot be in the past'
+    }
   }
-  if (!data.bookingDate) errors.bookingDate = 'Booking date is required'
-  else if (data.bookingDate < new Date().toISOString().slice(0, 10)) {
-    errors.bookingDate = 'Booking date cannot be in the past'
-  }
-  if (!data.bookingTime) errors.bookingTime = 'Booking time is required'
+  needsNurseCheck(errors, data.needsNurse)
   return errors
 }
 
 export function validateReferralDispatchForm(data: ReferralDispatchForm): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
-  req(errors, 'patientName', data.patientName, 'Patient name')
+  patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
   req(errors, 'referringHospital', data.referringHospital, 'Referring hospital')
-  if (!data.receivingHospitalId) errors.receivingHospitalId = 'Receiving hospital is required'
-  if (data.receivingHospitalId && !data.receivingHospitalBranchId) {
-    errors.receivingHospitalBranchId = 'Select receiving branch'
-  }
+  const hasReceiving =
+    Boolean(data.receivingHospitalId) || Boolean(data.receivingHospital.trim())
+  if (!hasReceiving) errors.receivingHospitalId = 'Receiving hospital is required'
   req(errors, 'referralReason', data.referralReason, 'Reason for referral')
   if (!data.priority) errors.priority = 'Priority is required'
   if (!data.regionId) errors.regionId = 'Region is required'
   if (!data.districtId) errors.districtId = 'District is required'
-  if (data.patientName.trim() && data.patientName.trim().length < NAME_MIN) {
-    errors.patientName = 'Patient name is too short'
-  }
+  needsNurseCheck(errors, data.needsNurse)
   return errors
 }
 
@@ -86,10 +111,11 @@ export function validateDispatchForm(
     nonEmergency: NonEmergencyDispatchForm
     referral: ReferralDispatchForm
   },
+  emergencyTypes: EmergencyTypeOption[] = [],
 ): DispatchFormErrors {
   switch (type) {
     case 'EMERGENCY':
-      return validateEmergencyDispatchForm(draft.emergency)
+      return validateEmergencyDispatchForm(draft.emergency, emergencyTypes)
     case 'NON_EMERGENCY':
       return validateNonEmergencyDispatchForm(draft.nonEmergency)
     case 'REFERRAL':

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Prisma, NotificationType, EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateNextEmployeeCode } from '../employees/employee-code.util';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -117,6 +118,7 @@ export class NursesService {
       totalRecords,
       totalIncidents,
       criticalIncidents: nurses.reduce((acc, n) => acc + n.incidentReports.filter(i => i.priority === 'CRITICAL').length, 0),
+      nextCode: await generateNextEmployeeCode(this.prisma, 'NUR'),
     };
   }
 

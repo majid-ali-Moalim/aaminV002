@@ -28,7 +28,9 @@ export class EmergencyRequestsController {
   @Public()
   @Post()
   @ApiOperation({ summary: 'Create a new emergency request' })
-  create(@Body() createEmergencyRequestDto: any) {
+  create(@Body() createEmergencyRequestDto: any, @Request() req) {
+    if (req.user?.sub) createEmergencyRequestDto.createdByUserId = req.user.sub;
+    if (req.user?.employeeId) createEmergencyRequestDto.submitterEmployeeId = req.user.employeeId;
     return this.emergencyRequestsService.create(createEmergencyRequestDto);
   }
 

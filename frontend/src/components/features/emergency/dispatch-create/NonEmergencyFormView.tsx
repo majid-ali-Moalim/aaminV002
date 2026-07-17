@@ -1,24 +1,24 @@
 'use client'
 
 import { Truck } from 'lucide-react'
-import { BOOKING_TIME_SLOTS, TRANSPORT_TYPES } from '@/components/public/hire-ambulance/constants'
-import type { District, Region } from '@/types'
+import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES } from '@/lib/emergency/dispatchFormShared'
+import type { District } from '@/types'
 import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
-import { FieldLabel, fieldInputClass, FormActions, SectionCard } from './ui'
+import PatientNameField from './PatientNameField'
+import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
+import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { DispatchFormErrors, NonEmergencyDispatchForm } from './types'
 
 type Props = {
   form: NonEmergencyDispatchForm
   errors: DispatchFormErrors
-  regions: Region[]
+  banadirRegionName: string
   districts: District[]
   hospitals: HospitalOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<NonEmergencyDispatchForm>) => void
-  onRegionChange: (regionId: string) => void
   onCancel: () => void
-  onSaveDraft: () => void
   onSubmit: () => void
   submitting: boolean
 }
@@ -26,18 +26,16 @@ type Props = {
 export default function NonEmergencyDispatchFormView({
   form,
   errors,
-  regions,
+  banadirRegionName,
   districts,
   hospitals,
   loadingDistricts,
   onChange,
-  onRegionChange,
   onCancel,
-  onSaveDraft,
   onSubmit,
   submitting,
 }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
+  const minDateTime = new Date().toISOString().slice(0, 16)
 
   return (
     <div className="space-y-6">
@@ -46,20 +44,20 @@ export default function NonEmergencyDispatchFormView({
           Scheduled or non-urgent medical transportation — appointments, discharges, and routine transfers.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <FieldLabel required error={errors.patientName}>Patient Name</FieldLabel>
-            <input
-              className={fieldInputClass(errors.patientName)}
-              value={form.patientName}
-              onChange={(e) => onChange({ patientName: e.target.value })}
-            />
-          </div>
+          <PatientNameField
+            value={form.patientName}
+            error={errors.patientName}
+            onChange={(patientName) => onChange({ patientName })}
+          />
           <div>
             <FieldLabel required error={errors.phone}>Phone Number</FieldLabel>
             <input
               className={fieldInputClass(errors.phone)}
               value={form.phone}
-              onChange={(e) => onChange({ phone: e.target.value })}
+              inputMode="numeric"
+              maxLength={9}
+              onChange={(e) => onChange({ phone: phoneDigitsOnly(e.target.value) })}
+              placeholder="61XXXXXXX"
             />
           </div>
           <div className="sm:col-span-2">
@@ -67,30 +65,33 @@ export default function NonEmergencyDispatchFormView({
             <select
               className={fieldInputClass(errors.transportType)}
               value={form.transportType}
-              onChange={(e) => onChange({ transportType: e.target.value })}
+              onChange={(e) => onChange({ transportType: e.target.value, transportTypeOther: '' })}
             >
               <option value="">Select transport type</option>
-              {TRANSPORT_TYPES.map((t) => (
+              {DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
             </select>
           </div>
+          {form.transportType === 'OTHER' && (
+            <div className="sm:col-span-2">
+              <FieldLabel required error={errors.transportTypeOther}>Describe transport type</FieldLabel>
+              <input
+                className={fieldInputClass(errors.transportTypeOther)}
+                value={form.transportTypeOther}
+                onChange={(e) => onChange({ transportTypeOther: e.target.value })}
+              />
+            </div>
+          )}
           <div>
-            <FieldLabel required error={errors.regionId}>Pickup Region</FieldLabel>
-            <select
-              className={fieldInputClass(errors.regionId)}
-              value={form.regionId}
-              onChange={(e) => onRegionChange(e.target.value)}
-            >
-              <option value="">Select region</option>
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <FieldLabel required>Pickup Region</FieldLabel>
+            <input
+              className={`${fieldInputClass()} bg-slate-100 text-slate-600 cursor-not-allowed`}
+              value={banadirRegionName}
+              readOnly
+            />
           </div>
           <div>
             <FieldLabel required error={errors.districtId}>Pickup District</FieldLabel>
@@ -98,7 +99,7 @@ export default function NonEmergencyDispatchFormView({
               className={fieldInputClass(errors.districtId)}
               value={form.districtId}
               onChange={(e) => onChange({ districtId: e.target.value, stationId: '' })}
-              disabled={!form.regionId || loadingDistricts}
+              disabled={loadingDistricts}
             >
               <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
               {districts.map((d) => (
@@ -125,54 +126,35 @@ export default function NonEmergencyDispatchFormView({
           </div>
           <div className="sm:col-span-2">
             <HospitalDestinationPicker
+              combobox
+              branchRequired={false}
               hospitals={hospitals}
               hospitalId={form.destinationHospitalId}
+              hospitalName={form.destinationHospitalName}
               branchId={form.destinationHospitalBranchId}
+              branchName={form.destinationHospitalBranchName}
               required
               hospitalError={errors.destinationHospitalId}
               branchError={errors.destinationHospitalBranchId}
-              onHospitalChange={(hospitalId, branchId, branchName) =>
+              onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
                 onChange({
                   destinationHospitalId: hospitalId,
+                  destinationHospitalName: hospitalName,
                   destinationHospitalBranchId: branchId,
                   destinationHospitalBranchName: branchName,
-                  destination: branchName,
+                  destination: branchName || hospitalName,
                 })
               }
             />
           </div>
-          <div>
-            <FieldLabel required error={errors.bookingDate}>Booking Date</FieldLabel>
-            <input
-              type="date"
-              min={today}
-              className={fieldInputClass(errors.bookingDate)}
-              value={form.bookingDate}
-              onChange={(e) => onChange({ bookingDate: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel required error={errors.bookingTime}>Booking Time</FieldLabel>
-            <select
-              className={fieldInputClass(errors.bookingTime)}
-              value={form.bookingTime}
-              onChange={(e) => onChange({ bookingTime: e.target.value })}
-            >
-              <option value="">Select time</option>
-              {BOOKING_TIME_SLOTS.map((slot) => (
-                <option key={slot.value} value={slot.value}>
-                  {slot.label}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="sm:col-span-2">
-            <FieldLabel error={errors.mobilityRequirement}>Mobility Requirement</FieldLabel>
+            <FieldLabel required error={errors.bookingDateTime}>Booking Date & Time</FieldLabel>
             <input
-              className={fieldInputClass(errors.mobilityRequirement)}
-              value={form.mobilityRequirement}
-              onChange={(e) => onChange({ mobilityRequirement: e.target.value })}
-              placeholder="e.g. wheelchair user, bed-bound"
+              type="datetime-local"
+              min={minDateTime}
+              className={fieldInputClass(errors.bookingDateTime)}
+              value={form.bookingDateTime}
+              onChange={(e) => onChange({ bookingDateTime: e.target.value })}
             />
           </div>
           <div className="sm:col-span-2 flex flex-wrap gap-6">
@@ -207,9 +189,14 @@ export default function NonEmergencyDispatchFormView({
         </div>
       </SectionCard>
 
+      <NurseRequiredField
+        needsNurse={form.needsNurse}
+        error={errors.needsNurse}
+        onChange={(value) => onChange({ needsNurse: value })}
+      />
+
       <FormActions
         onCancel={onCancel}
-        onSaveDraft={onSaveDraft}
         onSubmit={onSubmit}
         submitting={submitting}
         submitLabel="Submit Booking Request"

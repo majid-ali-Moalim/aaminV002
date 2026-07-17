@@ -4,6 +4,10 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AccessControlService } from '../access-control/access-control.service';
+import {
+  generateNextEmployeeCode,
+  roleNameToCodePrefix,
+} from './employee-code.util';
 
 @Injectable()
 export class EmployeesService {
@@ -39,6 +43,10 @@ export class EmployeesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getNextEmployeeCode(prefix: string) {
+    return generateNextEmployeeCode(this.prisma, prefix);
   }
 
   findOne(id: string) {
@@ -220,6 +228,21 @@ export class EmployeesService {
       await this.assertAmbulanceAssignableToDriver(data.assignedAmbulanceId);
     }
 
+    const codePrefix = roleNameToCodePrefix(employeeRole?.name);
+    let employeeCode = data.employeeCode?.trim() || undefined;
+    if (codePrefix) {
+      if (employeeCode) {
+        const taken = await this.prisma.employee.findFirst({
+          where: { employeeCode: { equals: employeeCode, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (taken) employeeCode = undefined;
+      }
+      if (!employeeCode) {
+        employeeCode = await generateNextEmployeeCode(this.prisma, codePrefix);
+      }
+    }
+
     try {
       const passwordHash = await bcrypt.hash(data.password, 10);
 
@@ -232,7 +255,7 @@ export class EmployeesService {
           firstName: data.firstName,
           lastName: data.lastName,
           phone: data.phone,
-          employeeCode: data.employeeCode,
+          employeeCode,
           gender: data.gender as any,
           dateOfBirth: this.parseDate(data.dateOfBirth),
           nationalId: data.nationalId,

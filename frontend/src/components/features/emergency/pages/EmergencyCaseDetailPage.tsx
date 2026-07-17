@@ -15,6 +15,7 @@ import {
   FileText,
   Stethoscope,
   Activity,
+  ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
@@ -162,10 +163,18 @@ export default function EmergencyCaseDetailPage() {
   return (
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" onClick={() => router.back()} className="rounded-xl">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.back()} className="rounded-xl">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <Link href={paths.pending}>
+            <Button variant="outline" className="rounded-xl">
+              <ClipboardList className="w-4 h-4 mr-2" />
+              Pending Queue
+            </Button>
+          </Link>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={loadCase} className="rounded-xl">
             <RefreshCw className="w-4 h-4 mr-2" />

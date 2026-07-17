@@ -142,6 +142,20 @@ export function dispatcherCaseNotificationWhere(
   };
 }
 
+export function isCaseAtDispatcherStation(
+  scope: DispatcherScope,
+  caseRow: { stationId: string | null; regionId?: string | null },
+  stationScoped: boolean,
+): boolean {
+  if (stationScoped) {
+    return Boolean(scope.stationId && caseRow.stationId && caseRow.stationId === scope.stationId);
+  }
+  if (!scope.regionId) {
+    return true;
+  }
+  return !caseRow.regionId || caseRow.regionId === scope.regionId;
+}
+
 export function isCaseInDispatcherPendingScope(
   scope: DispatcherScope,
   caseRow: {

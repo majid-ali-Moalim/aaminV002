@@ -58,34 +58,29 @@ export function fieldInputClass(error?: string) {
   return error ? `${inputClass} border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-100` : inputClass
 }
 
+export function phoneDigitsOnly(value: string): string {
+  return value.replace(/\D/g, '').replace(/^252/, '').slice(0, 9)
+}
+
 export function FormActions({
   onCancel,
-  onSaveDraft,
   onSubmit,
   submitting,
   submitLabel = 'Submit Request',
 }: {
   onCancel: () => void
-  onSaveDraft: () => void
   onSubmit: () => void
   submitting: boolean
   submitLabel?: string
 }) {
   return (
-    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+    <div className="flex flex-col sm:flex-row gap-3 pt-2 flex-wrap">
       <button
         type="button"
         onClick={onCancel}
         className="h-12 px-6 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50"
       >
         Cancel
-      </button>
-      <button
-        type="button"
-        onClick={onSaveDraft}
-        className="h-12 px-6 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50"
-      >
-        Save Draft
       </button>
       <button
         type="button"

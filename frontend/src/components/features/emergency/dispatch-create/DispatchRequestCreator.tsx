@@ -37,8 +37,14 @@ import {
   type DispatchRequestType,
 } from './types'
 import { firstErrorMessage, validateDispatchForm } from './validation'
-
-const DRAFT_KEY = 'aamin-dispatch-create-draft'
+import {
+  applySharedContactToDraft,
+  extractSharedContactFromDraft,
+  findBanadirRegionId,
+  findBanadirRegionName,
+  withBanadirRegionDefaults,
+} from '@/lib/emergency/dispatchFormShared'
+import { emergencyPortalPaths } from '@/lib/emergency/emergencyPortalPaths'
 
 export type EmergencyFormContext = 'admin' | 'dispatcher'
 
@@ -47,21 +53,20 @@ const FORM_ROUTES: Record<
   {
     back: string
     pending: string
-    viewCase: (caseId: string, trackingCode: string) => string
+    viewCase: (caseId: string) => string
     portalLabel: string
   }
 > = {
   admin: {
     back: '/admin/emergency-requests',
-    pending: '/admin/emergency-requests/pending',
-    viewCase: (caseId) => `/admin/emergency-requests/track/${caseId}`,
+    pending: emergencyPortalPaths('admin').pending,
+    viewCase: (caseId) => emergencyPortalPaths('admin').caseDetail(caseId),
     portalLabel: 'Admin',
   },
   dispatcher: {
     back: '/dispatcher/dashboard',
-    pending: '/dispatcher/emergency/pending',
-    viewCase: (_caseId, trackingCode) =>
-      trackingCode ? `/track/${encodeURIComponent(trackingCode)}` : '/dispatcher/emergency/pending',
+    pending: emergencyPortalPaths('dispatcher').pending,
+    viewCase: (caseId) => emergencyPortalPaths('dispatcher').caseDetail(caseId),
     portalLabel: 'Dispatcher',
   },
 }
@@ -121,6 +126,11 @@ export default function DispatchRequestCreator({
   const [submitting, setSubmitting] = useState(false)
   const [successCode, setSuccessCode] = useState<string | null>(null)
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null)
+  const [routingInfo, setRoutingInfo] = useState<{
+    stationName?: string | null
+    crossStationRoute?: boolean
+    submitterCanAccess?: boolean
+  } | null>(null)
   const [sessionStart] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState('00:00:00')
 
@@ -156,15 +166,6 @@ export default function DispatchRequestCreator({
   }, [sessionStart])
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(DRAFT_KEY)
-      if (raw) setDraft({ ...defaultDraft(), ...JSON.parse(raw) })
-    } catch {
-      /* ignore */
-    }
-  }, [])
-
-  useEffect(() => {
     const load = async () => {
       try {
         const [regionsRes, types, hospitalsRes] = await Promise.all([
@@ -185,6 +186,13 @@ export default function DispatchRequestCreator({
                 }))
             : [],
         )
+
+        const regionList = Array.isArray(regionsRes) ? regionsRes : []
+        const banadirId = findBanadirRegionId(regionList)
+        if (banadirId) {
+          setActiveRegionId(banadirId)
+          setDraft((prev) => withBanadirRegionDefaults(prev, banadirId))
+        }
       } catch {
         toast.error('Failed to load form resources')
       } finally {
@@ -214,22 +222,20 @@ export default function DispatchRequestCreator({
     if (activeRegionId) void loadDistricts(activeRegionId)
   }, [activeRegionId, loadDistricts])
 
-  const persistDraft = (next: DispatchCreateDraft) => {
-    setDraft(next)
-    try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next))
-    } catch {
-      /* ignore */
-    }
-  }
-
   const selectRequestType = (type: DispatchRequestType) => {
-    persistDraft({ ...draft, requestType: type })
+    setDraft((prev) => {
+      const shared = extractSharedContactFromDraft(prev)
+      let next: DispatchCreateDraft = { ...prev, requestType: type }
+      if (shared.patientName.trim() || shared.phone.trim()) {
+        next = applySharedContactToDraft(next, shared, type)
+      }
+      return next
+    })
     setErrors({})
   }
 
   const patchEmergency = (patch: Partial<DispatchCreateDraft['emergency']>) => {
-    persistDraft({ ...draft, emergency: { ...draft.emergency, ...patch } })
+    setDraft((prev) => ({ ...prev, emergency: { ...prev.emergency, ...patch } }))
     setErrors((e) => {
       const next = { ...e }
       Object.keys(patch).forEach((k) => delete next[k])
@@ -238,7 +244,7 @@ export default function DispatchRequestCreator({
   }
 
   const patchNonEmergency = (patch: Partial<DispatchCreateDraft['nonEmergency']>) => {
-    persistDraft({ ...draft, nonEmergency: { ...draft.nonEmergency, ...patch } })
+    setDraft((prev) => ({ ...prev, nonEmergency: { ...prev.nonEmergency, ...patch } }))
     setErrors((e) => {
       const next = { ...e }
       Object.keys(patch).forEach((k) => delete next[k])
@@ -247,24 +253,12 @@ export default function DispatchRequestCreator({
   }
 
   const patchReferral = (patch: Partial<DispatchCreateDraft['referral']>) => {
-    persistDraft({ ...draft, referral: { ...draft.referral, ...patch } })
+    setDraft((prev) => ({ ...prev, referral: { ...prev.referral, ...patch } }))
     setErrors((e) => {
       const next = { ...e }
       Object.keys(patch).forEach((k) => delete next[k])
       return next
     })
-  }
-
-  const handleRegionChange = (regionId: string, form: 'emergency' | 'nonEmergency' | 'referral') => {
-    setActiveRegionId(regionId)
-    if (form === 'emergency') patchEmergency({ regionId, districtId: '', stationId: '' })
-    if (form === 'nonEmergency') patchNonEmergency({ regionId, districtId: '', stationId: '' })
-    if (form === 'referral') patchReferral({ regionId, districtId: '', stationId: '' })
-  }
-
-  const handleSaveDraft = () => {
-    persistDraft(draft)
-    toast.success('Draft saved locally')
   }
 
   const handleCancel = () => {
@@ -278,7 +272,7 @@ export default function DispatchRequestCreator({
       toast.error('Select a request type first')
       return
     }
-    const validationErrors = validateDispatchForm(draft.requestType, draft)
+    const validationErrors = validateDispatchForm(draft.requestType, draft, emergencyTypes)
     setErrors(validationErrors)
     const msg = firstErrorMessage(validationErrors)
     if (msg) {
@@ -288,13 +282,30 @@ export default function DispatchRequestCreator({
 
     setSubmitting(true)
     try {
-      const payload = buildPayloadForType(draft.requestType, draft, emergencyTypes)
+      const payload = {
+        ...buildPayloadForType(draft.requestType, draft, emergencyTypes),
+        ...(user?.id ? { createdByUserId: user.id } : {}),
+        ...(user?.employee?.id ? { submitterEmployeeId: user.employee.id } : {}),
+      }
       const result = await emergencyRequestsService.create(payload)
       const code = result?.trackingCode || result?.id
+      const routing = result?.routing ?? {}
+      setRoutingInfo(routing)
       setSuccessCode(code)
       setCreatedCaseId(result?.id || null)
-      sessionStorage.removeItem(DRAFT_KEY)
-      toast.success(`Case ${code} created successfully`)
+
+      const stationLabel = routing.stationName || 'the responsible station'
+      if (routing.crossStationRoute) {
+        toast.success(
+          `Emergency request created successfully and routed to ${stationLabel} for review.`,
+        )
+      } else {
+        toast.success(
+          routing.stationName
+            ? `Emergency request created successfully and routed to ${stationLabel} for review.`
+            : `Case ${code} created successfully`,
+        )
+      }
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string }
       const msg = err?.response?.data?.message || err?.message || 'Failed to create case'
@@ -304,35 +315,82 @@ export default function DispatchRequestCreator({
     }
   }
 
+  const banadirRegionName = findBanadirRegionName(regions)
+
+  const submitterCanViewCase =
+    context === 'admin' || routingInfo?.submitterCanAccess !== false
+
+  useEffect(() => {
+    if (!successCode || !createdCaseId || context !== 'dispatcher') return
+    if (!routingInfo?.submitterCanAccess) return
+    const timer = window.setTimeout(() => {
+      router.push(routes.viewCase(createdCaseId))
+    }, 1800)
+    return () => window.clearTimeout(timer)
+  }, [successCode, createdCaseId, routingInfo, context, router, routes])
+
   if (successCode) {
+    const stationLabel = routingInfo?.stationName || 'the responsible station'
+    const crossStation = Boolean(routingInfo?.crossStationRoute)
+
     return (
       <div className="fixed inset-0 z-[100] bg-[#0F172A] flex items-center justify-center p-6">
         <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden">
           <div className="bg-gradient-to-r from-red-600 to-red-500 px-8 py-10 text-center text-white">
             <CheckCircle2 className="w-16 h-16 mx-auto mb-4 opacity-90" />
             <h1 className="text-2xl font-black uppercase tracking-tight">Request Created</h1>
-            <p className="text-red-100 text-sm mt-2">Registered in Aamin Emergency Dispatch</p>
+            <p className="text-red-100 text-sm mt-2">
+              {crossStation
+                ? `Routed to ${stationLabel} for review`
+                : `Registered in Aamin Emergency Dispatch`}
+            </p>
           </div>
           <div className="p-8 text-center space-y-6">
-            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-6">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Tracking Code</p>
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-6 px-4">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Case Reference</p>
               <p className="text-3xl font-black text-red-600 font-mono tracking-wide">{successCode}</p>
+              <p className="text-sm text-slate-600 mt-4 leading-relaxed">
+                Emergency request created successfully and routed to{' '}
+                <span className="font-bold text-slate-900">{stationLabel}</span> for review.
+              </p>
             </div>
+
+            {crossStation ? (
+              <p className="text-sm text-slate-600 leading-relaxed">
+                This case belongs to another station. Dispatchers at{' '}
+                <span className="font-semibold text-slate-900">{stationLabel}</span> will receive it in
+                their pending queue immediately.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Opening the case for review…
+              </p>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                href={
-                  createdCaseId ? routes.viewCase(createdCaseId, successCode) : routes.pending
-                }
-                className="flex-1 h-12 flex items-center justify-center rounded-xl bg-[#0F172A] text-white text-sm font-bold uppercase tracking-wide hover:bg-slate-800"
-              >
-                View Case
-              </Link>
-              <Link
-                href={routes.pending}
-                className="flex-1 h-12 flex items-center justify-center rounded-xl border-2 border-slate-200 text-slate-700 text-sm font-bold uppercase tracking-wide hover:bg-slate-50"
-              >
-                Pending Queue
-              </Link>
+              {submitterCanViewCase && createdCaseId ? (
+                <Link
+                  href={routes.viewCase(createdCaseId)}
+                  className="flex-1 min-h-12 px-4 flex items-center justify-center rounded-xl bg-[#0F172A] text-white text-sm font-bold uppercase tracking-wide hover:bg-slate-800 whitespace-nowrap"
+                >
+                  Review Case
+                </Link>
+              ) : null}
+              {crossStation || !submitterCanViewCase ? (
+                <Link
+                  href={routes.back}
+                  className={`${submitterCanViewCase && createdCaseId ? 'flex-1' : 'w-full'} min-h-12 px-4 flex items-center justify-center rounded-xl border-2 border-slate-200 text-slate-700 text-sm font-bold uppercase tracking-wide hover:bg-slate-50 whitespace-nowrap`}
+                >
+                  Back to Dashboard
+                </Link>
+              ) : (
+                <Link
+                  href={routes.pending}
+                  className="flex-1 min-h-12 px-4 flex items-center justify-center rounded-xl border-2 border-slate-200 text-slate-700 text-sm font-bold uppercase tracking-wide hover:bg-slate-50 whitespace-nowrap"
+                >
+                  Pending Queue
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -426,15 +484,12 @@ export default function DispatchRequestCreator({
                 <EmergencyDispatchFormView
                   form={draft.emergency}
                   errors={errors}
-                  regions={regions}
+                  banadirRegionName={banadirRegionName}
                   districts={districts}
                   emergencyTypes={emergencyTypes}
-                  hospitals={hospitals}
                   loadingDistricts={loadingDistricts}
                   onChange={patchEmergency}
-                  onRegionChange={(id) => handleRegionChange(id, 'emergency')}
                   onCancel={handleCancel}
-                  onSaveDraft={handleSaveDraft}
                   onSubmit={handleSubmit}
                   submitting={submitting}
                 />
@@ -444,14 +499,12 @@ export default function DispatchRequestCreator({
                 <NonEmergencyDispatchFormView
                   form={draft.nonEmergency}
                   errors={errors}
-                  regions={regions}
+                  banadirRegionName={banadirRegionName}
                   districts={districts}
                   hospitals={hospitals}
                   loadingDistricts={loadingDistricts}
                   onChange={patchNonEmergency}
-                  onRegionChange={(id) => handleRegionChange(id, 'nonEmergency')}
                   onCancel={handleCancel}
-                  onSaveDraft={handleSaveDraft}
                   onSubmit={handleSubmit}
                   submitting={submitting}
                 />
@@ -461,14 +514,12 @@ export default function DispatchRequestCreator({
                 <ReferralDispatchFormView
                   form={draft.referral}
                   errors={errors}
-                  regions={regions}
+                  banadirRegionName={banadirRegionName}
                   districts={districts}
                   hospitals={hospitals}
                   loadingDistricts={loadingDistricts}
                   onChange={patchReferral}
-                  onRegionChange={(id) => handleRegionChange(id, 'referral')}
                   onCancel={handleCancel}
-                  onSaveDraft={handleSaveDraft}
                   onSubmit={handleSubmit}
                   submitting={submitting}
                 />

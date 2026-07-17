@@ -2,6 +2,12 @@ import { Gender } from '@/types'
 import { systemSetupService, dispatchersService } from '@/lib/api'
 import type { Department, EmployeeRole, Region } from '@/types'
 import { genderOptions as baseGenderOptions } from '@/lib/nurseFormMasterData'
+import {
+  fetchWorkShiftEmploymentOptions,
+  filterDepartmentsForRole,
+  suggestDepartmentForRole,
+  type WorkShiftOption,
+} from '@/lib/employment/staffFormHelpers'
 
 export type SelectOption = { id: string; label: string }
 
@@ -20,8 +26,10 @@ export type DispatcherFormMasterData = {
   dispatcherRoleId: string
   dispatcherRoleName: string
   dispatcherStatsTotal: number
+  dispatcherNextCode?: string
   genderOptions: SelectOption[]
   employmentTypeOptions: SelectOption[]
+  workShiftOptions: WorkShiftOption[]
   shiftStatusOptions: SelectOption[]
   qualificationOptions: SelectOption[]
 }
@@ -36,17 +44,20 @@ export const DISPATCHER_SHIFT_OPTIONS: SelectOption[] = [
 ]
 
 export async function fetchDispatcherFormMasterData(): Promise<DispatcherFormMasterData> {
-  const [regs, depts, roles, stats] = await Promise.all([
+  const [regs, depts, roles, stats, workShiftOptions] = await Promise.all([
     systemSetupService.getRegions(),
     systemSetupService.getDepartments(),
     systemSetupService.getRoles(),
     dispatchersService.getStats().catch(() => ({ total: 0 })),
+    fetchWorkShiftEmploymentOptions(),
   ])
 
   const regions = Array.isArray(regs) ? regs.filter((r) => r.isActive !== false) : []
-  const departments = Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : []
+  const allDepartments = Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : []
+  const departments = filterDepartmentsForRole(allDepartments, 'dispatcher')
   const employeeRoles = Array.isArray(roles) ? roles.filter((r) => r.isActive !== false) : []
   const dispatcherRole = employeeRoles.find((r) => r.name === 'Dispatcher')
+  const employmentTypeOptions = workShiftOptions.map((s) => ({ id: s.id, label: s.label }))
 
   return {
     regions,
@@ -55,8 +66,10 @@ export async function fetchDispatcherFormMasterData(): Promise<DispatcherFormMas
     dispatcherRoleId: dispatcherRole?.id || '',
     dispatcherRoleName: dispatcherRole?.name || 'Dispatcher',
     dispatcherStatsTotal: (stats as { total?: number })?.total ?? 0,
+    dispatcherNextCode: (stats as { nextCode?: string })?.nextCode,
     genderOptions: baseGenderOptions(),
-    employmentTypeOptions: DEFAULT_EMPLOYMENT_TYPES.map((t) => ({ id: t, label: t })),
+    employmentTypeOptions,
+    workShiftOptions,
     shiftStatusOptions: DISPATCHER_SHIFT_OPTIONS,
     qualificationOptions: DISPATCHER_QUALIFICATIONS.map((q) => ({ id: q, label: q })),
   }
@@ -73,13 +86,9 @@ export function validateDispatcherMasterData(
 }
 
 export function suggestDispatcherDepartment(departments: Department[]) {
-  return (
-    departments.find((d) => d.name === 'Dispatch Operations') ||
-    departments.find((d) => d.name?.toLowerCase().includes('dispatch')) ||
-    departments[0]
-  )
+  return suggestDepartmentForRole(departments, 'dispatcher')
 }
 
-export function nextDispatcherCode(statsTotal: number) {
-  return `DIS-${String(statsTotal + 1).padStart(3, '0')}`
+export function nextDispatcherCode(statsTotal: number, nextCode?: string) {
+  return nextCode || `DIS-${String(statsTotal + 1).padStart(3, '0')}`
 }
