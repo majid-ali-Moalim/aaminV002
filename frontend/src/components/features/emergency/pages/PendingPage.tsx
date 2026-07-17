@@ -131,7 +131,7 @@ function PendingRequestsContent() {
             <h1 className="text-3xl font-black tracking-tight">Pending Review &amp; Triage</h1>
             <p className="text-red-100/80 mt-2 max-w-2xl">
               {portal === 'dispatcher'
-                ? 'Unassigned cases in your region — review, triage, and assign a crew. Once assigned, cases move to your Active Missions.'
+                ? 'Unassigned cases for your station — review, triage, assign a crew, or transfer to another station when needed.'
                 : 'Review caller information, verify conscious status, breathing, and bleeding, adjust priority if needed, then assign ambulance with driver and nurse.'}
             </p>
           </div>

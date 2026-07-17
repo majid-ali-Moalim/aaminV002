@@ -16,6 +16,7 @@ import { dispatcherDashboardApi } from '@/lib/dispatcherApi';
 import { EmergencyRequest, Ambulance, Employee } from '@/types';
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel';
 import { activeShiftLabel } from '@/lib/employment/shiftTypes';
+import { caseRequiresNurse } from '@/lib/emergency/caseNurseRequirement';
 
 interface AssignModalProps {
   request: EmergencyRequest;
@@ -143,6 +144,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
     return () => clearInterval(interval);
   }, []);
 
+  const nurseRequired = caseRequiresNurse(request);
+
   const handleAssign = async () => {
     if (!assignmentParams.ambulanceId) {
       return alert('Please select an ambulance');
@@ -150,8 +153,8 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
     if (!assignmentParams.driverId) {
       return alert('Please select a driver');
     }
-    if (!assignmentParams.nurseId) {
-      return alert('Please select a nurse — driver, nurse and ambulance are required for dispatch');
+    if (nurseRequired && !assignmentParams.nurseId) {
+      return alert('Please select a nurse — this case requires a nurse before dispatch can proceed');
     }
 
     const ambulanceId = assignmentParams.ambulanceId;
@@ -215,6 +218,12 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             <XCircle className="w-6 h-6" />
           </button>
         </div>
+
+        {nurseRequired && (
+          <div className="mx-8 mt-6 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50 text-violet-900 text-sm font-semibold">
+            Nurse required — assign a nurse to this case before dispatch can proceed.
+          </div>
+        )}
 
         <div className="flex-1 p-8 overflow-y-auto space-y-8 custom-scrollbar">
           
@@ -411,7 +420,11 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             <span>Assignment Queue Ready</span>
             <p className="text-blue-500 mt-0.5">
               {selectedAmbulance?.ambulanceNumber || 'UNITS-TBD'} / {selectedDriver?.firstName || 'STAFF-TBD'}
-              {selectedNurse ? ` + ${selectedNurse.firstName}` : ' + Nurse required'}
+              {selectedNurse
+                ? ` + ${selectedNurse.firstName}`
+                : nurseRequired
+                  ? ' + Nurse required'
+                  : ''}
             </p>
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
@@ -424,7 +437,12 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             </Button>
             <Button
               onClick={handleAssign}
-              disabled={isSubmitting || !assignmentParams.ambulanceId || !assignmentParams.driverId || !assignmentParams.nurseId}
+              disabled={
+                isSubmitting ||
+                !assignmentParams.ambulanceId ||
+                !assignmentParams.driverId ||
+                (nurseRequired && !assignmentParams.nurseId)
+              }
               className="flex-1 sm:flex-none px-8 h-12 bg-red-600 hover:bg-red-700 text-white font-bold uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Confirm Dispatch'}

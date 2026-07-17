@@ -1,6 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateNextEmployeeCode } from '../employees/employee-code.util';
+import { getAttendanceShiftBlockReason } from '../employee-attendance/shift-types';
 
 @Injectable()
 export class DriversService {
@@ -108,6 +110,7 @@ export class DriversService {
       onBreak,
       unavailable,
       expiringLicenses,
+      nextCode: await generateNextEmployeeCode(this.prisma, 'DR'),
     };
   }
 
@@ -212,8 +215,22 @@ export class DriversService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+      include: { employeeRole: true },
+    });
     if (!employee) throw new Error('Employee not found');
+
+    const checkInTime = new Date();
+    const blockReason = getAttendanceShiftBlockReason(
+      employee.employeeRole?.name,
+      employee.defaultShift,
+      employee.typicalStartTime,
+      checkInTime,
+    );
+    if (blockReason) {
+      throw new BadRequestException(blockReason);
+    }
 
     // Check if already checked in today
     const existing = await this.prisma.attendanceRecord.findFirst({
@@ -227,10 +244,7 @@ export class DriversService {
       throw new Error('Already checked in today');
     }
 
-    const checkInTime = new Date();
     let status = 'ON_TIME';
-    
-    // Logic: if after typicalStartTime, it's LATE
     if (employee.typicalStartTime) {
       const [hours, minutes] = employee.typicalStartTime.split(':').map(Number);
       const scheduledTime = new Date();
@@ -323,43 +337,27 @@ export class DriversService {
     'REVIEWING',
   ] as const;
 
-  private resolveOperationalStatus(
-    shiftStatus: string,
-    employmentStatus: string,
-    hasActiveCase: boolean,
-    hasAssignedAmbulance: boolean,
-  ): 'available' | 'unavailable' {
-    void shiftStatus;
-    if (employmentStatus === 'ACTIVE' && hasAssignedAmbulance && !hasActiveCase) {
-      return 'available';
-    }
-    return 'unavailable';
+  private resolveOperationalStatus(isPresentToday: boolean): 'available' | 'unavailable' {
+    return isPresentToday ? 'available' : 'unavailable';
   }
 
-  private getUnavailableReason(
-    shiftStatus: string,
-    employmentStatus: string,
-    hasActiveCase: boolean,
-    hasAssignedAmbulance: boolean,
-  ): string | null {
-    void shiftStatus;
-    if (hasActiveCase) return 'Assigned to active case';
-    if (!hasAssignedAmbulance) return 'No ambulance assigned';
-    if (employmentStatus !== 'ACTIVE') return 'Inactive';
-    return null;
+  private getUnavailableReason(isPresentToday: boolean): string | null {
+    return isPresentToday ? null : 'Absent — not marked present in attendance';
   }
 
   async getAvailabilityOverview() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [drivers, activeCases, todayCases, monthCases, recentShifts] =
+    const [drivers, activeCases, todayCases, monthCases, recentShifts, attendanceRecords] =
       await Promise.all([
         this.prisma.employee.findMany({
           where: { employeeRole: { name: { equals: 'Driver', mode: 'insensitive' } } },
           include: {
-            user: { select: { username: true, email: true } },
+            user: { select: { id: true, username: true, email: true } },
             employeeRole: true,
             station: { include: { region: true, district: true } },
             assignedAmbulance: { select: { id: true, ambulanceNumber: true, plateNumber: true } },
@@ -371,6 +369,7 @@ export class DriversService {
                 status: true,
                 updatedAt: true,
                 patient: { select: { fullName: true } },
+                ambulance: { select: { ambulanceNumber: true, plateNumber: true } },
               },
               take: 1,
               orderBy: { updatedAt: 'desc' },
@@ -390,6 +389,7 @@ export class DriversService {
             status: true,
             updatedAt: true,
             patient: { select: { fullName: true } },
+            ambulance: { select: { ambulanceNumber: true, plateNumber: true } },
           },
         }),
         this.prisma.emergencyRequest.findMany({
@@ -411,27 +411,28 @@ export class DriversService {
             employee: { select: { firstName: true, lastName: true, employeeCode: true } },
           },
         }),
+        this.prisma.attendanceRecord.findMany({
+          where: {
+            date: { gte: todayStart, lt: todayEnd },
+          },
+          select: { employeeId: true },
+        }),
       ]);
 
+    const presentEmployeeIds = new Set(attendanceRecords.map((r) => r.employeeId));
     const activeCaseByDriver = new Map(activeCases.map((c) => [c.driverId!, c]));
 
     const rows = drivers.map((driver) => {
       const activeCase =
         driver.drivenRequests?.[0] ?? activeCaseByDriver.get(driver.id) ?? null;
-      const hasAssignedAmbulance = Boolean(driver.assignedAmbulance);
-      const operationalStatus = this.resolveOperationalStatus(
-        driver.shiftStatus,
-        driver.status,
-        !!activeCase,
-        hasAssignedAmbulance,
-      );
+      const isPresentToday = presentEmployeeIds.has(driver.id);
+      const operationalStatus = this.resolveOperationalStatus(isPresentToday);
       const unavailableReason =
-        operationalStatus === 'unavailable'
-          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase, hasAssignedAmbulance)
-          : null;
+        operationalStatus === 'unavailable' ? this.getUnavailableReason(isPresentToday) : null;
 
       return {
         id: driver.id,
+        userId: driver.user?.id ?? null,
         employeeCode: driver.employeeCode,
         firstName: driver.firstName,
         lastName: driver.lastName,
@@ -439,6 +440,7 @@ export class DriversService {
         phone: driver.phone,
         shiftStatus: driver.shiftStatus,
         employmentStatus: driver.status,
+        attendanceStatus: isPresentToday ? 'present' : 'absent',
         operationalStatus,
         unavailableReason,
         assignedAmbulance: driver.assignedAmbulance
@@ -465,6 +467,7 @@ export class DriversService {
               trackingCode: activeCase.trackingCode,
               status: activeCase.status,
               patientName: (activeCase as any).patient?.fullName ?? null,
+              ambulanceNumber: (activeCase as any).ambulance?.ambulanceNumber ?? null,
             }
           : null,
         updatedAt: driver.updatedAt.toISOString(),
@@ -571,7 +574,7 @@ export class DriversService {
         employeeRole: { name: { equals: 'Driver', mode: 'insensitive' } },
       },
       include: {
-        user: { select: { username: true, email: true } },
+        user: { select: { id: true, username: true, email: true } },
         employeeRole: true,
         station: { include: { region: true, district: true } },
         assignedAmbulance: true,
@@ -598,6 +601,19 @@ export class DriversService {
 
     if (!driver) throw new NotFoundException('Driver not found');
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    const attendance = await this.prisma.attendanceRecord.findFirst({
+      where: {
+        employeeId: driver.id,
+        date: { gte: todayStart, lt: todayEnd },
+      },
+      select: { id: true },
+    });
+    const isPresentToday = Boolean(attendance);
+
     const activeCase = driver.drivenRequests.find((r) =>
       this.ACTIVE_CASE_STATUSES.includes(r.status as any),
     );
@@ -605,21 +621,16 @@ export class DriversService {
     return {
       driver: {
         id: driver.id,
+        userId: driver.user?.id ?? null,
         employeeCode: driver.employeeCode,
         firstName: driver.firstName,
         lastName: driver.lastName,
         phone: driver.phone,
         shiftStatus: driver.shiftStatus,
         employmentStatus: driver.status,
-        operationalStatus: this.resolveOperationalStatus(
-          driver.shiftStatus,
-          driver.status,
-          !!activeCase,
-          Boolean(driver.assignedAmbulance),
-        ),
-        unavailableReason: activeCase || !driver.assignedAmbulance || driver.status !== 'ACTIVE'
-          ? this.getUnavailableReason(driver.shiftStatus, driver.status, !!activeCase, Boolean(driver.assignedAmbulance))
-          : null,
+        attendanceStatus: isPresentToday ? 'present' : 'absent',
+        operationalStatus: this.resolveOperationalStatus(isPresentToday),
+        unavailableReason: isPresentToday ? null : this.getUnavailableReason(isPresentToday),
         licenseNumber: driver.licenseNumber,
         licenseStatus: driver.licenseStatus,
         licenseExpiryDate: driver.licenseExpiryDate?.toISOString() ?? null,

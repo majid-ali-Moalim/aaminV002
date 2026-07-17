@@ -339,7 +339,6 @@ export default function DriversPage() {
           relationship: formData.emergencyContactRelationship || undefined,
           employmentType: formData.employmentType || undefined,
           employmentDate: formData.joinDate || undefined,
-          assignedAmbulanceId: formData.assignedAmbulanceId || undefined,
           status: formData.employmentStatus || undefined,
           shiftStatus: formData.shiftStatus,
           licenseNumber: formData.drivingLicenseNumber,
@@ -700,10 +699,9 @@ export default function DriversPage() {
                     </th>
                     <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Driver</th>
                     <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Contact</th>
-                    <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Assignment</th>
-                    <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                    <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Station & Region</th>
+                    <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Employment</th>
                     <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">License</th>
-                    <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400">Performance</th>
                     <th className="px-6 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -760,19 +758,24 @@ export default function DriversPage() {
                             <MapPin className="w-3 h-3 mr-1 text-red-500" />
                             {driver.station?.name || 'Unassigned'}
                           </div>
-                          <div className="flex items-center text-xs text-slate-500">
-                            <Truck className="w-3 h-3 mr-1" />
-                            {driver.assignedAmbulance?.ambulanceNumber || 'No Ambulance'}
+                          <div className="text-xs text-slate-500">
+                            {(driver as { region?: { name?: string } }).region?.name || driver.currentArea || '—'}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={cn(
-                          'inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium border',
-                          getStatusColor(driver.shiftStatus || '')
-                        )}>
-                          {getStaffStatusLabel(driver.shiftStatus || '')}
-                        </span>
+                        <div className="space-y-1 text-sm">
+                          <p className="font-semibold text-slate-800">{driver.employmentStatus || driver.employmentType || '—'}</p>
+                          <p className="text-xs text-slate-500">
+                            Joined {driver.joinDate ? format(new Date(driver.joinDate), 'MMM yyyy') : '—'}
+                          </p>
+                          <span className={cn(
+                            'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
+                            getStatusColor(driver.shiftStatus || '')
+                          )}>
+                            {getStaffStatusLabel(driver.shiftStatus || '')}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1">
@@ -782,22 +785,14 @@ export default function DriversPage() {
                           )}>
                             {driver.licenseStatus || 'UNKNOWN'}
                           </span>
+                          <div className="text-xs text-slate-600">
+                            Class {driver.licenseClass || '—'} · #{driver.licenseNumber || driver.drivingLicenseNumber || '—'}
+                          </div>
                           {driver.licenseExpiryDate && (
                             <div className="text-xs text-slate-500">
-                              Exp: {format(new Date(driver.licenseExpiryDate), 'MM/yyyy')}
+                              Exp: {format(new Date(driver.licenseExpiryDate), 'dd MMM yyyy')}
                             </div>
                           )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center">
-                            {getRatingStars(driver.rating || 0)}
-                            <span className="ml-2 text-xs text-slate-500">({driver.rating || 0})</span>
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {driver.totalTrips || 0} trips
-                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -1491,55 +1486,6 @@ export default function DriversPage() {
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     />
                   </div>
-                </div>
-              </div>
-
-              {/* Ambulance Assignment (2 fields) */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                  <Truck className="w-4 h-4 text-red-600" />
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Ambulance Assignment</h3>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Assign Ambulance Now
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, assignAmbulanceNow: !formData.assignAmbulanceNow })}
-                        className={cn(
-                          'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/30',
-                          formData.assignAmbulanceNow ? 'bg-red-500' : 'bg-slate-300'
-                        )}
-                      >
-                        <span className={cn(
-                          'inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform',
-                          formData.assignAmbulanceNow ? 'translate-x-6' : 'translate-x-1'
-                        )} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {formData.assignAmbulanceNow && (
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Assigned Ambulance
-                      </label>
-                      <select
-                        value={formData.assignedAmbulanceId}
-                        onChange={(e) => setFormData({ ...formData, assignedAmbulanceId: e.target.value })}
-                        className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
-                      >
-                        <option value="">Select Ambulance</option>
-                        {ambulances.map(a => (
-                          <option key={a.id} value={a.id}>{a.ambulanceNumber}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                 </div>
               </div>
 

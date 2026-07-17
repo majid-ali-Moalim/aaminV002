@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   UserCheck,
-  Shuffle,
   Activity,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -38,7 +37,6 @@ const driverMenuItems: MenuItem[] = [
   { href: '/admin/drivers', label: 'All Drivers', icon: Users, exact: true },
   { href: '/admin/drivers/active', label: 'Active Drivers', icon: UserCheck },
   { href: '/admin/drivers/availability', label: 'Driver Availability', icon: Activity },
-  { href: '/admin/drivers/assignments', label: 'Driver Assignments', icon: Shuffle, accent: 'info' },
 ]
 
 function isItemActive(pathname: string, item: MenuItem) {

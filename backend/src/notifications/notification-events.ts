@@ -18,7 +18,8 @@ export type NotificationEventKey =
   | 'SECURITY_ALERT'
   | 'EMERGENCY_BROADCAST'
   | 'COMMUNICATION_MESSAGE'
-  | 'SHIFT_REMINDER';
+  | 'SHIFT_REMINDER'
+  | 'CASE_STATION_TRANSFER';
 
 export type DispatchContext = {
   createdById?: string | null;
@@ -27,6 +28,7 @@ export type DispatchContext = {
   includeEmployeeRoles?: string[];
   directOnly?: boolean;
   regionId?: string | null;
+  stationId?: string | null;
 };
 
 export type DispatchPayload = {
@@ -140,5 +142,10 @@ export const EVENT_ROLE_ACCESS: Record<
     includeUserRoles: ['EMPLOYEE'],
     employeeRoleNames: ['Driver', 'Nurse', 'Dispatcher'],
     excludeEmployeeRoleNames: [],
+  },
+  CASE_STATION_TRANSFER: {
+    includeUserRoles: ['ADMIN'],
+    employeeRoleNames: ['Dispatcher'],
+    excludeEmployeeRoleNames: ['Driver', 'Nurse'],
   },
 };

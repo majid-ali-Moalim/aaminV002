@@ -303,6 +303,19 @@ export interface EmergencyStatusLog {
   changedByEmployee?: Employee;
 }
 
+export interface EmergencyCaseTransfer {
+  id: string;
+  emergencyRequestId: string;
+  fromStationId?: string | null;
+  toStationId: string;
+  transferredById: string;
+  reason: string;
+  createdAt: string;
+  fromStation?: { id: string; name: string } | null;
+  toStation?: { id: string; name: string } | null;
+  transferredBy?: { id: string; firstName?: string | null; lastName?: string | null };
+}
+
 export interface EmergencyRequest {
   id: string;
   trackingCode: string;
@@ -315,6 +328,7 @@ export interface EmergencyRequest {
   incidentCategoryId?: string | null;
   regionId?: string | null;
   districtId?: string | null;
+  stationId?: string | null;
 
   status: EmergencyRequestStatus;
   priority: Priority;
@@ -363,6 +377,8 @@ export interface EmergencyRequest {
   incidentCategory?: IncidentCategory | null;
   region?: Region | null;
   district?: District | null;
+  station?: { id: string; name: string; regionId?: string } | null;
+  caseTransfers?: EmergencyCaseTransfer[];
   statusLogs?: EmergencyStatusLog[];
   patientCareRecords?: PatientCareRecord[];
   referrals?: any[]; 

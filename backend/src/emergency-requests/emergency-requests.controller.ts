@@ -28,7 +28,9 @@ export class EmergencyRequestsController {
   @Public()
   @Post()
   @ApiOperation({ summary: 'Create a new emergency request' })
-  create(@Body() createEmergencyRequestDto: any) {
+  create(@Body() createEmergencyRequestDto: any, @Request() req) {
+    if (req.user?.sub) createEmergencyRequestDto.createdByUserId = req.user.sub;
+    if (req.user?.employeeId) createEmergencyRequestDto.submitterEmployeeId = req.user.employeeId;
     return this.emergencyRequestsService.create(createEmergencyRequestDto);
   }
 
@@ -141,6 +143,17 @@ export class EmergencyRequestsController {
   @ApiOperation({ summary: 'Escalate emergency request' })
   escalate(@Param('id') id: string, @Body() escalateDto: { reason?: string }) {
     return this.emergencyRequestsService.escalateRequest(id, escalateDto.reason);
+  }
+
+  @Patch(':id/transfer-station')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Transfer case to another ambulance station' })
+  transferStation(
+    @Param('id') id: string,
+    @Body() dto: { toStationId: string; reason: string },
+    @Request() req,
+  ) {
+    return this.emergencyRequestsService.transferCaseStation(id, dto, req.user);
   }
 
   @Patch(':id')

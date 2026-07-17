@@ -7,6 +7,12 @@ import {
 } from '@/lib/api'
 import type { Ambulance, Department, District, EmployeeRole, EquipmentLevel, Region, Station } from '@/types'
 import { ADMIN_STAFF_STATUS_OPTIONS } from '@/lib/staff/status'
+import {
+  fetchWorkShiftEmploymentOptions,
+  filterDepartmentsForRole,
+  suggestDepartmentForRole,
+  type WorkShiftOption,
+} from '@/lib/employment/staffFormHelpers'
 
 export type SelectOption = { id: string; label: string }
 
@@ -21,9 +27,11 @@ export type NurseFormMasterData = {
   nurseRoleId: string
   nurseRoleName: string
   nurseStatsTotal: number
+  nurseNextCode?: string
   qualifications: SelectOption[]
   specializations: SelectOption[]
   employmentTypes: SelectOption[]
+  workShiftOptions: WorkShiftOption[]
   genderOptions: SelectOption[]
   bloodGroupOptions: SelectOption[]
   shiftStatusOptions: SelectOption[]
@@ -75,7 +83,8 @@ function uniqueOptions(values: (string | null | undefined)[], defaults: string[]
 }
 
 export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
-  const [regs, dists, stns, depts, roles, levels, ambs, stats, nurses] = await Promise.all([
+  const [regs, dists, stns, depts, roles, levels, ambs, stats, nurses, workShiftOptions] =
+    await Promise.all([
     systemSetupService.getRegions(),
     systemSetupService.getDistricts().catch(() => []),
     systemSetupService.getStations().catch(() => []),
@@ -85,6 +94,7 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
     ambulancesService.getAll().catch(() => emergencyRequestsService.getAvailableAmbulances()),
     nursesService.getStats().catch(() => ({ total: 0 })),
     nursesService.getAll().catch(() => []),
+    fetchWorkShiftEmploymentOptions(),
   ])
 
   const regions = Array.isArray(regs) ? regs.filter((r) => r.isActive !== false) : []
@@ -97,7 +107,8 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
     districts = districts.filter((d) => d.isActive !== false)
   }
   const stations = (Array.isArray(stns) ? stns : []).filter((s) => s.isActive !== false)
-  const departments = Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : []
+  const allDepartments = Array.isArray(depts) ? depts.filter((d) => d.isActive !== false) : []
+  const departments = filterDepartmentsForRole(allDepartments, 'nurse')
   const employeeRoles = Array.isArray(roles) ? roles.filter((r) => r.isActive !== false) : []
   const equipmentLevels = Array.isArray(levels) ? levels.filter((l) => l.isActive !== false) : []
   const nursesList = Array.isArray(nurses) ? nurses : []
@@ -116,10 +127,7 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
     nursesList.map((n) => (n as { specialization?: string }).specialization),
     DEFAULT_SPECIALIZATIONS
   )
-  const employmentTypes = uniqueOptions(
-    nursesList.map((n) => (n as { defaultShift?: string }).defaultShift),
-    DEFAULT_EMPLOYMENT_TYPES
-  )
+  const employmentTypes = workShiftOptions.map((s) => ({ id: s.id, label: s.label }))
 
   return {
     regions,
@@ -132,9 +140,11 @@ export async function fetchNurseFormMasterData(): Promise<NurseFormMasterData> {
     nurseRoleId: nurseRole?.id || '',
     nurseRoleName: nurseRole?.name || 'Nurse',
     nurseStatsTotal: (stats as { total?: number })?.total ?? 0,
+    nurseNextCode: (stats as { nextCode?: string })?.nextCode,
     qualifications,
     specializations,
     employmentTypes,
+    workShiftOptions,
     genderOptions: genderOptions(),
     bloodGroupOptions: bloodGroupOptions(),
     shiftStatusOptions: SHIFT_STATUS_OPTIONS,
@@ -159,15 +169,9 @@ export function validateMasterData(data: Pick<
 }
 
 export function suggestNurseDepartment(departments: Department[]): Department | undefined {
-  return (
-    departments.find((d) => d.name === 'Medical Response') ||
-    departments.find((d) => d.name === 'Clinical Services') ||
-    departments.find((d) => d.name?.toLowerCase().includes('medical')) ||
-    departments.find((d) => d.name === 'Field Emergency') ||
-    departments[0]
-  )
+  return suggestDepartmentForRole(departments, 'nurse')
 }
 
-export function nextNurseCode(statsTotal: number): string {
-  return `NUR-${String(statsTotal + 1).padStart(3, '0')}`
+export function nextNurseCode(statsTotal: number, nextCode?: string): string {
+  return nextCode || `NUR-${String(statsTotal + 1).padStart(3, '0')}`
 }

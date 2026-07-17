@@ -11,7 +11,7 @@ export type MdmEntityKey =
   | 'mission-statuses'
   | 'cancellation-reasons'
 
-export type MdmFieldType = 'text' | 'textarea' | 'number' | 'color' | 'select'
+export type MdmFieldType = 'text' | 'textarea' | 'number' | 'color' | 'select' | 'multiselect'
 
 export interface MdmFieldDef {
   key: string
@@ -29,7 +29,7 @@ export interface MdmEntityDef {
   label: string
   singular: string
   fields: MdmFieldDef[]
-  tableColumns: { key: string; label: string; render?: 'status' | 'region' | 'district' | 'category' | 'color' | 'sortOrder' }[]
+  tableColumns: { key: string; label: string; render?: 'status' | 'region' | 'district' | 'category' | 'color' | 'sortOrder' | 'coverageDistricts' }[]
 }
 
 export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
@@ -76,9 +76,16 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
       { key: 'regionId', label: 'Region', type: 'select', required: true, optionsKey: 'regions' },
       {
         key: 'districtId',
-        label: 'District',
+        label: 'Home District',
         type: 'select',
         required: true,
+        optionsKey: 'districts',
+        optionsFilterBy: 'regionId',
+      },
+      {
+        key: 'coverageDistrictIds',
+        label: 'Coverage Districts',
+        type: 'multiselect',
         optionsKey: 'districts',
         optionsFilterBy: 'regionId',
       },
@@ -90,7 +97,8 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
       { key: 'code', label: 'Code' },
       { key: 'name', label: 'Name' },
       { key: 'region', label: 'Region', render: 'region' },
-      { key: 'district', label: 'District', render: 'district' },
+      { key: 'district', label: 'Home District', render: 'district' },
+      { key: 'coverageDistrictIds', label: 'Coverage Districts', render: 'coverageDistricts' },
       { key: 'address', label: 'Address' },
       { key: 'isActive', label: 'Status', render: 'status' },
     ],

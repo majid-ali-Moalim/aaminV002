@@ -91,6 +91,11 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
     setEditRow(row)
     const initial: Record<string, string> = {}
     def.fields.forEach((f) => {
+      if (f.type === 'multiselect') {
+        const raw = row[f.key]
+        initial[f.key] = Array.isArray(raw) ? raw.join(',') : ''
+        return
+      }
       initial[f.key] = row[f.key]?.toString?.() ?? row[f.key] ?? ''
     })
     setForm(initial)
@@ -110,6 +115,10 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
       const payload: Record<string, unknown> = {}
       def.fields.forEach((f) => {
         const v = form[f.key]
+        if (f.type === 'multiselect') {
+          payload[f.key] = v ? String(v).split(',').filter(Boolean) : []
+          return
+        }
         if (v === '' || v === undefined) return
         payload[f.key] = f.type === 'number' ? Number(v) : v
       })
@@ -347,7 +356,10 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                       disabled={Boolean(f.optionsFilterBy && !form[f.optionsFilterBy])}
                       onChange={(e) => {
                         const next = { ...form, [f.key]: e.target.value }
-                        if (f.key === 'regionId') next.districtId = ''
+                        if (f.key === 'regionId') {
+                          next.districtId = ''
+                          next.coverageDistrictIds = ''
+                        }
                         setForm(next)
                       }}
                     >
@@ -369,6 +381,39 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                           </option>
                         ))}
                     </select>
+                  ) : f.type === 'multiselect' && f.optionsKey ? (
+                    <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2 bg-white dark:bg-gray-800">
+                      {(options[f.optionsKey] ?? [])
+                        .filter((o) => {
+                          if (!f.optionsFilterBy) return true
+                          const parentVal = form[f.optionsFilterBy]
+                          if (!parentVal) return false
+                          return o[f.optionsFilterBy] === parentVal
+                        })
+                        .map((o) => {
+                          const selected = (form[f.key] ?? '').split(',').filter(Boolean)
+                          const checked = selected.includes(o.id)
+                          return (
+                            <label key={o.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={Boolean(f.optionsFilterBy && !form[f.optionsFilterBy])}
+                                onChange={() => {
+                                  const next = checked
+                                    ? selected.filter((id) => id !== o.id)
+                                    : [...selected, o.id]
+                                  setForm({ ...form, [f.key]: next.join(',') })
+                                }}
+                              />
+                              <span>{o.name}</span>
+                            </label>
+                          )
+                        })}
+                      {f.optionsFilterBy && !form[f.optionsFilterBy] ? (
+                        <p className="text-xs text-gray-500">Select region first to choose coverage districts.</p>
+                      ) : null}
+                    </div>
                   ) : (
                     <input
                       type={f.type === 'number' ? 'number' : f.type === 'color' ? 'color' : 'text'}
@@ -450,5 +495,10 @@ function renderCell(row: Row, key: string, render?: string) {
       </span>
     )
   if (render === 'sortOrder') return row.sortOrder ?? '—'
+  if (render === 'coverageDistricts') {
+    const ids = Array.isArray(row.coverageDistrictIds) ? row.coverageDistrictIds : []
+    if (!ids.length) return row.district?.name ? `${row.district.name} (home)` : '—'
+    return `${ids.length} district(s)`
+  }
   return row[key] ?? '—'
 }

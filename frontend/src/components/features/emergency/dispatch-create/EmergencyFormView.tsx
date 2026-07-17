@@ -1,34 +1,32 @@
 'use client'
 
-import { AlertTriangle, Clock, Flag, CheckCircle } from 'lucide-react'
+import { AlertTriangle, Clock, Flag, CheckCircle, AlertOctagon } from 'lucide-react'
 import { Priority } from '@/types'
 import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
+import { isOtherEmergencyType } from '@/lib/emergency/emergencyTypes'
 import type { District, Region } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
-import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
-import { FieldLabel, fieldInputClass, FormActions, SectionCard } from './ui'
+import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
+import PatientNameField from './PatientNameField'
+import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import type { DispatchFormErrors, EmergencyDispatchForm } from './types'
-import { AlertOctagon } from 'lucide-react'
 
 const PRIORITIES = [
-  { id: Priority.CRITICAL, label: 'Critical', icon: AlertTriangle },
-  { id: Priority.HIGH, label: 'High', icon: Flag },
-  { id: Priority.MEDIUM, label: 'Medium', icon: Clock },
-  { id: Priority.LOW, label: 'Low', icon: CheckCircle },
+  { id: Priority.CRITICAL, label: 'Critical', icon: AlertTriangle, disabled: false },
+  { id: Priority.HIGH, label: 'High', icon: Flag, disabled: false },
+  { id: Priority.MEDIUM, label: 'Medium', icon: Clock, disabled: true },
+  { id: Priority.LOW, label: 'Low', icon: CheckCircle, disabled: true },
 ]
 
 type Props = {
   form: EmergencyDispatchForm
   errors: DispatchFormErrors
-  regions: Region[]
+  banadirRegionName: string
   districts: District[]
   emergencyTypes: EmergencyTypeOption[]
-  hospitals: HospitalOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<EmergencyDispatchForm>) => void
-  onRegionChange: (regionId: string) => void
   onCancel: () => void
-  onSaveDraft: () => void
   onSubmit: () => void
   submitting: boolean
 }
@@ -36,18 +34,18 @@ type Props = {
 export default function EmergencyDispatchFormView({
   form,
   errors,
-  regions,
+  banadirRegionName,
   districts,
   emergencyTypes,
-  hospitals,
   loadingDistricts,
   onChange,
-  onRegionChange,
   onCancel,
-  onSaveDraft,
   onSubmit,
   submitting,
 }: Props) {
+  const selectedType = emergencyTypes.find((t) => t.id === form.emergencyTypeId)
+  const showOtherType = selectedType && isOtherEmergencyType(selectedType)
+
   return (
     <div className="space-y-6">
       <SectionCard title="Emergency Request" icon={AlertOctagon} iconBg="bg-red-100 text-red-600">
@@ -55,20 +53,19 @@ export default function EmergencyDispatchFormView({
           Short form for life-threatening cases — dispatch speed is the priority. Add more details later if needed.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <FieldLabel required error={errors.patientName}>Patient Name</FieldLabel>
-            <input
-              className={fieldInputClass(errors.patientName)}
-              value={form.patientName}
-              onChange={(e) => onChange({ patientName: e.target.value })}
-            />
-          </div>
+          <PatientNameField
+            value={form.patientName}
+            error={errors.patientName}
+            onChange={(patientName) => onChange({ patientName })}
+          />
           <div>
             <FieldLabel required error={errors.phone}>Phone Number</FieldLabel>
             <input
               className={fieldInputClass(errors.phone)}
               value={form.phone}
-              onChange={(e) => onChange({ phone: e.target.value })}
+              inputMode="numeric"
+              maxLength={9}
+              onChange={(e) => onChange({ phone: phoneDigitsOnly(e.target.value) })}
               placeholder="61XXXXXXX"
             />
           </div>
@@ -77,7 +74,12 @@ export default function EmergencyDispatchFormView({
             <select
               className={fieldInputClass(errors.emergencyTypeId)}
               value={form.emergencyTypeId}
-              onChange={(e) => onChange({ emergencyTypeId: e.target.value })}
+              onChange={(e) =>
+                onChange({
+                  emergencyTypeId: e.target.value,
+                  emergencyTypeOther: '',
+                })
+              }
             >
               <option value="">Select emergency type</option>
               {emergencyTypes.map((t) => (
@@ -87,28 +89,32 @@ export default function EmergencyDispatchFormView({
               ))}
             </select>
           </div>
+          {showOtherType && (
+            <div className="sm:col-span-2">
+              <FieldLabel required error={errors.emergencyTypeOther}>Describe other emergency</FieldLabel>
+              <input
+                className={fieldInputClass(errors.emergencyTypeOther)}
+                value={form.emergencyTypeOther}
+                onChange={(e) => onChange({ emergencyTypeOther: e.target.value })}
+                placeholder="What type of emergency is this?"
+              />
+            </div>
+          )}
           <div>
-            <FieldLabel required error={errors.regionId}>Region</FieldLabel>
-            <select
-              className={fieldInputClass(errors.regionId)}
-              value={form.regionId}
-              onChange={(e) => onRegionChange(e.target.value)}
-            >
-              <option value="">Select region</option>
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <FieldLabel required>Region</FieldLabel>
+            <input
+              className={`${fieldInputClass()} bg-slate-100 text-slate-600 cursor-not-allowed`}
+              value={banadirRegionName}
+              readOnly
+            />
           </div>
           <div>
             <FieldLabel required error={errors.districtId}>District</FieldLabel>
             <select
               className={fieldInputClass(errors.districtId)}
               value={form.districtId}
-              onChange={(e) => onChange({ districtId: e.target.value })}
-              disabled={!form.regionId || loadingDistricts}
+              onChange={(e) => onChange({ districtId: e.target.value, stationId: '' })}
+              disabled={loadingDistricts}
             >
               <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
               {districts.map((d) => (
@@ -118,8 +124,17 @@ export default function EmergencyDispatchFormView({
               ))}
             </select>
           </div>
+          <StationAssignmentField
+            regionId={form.regionId}
+            districtId={form.districtId}
+            stationId={form.stationId}
+            error={errors.stationId}
+            onChange={(stationId) => onChange({ stationId })}
+          />
           <div className="sm:col-span-2">
-            <FieldLabel required error={errors.landmark}>Landmark</FieldLabel>
+            <FieldLabel error={errors.landmark}>
+              Landmark <span className="text-slate-400 font-normal">(optional)</span>
+            </FieldLabel>
             <input
               className={fieldInputClass(errors.landmark)}
               value={form.landmark}
@@ -127,37 +142,14 @@ export default function EmergencyDispatchFormView({
               placeholder="Near main mosque, market, etc."
             />
           </div>
-          <div>
-            <FieldLabel error={errors.areaStreet}>Area / Street</FieldLabel>
+          <div className="sm:col-span-2">
+            <FieldLabel error={errors.areaStreet}>
+              Area / Street <span className="text-slate-400 font-normal">(optional)</span>
+            </FieldLabel>
             <input
               className={fieldInputClass(errors.areaStreet)}
               value={form.areaStreet}
               onChange={(e) => onChange({ areaStreet: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel error={errors.additionalDirections}>Additional Directions</FieldLabel>
-            <input
-              className={fieldInputClass(errors.additionalDirections)}
-              value={form.additionalDirections}
-              onChange={(e) => onChange({ additionalDirections: e.target.value })}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <HospitalDestinationPicker
-              hospitals={hospitals}
-              hospitalId={form.destinationHospitalId}
-              branchId={form.destinationHospitalBranchId}
-              required
-              hospitalError={errors.destinationHospitalId}
-              branchError={errors.destinationHospitalBranchId}
-              onHospitalChange={(hospitalId, branchId, branchName) =>
-                onChange({
-                  destinationHospitalId: hospitalId,
-                  destinationHospitalBranchId: branchId,
-                  destinationHospitalBranchName: branchName,
-                })
-              }
             />
           </div>
           <div className="sm:col-span-2">
@@ -187,15 +179,21 @@ export default function EmergencyDispatchFormView({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => onChange({ priority: p.id })}
+                disabled={p.disabled}
+                onClick={() => !p.disabled && onChange({ priority: p.id })}
                 className={`py-3 rounded-xl border-2 flex flex-col items-center gap-1 transition ${
-                  selected
-                    ? 'border-red-500 bg-red-50 text-red-800 shadow-sm'
-                    : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
+                  p.disabled
+                    ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed opacity-60'
+                    : selected
+                      ? 'border-red-500 bg-red-50 text-red-800 shadow-sm'
+                      : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${selected ? 'text-red-600' : 'opacity-40'}`} />
+                <Icon className={`w-5 h-5 ${selected && !p.disabled ? 'text-red-600' : 'opacity-40'}`} />
                 <span className="text-[10px] font-black uppercase">{p.label}</span>
+                {p.disabled && (
+                  <span className="text-[8px] font-bold uppercase text-slate-400">Inactive</span>
+                )}
               </button>
             )
           })}
@@ -204,7 +202,6 @@ export default function EmergencyDispatchFormView({
 
       <FormActions
         onCancel={onCancel}
-        onSaveDraft={onSaveDraft}
         onSubmit={onSubmit}
         submitting={submitting}
         submitLabel="Submit Emergency Request"

@@ -40,6 +40,12 @@ import {
   nextDispatcherCode,
   type SelectOption,
 } from '@/lib/dispatcherFormMasterData'
+import {
+  formatResidentialAddress,
+  oneYearAfterDate,
+  shiftTimesFromWorkShift,
+  type WorkShiftOption,
+} from '@/lib/employment/staffFormHelpers'
 import { systemSetupService, uploadService, employeesService } from '@/lib/api'
 import { Station, Department, Region, District } from '@/types'
 import { EMERGENCY_CONTACT_RELATIONSHIPS } from '@/lib/staff/emergencyContact'
@@ -128,6 +134,7 @@ export default function AddDispatcherForm() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [genderOptions, setGenderOptions] = useState<SelectOption[]>([])
   const [employmentTypeOptions, setEmploymentTypeOptions] = useState<SelectOption[]>([])
+  const [workShiftOptions, setWorkShiftOptions] = useState<WorkShiftOption[]>([])
   const [qualificationOptions, setQualificationOptions] = useState<SelectOption[]>([])
   const [dispatcherRoleId, setDispatcherRoleId] = useState('')
   const [dispatcherCode, setDispatcherCode] = useState('DIS-001')
@@ -157,11 +164,11 @@ export default function AddDispatcherForm() {
     relationship: '',
     employeeCode: '',
     departmentId: '',
-    employmentType: 'Full-time',
+    employmentType: '',
     joinDate: new Date().toISOString().split('T')[0],
     shiftStatus: 'OFF_DUTY',
     licenseNumber: '',
-    licenseExpiryDate: '',
+    licenseExpiryDate: oneYearAfterDate(new Date().toISOString().split('T')[0]),
     qualification: '',
     yearsOfExperience: '',
     certificationUpload: '',
@@ -199,6 +206,7 @@ export default function AddDispatcherForm() {
     setDispatcherRoleId(data.dispatcherRoleId)
     setGenderOptions(data.genderOptions)
     setEmploymentTypeOptions(data.employmentTypeOptions)
+    setWorkShiftOptions(data.workShiftOptions)
     setQualificationOptions(data.qualificationOptions)
 
     const issues = validateDispatcherMasterData(data)
@@ -214,7 +222,11 @@ export default function AddDispatcherForm() {
     setMasterDataError(null)
     try {
       const data = applyMasterData(await fetchDispatcherFormMasterData())
-      const code = nextDispatcherCode(data.dispatcherStatsTotal)
+      const stationList = await systemSetupService.getStations().catch(() => [])
+      setStations(
+        Array.isArray(stationList) ? stationList.filter((x: Station) => x.isActive !== false) : [],
+      )
+      const code = nextDispatcherCode(data.dispatcherStatsTotal, data.dispatcherNextCode)
       setDispatcherCode(code)
       const opsDept = suggestDispatcherDepartment(data.departments)
 
@@ -222,7 +234,7 @@ export default function AddDispatcherForm() {
         ...f,
         employeeCode: code,
         departmentId: f.departmentId || opsDept?.id || '',
-        employmentType: f.employmentType || data.employmentTypeOptions[0]?.id || 'Full-time',
+        employmentType: f.employmentType || data.employmentTypeOptions[0]?.id || '',
         qualification: f.qualification || data.qualificationOptions[0]?.id || '',
       }))
     } catch {
@@ -264,9 +276,8 @@ export default function AddDispatcherForm() {
   const todayStr = useMemo(() => formatDateInput(new Date()), [])
 
   const handleRegionChange = async (regionId: string) => {
-    patch({ regionId, districtId: '', stationId: '' })
+    patch({ regionId, districtId: '' })
     setDistricts([])
-    setStations([])
     if (!regionId) return
 
     setLoadingDistricts(true)
@@ -284,24 +295,8 @@ export default function AddDispatcherForm() {
     }
   }
 
-  const handleDistrictChange = async (districtId: string) => {
-    patch({ districtId, stationId: '' })
-    setStations([])
-    if (!districtId) return
-
-    setLoadingStations(true)
-    try {
-      const stationList = await systemSetupService.getStations(districtId)
-      setStations(Array.isArray(stationList) ? stationList.filter((x: Station) => x.isActive !== false) : [])
-      if (!Array.isArray(stationList) || stationList.length === 0) {
-        toast.error('No stations in this district. Add a station in System Setup.')
-      }
-    } catch {
-      toast.error('Failed to load stations')
-      setStations([])
-    } finally {
-      setLoadingStations(false)
-    }
+  const handleDistrictChange = (districtId: string) => {
+    patch({ districtId })
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -333,7 +328,12 @@ export default function AddDispatcherForm() {
       ? `${form.firstName.trim()} ${form.middleName.trim()}`
       : form.firstName.trim()
 
-    const fullAddress = form.address.trim() || undefined
+    const fullAddress = formatResidentialAddress(
+      form.address,
+      selectedDistrict?.name,
+      selectedRegion?.name,
+    )
+    const shift = shiftTimesFromWorkShift(form.employmentType, workShiftOptions)
 
     return {
       role: 'EMPLOYEE' as const,
@@ -358,7 +358,8 @@ export default function AddDispatcherForm() {
       relationship: form.relationship.trim() || undefined,
       address: fullAddress,
       employmentDate: form.joinDate || undefined,
-      defaultShift: form.employmentType,
+      defaultShift: shift.defaultShift,
+      typicalStartTime: shift.typicalStartTime,
       shiftStatus: mapShiftStatus(form.shiftStatus),
       licenseNumber: form.licenseNumber.trim() || undefined,
       licenseType: 'DISPATCH',
@@ -469,7 +470,7 @@ export default function AddDispatcherForm() {
       relationship: '',
       employeeCode: dispatcherCode,
       departmentId: form.departmentId,
-      employmentType: 'Full-time',
+      employmentType: employmentTypeOptions[0]?.id || '',
       joinDate: new Date().toISOString().split('T')[0],
       shiftStatus: 'OFF_DUTY',
       licenseNumber: '',
@@ -756,21 +757,25 @@ export default function AddDispatcherForm() {
                   <>
                     <SectionHeader
                       icon={MapPin}
-                      title="Location & Employment"
-                      subtitle="Dispatch station assignment"
+                      title="Home & Work Assignment"
+                      subtitle="Home address is where the employee lives; station is where they work and receive cases"
                       color="red"
                     />
 
-                    {(selectedRegion || selectedDistrict || selectedStation) && (
-                      <div className="mb-6 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
-                        <MapPin className="w-4 h-4 text-red-500 shrink-0" />
-                        <span>{selectedRegion?.name || '—'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span>{selectedDistrict?.name || 'Select district'}</span>
-                        <ChevronRight className="w-3 h-3 text-red-300" />
-                        <span className="text-red-700">{selectedStation?.name || 'Select station'}</span>
+                    <div className="mb-6 space-y-4">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                        <p className="font-bold text-slate-800 mb-1">Home location</p>
+                        <p>Region and district describe where the employee lives — not station coverage areas.</p>
                       </div>
-                    )}
+                      {(selectedRegion || selectedDistrict) && (
+                        <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs font-bold text-slate-700">
+                          <MapPin className="w-4 h-4 text-red-500 shrink-0" />
+                          <span>{selectedRegion?.name || '—'}</span>
+                          <ChevronRight className="w-3 h-3 text-red-300" />
+                          <span>{selectedDistrict?.name || 'Select home district'}</span>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="md:col-span-2">
@@ -786,17 +791,17 @@ export default function AddDispatcherForm() {
                         />
                       </div>
                       <FormSelect
-                        label="Region"
+                        label="Home Region"
                         required
                         icon={MapPin}
                         options={regions}
                         value={form.regionId}
                         error={fieldErrors.regionId}
-                        emptyHint={regions.length ? 'Select Region' : 'No regions — add in System Setup'}
+                        emptyHint={regions.length ? 'Select home region' : 'No regions — add in System Setup'}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleRegionChange(e.target.value)}
                       />
                       <FormSelect
-                        label="District"
+                        label="Home District"
                         required
                         icon={MapPin}
                         options={districts}
@@ -806,28 +811,41 @@ export default function AddDispatcherForm() {
                         loading={loadingDistricts}
                         emptyHint={
                           !form.regionId
-                            ? 'Select a region first'
+                            ? 'Select home region first'
                             : districts.length
-                              ? 'Select District'
+                              ? 'Select home district'
                               : 'No districts in this region'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDistrictChange(e.target.value)}
                       />
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-red-50">
+                      <SectionHeader
+                        icon={Building2}
+                        title="Work Assignment"
+                        subtitle="Station determines which district cases this dispatcher can receive"
+                        color="red"
+                      />
+                      {selectedStation && (
+                        <div className="mb-4 flex flex-wrap items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-slate-700">
+                          <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="text-emerald-800">{selectedStation.name}</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormSelect
-                        label="Dispatch Station"
+                        label="Assigned Station"
                         required
                         icon={Building2}
                         options={stations}
                         value={form.stationId}
                         error={fieldErrors.stationId}
-                        disabled={!form.districtId}
                         loading={loadingStations}
                         emptyHint={
-                          !form.districtId
-                            ? 'Select a district first'
-                            : stations.length
-                              ? 'Select Station'
-                              : 'No stations — add in System Setup'
+                          stations.length
+                            ? 'Select work station'
+                            : 'No stations — add in Master Data → Stations'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ stationId: e.target.value })}
                       />
@@ -847,16 +865,21 @@ export default function AddDispatcherForm() {
                         value={form.departmentId}
                         error={fieldErrors.departmentId}
                         emptyHint={
-                          departments.length ? 'Select Department' : 'No departments — add in System Setup'
+                          departments.length ? 'Dispatch Operations departments only' : 'No departments — add in System Setup'
                         }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ departmentId: e.target.value })}
                       />
                       <FormSelect
-                        label="Employment Type"
+                        label="Work Shift"
                         required
                         options={employmentTypeOptions}
                         value={form.employmentType}
                         error={fieldErrors.employmentType}
+                        emptyHint={
+                          employmentTypeOptions.length
+                            ? 'Shifts from Shift Management'
+                            : 'No shifts configured — add in Shift Management'
+                        }
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                           patch({ employmentType: e.target.value })
                         }
@@ -869,8 +892,15 @@ export default function AddDispatcherForm() {
                         error={fieldErrors.joinDate}
                         min={minJoinDate}
                         max={todayStr}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ joinDate: e.target.value })}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const joinDate = e.target.value
+                          patch({
+                            joinDate,
+                            licenseExpiryDate: oneYearAfterDate(joinDate),
+                          })
+                        }}
                       />
+                      </div>
                     </div>
 
                     <div className="mt-8 pt-8 border-t border-red-50">
@@ -945,6 +975,9 @@ export default function AddDispatcherForm() {
                           patch({ licenseExpiryDate: e.target.value })
                         }
                       />
+                      <p className="md:col-span-2 text-[10px] text-slate-500">
+                        Certificate expiry auto-fills as one year after the join date. You can adjust if needed.
+                      </p>
                       <FormSelect
                         label="Qualification"
                         required

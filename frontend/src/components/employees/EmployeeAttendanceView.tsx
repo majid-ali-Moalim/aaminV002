@@ -21,6 +21,7 @@ import {
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { employeeAttendanceService } from '@/lib/api'
+import { activeShiftLabel } from '@/lib/employment/shiftTypes'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
 
 type AttendanceRow = {
@@ -40,6 +41,10 @@ type AttendanceRow = {
   totalHours: number | null
   hoursInProgress?: boolean
   profilePhoto?: string | null
+  canMarkAttendance?: boolean
+  onCurrentShift?: boolean
+  requiresShiftMatch?: boolean
+  attendanceBlockReason?: string | null
 }
 
 type MissedShiftAlert = {
@@ -233,6 +238,8 @@ export default function EmployeeAttendanceView() {
   const [markingId, setMarkingId] = useState<string | null>(null)
   const [missedAlerts, setMissedAlerts] = useState<MissedShiftAlert[]>([])
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState<Set<string>>(() => loadDismissedAlerts())
+  const [activeShift, setActiveShift] = useState(activeShiftLabel())
+  const [viewingToday, setViewingToday] = useState(true)
 
   const loadDay = useCallback(async (date: string) => {
     setLoading(true)
@@ -241,6 +248,8 @@ export default function EmployeeAttendanceView() {
       setRows(res.items ?? [])
       setSummary(res.summary ?? null)
       setMissedAlerts(Array.isArray(res.missedShiftAlerts) ? res.missedShiftAlerts : [])
+      setActiveShift(res.activeShiftLabel ?? activeShiftLabel())
+      setViewingToday(Boolean(res.isToday))
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
@@ -280,6 +289,10 @@ export default function EmployeeAttendanceView() {
   }
 
   const markAttendance = async (row: AttendanceRow, action: 'present' | 'absent') => {
+    if (row.canMarkAttendance === false) {
+      toast.error(row.attendanceBlockReason || 'Attendance can only be marked during this employee\'s shift')
+      return
+    }
     setMarkingId(row.employeeDbId)
     try {
       await employeeAttendanceService.markAttendance({
@@ -399,6 +412,14 @@ export default function EmployeeAttendanceView() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {viewingToday && (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <span className="font-bold">Active shift now:</span> {activeShift}. Present and absent can
+          only be marked for staff whose assigned shift matches this window (drivers, nurses,
+          dispatchers).
         </div>
       )}
 
@@ -565,9 +586,14 @@ export default function EmployeeAttendanceView() {
                             {!r.present && (
                               <button
                                 type="button"
-                                disabled={markingId === r.employeeDbId}
+                                disabled={markingId === r.employeeDbId || r.canMarkAttendance === false}
                                 onClick={() => markAttendance(r, 'present')}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
+                                title={
+                                  r.canMarkAttendance === false
+                                    ? r.attendanceBlockReason ?? 'Not on current shift'
+                                    : 'Mark present'
+                                }
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Present
                               </button>
@@ -575,9 +601,14 @@ export default function EmployeeAttendanceView() {
                             {r.present && (
                               <button
                                 type="button"
-                                disabled={markingId === r.employeeDbId}
+                                disabled={markingId === r.employeeDbId || r.canMarkAttendance === false}
                                 onClick={() => markAttendance(r, 'absent')}
-                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                title={
+                                  r.canMarkAttendance === false
+                                    ? r.attendanceBlockReason ?? 'Not on current shift'
+                                    : 'Mark absent'
+                                }
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Absent
                               </button>

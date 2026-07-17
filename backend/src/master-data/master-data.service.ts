@@ -182,6 +182,27 @@ export class MasterDataService implements OnModuleInit {
       if (!district) {
         throw new BadRequestException('Selected district does not belong to the chosen region');
       }
+      if (data.coverageDistrictIds !== undefined) {
+        const coverageIds = Array.isArray(data.coverageDistrictIds)
+          ? data.coverageDistrictIds.map(String)
+          : [];
+        if (coverageIds.length) {
+          const valid = await this.prisma.district.findMany({
+            where: {
+              id: { in: coverageIds },
+              regionId: String(data.regionId),
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+          if (valid.length !== coverageIds.length) {
+            throw new BadRequestException(
+              'One or more coverage districts do not belong to the selected region',
+            );
+          }
+        }
+        data.coverageDistrictIds = coverageIds;
+      }
     }
 
     const usesAuditFields = entity !== 'system-settings' && entity !== 'stations';
@@ -199,7 +220,7 @@ export class MasterDataService implements OnModuleInit {
   async update(entity: MdmEntityKey, id: string, data: Record<string, unknown>, userId?: string) {
     await this.getOne(entity, id);
 
-    if (entity === 'stations' && (data.regionId || data.districtId)) {
+    if (entity === 'stations' && (data.regionId || data.districtId || data.coverageDistrictIds !== undefined)) {
       const existing = await this.model(entity).findUnique({ where: { id } });
       const regionId = String(data.regionId ?? existing?.regionId ?? '');
       const districtId = String(data.districtId ?? existing?.districtId ?? '');
@@ -211,6 +232,27 @@ export class MasterDataService implements OnModuleInit {
       });
       if (!district) {
         throw new BadRequestException('Selected district does not belong to the chosen region');
+      }
+      if (data.coverageDistrictIds !== undefined) {
+        const coverageIds = Array.isArray(data.coverageDistrictIds)
+          ? data.coverageDistrictIds.map(String)
+          : [];
+        if (coverageIds.length) {
+          const valid = await this.prisma.district.findMany({
+            where: {
+              id: { in: coverageIds },
+              regionId,
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+          if (valid.length !== coverageIds.length) {
+            throw new BadRequestException(
+              'One or more coverage districts do not belong to the selected region',
+            );
+          }
+        }
+        data.coverageDistrictIds = coverageIds;
       }
     }
 

@@ -3,14 +3,25 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts'
-import {
-  Stethoscope, Search, RefreshCw, Plus, Download, FileSpreadsheet, FileText,
-  Eye, X, Loader2, AlertCircle, ExternalLink, Clock, ChevronRight,
+  Stethoscope,
+  Search,
+  RefreshCw,
+  Plus,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Eye,
+  X,
+  Loader2,
+  AlertCircle,
+  ExternalLink,
+  ChevronRight,
+  MessageSquare,
+  User,
+  Truck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { nursesService } from '@/lib/api'
@@ -22,6 +33,7 @@ import {
   NURSE_STATUS_CONFIG,
   formatTimeAgo,
 } from '@/lib/nurses/availability'
+import { buildStaffChatUrl } from '@/lib/staffChat'
 
 const STATUS_TABS: { id: NurseStatusFilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -30,6 +42,7 @@ const STATUS_TABS: { id: NurseStatusFilterTab; label: string }[] = [
 ]
 
 export default function NurseAvailabilityView() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<NurseStatusFilterTab>('all')
   const [stationFilter, setStationFilter] = useState('')
@@ -59,7 +72,21 @@ export default function NurseAvailabilityView() {
     }
   }
 
-  const closeDetail = () => { setDetailId(null); setDetailData(null) }
+  const closeDetail = () => {
+    setDetailId(null)
+    setDetailData(null)
+  }
+
+  const openNurseChat = (row: Pick<NurseAvailabilityRow, 'userId' | 'currentCase'>) => {
+    if (!row.userId) return
+    router.push(
+      buildStaffChatUrl({
+        userId: row.userId,
+        caseId: row.currentCase?.id,
+        trackingCode: row.currentCase?.trackingCode,
+      }),
+    )
+  }
 
   const filteredRows = useMemo(() => {
     if (!data?.nurses) return []
@@ -71,22 +98,35 @@ export default function NurseAvailabilityView() {
       if (districtFilter && row.district?.id !== districtFilter) return false
       if (specializationFilter && row.specialization !== specializationFilter) return false
       if (!q) return true
-      const hay = [row.fullName, row.employeeCode ?? '', row.phone ?? '', row.specialization ?? '',
-        row.currentCase?.trackingCode ?? '', row.station?.name ?? ''].join(' ').toLowerCase()
+      const hay = [
+        row.fullName,
+        row.employeeCode ?? '',
+        row.phone ?? '',
+        row.specialization ?? '',
+        row.currentCase?.trackingCode ?? '',
+        row.currentCase?.patientName ?? '',
+        row.station?.name ?? '',
+      ].join(' ').toLowerCase()
       return hay.includes(q)
     })
   }, [data?.nurses, search, statusFilter, stationFilter, regionFilter, districtFilter, specializationFilter])
 
   const summary = data?.summary ?? { total: 0, available: 0, unavailable: 0, activeToday: 0 }
+  const onCaseCount = useMemo(
+    () => (data?.nurses ?? []).filter((n) => n.currentCase).length,
+    [data?.nurses],
+  )
 
   const exportRows = filteredRows.map((r) => ({
     'Nurse ID': r.employeeCode ?? r.id.slice(0, 8),
     Name: r.fullName,
-    Specialization: r.specialization ?? '—',
     Phone: r.phone ?? '—',
+    Specialization: r.specialization ?? '—',
+    Attendance: r.attendanceStatus === 'present' ? 'Present' : 'Absent',
     Status: NURSE_STATUS_CONFIG[r.operationalStatus].label,
-    Reason: r.unavailableReason ?? '—',
     'Current Case': r.currentCase?.trackingCode ?? '—',
+    Patient: r.currentCase?.patientName ?? '—',
+    Ambulance: r.currentCase?.ambulanceNumber ?? '—',
     Station: r.station?.name ?? '—',
     'Last Updated': format(new Date(r.updatedAt), 'yyyy-MM-dd HH:mm'),
   }))
@@ -94,23 +134,25 @@ export default function NurseAvailabilityView() {
   const exportCsv = () => {
     if (!exportRows.length) return
     const headers = Object.keys(exportRows[0])
-    downloadBlob([headers.join(','), ...exportRows.map((row) =>
-      headers.map((h) => `"${String(row[h as keyof typeof row]).replace(/"/g, '""')}"`).join(','))].join('\n'),
-      'text/csv', `nurse-availability-${today()}.csv`)
+    const csv = [headers.join(','), ...exportRows.map((row) =>
+      headers.map((h) => `"${String(row[h as keyof typeof row]).replace(/"/g, '""')}"`).join(','),
+    )].join('\n')
+    downloadBlob(csv, 'text/csv', `nurse-availability-${today()}.csv`)
   }
 
   const exportExcel = () => {
     if (!exportRows.length) return
     const headers = Object.keys(exportRows[0])
-    downloadBlob('\uFEFF' + [headers.join('\t'), ...exportRows.map((row) =>
-      headers.map((h) => String(row[h as keyof typeof row])).join('\t'))].join('\n'),
-      'application/vnd.ms-excel', `nurse-availability-${today()}.xls`)
+    const tsv = [headers.join('\t'), ...exportRows.map((row) =>
+      headers.map((h) => String(row[h as keyof typeof row])).join('\t'),
+    )].join('\n')
+    downloadBlob('\uFEFF' + tsv, 'application/vnd.ms-excel', `nurse-availability-${today()}.xls`)
   }
 
   if (isLoading && !data) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-slate-500">
-        <Loader2 className="w-10 h-10 animate-spin text-red-500 mb-4" />
+        <Loader2 className="w-10 h-10 animate-spin text-violet-500 mb-4" />
         <p className="text-sm font-semibold">Loading nurse availability…</p>
       </div>
     )
@@ -122,10 +164,10 @@ export default function NurseAvailabilityView() {
         <div className="absolute top-0 right-0 p-8 opacity-10"><Stethoscope className="w-32 h-32" /></div>
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-200 mb-2">Dispatch Operations</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-200 mb-2">Clinical Operations</p>
             <h1 className="text-3xl font-black tracking-tight">Nurse Availability</h1>
             <p className="text-violet-100/80 mt-2 max-w-xl text-sm">
-              See which nurses can be assigned to emergency cases. Only nurses marked Available are dispatch-ready.
+              Availability follows today&apos;s attendance — present nurses are available; absent nurses are unavailable.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -150,29 +192,10 @@ export default function NurseAvailabilityView() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Total Nurses" value={summary.total} icon={Stethoscope} tone="slate" />
-        <KpiCard label="Available" value={summary.available} icon={Stethoscope} tone="emerald" />
-        <KpiCard label="Unavailable" value={summary.unavailable} icon={AlertCircle} tone="red" />
-        <KpiCard label="Active Today" value={summary.activeToday} icon={Clock} tone="violet" />
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        {(Object.keys(NURSE_STATUS_CONFIG) as OperationalNurseStatus[]).map((key) => {
-          const cfg = NURSE_STATUS_CONFIG[key]
-          const count = data?.statusCounts[key] ?? 0
-          const desc = key === 'available' ? 'Can be assigned to a new case immediately.' : 'On duty, on case, on break, pending clearance, or not working.'
-          return (
-            <div key={key} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">{cfg.emoji}</span>
-                <span className={`text-3xl font-black ${key === 'available' ? 'text-emerald-600' : 'text-red-600'}`}>{count}</span>
-              </div>
-              <h3 className="text-sm font-black text-slate-800 mt-3">{cfg.label}</h3>
-              <p className="text-xs text-slate-500 mt-1">{desc}</p>
-            </div>
-          )
-        })}
+        <KpiCard label="Available (Present)" value={summary.available} icon={Stethoscope} tone="emerald" />
+        <KpiCard label="On Active Case" value={onCaseCount} icon={Truck} tone="violet" />
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 print:hidden">
@@ -189,15 +212,11 @@ export default function NurseAvailabilityView() {
             <option value="">All Stations</option>
             {data?.filters.stations.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="lg:w-40 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
-            <option value="">All Regions</option>
-            {data?.filters.regions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as NurseStatusFilterTab)} className="lg:w-40 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
+            {STATUS_TABS.map((tab) => (
+              <option key={tab.id} value={tab.id}>{tab.id === 'all' ? 'All Statuses' : tab.label}</option>
+            ))}
           </select>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {STATUS_TABS.map((tab) => (
-            <button key={tab.id} type="button" onClick={() => setStatusFilter(tab.id)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${statusFilter === tab.id ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{tab.label}</button>
-          ))}
         </div>
       </div>
 
@@ -211,11 +230,12 @@ export default function NurseAvailabilityView() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-3">Nurse ID</th>
-                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Nurse</th>
                   <th className="px-4 py-3">Specialization</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Attendance</th>
                   <th className="px-4 py-3">Current Case</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Ambulance</th>
                   <th className="px-4 py-3">Station</th>
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 print:hidden">Actions</th>
@@ -223,24 +243,33 @@ export default function NurseAvailabilityView() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">No nurses match your filters</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">No nurses match your filters</td></tr>
                 ) : filteredRows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3 font-mono text-slate-600">{row.employeeCode ?? '—'}</td>
-                    <td className="px-4 py-3 font-bold">{row.fullName}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold">{row.fullName}</p>
+                      <p className="text-[10px] font-mono text-slate-500">{row.employeeCode ?? '—'}</p>
+                    </td>
                     <td className="px-4 py-3">{row.specialization ?? '—'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.operationalStatus} />
-                      {row.unavailableReason && <p className="text-[10px] text-slate-500 mt-0.5">{row.unavailableReason}</p>}
+                      <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{row.attendanceStatus ?? 'absent'}</p>
                     </td>
                     <td className="px-4 py-3">
                       {row.currentCase ? <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link> : '—'}
                     </td>
+                    <td className="px-4 py-3">{row.currentCase?.patientName ?? '—'}</td>
+                    <td className="px-4 py-3">{row.currentCase?.ambulanceNumber ?? '—'}</td>
                     <td className="px-4 py-3">{row.station?.name ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatTimeAgo(row.updatedAt)}</td>
                     <td className="px-4 py-3 print:hidden">
                       <div className="flex gap-1">
                         <button type="button" onClick={() => openDetail(row.id)} className="p-1.5 rounded-lg hover:bg-slate-100"><Eye className="w-4 h-4" /></button>
+                        {row.currentCase && row.userId && (
+                          <button type="button" onClick={() => openNurseChat(row)} className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50" title="Message nurse about case">
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -263,48 +292,6 @@ export default function NurseAvailabilityView() {
         </aside>
       </div>
 
-      {data?.analytics && (
-        <section className="space-y-4">
-          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Analytics</h2>
-          <div className="grid lg:grid-cols-2 gap-4">
-            <ChartCard title="Daily Nurse Usage">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.analytics.dailyUsage}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" /><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip />
-                  <Bar dataKey="count" fill="#7C3AED" radius={[6, 6, 0, 0]} name="Cases" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Cases Per Nurse (30 days)">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.analytics.casesPerNurse} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" /><XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="nurseName" tick={{ fontSize: 10 }} width={90} /><Tooltip />
-                  <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Cases" />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Available vs Unavailable">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={data.analytics.statusDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`}>
-                    {data.analytics.statusDistribution.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                  </Pie><Tooltip /><Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartCard>
-            <ChartCard title="Nurse Activity Trend">
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={data.analytics.activityTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" /><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip />
-                  <Line type="monotone" dataKey="active" stroke="#8B5CF6" strokeWidth={2} dot={{ r: 4 }} name="Active cases" />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          </div>
-        </section>
-      )}
-
       {detailId && (
         <Modal onClose={closeDetail} title={detailData?.nurse ? `${detailData.nurse.firstName ?? ''} ${detailData.nurse.lastName ?? ''}`.trim() : 'Nurse Details'}>
           {detailLoading ? <div className="py-16 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-violet-500" /></div> : detailData ? (
@@ -313,38 +300,30 @@ export default function NurseAvailabilityView() {
                 <InfoField label="Nurse ID" value={detailData.nurse.employeeCode ?? '—'} />
                 <InfoField label="Phone" value={detailData.nurse.phone ?? '—'} />
                 <InfoField label="Specialization" value={detailData.nurse.specialization ?? '—'} />
-                <InfoField label="Current Status"><StatusBadge status={detailData.nurse.operationalStatus} /></InfoField>
-                <InfoField label="Reason" value={detailData.nurse.unavailableReason ?? 'Ready for dispatch'} />
+                <InfoField label="Attendance"><StatusBadge status={detailData.nurse.operationalStatus} /></InfoField>
+                <InfoField label="Today's attendance" value={detailData.nurse.attendanceStatus === 'present' ? 'Present' : 'Absent'} />
                 <InfoField label="Station" value={detailData.nurse.station?.name ?? '—'} />
               </div>
               {detailData.currentCase && (
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 space-y-2">
                   <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Current Case</p>
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`} className="text-blue-700 font-bold hover:underline flex items-center gap-1">{detailData.currentCase.trackingCode} <ExternalLink className="w-3.5 h-3.5" /></Link>
+                  {detailData.currentCase.patient?.fullName && <p className="text-sm text-slate-700"><User className="w-3.5 h-3.5 inline mr-1" />{detailData.currentCase.patient.fullName}</p>}
+                  {detailData.currentCase.ambulance?.ambulanceNumber && <p className="text-sm text-slate-700"><Truck className="w-3.5 h-3.5 inline mr-1" />{detailData.currentCase.ambulance.ambulanceNumber}</p>}
                 </div>
               )}
-              <div>
-                <h3 className="text-xs font-black text-slate-500 uppercase mb-2">Case History</h3>
-                {detailData.caseHistory?.length ? detailData.caseHistory.map((c: any) => (
-                  <Link key={c.id} href={`/admin/emergency-requests/${c.id}`} className="flex justify-between p-2.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-sm mb-1">
-                    <span className="font-semibold">{c.trackingCode}</span><span className="text-xs text-slate-500">{c.status.replace(/_/g, ' ')}</span>
-                  </Link>
-                )) : <p className="text-sm text-slate-500">No case history</p>}
-              </div>
-              <div>
-                <h3 className="text-xs font-black text-slate-500 uppercase mb-2">Shift History</h3>
-                {detailData.shiftHistory?.length ? detailData.shiftHistory.map((s: any) => (
-                  <div key={s.id} className="text-sm p-2.5 rounded-lg bg-slate-50 mb-1"><p className="font-medium">{s.status.replace(/_/g, ' ')}</p><p className="text-xs text-slate-500">{formatTimeAgo(s.startTime)}</p></div>
-                )) : <p className="text-sm text-slate-500">No shift history</p>}
-              </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
+                {detailData.currentCase && detailData.nurse.userId && (
+                  <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openNurseChat({ userId: detailData.nurse.userId, currentCase: detailData.currentCase })}>
+                    <MessageSquare className="w-4 h-4 mr-1" /> Message Nurse
+                  </Button>
+                )}
                 {detailData.currentCase && <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}><Button size="sm" className="rounded-xl bg-violet-600 hover:bg-violet-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>}
               </div>
             </div>
           ) : <p className="text-center py-8 text-slate-500">Could not load details</p>}
         </Modal>
       )}
-
     </div>
   )
 }
@@ -362,10 +341,6 @@ function KpiCard({ label, value, icon: Icon, tone }: { label: string; value: num
 function StatusBadge({ status }: { status: OperationalNurseStatus }) {
   const cfg = NURSE_STATUS_CONFIG[status]
   return <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${cfg.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />{cfg.label}</span>
-}
-
-function ChartCard({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5"><h3 className="text-sm font-bold mb-4">{title}</h3>{children}</div>
 }
 
 function InfoField({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {

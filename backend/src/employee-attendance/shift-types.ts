@@ -52,6 +52,27 @@ export function isEmployeeOnActiveShift(
   return empShift.code === getActiveShiftCodeAt(at);
 }
 
+/** Returns a user-facing block reason, or null when marking is allowed. */
+export function getAttendanceShiftBlockReason(
+  roleName: string | null | undefined,
+  defaultShift?: string | null,
+  typicalStartTime?: string | null,
+  at = new Date(),
+): string | null {
+  if (!isFieldShiftRole(roleName)) return null;
+  if (isEmployeeOnActiveShift(defaultShift, typicalStartTime, at)) return null;
+
+  const empShift = resolveShiftForEmployee(defaultShift, typicalStartTime);
+  const activeCode = getActiveShiftCodeAt(at);
+  const activeWindow = activeCode === 'DAY' ? DAY_SHIFT : NIGHT_SHIFT;
+
+  return (
+    `This employee is on ${empShift.name} (${empShift.startTime} – ${empShift.endTime}) ` +
+    `and can only be marked present or absent during that shift. ` +
+    `The current active window is ${activeShiftLabel(at)} (${activeWindow.startTime} – ${activeWindow.endTime}).`
+  );
+}
+
 export function activeShiftLabel(at = new Date()): string {
   return getActiveShiftCodeAt(at) === 'DAY' ? 'Day time' : 'Night time';
 }

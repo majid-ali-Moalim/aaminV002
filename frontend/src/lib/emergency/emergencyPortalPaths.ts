@@ -23,7 +23,8 @@ export function emergencyPortalPaths(portal: EmergencyPortal = 'admin') {
       portal === 'dispatcher' ? `${base}/pending` : '/admin/dashboard/live',
     caseDetail: (id: string) => `${base}/${id}`,
     caseTimeline: (id: string) => `${base}/timeline/${id}`,
-    caseTrack: (id: string) => `${base}/track/${id}`,
+    caseTrack: (id: string) =>
+      portal === 'dispatcher' ? `${base}/${id}` : `${base}/track/${id}`,
     patientsCases:
       portal === 'dispatcher' ? '/dispatcher/patients/cases' : '/admin/patients/cases',
   }

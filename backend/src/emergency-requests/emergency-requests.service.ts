@@ -14,7 +14,10 @@ import {
   myActiveCasesWhere,
   regionalCasesWhere,
   regionalPendingCasesWhere,
+  isCaseInDispatcherPendingScope,
+  isCaseAtDispatcherStation,
 } from '../dispatchers-app/dispatcher-scope.util';
+import { StationCoverageService } from '../station-coverage/station-coverage.service';
 import {
   assertDispatchEligibleStaff,
   filterDispatchEligibleEmployees,
@@ -28,6 +31,14 @@ type AuthUser = {
   employeeRole?: string;
 };
 
+function caseRequiresNurse(caseRow: {
+  notes?: string | null;
+  manualDispatchNotes?: string | null;
+}): boolean {
+  const blob = `${caseRow.notes ?? ''}\n${caseRow.manualDispatchNotes ?? ''}`.toUpperCase();
+  return blob.includes('REQUIRES NURSE: YES') || blob.includes('NURSE REQUIRED');
+}
+
 type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional';
 
 @Injectable()
@@ -37,7 +48,8 @@ export class EmergencyRequestsService {
     private notifications: NotificationsService,
     private trackingGateway: TrackingGateway,
     private trackingService: TrackingService,
-    private auditLog: AuditLogService
+    private auditLog: AuditLogService,
+    private stationCoverage: StationCoverageService,
   ) {}
 
   private async teamUserIds(requestId: string): Promise<string[]> {
@@ -56,7 +68,9 @@ export class EmergencyRequestsService {
     );
   }
 
-  private async resolveDispatcherScope(userId: string): Promise<DispatcherScope | null> {
+  private async resolveDispatcherScope(
+    userId: string,
+  ): Promise<(DispatcherScope & { stationScoped: boolean }) | null> {
     const employee = await this.prisma.employee.findFirst({
       where: {
         userId,
@@ -65,12 +79,14 @@ export class EmergencyRequestsService {
       include: { station: { include: { region: true } } },
     });
     if (!employee) return null;
+    const stationScoped = await this.stationCoverage.usesStationScoping();
     return {
       dispatcherId: employee.id,
       regionId: employee.station?.regionId ?? null,
       districtId: employee.station?.districtId ?? null,
       stationId: employee.stationId ?? null,
       regionName: employee.station?.region?.name ?? null,
+      stationScoped,
     };
   }
 
@@ -86,21 +102,27 @@ export class EmergencyRequestsService {
     const q = (queue || 'regional') as EmergencyQueue;
     switch (q) {
       case 'pending':
-        return regionalPendingCasesWhere(scope);
+        return regionalPendingCasesWhere(scope, {}, scope.stationScoped);
       case 'my-active':
         return myActiveCasesWhere(scope);
       case 'my-cases':
         return myCasesWhere(scope);
       case 'regional':
       default:
-        return regionalCasesWhere(scope);
+        return regionalCasesWhere(scope, {}, scope.stationScoped);
     }
   }
 
   async assertDispatcherCanAccessCase(
     user: AuthUser | undefined,
-    caseRow: { id: string; dispatcherId: string | null; regionId: string | null; status: string },
-    action: 'read' | 'assign' | 'mutate' = 'read',
+    caseRow: {
+      id: string;
+      dispatcherId: string | null;
+      regionId: string | null;
+      stationId: string | null;
+      status: string;
+    },
+    action: 'read' | 'assign' | 'mutate' | 'transfer' = 'read',
   ) {
     if (!this.isDispatcherUser(user) || !user?.sub) return;
 
@@ -110,17 +132,26 @@ export class EmergencyRequestsService {
     }
 
     const isMine = caseRow.dispatcherId === scope.dispatcherId;
-    const isRegionalPending =
-      !caseRow.dispatcherId &&
-      ['PENDING', 'REVIEWING'].includes(caseRow.status) &&
-      (!scope.regionId || caseRow.regionId === scope.regionId);
+    const isRegionalPending = isCaseInDispatcherPendingScope(scope, caseRow, scope.stationScoped);
+    const inStationScope = isCaseAtDispatcherStation(scope, caseRow, scope.stationScoped);
+
+    if (!inStationScope) {
+      throw new ForbiddenException('Case belongs to another station');
+    }
 
     if (action === 'assign') {
       if (caseRow.dispatcherId && caseRow.dispatcherId !== scope.dispatcherId) {
         throw new ForbiddenException('This case is assigned to another dispatcher');
       }
       if (!isMine && !isRegionalPending) {
-        throw new ForbiddenException('You can only assign cases in your region pending queue');
+        throw new ForbiddenException('You can only assign cases in your station pending queue');
+      }
+      return;
+    }
+
+    if (action === 'transfer') {
+      if (!isMine && !isRegionalPending) {
+        throw new ForbiddenException('You can only transfer cases within your dispatch scope');
       }
       return;
     }
@@ -129,8 +160,20 @@ export class EmergencyRequestsService {
       throw new ForbiddenException('You can only update cases assigned to you');
     }
 
+    if (action === 'read') {
+      return;
+    }
+
     if (!isMine && !isRegionalPending) {
       throw new ForbiddenException('Case is outside your dispatch scope');
+    }
+  }
+
+  private assertValidSomaliaPhone(value: string | undefined | null, label: string) {
+    if (!value?.trim()) return;
+    const digits = String(value).replace(/\D/g, '').replace(/^252/, '');
+    if (!/^[67]\d{7,8}$/.test(digits)) {
+      throw new BadRequestException(`Invalid Somali ${label}`);
     }
   }
 
@@ -149,6 +192,11 @@ export class EmergencyRequestsService {
         }
       };
       sanitize(data);
+
+      this.assertValidSomaliaPhone(data.callerPhone, 'phone number');
+      if (data.newPatient?.phone) {
+        this.assertValidSomaliaPhone(data.newPatient.phone, 'patient phone');
+      }
 
       let patientId = data.patientId;
 
@@ -247,6 +295,30 @@ export class EmergencyRequestsService {
       if (data.incidentCategoryId) finalPayload.incidentCategory = { connect: { id: data.incidentCategoryId } };
       if (data.regionId) finalPayload.region = { connect: { id: data.regionId } };
       if (data.districtId) finalPayload.district = { connect: { id: data.districtId } };
+
+      const stationRouting = await this.stationCoverage.resolveCaseStationRouting({
+        districtId: data.districtId,
+        regionId: data.regionId,
+        submitterEmployeeId: data.submitterEmployeeId,
+      });
+      const resolvedStationId = stationRouting.stationId;
+      const stationScoped = await this.stationCoverage.usesStationScoping();
+
+      if (stationScoped && !resolvedStationId) {
+        throw new BadRequestException(
+          'No station covers the selected district. Configure station coverage or choose a covered district.',
+        );
+      }
+
+      if (resolvedStationId) {
+        finalPayload.station = { connect: { id: resolvedStationId } };
+      }
+
+      // Cases belong to the responsible station pending queue — no dispatcher owner at create.
+      const autoRouteFromStationId = stationRouting.crossStationRoute
+        ? stationRouting.submitterStationId
+        : null;
+
       if (data.destinationHospitalId) finalPayload.destinationHospital = { connect: { id: data.destinationHospitalId } };
       if (data.destinationHospitalBranchId) finalPayload.destinationHospitalBranchId = String(data.destinationHospitalBranchId);
       if (data.destinationHospitalBranchName) finalPayload.destinationHospitalBranchName = String(data.destinationHospitalBranchName);
@@ -286,7 +358,15 @@ export class EmergencyRequestsService {
       if (isAssigned) {
         finalPayload.status = 'ASSIGNED';
         finalPayload.assignedAt = new Date();
+      } else {
+        finalPayload.status = 'PENDING';
       }
+
+      const autoRouteMeta = {
+        fromStationId: autoRouteFromStationId,
+        stationName: stationRouting.stationName,
+        crossStationRoute: stationRouting.crossStationRoute,
+      };
 
       let request:
         | (Awaited<ReturnType<typeof this.prisma.emergencyRequest.create>> & {
@@ -303,7 +383,12 @@ export class EmergencyRequestsService {
         try {
           request = await this.prisma.emergencyRequest.create({
             data: finalPayload,
-            include: { patient: true, driver: true, nurse: true },
+            include: {
+              patient: true,
+              driver: true,
+              nurse: true,
+              station: { select: { id: true, name: true } },
+            },
           });
           break;
         } catch (createError: any) {
@@ -322,31 +407,57 @@ export class EmergencyRequestsService {
         throw new BadRequestException('Could not generate a unique tracking code. Please try again.');
       }
 
+      if (
+        autoRouteMeta.crossStationRoute &&
+        autoRouteMeta.fromStationId &&
+        resolvedStationId
+      ) {
+        const transferredById = data.submitterEmployeeId;
+        if (transferredById) {
+          await this.prisma.emergencyCaseTransfer.create({
+            data: {
+              emergencyRequestId: request.id,
+              fromStationId: autoRouteMeta.fromStationId,
+              toStationId: resolvedStationId,
+              reason: 'Auto-routed to covering station based on patient district',
+              transferredById,
+            },
+          });
+        }
+      }
+
       const assignedAtCreate = [request.driver?.userId, request.nurse?.userId].filter(Boolean) as string[];
 
+      const stationLabel = autoRouteMeta.stationName || 'the responsible station';
       await this.notifications.dispatchEvent({
         eventKey: 'EMERGENCY_CREATED',
-        title: 'New Emergency Case',
-        message: `Case ${request.trackingCode} created for ${request.patient.fullName} at ${request.pickupLocation}${
-          request.pickupLatitude != null && request.pickupLongitude != null
-            ? ` (GPS: ${request.pickupLatitude}, ${request.pickupLongitude})`
-            : ''
-        }`,
+        title: 'New emergency request assigned to your station',
+        message: `Case ${request.trackingCode} for ${request.patient.fullName} at ${request.pickupLocation} is waiting in the ${stationLabel} pending queue.`,
         type: 'EMERGENCY',
         category: 'MISSION',
         priority: request.priority as any,
         entityType: 'EmergencyRequest',
         entityId: request.id,
-        redirectUrl: `/dispatcher/emergency/pending?id=${request.id}`,
+        redirectUrl: `/dispatcher/emergency-requests/pending`,
         context: {
           createdById: data.createdByUserId ?? data.dispatcherUserId,
           regionId: request.regionId ?? data.regionId ?? null,
+          stationId: request.stationId ?? resolvedStationId ?? null,
           assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
           includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
+          directOnly: false,
         },
       });
 
-      return request;
+      return {
+        ...request,
+        routing: {
+          stationId: resolvedStationId,
+          stationName: autoRouteMeta.stationName,
+          crossStationRoute: autoRouteMeta.crossStationRoute,
+          submitterCanAccess: !autoRouteMeta.crossStationRoute,
+        },
+      };
     } catch (error: any) {
       console.error('STRICT DISPATCH ERROR:', error);
       let detail = error.message;
@@ -432,9 +543,18 @@ export class EmergencyRequestsService {
         },
         region: true,
         district: true,
+        station: { select: { id: true, name: true, regionId: true } },
         destinationHospital: true,
         incidentCategory: true,
         referrals: true,
+        caseTransfers: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            fromStation: { select: { id: true, name: true } },
+            toStation: { select: { id: true, name: true } },
+            transferredBy: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
         statusLogs: {
           orderBy: { createdAt: 'desc' },
           include: {
@@ -548,8 +668,13 @@ export class EmergencyRequestsService {
 
     const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
 
-    if (!data.driverId || !data.nurseId) {
-      throw new BadRequestException('Both a driver and a nurse must be assigned before dispatch');
+    if (!data.driverId) {
+      throw new BadRequestException('A driver must be assigned before dispatch');
+    }
+    if (caseRequiresNurse(existing) && !data.nurseId) {
+      throw new BadRequestException(
+        'Nurse required — assign a nurse to this case before dispatch can proceed',
+      );
     }
 
     if (data.driverId) {
@@ -1174,6 +1299,106 @@ export class EmergencyRequestsService {
     const available = nurses.filter((n) => !busyNurseIds.includes(n.id));
     return filterDispatchEligibleEmployees(available, presentIds);
   }
+
+  async transferCaseStation(
+    id: string,
+    dto: { toStationId: string; reason: string },
+    user?: AuthUser,
+  ) {
+    const existing = await this.prisma.emergencyRequest.findUnique({
+      where: { id },
+      include: { station: true, patient: true },
+    });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    await this.assertDispatcherCanAccessCase(user, existing, 'transfer');
+
+    const reason = String(dto.reason ?? '').trim();
+    if (!reason) throw new BadRequestException('Transfer reason is required');
+    if (!dto.toStationId) throw new BadRequestException('Receiving station is required');
+
+    const toStation = await this.prisma.station.findFirst({
+      where: { id: dto.toStationId, isActive: true },
+    });
+    if (!toStation) throw new BadRequestException('Target station not found or inactive');
+    if (existing.stationId === dto.toStationId) {
+      throw new BadRequestException('Case is already assigned to this station');
+    }
+
+    const transferredById = user?.employeeId;
+    if (!transferredById) {
+      throw new ForbiddenException('Employee profile required to transfer cases');
+    }
+
+    const hadAssignment = Boolean(existing.ambulanceId || existing.driverId || existing.nurseId);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.emergencyCaseTransfer.create({
+        data: {
+          emergencyRequestId: id,
+          fromStationId: existing.stationId,
+          toStationId: dto.toStationId,
+          transferredById,
+          reason,
+        },
+      });
+
+      return tx.emergencyRequest.update({
+        where: { id },
+        data: {
+          stationId: dto.toStationId,
+          dispatcherId: null,
+          status: 'PENDING',
+          ambulanceId: null,
+          driverId: null,
+          nurseId: null,
+          assignedAt: null,
+          statusLogs: {
+            create: {
+              fromStatus: existing.status,
+              toStatus: 'PENDING',
+              changedByEmployeeId: transferredById,
+              notes: `Transferred to ${toStation.name}. Reason: ${reason}`,
+            },
+          },
+        },
+        include: {
+          patient: true,
+          station: { select: { id: true, name: true } },
+          caseTransfers: {
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            include: {
+              fromStation: { select: { id: true, name: true } },
+              toStation: { select: { id: true, name: true } },
+              transferredBy: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+      });
+    });
+
+    const actorUserId = user?.sub;
+    await this.notifications.dispatchEvent({
+      eventKey: 'CASE_STATION_TRANSFER',
+      title: 'Case transferred to your station',
+      message: `Case ${existing.trackingCode} transferred to ${toStation.name}${hadAssignment ? ' (crew unassigned)' : ''}. Reason: ${reason}`,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: existing.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/dispatcher/emergency/pending?id=${existing.id}`,
+      context: {
+        createdById: actorUserId,
+        stationId: dto.toStationId,
+        regionId: toStation.regionId,
+      },
+    });
+
+    return updated;
+  }
+
   async getDashboardStats() {
     const total = await this.prisma.emergencyRequest.count();
     const pending = await this.prisma.emergencyRequest.count({

@@ -2,9 +2,12 @@
 
 import { AlertTriangle, Building2, Clock, Flag, CheckCircle } from 'lucide-react'
 import { Priority } from '@/types'
-import type { District, Region } from '@/types'
+import type { District } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
-import { FieldLabel, fieldInputClass, FormActions, SectionCard } from './ui'
+import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
+import PatientNameField from './PatientNameField'
+import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
+import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { DispatchFormErrors, ReferralDispatchForm } from './types'
 
@@ -18,14 +21,12 @@ const PRIORITIES = [
 type Props = {
   form: ReferralDispatchForm
   errors: DispatchFormErrors
-  regions: Region[]
+  banadirRegionName: string
   districts: District[]
   hospitals: HospitalOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<ReferralDispatchForm>) => void
-  onRegionChange: (regionId: string) => void
   onCancel: () => void
-  onSaveDraft: () => void
   onSubmit: () => void
   submitting: boolean
 }
@@ -33,14 +34,12 @@ type Props = {
 export default function ReferralDispatchFormView({
   form,
   errors,
-  regions,
+  banadirRegionName,
   districts,
   hospitals,
   loadingDistricts,
   onChange,
-  onRegionChange,
   onCancel,
-  onSaveDraft,
   onSubmit,
   submitting,
 }: Props) {
@@ -51,20 +50,20 @@ export default function ReferralDispatchFormView({
           Transfer a patient from one healthcare facility to another with full referral documentation.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <FieldLabel required error={errors.patientName}>Patient Name</FieldLabel>
-            <input
-              className={fieldInputClass(errors.patientName)}
-              value={form.patientName}
-              onChange={(e) => onChange({ patientName: e.target.value })}
-            />
-          </div>
+          <PatientNameField
+            value={form.patientName}
+            error={errors.patientName}
+            onChange={(patientName) => onChange({ patientName })}
+          />
           <div>
             <FieldLabel required error={errors.phone}>Phone Number</FieldLabel>
             <input
               className={fieldInputClass(errors.phone)}
               value={form.phone}
-              onChange={(e) => onChange({ phone: e.target.value })}
+              inputMode="numeric"
+              maxLength={9}
+              onChange={(e) => onChange({ phone: phoneDigitsOnly(e.target.value) })}
+              placeholder="61XXXXXXX"
             />
           </div>
           <div>
@@ -83,18 +82,23 @@ export default function ReferralDispatchFormView({
           </div>
           <div className="sm:col-span-2">
             <HospitalDestinationPicker
+              combobox
+              branchRequired={false}
               hospitals={hospitals}
+              hospitalLabel="Receiving Hospital or Place"
               hospitalId={form.receivingHospitalId}
+              hospitalName={form.receivingHospital}
               branchId={form.receivingHospitalBranchId}
+              branchName={form.receivingHospitalBranchName}
               required
               hospitalError={errors.receivingHospitalId}
               branchError={errors.receivingHospitalBranchId}
-              onHospitalChange={(hospitalId, branchId, branchName) =>
+              onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
                 onChange({
                   receivingHospitalId: hospitalId,
                   receivingHospitalBranchId: branchId,
                   receivingHospitalBranchName: branchName,
-                  receivingHospital: branchName,
+                  receivingHospital: hospitalName || branchName,
                 })
               }
             />
@@ -109,27 +113,20 @@ export default function ReferralDispatchFormView({
             />
           </div>
           <div>
-            <FieldLabel required error={errors.regionId}>Region</FieldLabel>
-            <select
-              className={fieldInputClass(errors.regionId)}
-              value={form.regionId}
-              onChange={(e) => onRegionChange(e.target.value)}
-            >
-              <option value="">Select region</option>
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <FieldLabel required>Region</FieldLabel>
+            <input
+              className={`${fieldInputClass()} bg-slate-100 text-slate-600 cursor-not-allowed`}
+              value={banadirRegionName}
+              readOnly
+            />
           </div>
           <div>
             <FieldLabel required error={errors.districtId}>District</FieldLabel>
             <select
               className={fieldInputClass(errors.districtId)}
               value={form.districtId}
-              onChange={(e) => onChange({ districtId: e.target.value })}
-              disabled={!form.regionId || loadingDistricts}
+              onChange={(e) => onChange({ districtId: e.target.value, stationId: '' })}
+              disabled={loadingDistricts}
             >
               <option value="">{loadingDistricts ? 'Loading…' : 'Select district'}</option>
               {districts.map((d) => (
@@ -139,6 +136,13 @@ export default function ReferralDispatchFormView({
               ))}
             </select>
           </div>
+          <StationAssignmentField
+            regionId={form.regionId}
+            districtId={form.districtId}
+            stationId={form.stationId}
+            error={errors.stationId}
+            onChange={(stationId) => onChange({ stationId })}
+          />
           <div>
             <FieldLabel error={errors.referringDoctor}>Referring Doctor</FieldLabel>
             <input
@@ -163,15 +167,6 @@ export default function ReferralDispatchFormView({
               rows={2}
               value={form.patientConditionSummary}
               onChange={(e) => onChange({ patientConditionSummary: e.target.value })}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <FieldLabel error={errors.medicalNotes}>Medical Notes</FieldLabel>
-            <textarea
-              className={`${fieldInputClass(errors.medicalNotes)} h-auto min-h-[72px] py-3 resize-y`}
-              rows={2}
-              value={form.medicalNotes}
-              onChange={(e) => onChange({ medicalNotes: e.target.value })}
             />
           </div>
           <div className="sm:col-span-2">
@@ -215,9 +210,14 @@ export default function ReferralDispatchFormView({
         </div>
       </SectionCard>
 
+      <NurseRequiredField
+        needsNurse={form.needsNurse}
+        error={errors.needsNurse}
+        onChange={(value) => onChange({ needsNurse: value })}
+      />
+
       <FormActions
         onCancel={onCancel}
-        onSaveDraft={onSaveDraft}
         onSubmit={onSubmit}
         submitting={submitting}
         submitLabel="Submit Referral Request"

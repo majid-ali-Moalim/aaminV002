@@ -397,6 +397,11 @@ export const emergencyRequestsService = {
     return await api.patch(`/api/emergency-requests/${id}/fail`, { reason })
   },
 
+  transferStation: async (id: string, data: { toStationId: string; reason: string }) => {
+    const api = new ApiService()
+    return await api.patch(`/api/emergency-requests/${id}/transfer-station`, data)
+  },
+
   getTimeline: async (id: string) => {
     const api = new ApiService()
     return await api.get(`/api/emergency-requests/${id}/timeline`)
@@ -697,6 +702,19 @@ export const systemSetupService = {
     const api = new ApiService()
     return await api.delete(`/api/setup/${model}/${id}`)
   }
+}
+
+export const stationCoverageService = {
+  suggestStation: async (districtId: string, regionId?: string) => {
+    const api = new ApiService()
+    const params = new URLSearchParams({ districtId })
+    if (regionId) params.set('regionId', regionId)
+    return await api.get(`/api/setup/stations/suggest?${params.toString()}`)
+  },
+  getCoverageMode: async () => {
+    const api = new ApiService()
+    return await api.get('/api/setup/stations/coverage-mode')
+  },
 }
 
 // Drivers service

@@ -73,21 +73,25 @@ model Area {
 }
 
 model Station {
-  id          String      @id @default(cuid())
-  name        String
-  regionId    String
-  districtId  String
-  description String?
-  code        String?     @unique
-  address     String?
-  phone       String?
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  ambulances  Ambulance[]
-  employees   Employee[]
-  district    District    @relation(fields: [districtId], references: [id])
-  region      Region      @relation(fields: [regionId], references: [id])
+  id                  String                  @id @default(cuid())
+  name                String
+  regionId            String
+  districtId          String
+  coverageDistrictIds Json?
+  description         String?
+  code                String?                 @unique
+  address             String?
+  phone               String?
+  isActive            Boolean                 @default(true)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  ambulances          Ambulance[]
+  employees           Employee[]
+  emergencyRequests   EmergencyRequest[]
+  transfersFrom       EmergencyCaseTransfer[] @relation("TransferFromStation")
+  transfersTo         EmergencyCaseTransfer[] @relation("TransferToStation")
+  district            District                @relation(fields: [districtId], references: [id])
+  region              Region                  @relation(fields: [regionId], references: [id])
 
   @@unique([name, districtId])
   @@index([regionId])
@@ -425,6 +429,7 @@ model Employee {
   leaveRequests        LeaveRequest[]
   attendanceApprovals  AttendanceApprovalRequest[]
   overtimeRecords      OvertimeRecord[]
+  caseTransfersMade    EmergencyCaseTransfer[] @relation("EmployeeCaseTransfers")
 
   @@index([employeeRoleId])
   @@index([departmentId])
@@ -527,6 +532,7 @@ model EmergencyRequest {
   incidentCategoryId   String?
   regionId             String?
   districtId           String?
+  stationId            String?
   status               EmergencyRequestStatus @default(PENDING)
   priority             Priority               @default(MEDIUM)
   callerName           String?
@@ -572,11 +578,13 @@ model EmergencyRequest {
   patient              Patient                @relation(fields: [patientId], references: [id])
   destinationHospital  Hospital?              @relation(fields: [destinationHospitalId], references: [id])
   region               Region?                @relation(fields: [regionId], references: [id])
+  station              Station?               @relation(fields: [stationId], references: [id])
   statusLogs           EmergencyStatusLog[]
   referrals            Referral?
   coordinationCases    HospitalCoordinationCase[]
   patientCareRecords   PatientCareRecord[]
   incidentReport       IncidentReport?
+  caseTransfers        EmergencyCaseTransfer[]
 
   @@index([patientId])
   @@index([dispatcherId])
@@ -585,11 +593,31 @@ model EmergencyRequest {
   @@index([incidentCategoryId])
   @@index([regionId])
   @@index([districtId])
+  @@index([stationId])
   @@index([destinationHospitalId])
   @@index([status])
   @@index([priority])
   @@index([createdAt])
   @@map("emergency_requests")
+}
+
+model EmergencyCaseTransfer {
+  id                 String           @id @default(cuid())
+  emergencyRequestId String
+  fromStationId      String?
+  toStationId        String
+  transferredById    String
+  reason             String
+  createdAt          DateTime         @default(now())
+  emergencyRequest   EmergencyRequest @relation(fields: [emergencyRequestId], references: [id], onDelete: Cascade)
+  fromStation        Station?         @relation("TransferFromStation", fields: [fromStationId], references: [id])
+  toStation          Station          @relation("TransferToStation", fields: [toStationId], references: [id])
+  transferredBy      Employee         @relation("EmployeeCaseTransfers", fields: [transferredById], references: [id])
+
+  @@index([emergencyRequestId])
+  @@index([toStationId])
+  @@index([transferredById])
+  @@map("emergency_case_transfers")
 }
 
 model EmergencyStatusLog {
