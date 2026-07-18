@@ -9,7 +9,6 @@ import { NURSE_NAV_ITEMS, isNurseNavActive } from '@/lib/nurse/navigation'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { useChatStore } from '@/lib/stores/chatStore'
-import { NurseThemeToggle } from '@/components/nurse/NurseThemeToggle'
 
 export function NurseSidebar() {
   const pathname = usePathname()
@@ -68,10 +67,6 @@ export function NurseSidebar() {
           )
         })}
       </nav>
-
-      <div className="nurse-sidebar-footer">
-        <NurseThemeToggle />
-      </div>
 
       <button type="button" className="nurse-sidebar-logout" onClick={logout}>
         <LogOut size={16} />

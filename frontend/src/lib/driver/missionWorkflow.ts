@@ -41,7 +41,7 @@ export type WorkflowStep = {
   backendStatus?: string
 }
 
-/** Compact 5-step timeline shown in the case workspace (transport only — clinical work is on the nurse side). */
+/** Compact 5-step driver transport timeline (ends at hospital — nurse closes case). */
 export type DriverTimelineStep = {
   id: string
   label: string
@@ -52,32 +52,39 @@ export type DriverTimelineStep = {
 
 export const DRIVER_TIMELINE_STEPS: DriverTimelineStep[] = [
   {
+    id: 'START',
+    label: 'Start Case',
+    shortLabel: 'Start',
+    description: 'Accept the assignment and begin the run.',
+    stepIds: ['ASSIGNED'],
+  },
+  {
     id: 'EN_ROUTE',
-    label: 'En Route to Scene',
+    label: 'Going to Patient',
     shortLabel: 'En Route',
     description: 'Navigate to the incident location.',
-    stepIds: ['ASSIGNED', 'ACCEPTED', 'EN_ROUTE_SCENE'],
+    stepIds: ['ACCEPTED', 'EN_ROUTE_SCENE'],
   },
   {
     id: 'ON_SCENE',
-    label: 'On Scene',
+    label: 'Arrived at Patient',
     shortLabel: 'On Scene',
-    description: 'Confirm arrival — the nurse handles patient care on scene.',
+    description: 'Confirm arrival — nurse handles loading and medical notes.',
     stepIds: ['ARRIVED_SCENE'],
   },
   {
     id: 'TRANSPORT',
-    label: 'Transport to Hospital',
+    label: 'Going to Hospital',
     shortLabel: 'Transport',
-    description: 'Drive to the receiving facility and confirm hospital arrival.',
-    stepIds: ['EN_ROUTE_HOSPITAL', 'ARRIVED_HOSPITAL'],
+    description: 'Transport after nurse saves medical notes.',
+    stepIds: ['EN_ROUTE_HOSPITAL'],
   },
   {
-    id: 'COMPLETE',
-    label: 'Mission Complete',
-    shortLabel: 'Done',
-    description: 'Nurse completes handover and closes the case.',
-    stepIds: ['MISSION_COMPLETED'],
+    id: 'HOSPITAL',
+    label: 'Arrived at Hospital',
+    shortLabel: 'Hospital',
+    description: 'Patient delivered — nurse completes handover and closes the case.',
+    stepIds: ['ARRIVED_HOSPITAL'],
   },
 ]
 
@@ -90,61 +97,61 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     backendStatus: 'ASSIGNED',
     primaryAdvance: 'start_navigation',
     actions: [
-      { id: 'start_navigation', label: 'Start En Route to Scene', variant: 'primary' },
+      { id: 'start_navigation', label: 'Start Case', variant: 'primary' },
       { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'ACCEPTED',
-    label: 'En Route',
+    label: 'Going to Patient',
     shortLabel: 'En Route',
     description: 'Proceed to the incident location.',
     backendStatus: 'DISPATCHED',
     primaryAdvance: 'start_navigation',
     actions: [
-      { id: 'start_navigation', label: 'Start En Route to Scene', variant: 'primary' },
+      { id: 'start_navigation', label: 'Going to Patient', variant: 'primary' },
       { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'EN_ROUTE_SCENE',
-    label: 'En Route to Scene',
+    label: 'Going to Patient',
     shortLabel: 'En Route',
     description: 'Proceed to the incident location.',
     backendStatus: 'DISPATCHED',
     primaryAdvance: 'mark_arrival',
     actions: [
-      { id: 'mark_arrival', label: 'Mark Arrival at Scene', variant: 'primary' },
+      { id: 'mark_arrival', label: 'Arrived at Patient', variant: 'primary' },
     ],
   },
   {
     id: 'ARRIVED_SCENE',
-    label: 'On Scene',
+    label: 'Arrived at Patient',
     shortLabel: 'On Scene',
-    description: 'Crew is on scene. Start transport when the nurse confirms the patient is ready.',
+    description: 'Crew is on scene. Transport unlocks after the nurse saves medical notes.',
     backendStatus: 'ARRIVED_SCENE',
     primaryAdvance: 'start_transport',
     actions: [
-      { id: 'start_transport', label: 'Start Transport to Hospital', variant: 'primary' },
+      { id: 'start_transport', label: 'Going to Hospital', variant: 'primary' },
       { id: 'view_details', label: 'View Case Details', variant: 'secondary' },
     ],
   },
   {
     id: 'EN_ROUTE_HOSPITAL',
-    label: 'En Route to Hospital',
+    label: 'Going to Hospital',
     shortLabel: 'Transport',
     description: 'Transport the patient to the receiving facility.',
     backendStatus: 'TRANSPORTING',
     primaryAdvance: 'mark_hospital_arrival',
     actions: [
-      { id: 'mark_hospital_arrival', label: 'Mark Hospital Arrival', variant: 'primary' },
+      { id: 'mark_hospital_arrival', label: 'Arrived at Hospital', variant: 'primary' },
     ],
   },
   {
     id: 'ARRIVED_HOSPITAL',
-    label: 'At Hospital',
+    label: 'Arrived at Hospital',
     shortLabel: 'At Hospital',
-    description: 'Patient delivered — the nurse completes handover and closes the mission.',
+    description: 'Timeline complete — the nurse completes handover and closes the case.',
     backendStatus: 'ARRIVED_HOSPITAL',
     actions: [
       { id: 'view_details', label: 'View Case Summary', variant: 'secondary' },
@@ -174,6 +181,12 @@ export type WorkflowStageMeta = {
   timestamps: Partial<Record<WorkflowStepId, string>>
   gps: Partial<Record<WorkflowStepId, { lat: number; lng: number }>>
   notes: Partial<Record<WorkflowStepId, string>>
+  completedMilestones?: Partial<
+    Record<
+      'start_case' | 'going_to_patient' | 'arrived_at_patient' | 'going_to_hospital' | 'arrived_at_hospital',
+      boolean
+    >
+  >
   reviewedAt?: string
   enRouteStartedAt?: string
   eta?: string
@@ -224,6 +237,21 @@ export function patchWorkflowMeta(missionId: string, patch: Partial<WorkflowStag
   sessionStorage.setItem(META_STORAGE_KEY(missionId), JSON.stringify({ ...current, ...patch }))
 }
 
+export function markDriverMilestoneComplete(
+  missionId: string,
+  milestone:
+    | 'start_case'
+    | 'going_to_patient'
+    | 'arrived_at_patient'
+    | 'going_to_hospital'
+    | 'arrived_at_hospital',
+) {
+  const meta = getWorkflowMeta(missionId)
+  patchWorkflowMeta(missionId, {
+    completedMilestones: { ...meta.completedMilestones, [milestone]: true },
+  })
+}
+
 export function stampWorkflowStage(
   missionId: string,
   stepId: WorkflowStepId,
@@ -272,6 +300,7 @@ export function stepFromBackendStatus(status: string): WorkflowStepId {
 
 export function getDriverTimelineIndex(stepId: WorkflowStepId): number {
   if (stepId === 'MISSION_COMPLETED') return DRIVER_TIMELINE_STEPS.length - 1
+  if (stepId === 'ARRIVED_HOSPITAL') return DRIVER_TIMELINE_STEPS.length - 1
   const idx = DRIVER_TIMELINE_STEPS.findIndex((t) => t.stepIds.includes(stepId))
   return idx >= 0 ? idx : 0
 }

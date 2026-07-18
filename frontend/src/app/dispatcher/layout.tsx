@@ -13,6 +13,7 @@ import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { OptimisticNavProvider } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
 import './dispatcher.css'
+import '@/components/features/emergency/case-detail.css'
 
 function DispatcherShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)

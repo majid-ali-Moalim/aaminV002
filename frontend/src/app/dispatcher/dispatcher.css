@@ -6,6 +6,21 @@
   --dsb-text: 222 47% 11%;
   --dsb-text-secondary: 215 16% 47%;
   --dsb-topbar: 0 0% 100%;
+  --case-surface: var(--dsb-surface);
+  --case-bg-subtle: var(--dsb-bg);
+  --case-border: var(--dsb-border);
+  --case-text: var(--dsb-text);
+  --case-text-secondary: var(--dsb-text-secondary);
+  --case-text-muted: var(--dsb-text-secondary);
+  --dsb-sidebar-bg: #ffffff;
+  --dsb-sidebar-panel: #f1f5f9;
+  --dsb-sidebar-primary: #dc2626;
+  --dsb-sidebar-text: #0f172a;
+  --dsb-sidebar-text-active: #ffffff;
+  --dsb-sidebar-secondary: #475569;
+  --dsb-sidebar-muted: #94a3b8;
+  --dsb-sidebar-border: #e2e8f0;
+  --dsb-sidebar-workflow-dash: rgba(15, 23, 42, 0.12);
   color-scheme: light;
 }
 
@@ -16,6 +31,21 @@
   --dsb-text: 210 40% 98%;
   --dsb-text-secondary: 215 20% 72%;
   --dsb-topbar: 217 33% 10%;
+  --case-surface: var(--dsb-surface);
+  --case-bg-subtle: var(--dsb-bg);
+  --case-border: var(--dsb-border);
+  --case-text: var(--dsb-text);
+  --case-text-secondary: var(--dsb-text-secondary);
+  --case-text-muted: var(--dsb-text-secondary);
+  --dsb-sidebar-bg: #0b1220;
+  --dsb-sidebar-panel: #111827;
+  --dsb-sidebar-primary: #ef2d2d;
+  --dsb-sidebar-text: #ffffff;
+  --dsb-sidebar-text-active: #ffffff;
+  --dsb-sidebar-secondary: #94a3b8;
+  --dsb-sidebar-muted: #64748b;
+  --dsb-sidebar-border: rgba(255, 255, 255, 0.06);
+  --dsb-sidebar-workflow-dash: rgba(255, 255, 255, 0.12);
   color-scheme: dark;
 }
 
@@ -57,4 +87,197 @@
 
 .dispatcher-dark .bg-gray-50 {
   background-color: hsl(var(--dsb-bg)) !important;
+}
+
+/* Active missions dark mode (base styles in active-missions.css) */
+.dispatcher-dark .active-missions-page .active-missions-card {
+  background-color: hsl(var(--dsb-surface)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-page .text-slate-800,
+.dispatcher-dark .active-missions-page .text-slate-700,
+.dispatcher-dark .active-missions-page .text-slate-900 {
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .active-missions-page .text-slate-600,
+.dispatcher-dark .active-missions-page .text-slate-500,
+.dispatcher-dark .active-missions-page .text-slate-400 {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .active-missions-page .border-slate-100,
+.dispatcher-dark .active-missions-page .border-slate-200 {
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-page .bg-slate-50\/50 {
+  background-color: hsl(var(--dsb-bg) / 0.65) !important;
+}
+
+.dispatcher-dark .active-missions-input,
+.dispatcher-dark .active-missions-field {
+  background-color: hsl(var(--dsb-bg)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .active-missions-input::placeholder,
+.dispatcher-dark .active-missions-field::placeholder {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .active-missions-field.readonly {
+  background-color: hsl(var(--dsb-surface)) !important;
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .active-missions-filter-pill:not(.bg-red-600) {
+  background-color: hsl(var(--dsb-surface)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .active-missions-action-btn--complete {
+  background: #059669;
+  color: #fff !important;
+}
+
+.dispatcher-dark .active-missions-action-btn--cancel {
+  background: hsl(var(--dsb-surface));
+  color: #fca5a5 !important;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.dispatcher-dark .active-missions-action-btn--cancel:hover {
+  background: rgba(127, 29, 29, 0.35);
+}
+
+.dispatcher-dark .active-missions-action-btn--open {
+  background: hsl(var(--dsb-surface));
+  color: #fff !important;
+  border-color: hsl(var(--dsb-border));
+}
+
+.dispatcher-dark .active-missions-action-btn--open:hover {
+  background: hsl(var(--dsb-border));
+}
+
+.dispatcher-dark .active-missions-modal {
+  background-color: hsl(var(--dsb-surface)) !important;
+  color: hsl(var(--dsb-text));
+}
+
+.dispatcher-dark .active-missions-modal-footer {
+  background-color: hsl(var(--dsb-bg)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-muted {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .active-missions-label {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .active-missions-btn-outline {
+  background: hsl(var(--dsb-surface)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+  color: #fff !important;
+}
+
+.dispatcher-dark .active-missions-btn-outline:hover {
+  background: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-btn-secondary {
+  background: hsl(var(--dsb-surface)) !important;
+  color: #fff !important;
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-btn-secondary:hover {
+  background: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-btn-primary,
+.dispatcher-dark .active-missions-btn-danger {
+  color: #fff !important;
+}
+
+.dispatcher-dark .active-missions-status-table {
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-status-table thead {
+  background: hsl(var(--dsb-bg)) !important;
+}
+
+.dispatcher-dark .active-missions-status-table th,
+.dispatcher-dark .active-missions-status-table td {
+  color: hsl(var(--dsb-text)) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-rejected-card {
+  background: hsl(var(--dsb-bg) / 0.5) !important;
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .active-missions-icon-btn {
+  color: hsl(var(--dsb-text)) !important;
+}
+
+/* Slate utility shims (many shared emergency pages use slate, not gray) */
+.dispatcher-dark .bg-slate-50,
+.dispatcher-dark .bg-slate-50\/50 {
+  background-color: hsl(var(--dsb-bg)) !important;
+}
+
+.dispatcher-dark .text-slate-900,
+.dispatcher-dark .text-slate-800,
+.dispatcher-dark .text-slate-700 {
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .text-slate-600,
+.dispatcher-dark .text-slate-500,
+.dispatcher-dark .text-slate-400 {
+  color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .border-slate-100,
+.dispatcher-dark .border-slate-200,
+.dispatcher-dark .border-slate-300 {
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .bg-rose-50\/40,
+.dispatcher-dark .bg-rose-50\/50,
+.dispatcher-dark .bg-amber-50\/50 {
+  background-color: hsl(var(--dsb-surface)) !important;
+}
+
+.dispatcher-dark .border-rose-100,
+.dispatcher-dark .border-amber-100 {
+  border-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .text-rose-700,
+.dispatcher-dark .text-amber-700 {
+  color: hsl(var(--dsb-text)) !important;
+}
+
+.dispatcher-dark .ring-red-100 {
+  --tw-ring-color: hsl(var(--dsb-border)) !important;
+}
+
+.dispatcher-dark .bg-slate-300 {
+  background-color: hsl(var(--dsb-text-secondary)) !important;
+}
+
+.dispatcher-dark .bg-slate-200 {
+  background-color: hsl(var(--dsb-border)) !important;
 }

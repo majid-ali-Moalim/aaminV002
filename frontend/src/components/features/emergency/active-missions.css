@@ -1,0 +1,87 @@
+/* Active missions list — shared dispatcher + admin */
+
+.active-missions-action-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.active-missions-action-btn--complete {
+  background: #059669;
+  color: #fff;
+}
+
+.active-missions-action-btn--complete:hover {
+  background: #047857;
+}
+
+.active-missions-action-btn--cancel {
+  background: #fff;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.active-missions-action-btn--cancel:hover {
+  background: #fef2f2;
+}
+
+.active-missions-action-btn--open {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.active-missions-action-btn--open:hover {
+  background: #f1f5f9;
+}
+
+/* Modal footer — explicit light-mode colors (AssignModal-style) */
+.active-missions-btn-secondary {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.active-missions-btn-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.active-missions-btn-primary {
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.active-missions-btn-primary:hover:not(:disabled) {
+  background: #047857;
+}
+
+.active-missions-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.active-missions-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.active-missions-status-table thead {
+  background: #f8fafc;
+}
+
+.active-missions-rejected-card {
+  background: #f8fafc;
+}
+
+.active-missions-icon-btn {
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}

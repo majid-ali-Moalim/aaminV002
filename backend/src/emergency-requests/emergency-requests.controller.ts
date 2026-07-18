@@ -131,6 +131,34 @@ export class EmergencyRequestsController {
     );
   }
 
+  @Patch(':id/complete')
+  @Roles('ADMIN', 'DISPATCHER')
+  @ApiOperation({ summary: 'Mark emergency request completed with dispatcher closure summary' })
+  complete(
+    @Param('id') id: string,
+    @Body()
+    completeDto: {
+      acceptedHospital?: string
+      rejectedHospitals?: string
+      consciousStatus?: string
+      breathingStatus?: string
+      bleedingStatus?: string
+      patientConditionAtClose?: string
+      receivingStaff?: string
+      treatmentSummary?: string
+      handoverNotes?: string
+      dispatcherNotes?: string
+    },
+    @Request() req,
+  ) {
+    return this.emergencyRequestsService.completeRequest(
+      id,
+      completeDto,
+      req.user?.employeeId,
+      req.user,
+    );
+  }
+
   @Patch(':id/fail')
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Mark emergency request as failed' })

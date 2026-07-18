@@ -39,6 +39,7 @@ export interface DriverMission {
   nurse?: { firstName?: string; lastName?: string }
   callerName?: string
   callerPhone?: string
+  patientCareRecords?: Array<{ id: string; clinicalNotes?: string | null; createdAt?: string }>
   statusLogs?: Array<{ toStatus: string; createdAt: string; notes?: string }>
 }
 

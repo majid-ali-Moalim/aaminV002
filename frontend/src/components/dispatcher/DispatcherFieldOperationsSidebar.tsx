@@ -23,20 +23,9 @@ import {
   isDispatcherManagementPath,
   isDispatcherNursePath,
 } from '@/lib/dispatcher/fieldOperationsNav'
+import { DISPATCHER_SIDEBAR } from '@/lib/dispatcher/dispatcherSidebarTheme'
 
-const SIDEBAR = {
-  bg: '#0B1220',
-  panel: '#111827',
-  primary: '#EF2D2D',
-  text: '#FFFFFF',
-  secondary: '#94A3B8',
-  muted: '#64748B',
-  border: 'rgba(255,255,255,0.06)',
-  success: '#22C55E',
-  warning: '#F59E0B',
-  critical: '#EF4444',
-  info: '#3B82F6',
-} as const
+const SIDEBAR = DISPATCHER_SIDEBAR
 
 function SectionLabel({ label }: { label: string }) {
   return (
@@ -92,7 +81,9 @@ function CollapsibleSection({
         onClick={() => setOpen(!isOpen)}
         className="w-full flex items-center justify-between px-2.5 py-2 text-[13px] font-semibold rounded-lg"
         style={
-          isActive ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.text } : { color: SIDEBAR.secondary }
+          isActive
+            ? { backgroundColor: SIDEBAR.primary, color: SIDEBAR.textActive }
+            : { color: SIDEBAR.secondary }
         }
         onMouseEnter={(e) => {
           if (!isActive) {
@@ -110,14 +101,20 @@ function CollapsibleSection({
         <div className="flex items-center gap-2.5 min-w-0">
           <Icon
             className="w-4 h-4 shrink-0"
-            style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }}
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
           />
           <span className="truncate">{label}</span>
         </div>
         {isOpen ? (
-          <ChevronDown className="w-4 h-4 shrink-0" style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }} />
+          <ChevronDown
+            className="w-4 h-4 shrink-0"
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
+          />
         ) : (
-          <ChevronRight className="w-4 h-4 shrink-0" style={{ color: isActive ? SIDEBAR.text : SIDEBAR.muted }} />
+          <ChevronRight
+            className="w-4 h-4 shrink-0"
+            style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
+          />
         )}
       </button>
 

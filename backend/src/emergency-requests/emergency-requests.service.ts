@@ -828,6 +828,18 @@ export class EmergencyRequestsService {
 
     await this.assertDispatcherCanAccessCase(user, existing, 'mutate');
 
+    if (status === 'COMPLETED') {
+      const handover = await this.prisma.patientCareRecord.findFirst({
+        where: {
+          requestId: id,
+          clinicalNotes: { startsWith: '[EADS_HANDOVER]' },
+        },
+      });
+      if (!handover) {
+        throw new BadRequestException('Case cannot be completed until hospital handover is recorded.');
+      }
+    }
+
     const updateData: any = { status };
     if (status === 'DISPATCHED') updateData.dispatchedAt = new Date();
     else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
@@ -1036,6 +1048,148 @@ export class EmergencyRequestsService {
       existing.id,
       existing.status,
       'CANCELLED'
+    );
+
+    return updated;
+  }
+
+  async completeRequest(
+    id: string,
+    dto: {
+      acceptedHospital?: string
+      rejectedHospitals?: string
+      consciousStatus?: string
+      breathingStatus?: string
+      bleedingStatus?: string
+      patientConditionAtClose?: string
+      receivingStaff?: string
+      treatmentSummary?: string
+      handoverNotes?: string
+      dispatcherNotes?: string
+    },
+    employeeId?: string,
+    user?: AuthUser,
+  ) {
+    const existing = await this.prisma.emergencyRequest.findUnique({
+      where: { id },
+      include: {
+        driver: { select: { firstName: true, lastName: true } },
+        nurse: { select: { firstName: true, lastName: true } },
+        ambulance: { select: { ambulanceNumber: true } },
+        destinationHospital: { select: { name: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Emergency request not found');
+
+    await this.assertDispatcherCanAccessCase(user, existing, 'mutate');
+
+    if (existing.status === 'COMPLETED') {
+      throw new BadRequestException('Case is already completed');
+    }
+    if (existing.status === 'CANCELLED') {
+      throw new BadRequestException('Cancelled cases cannot be completed');
+    }
+
+    const driverName = existing.driver
+      ? `${existing.driver.firstName || ''} ${existing.driver.lastName || ''}`.trim()
+      : '';
+    const nurseName = existing.nurse
+      ? `${existing.nurse.firstName || ''} ${existing.nurse.lastName || ''}`.trim()
+      : '';
+    const acceptedHospital =
+      dto.acceptedHospital?.trim() ||
+      existing.destinationHospital?.name ||
+      existing.destination ||
+      '';
+    const summaryLines = [
+      '[Dispatcher Completion]',
+      driverName ? `Driver: ${driverName}` : null,
+      nurseName ? `Nurse: ${nurseName}` : null,
+      existing.ambulance?.ambulanceNumber
+        ? `Ambulance: ${existing.ambulance.ambulanceNumber}`
+        : null,
+      acceptedHospital ? `Accepted hospital: ${acceptedHospital}` : null,
+      dto.rejectedHospitals?.trim()
+        ? `Rejected hospital(s): ${dto.rejectedHospitals.trim()}`
+        : null,
+      dto.consciousStatus ? `Conscious: ${dto.consciousStatus.replace(/_/g, ' ')}` : null,
+      dto.breathingStatus ? `Breathing: ${dto.breathingStatus.replace(/_/g, ' ')}` : null,
+      dto.bleedingStatus ? `Bleeding: ${dto.bleedingStatus.replace(/_/g, ' ')}` : null,
+      dto.patientConditionAtClose?.trim()
+        ? `Patient condition: ${dto.patientConditionAtClose.trim()}`
+        : null,
+      dto.receivingStaff?.trim() ? `Receiving staff: ${dto.receivingStaff.trim()}` : null,
+      dto.treatmentSummary?.trim() ? `Treatment: ${dto.treatmentSummary.trim()}` : null,
+      dto.handoverNotes?.trim() ? `Handover notes: ${dto.handoverNotes.trim()}` : null,
+      dto.dispatcherNotes?.trim()
+        ? `Dispatcher notes: ${dto.dispatcherNotes.trim()}`
+        : null,
+    ].filter(Boolean);
+
+    const notes = summaryLines.join('\n');
+
+    const updated = await this.prisma.emergencyRequest.update({
+      where: { id },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        statusLogs: {
+          create: {
+            fromStatus: existing.status,
+            toStatus: 'COMPLETED',
+            changedByEmployeeId: employeeId,
+            notes,
+          },
+        },
+      },
+      include: {
+        statusLogs: true,
+        patient: true,
+      },
+    });
+
+    const crewIds = [existing.driverId, existing.nurseId].filter(Boolean) as string[];
+    if (crewIds.length) {
+      await this.prisma.employee.updateMany({
+        where: { id: { in: crewIds } },
+        data: { shiftStatus: 'AVAILABLE' },
+      });
+    }
+    if (existing.ambulanceId) {
+      await this.prisma.ambulance.update({
+        where: { id: existing.ambulanceId },
+        data: { status: 'AVAILABLE' },
+      });
+    }
+
+    const assignedIds = await this.teamUserIds(existing.id);
+    const actorUserId = employeeId
+      ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))
+          ?.userId
+      : undefined;
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_COMPLETED',
+      title: 'Mission Completed',
+      message: `Case ${existing.trackingCode} has been completed by dispatch.`,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: existing.priority as any,
+      entityType: 'EmergencyRequest',
+      entityId: existing.id,
+      redirectUrl: `/admin/emergency-requests/completed?id=${existing.id}`,
+      context: { createdById: actorUserId, assignedUserIds: assignedIds },
+    });
+
+    const trackingData = await this.trackingService.findByCodeOrPhone(existing.trackingCode);
+    this.trackingGateway.emitTrackingUpdate(existing.trackingCode, trackingData);
+
+    await this.auditLog.logCaseActivity(
+      employeeId || 'SYSTEM',
+      'STATUS_UPDATED',
+      existing.id,
+      existing.status,
+      'COMPLETED',
     );
 
     return updated;

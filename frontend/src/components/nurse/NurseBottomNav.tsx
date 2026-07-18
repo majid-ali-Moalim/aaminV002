@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, Route, Bell, User, ClipboardList } from 'lucide-react'
+import { LayoutGrid, Route, Building2, Bell, User } from 'lucide-react'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 
 const navItems = [
@@ -19,10 +19,10 @@ const navItems = [
     match: (p: string) => p.startsWith('/nurse/mission'),
   },
   {
-    href: '/nurse/mission/history',
-    icon: ClipboardList,
-    label: 'History',
-    match: (p: string) => p.startsWith('/nurse/mission/history'),
+    href: '/nurse/hospitals',
+    icon: Building2,
+    label: 'Hospitals',
+    match: (p: string) => p.startsWith('/nurse/hospitals'),
   },
   {
     href: '/nurse/notifications',

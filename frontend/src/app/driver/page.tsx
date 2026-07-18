@@ -53,11 +53,11 @@ export default function DriverDashboard() {
   if (!isAuthenticated) return null
 
   const NEXT_ACTIONS: Record<string, { label: string; status: string; cls: string }> = {
-    ASSIGNED:         { label: 'Start Trip (En Route)', status: 'DISPATCHED',        cls: 'btn-orange' },
-    DISPATCHED:       { label: 'Arrived at Scene',      status: 'ON_SCENE',           cls: 'btn-blue' },
-    ON_SCENE:         { label: 'Patient Loaded — Transport', status: 'TRANSPORTING',   cls: 'btn-cyan' },
-    TRANSPORTING:     { label: 'Arrived at Hospital',   status: 'ARRIVED_HOSPITAL',   cls: 'btn-purple' },
-    ARRIVED_HOSPITAL: { label: 'Complete Mission ✓',    status: 'COMPLETED',          cls: 'btn-green' },
+    ASSIGNED:         { label: 'Start Case',            status: 'DISPATCHED',        cls: 'btn-orange' },
+    DISPATCHED:       { label: 'Arrived at Patient',  status: 'ARRIVED_SCENE',     cls: 'btn-blue' },
+    ARRIVED_SCENE:    { label: 'Going to Hospital',     status: 'TRANSPORTING',      cls: 'btn-cyan' },
+    PATIENT_STABILIZED: { label: 'Going to Hospital',   status: 'TRANSPORTING',      cls: 'btn-cyan' },
+    TRANSPORTING:     { label: 'Arrived at Hospital',   status: 'ARRIVED_HOSPITAL',  cls: 'btn-purple' },
   }
 
   const nextAction = activeMission ? NEXT_ACTIONS[activeMission.status] : null

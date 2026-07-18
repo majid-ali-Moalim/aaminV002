@@ -155,6 +155,10 @@ export class DriversAppService {
           },
         },
         statusLogs: { orderBy: { createdAt: 'asc' } },
+        patientCareRecords: {
+          select: { id: true, clinicalNotes: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -220,6 +224,10 @@ export class DriversAppService {
           },
         },
         statusLogs: { orderBy: { createdAt: 'asc' } },
+        patientCareRecords: {
+          select: { id: true, clinicalNotes: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -242,10 +250,24 @@ export class DriversAppService {
     }
 
     const allowedStatuses = [
-      'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL', 'COMPLETED',
+      'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
     ];
     if (!allowedStatuses.includes(status)) {
       throw new BadRequestException(`Invalid status: ${status}`);
+    }
+
+    if (status === 'TRANSPORTING') {
+      const notesRecord = await this.prisma.patientCareRecord.findFirst({
+        where: {
+          requestId: missionId,
+          clinicalNotes: { startsWith: '[EADS_ASSESSMENT]' },
+        },
+      });
+      if (!notesRecord) {
+        throw new BadRequestException(
+          'Transport cannot start until the nurse saves medical notes.',
+        );
+      }
     }
 
     const updateData: any = { status };
@@ -253,14 +275,6 @@ export class DriversAppService {
     else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
     else if (status === 'ARRIVED_HOSPITAL') updateData.arrivedDestinationAt = new Date();
-    else if (status === 'COMPLETED') {
-      updateData.completedAt = new Date();
-      // Free up driver's shift status
-      await this.prisma.employee.update({
-        where: { id: employee.id },
-        data: { shiftStatus: 'AVAILABLE' },
-      });
-    }
 
     const updated = await this.prisma.emergencyRequest.update({
       where: { id: missionId },

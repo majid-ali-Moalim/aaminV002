@@ -2,16 +2,9 @@
 
 import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
 import { DISPATCHER_ACCOUNT_ITEMS } from '@/lib/dispatcher/accountNav'
+import { DISPATCHER_SIDEBAR } from '@/lib/dispatcher/dispatcherSidebarTheme'
 
-const SIDEBAR = {
-  bg: '#0B1220',
-  panel: '#111827',
-  primary: '#EF2D2D',
-  text: '#FFFFFF',
-  secondary: '#94A3B8',
-  muted: '#64748B',
-  border: 'rgba(255,255,255,0.06)',
-} as const
+const SIDEBAR = DISPATCHER_SIDEBAR
 
 function SectionLabel({ label }: { label: string }) {
   return (

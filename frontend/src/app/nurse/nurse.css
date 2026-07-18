@@ -1,14 +1,29 @@
 /* Nurse Panel — EADS Clinical Ops */
 
 .nurse-shell {
+  --n-text: #fafafa;
+  --n-text-body: #e4e4e7;
+  --n-text-muted: #a1a1aa;
+  --n-text-subtle: #71717a;
+  --n-accent: #f87171;
+  --n-bg-shell: #0c0c0e;
+  --n-bg-header: rgba(0, 0, 0, 0.2);
+  --n-bg-card: rgba(255, 255, 255, 0.03);
+  --n-bg-card-hover: rgba(255, 255, 255, 0.06);
+  --n-bg-input: rgba(0, 0, 0, 0.3);
+  --n-input-text: #f4f4f5;
+  --n-border: rgba(255, 255, 255, 0.06);
+  --n-border-strong: rgba(255, 255, 255, 0.1);
+  --n-ring-center: #18181b;
+  --n-bottom-nav: rgba(12, 12, 14, 0.96);
   display: flex;
   min-height: 100dvh;
   min-height: 100svh;
   height: 100dvh;
   height: 100svh;
   overflow: hidden;
-  background: #0c0c0e;
-  color: #e4e4e7;
+  background: var(--n-bg-shell);
+  color: var(--n-text-body);
 }
 
 .nurse-viewport {
@@ -35,6 +50,15 @@
   height: 100svh;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nurse-sidebar::-webkit-scrollbar,
+.nurse-sidebar-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .nurse-sidebar-brand {
@@ -53,7 +77,7 @@
 .nurse-sidebar-brand-title {
   font-size: 14px;
   font-weight: 900;
-  color: #fafafa;
+  color: var(--n-text);
 }
 
 .nurse-sidebar-brand-sub {
@@ -61,7 +85,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #71717a;
+  color: var(--n-text-subtle);
 }
 
 .nurse-sidebar-profile {
@@ -93,12 +117,12 @@
 .nurse-sidebar-name {
   font-size: 13px;
   font-weight: 700;
-  color: #f4f4f5;
+  color: var(--n-text-body);
 }
 
 .nurse-sidebar-meta {
   font-size: 10px;
-  color: #a1a1aa;
+  color: var(--n-text-muted);
   font-weight: 600;
 }
 
@@ -108,6 +132,9 @@
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .nurse-sidebar-link {
@@ -160,6 +187,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--n-bg-shell);
+  color: var(--n-text-body);
 }
 
 .nurse-header {
@@ -168,8 +197,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--n-border);
+  background: var(--n-bg-header);
 }
 
 .nurse-header-kicker {
@@ -182,12 +211,12 @@
 .nurse-header-title {
   font-size: 1.35rem;
   font-weight: 900;
-  color: #fafafa;
+  color: var(--n-text);
 }
 
 .nurse-header-sub {
   font-size: 13px;
-  color: #71717a;
+  color: var(--n-text-subtle);
   margin-top: 4px;
 }
 
@@ -214,9 +243,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #d4d4d8;
+  background: var(--n-bg-card-hover);
+  border: 1px solid var(--n-border-strong);
+  color: var(--n-text-body);
 }
 
 .nurse-main {
@@ -237,12 +266,12 @@
 .nurse-dash-hero h2 {
   font-size: 1.25rem;
   font-weight: 900;
-  color: #fff;
+  color: var(--n-text);
 }
 
 .nurse-dash-hero p {
   font-size: 13px;
-  color: #a1a1aa;
+  color: var(--n-text-muted);
   margin-top: 4px;
 }
 
@@ -262,8 +291,8 @@
 .nurse-stat-card {
   padding: 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--n-bg-card);
+  border: 1px solid var(--n-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -272,12 +301,12 @@
 .nurse-stat-value {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #fff;
+  color: var(--n-text);
 }
 
 .nurse-stat-label {
   font-size: 11px;
-  color: #71717a;
+  color: var(--n-text-subtle);
   font-weight: 600;
 }
 
@@ -387,15 +416,25 @@
 .nurse-empty {
   text-align: center;
   padding: 40px;
-  color: #71717a;
+  color: var(--n-text-subtle);
+}
+
+.nurse-loading-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--n-text-subtle);
+  font-size: 13px;
 }
 
 .nurse-empty-card {
   text-align: center;
   padding: 48px 24px;
   border-radius: 16px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  color: #71717a;
+  border: 1px dashed var(--n-border-strong);
+  color: var(--n-text-subtle);
 }
 
 .nurse-card-stack {
@@ -518,7 +557,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #71717a;
+  color: var(--n-text-subtle);
 }
 
 .nurse-form-grid label.span-2 {
@@ -530,9 +569,9 @@
 .nurse-textarea {
   padding: 12px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  color: #f4f4f5;
+  border: 1px solid var(--n-border-strong);
+  background: var(--n-bg-input);
+  color: var(--n-input-text);
   font-size: 14px;
   font-weight: 500;
   text-transform: none;
@@ -900,7 +939,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #a1a1aa;
+  color: var(--n-text-muted);
   margin-bottom: 12px;
 }
 
@@ -916,9 +955,9 @@
   gap: 8px;
   padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #e4e4e7;
+  background: var(--n-bg-card-hover);
+  border: 1px solid var(--n-border);
+  color: var(--n-text-body);
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
@@ -984,10 +1023,10 @@
   gap: 6px;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--n-bg-card);
+  border: 1px solid var(--n-border);
   text-decoration: none;
-  color: inherit;
+  color: var(--n-text-body);
   font-size: 12px;
 }
 
@@ -1009,11 +1048,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #d4d4d8;
+  color: var(--n-text-body);
 }
 
 .nurse-empty-inline {
-  color: #71717a;
+  color: var(--n-text-subtle);
   font-size: 13px;
 }
 
@@ -1390,7 +1429,7 @@
   font-family: ui-monospace, monospace;
   font-size: 1.75rem;
   font-weight: 800;
-  color: #fafafa;
+  color: var(--n-text);
   margin: 4px 0 8px;
 }
 
@@ -1405,8 +1444,8 @@
   font-weight: 800;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e4e4e7;
+  background: var(--n-bg-card-hover);
+  color: var(--n-text-body);
 }
 
 .nmw-hero-right {
@@ -1430,7 +1469,7 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: #18181b;
+  background: var(--n-ring-center);
   position: absolute;
 }
 
@@ -1438,16 +1477,16 @@
   position: relative;
   font-size: 11px;
   font-weight: 800;
-  color: #fafafa;
+  color: var(--n-text);
 }
 
 .nmw-refresh {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #a1a1aa;
+  border: 1px solid var(--n-border-strong);
+  background: var(--n-bg-card-hover);
+  color: var(--n-text-muted);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -1473,10 +1512,10 @@
   gap: 16px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--n-bg-card);
+  border: 1px solid var(--n-border);
   font-size: 13px;
-  color: #d4d4d8;
+  color: var(--n-text-body);
 }
 
 .nmw-patient-strip span {
@@ -1498,8 +1537,8 @@
 .nmw-card {
   padding: 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--n-bg-card);
+  border: 1px solid var(--n-border-strong);
 }
 
 .nmw-card-title {
@@ -1510,7 +1549,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #a1a1aa;
+  color: var(--n-text-muted);
   margin-bottom: 12px;
 }
 
@@ -1586,15 +1625,15 @@
 .nmw-timeline-label {
   font-size: 13px;
   font-weight: 700;
-  color: #71717a;
+  color: var(--n-text-subtle);
 }
 
 .nmw-timeline-item.active .nmw-timeline-label {
-  color: #fafafa;
+  color: var(--n-text);
 }
 
 .nmw-timeline-item.done .nmw-timeline-label {
-  color: #d4d4d8;
+  color: var(--n-text-body);
 }
 
 .nmw-timeline-desc {
@@ -1734,18 +1773,18 @@
 .nmw-timeline-h-label {
   font-size: 11px;
   font-weight: 700;
-  color: #71717a;
+  color: var(--n-text-subtle);
   line-height: 1.2;
   transition: color 0.2s ease;
 }
 
 .nmw-timeline-h-item.active .nmw-timeline-h-label {
-  color: #fafafa;
+  color: var(--n-text);
   font-weight: 800;
 }
 
 .nmw-timeline-h-item.done .nmw-timeline-h-label {
-  color: #d4d4d8;
+  color: var(--n-text-body);
 }
 
 .nmw-timeline-h-current {
@@ -1808,14 +1847,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #71717a;
+  color: var(--n-text-subtle);
 }
 
 .nmw-info-value {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.45;
-  color: #f4f4f5;
+  color: var(--n-input-text);
 }
 
 .nmw-info-contact {
@@ -1828,13 +1867,13 @@
 .nmw-task-form--comfortable .nmw-task-head h4 {
   font-size: 17px;
   font-weight: 800;
-  color: #fafafa;
+  color: var(--n-text);
 }
 
 .nmw-task-form--comfortable .nmw-task-head p {
   font-size: 14px;
   line-height: 1.5;
-  color: #a1a1aa;
+  color: var(--n-text-muted);
 }
 
 .nmw-form-section-label {
@@ -1845,13 +1884,67 @@
   color: #f87171;
   margin: 8px 0 4px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--n-border);
+}
+
+.nmw-rejected-hospitals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nmw-rejected-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nmw-add-rejected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.nmw-rejected-card {
+  border: 1px solid var(--n-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.nmw-rejected-card-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--n-text-muted);
+}
+
+.nmw-icon-btn {
+  border: none;
+  background: transparent;
+  color: #f87171;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.nmw-icon-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
 }
 
 .nmw-task-form--comfortable .nurse-form-grid label {
   font-size: 14px;
   font-weight: 600;
-  color: #e4e4e7;
+  color: var(--n-text-body);
   gap: 8px;
 }
 
@@ -1861,16 +1954,6 @@
   font-size: 15px;
   line-height: 1.5;
   padding: 11px 12px;
-}
-
-.nurse-page--light .nmw-info-value,
-.nurse-shell--light .nmw-info-value {
-  color: #0f172a;
-}
-
-.nurse-page--light .nmw-task-form--comfortable .nmw-task-head h4,
-.nurse-shell--light .nmw-task-form--comfortable .nmw-task-head h4 {
-  color: #0f172a;
 }
 
 .nmw-warn {
@@ -1895,9 +1978,9 @@
   border-radius: 10px;
   font-size: 12px;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #e4e4e7;
+  border: 1px solid var(--n-border-strong);
+  background: var(--n-bg-card-hover);
+  color: var(--n-text-body);
   cursor: pointer;
 }
 
@@ -1909,6 +1992,73 @@
 
 .nmw-action-btn:hover:not(:disabled) {
   filter: brightness(1.08);
+}
+
+.nmw-workflow-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nmw-workflow-btn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--n-border-strong);
+  background: var(--n-bg-card-hover);
+  color: var(--n-text-body);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.nmw-workflow-btn.active {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #fca5a5;
+}
+
+.nmw-workflow-btn.done {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+  cursor: default;
+}
+
+.nmw-workflow-btn.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  color: var(--n-text-subtle);
+}
+
+.nmw-workflow-btn-wait {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-text-subtle);
+  margin-left: 26px;
+}
+
+.nmw-workflow-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.nmw-workflow-btn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
 }
 
 .nmw-quick-tasks {
@@ -2223,7 +2373,7 @@
   max-width: 768px;
   display: flex;
   align-items: stretch;
-  background: rgba(12, 12, 14, 0.96);
+  background: var(--n-bottom-nav);
   backdrop-filter: blur(16px);
   border-top: 1px solid rgba(220, 38, 38, 0.25);
   z-index: 50;
@@ -2239,7 +2389,7 @@
   gap: 4px;
   padding: 10px 4px;
   min-height: 56px;
-  color: #71717a;
+  color: var(--n-text-subtle);
   text-decoration: none;
   font-size: 10px;
   font-weight: 700;
@@ -2248,11 +2398,11 @@
 }
 
 .nurse-nav-item.active {
-  color: #f87171;
+  color: var(--n-accent);
 }
 
 .nurse-nav-item:hover {
-  color: #e4e4e7;
+  color: var(--n-text-body);
 }
 
 .nurse-nav-icon-wrap {
@@ -2549,23 +2699,16 @@
 
 /* ─── Nurse theme toggle & light mode ─────────────────────────────── */
 
-.nurse-sidebar-footer {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
 .nurse-theme-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--n-border-strong);
+  background: var(--n-bg-card-hover);
+  color: var(--n-text-muted);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -2581,9 +2724,7 @@
 .nurse-theme-toggle--compact {
   width: 36px;
   height: 36px;
-  padding: 0;
   flex-shrink: 0;
-  border-radius: 10px;
 }
 
 .nurse-shift-badge.on-case {
@@ -2593,8 +2734,21 @@
 }
 
 .nurse-shell--light {
-  background: #f9fafb;
-  color: #0f172a;
+  --n-text: #0f172a;
+  --n-text-body: #334155;
+  --n-text-muted: #64748b;
+  --n-text-subtle: #94a3b8;
+  --n-accent: #dc2626;
+  --n-bg-shell: #f9fafb;
+  --n-bg-header: rgba(255, 255, 255, 0.96);
+  --n-bg-card: #ffffff;
+  --n-bg-card-hover: #f3f4f6;
+  --n-bg-input: #ffffff;
+  --n-input-text: #0f172a;
+  --n-border: #e5e7eb;
+  --n-border-strong: #d1d5db;
+  --n-ring-center: #f9fafb;
+  --n-bottom-nav: rgba(255, 255, 255, 0.98);
 }
 
 .nurse-shell--light .nurse-sidebar {
@@ -2606,25 +2760,9 @@
   border-bottom-color: #e5e7eb;
 }
 
-.nurse-shell--light .nurse-sidebar-brand-title {
-  color: #0f172a;
-}
-
-.nurse-shell--light .nurse-sidebar-brand-sub {
-  color: #64748b;
-}
-
 .nurse-shell--light .nurse-sidebar-profile {
   background: #f9fafb;
   border-color: #e5e7eb;
-}
-
-.nurse-shell--light .nurse-sidebar-name {
-  color: #0f172a;
-}
-
-.nurse-shell--light .nurse-sidebar-meta {
-  color: #64748b;
 }
 
 .nurse-shell--light .nurse-sidebar-link {
@@ -2652,100 +2790,308 @@
   color: #0f172a;
 }
 
-.nurse-shell--light .nurse-sidebar-footer {
-  border-top-color: #e5e7eb;
-}
-
-.nurse-shell--light .nurse-theme-toggle {
-  background: #f9fafb;
-  border-color: #e5e7eb;
-  color: #64748b;
-}
-
 .nurse-shell--light .nurse-theme-toggle:hover {
   background: #fef2f2;
   border-color: #dc2626;
   color: #dc2626;
 }
 
-.nurse-page--light {
-  background: #f9fafb;
+/* ─── Nurse hospitals directory ─────────────────────────────────── */
+
+.nurse-hospitals-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
-.nurse-page--light .nurse-header {
-  background: rgba(255, 255, 255, 0.96);
-  border-bottom-color: #e5e7eb;
+@media (min-width: 640px) {
+  .nurse-hospitals-toolbar {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
-.nurse-page--light .nurse-header-title {
-  color: #0f172a;
+.nurse-hospitals-search,
+.nurse-hospitals-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
-.nurse-page--light .nurse-header-sub {
-  color: #64748b;
+.nurse-hospitals-search input,
+.nurse-hospitals-filter select {
+  flex: 1;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f4f5;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.nurse-page--light .nurse-notif-btn {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #374151;
+.nurse-hospitals-search svg,
+.nurse-hospitals-filter svg {
+  color: #a1a1aa;
+  flex-shrink: 0;
 }
 
-.nurse-page--light .nurse-theme-toggle--compact {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #374151;
+.nurse-hospitals-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.nurse-page--light .nurse-theme-toggle--compact:hover {
-  background: #fef2f2;
-  border-color: #dc2626;
-  color: #dc2626;
+.nurse-hospital-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--n-border);
+  background: var(--n-bg-card);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.nurse-hospital-card:hover {
+  background: var(--n-bg-card-hover);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+.nurse-hospital-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+}
+
+.nurse-hospital-avatar--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 16px;
+}
+
+.nurse-hospital-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nurse-hospital-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--n-text);
+  margin: 0;
+}
+
+.nurse-hospital-meta {
+  font-size: 12px;
+  color: var(--n-text-muted);
+  margin: 4px 0 0;
+}
+
+.nurse-hospital-hotline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #86efac;
+  margin: 6px 0 0;
+}
+
+.nurse-hospital-call-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #059669;
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nurse-hospital-call-btn:hover {
+  background: #047857;
+}
+
+.nurse-hospital-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+@media (min-width: 640px) {
+  .nurse-hospital-detail-backdrop {
+    align-items: center;
+  }
+}
+
+.nurse-hospital-detail {
+  width: 100%;
+  max-width: 520px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #18181b;
+  padding: 20px;
+  color: #f4f4f5;
+}
+
+.nurse-hospital-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.nurse-hospital-detail-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.nurse-hospital-detail-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #a1a1aa;
+}
+
+.nurse-hospital-detail-close {
+  margin-left: auto;
+  padding: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #e4e4e7;
+  cursor: pointer;
+}
+
+.nurse-hospital-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.nurse-hospital-detail-grid .label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+
+.nurse-hospital-detail-grid p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.nurse-hospital-contacts h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fca5a5;
+  margin: 0 0 10px;
+}
+
+.nurse-hospital-contacts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nurse-hospital-contacts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+.nurse-hospital-contacts .contact-label {
+  color: #a1a1aa;
+  font-weight: 600;
+}
+
+.nurse-hospital-contacts .contact-call {
+  color: #86efac;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nurse-hospital-location-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #d4d4d8;
+}
+
+.nurse-shell--light .nurse-hospitals-search input,
+.nurse-shell--light .nurse-hospitals-filter select {
+  background: var(--n-bg-input);
+  border-color: var(--n-border);
+  color: var(--n-input-text);
+}
+
+.nurse-shell--light .nurse-hospital-detail {
+  background: var(--n-bg-card);
+  color: var(--n-text);
+}
+
+.nurse-shell--light .nurse-hospital-detail-head h3 {
+  color: var(--n-text);
+}
+
+.nurse-shell--light .nurse-hospital-detail-grid p {
+  color: var(--n-text-body);
 }
 
 .nurse-page--light .nurse-dash-hero {
   background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
   border-color: #fecaca;
-}
-
-.nurse-page--light .nurse-dash-hero h2 {
-  color: #0f172a;
-}
-
-.nurse-page--light .nurse-dash-hero p {
-  color: #64748b;
-}
-
-.nurse-page--light .nurse-stat-card {
-  background: #ffffff;
-  border-color: #e5e7eb;
-}
-
-.nurse-page--light .nurse-stat-value {
-  color: #0f172a;
-}
-
-.nurse-page--light .nurse-stat-label {
-  color: #64748b;
-}
-
-.nurse-page--light .nurse-quick-action-btn {
-  background: #ffffff;
-  border-color: #e5e7eb;
-  color: #374151;
-}
-
-.nurse-page--light .nurse-quick-action-btn:hover {
-  background: #fef2f2;
-  border-color: #dc2626;
-  color: #dc2626;
-}
-
-.nurse-page--light .nurse-mission-row {
-  background: #ffffff;
-  border-color: #e5e7eb;
-}
-
-.nurse-page--light .nurse-dash-section h3 {
-  color: #64748b;
 }

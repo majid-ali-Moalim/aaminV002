@@ -387,6 +387,25 @@ export const emergencyRequestsService = {
     return await api.patch(`/api/emergency-requests/${id}/cancel`, { reason })
   },
 
+  completeRequest: async (
+    id: string,
+    data: {
+      acceptedHospital?: string
+      rejectedHospitals?: string
+      consciousStatus?: string
+      breathingStatus?: string
+      bleedingStatus?: string
+      patientConditionAtClose?: string
+      receivingStaff?: string
+      treatmentSummary?: string
+      handoverNotes?: string
+      dispatcherNotes?: string
+    },
+  ) => {
+    const api = new ApiService()
+    return await api.patch(`/api/emergency-requests/${id}/complete`, data)
+  },
+
   escalateRequest: async (id: string, reason?: string) => {
     const api = new ApiService()
     return await api.patch(`/api/emergency-requests/${id}/escalate`, { reason })
@@ -839,14 +858,16 @@ export const nursesService = {
     const api = new ApiService()
     const params = new URLSearchParams()
     if (nurseId) params.append('nurseId', nurseId)
-    return await api.get(`/api/nurses/reports/patient-care?${params.toString()}`)
+    const query = params.toString()
+    return await api.get(`/api/nurses/reports/patient-care${query ? `?${query}` : ''}`)
   },
 
   getIncidentReports: async (nurseId?: string) => {
     const api = new ApiService()
     const params = new URLSearchParams()
     if (nurseId) params.append('nurseId', nurseId)
-    return await api.get(`/api/nurses/reports/incidents?${params.toString()}`)
+    const query = params.toString()
+    return await api.get(`/api/nurses/reports/incidents${query ? `?${query}` : ''}`)
   },
  
   createPatientCareRecord: async (data: any) => {
@@ -1422,6 +1443,10 @@ export const hospitalsService = {
     if (filters?.districtId) params.append('districtId', filters.districtId)
     const queryString = params.toString() ? `?${params.toString()}` : ''
     return await api.get<any[]>(`/api/hospitals${queryString}`)
+  },
+  getById: async (id: string) => {
+    const api = new ApiService()
+    return await api.get<any>(`/api/hospitals/${id}`)
   },
   createHospital: async (data: Record<string, unknown>) => {
     const api = new ApiService()

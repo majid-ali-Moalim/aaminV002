@@ -7,6 +7,7 @@ import {
   Activity,
   ClipboardList,
   HeartPulse,
+  Building2,
   MessageCircle,
   Stethoscope,
   Truck,
@@ -95,6 +96,7 @@ export default function NurseDashboardView() {
 
   const quickActions = [
     { label: 'Open Mission Workspace', href: '/nurse/mission', icon: HeartPulse },
+    { label: 'Find Hospitals', href: '/nurse/hospitals', icon: Building2 },
     { label: 'Chat Dispatcher', href: '/nurse/chat', icon: MessageCircle },
     { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
     { label: 'Record Vital Signs', href: '/nurse/mission', icon: Activity },
