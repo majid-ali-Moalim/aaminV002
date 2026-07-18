@@ -56,6 +56,7 @@ export class HospitalsController {
     return this.hospitalsService.findAll({ regionId, districtId });
   }
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get a hospital by id' })
   findOne(@Param('id') id: string) {

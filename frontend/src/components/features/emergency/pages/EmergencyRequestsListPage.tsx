@@ -437,6 +437,7 @@ export default function EmergencyRequestsPage() {
         caseId={detailCaseId}
         open={Boolean(detailCaseId)}
         preview={detailPreview}
+        casePageBase={paths.base}
         onClose={() => {
           setDetailCaseId(null)
           setDetailPreview(null)

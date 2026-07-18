@@ -23,17 +23,12 @@ import {
   filterDispatchEligibleEmployees,
   getPresentEmployeeIdsToday,
 } from '../employee-attendance/dispatch-staff-eligibility';
+import {
+  ACTIVE_CASE_STATUSES,
+  ASSIGNABLE_SHIFT_STATUSES,
+} from '../common/active-case-statuses';
 
-const ACTIVE_MISSION_STATUSES: EmergencyRequestStatus[] = [
-  'REVIEWING',
-  'ASSIGNED',
-  'DISPATCHED',
-  'EN_ROUTE',
-  'ARRIVED_SCENE',
-  'PATIENT_STABILIZED',
-  'TRANSPORTING',
-  'ARRIVED_HOSPITAL',
-];
+const ACTIVE_MISSION_STATUSES = ACTIVE_CASE_STATUSES;
 
 function startOfToday() {
   const d = new Date();
@@ -1072,7 +1067,7 @@ export class DispatchersAppService {
               ...regionalEmployeeWhere(scope, scope.stationScoped),
               employeeRoleId: driverRole.id,
               status: 'ACTIVE',
-              shiftStatus: 'AVAILABLE',
+              shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
               id: { notIn: busyDriverIds },
             },
             include: { assignedAmbulance: { include: { equipmentLevel: true } } },
@@ -1084,7 +1079,7 @@ export class DispatchersAppService {
               ...regionalEmployeeWhere(scope, scope.stationScoped),
               employeeRoleId: nurseRole.id,
               status: 'ACTIVE',
-              shiftStatus: 'AVAILABLE',
+              shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
               id: { notIn: busyNurseIds },
             },
             include: { assignedAmbulance: { include: { equipmentLevel: true } } },

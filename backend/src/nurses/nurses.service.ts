@@ -65,7 +65,14 @@ export class NursesService {
         user: true,
         employeeRole: true,
         department: true,
-        station: true,
+        station: {
+          select: {
+            id: true,
+            name: true,
+            districtId: true,
+            district: { select: { id: true, name: true } },
+          },
+        },
         assignedAmbulance: true,
         shiftRecords: {
           take: 10,
@@ -311,25 +318,76 @@ export class NursesService {
       where.status = status as EmergencyRequestStatus;
     }
 
+    const userPublic = { select: { id: true, username: true, email: true } };
+
     return this.prisma.emergencyRequest.findMany({
       where,
       include: {
         patient: {
-          include: { user: true },
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            age: true,
+            gender: true,
+            patientCode: true,
+          },
         },
         driver: {
-          include: { user: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            employeeCode: true,
+            user: userPublic,
+          },
         },
         nurse: {
-          include: { user: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            employeeCode: true,
+            user: userPublic,
+          },
         },
-        ambulance: true,
-        destinationHospital: true,
-        region: true,
-        district: true,
+        ambulance: {
+          select: {
+            id: true,
+            ambulanceNumber: true,
+            plateNumber: true,
+            vehicleType: true,
+          },
+        },
+        destinationHospital: {
+          select: { id: true, name: true, primaryPhone: true, emergencyHotline: true },
+        },
+        region: { select: { id: true, name: true } },
+        district: { select: { id: true, name: true } },
+        incidentCategory: { select: { id: true, name: true } },
+        dispatcher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            user: { select: { username: true } },
+          },
+        },
         statusLogs: {
           orderBy: { createdAt: 'desc' },
           take: 20,
+          include: {
+            changedByEmployee: {
+              select: {
+                firstName: true,
+                lastName: true,
+                employeeRole: { select: { name: true } },
+              },
+            },
+          },
         },
       },
       orderBy: { updatedAt: 'desc' },

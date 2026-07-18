@@ -26,6 +26,7 @@ import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
+import '@/components/features/emergency/case-detail.css'
 
 function nurseName(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
   return [record.nurse?.firstName, record.nurse?.lastName].filter(Boolean).join(' ') || 'Nurse'
@@ -93,6 +94,15 @@ function clinicalRecordLines(record: NonNullable<EmergencyRequest['patientCareRe
   ]
 }
 
+function CaseField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="case-detail-field">
+      <p className="case-detail-label">{label}</p>
+      <p className="case-detail-value">{value || '—'}</p>
+    </div>
+  )
+}
+
 export default function EmergencyCaseDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -131,10 +141,10 @@ export default function EmergencyCaseDetailPage() {
 
   if (isLoading && !request) {
     return (
-      <div className="p-6 max-w-[1200px] mx-auto">
-        <div className="py-24 text-center bg-white rounded-2xl border border-slate-100">
+      <div className="case-detail-page">
+        <div className="case-detail-loading">
           <RefreshCw className="w-10 h-10 animate-spin mx-auto text-red-500 mb-4" />
-          <p className="text-sm font-semibold text-slate-500">Loading case…</p>
+          <p className="text-sm font-semibold">Loading case…</p>
         </div>
       </div>
     )
@@ -142,14 +152,12 @@ export default function EmergencyCaseDetailPage() {
 
   if (error || !request) {
     return (
-      <div className="p-6 max-w-[1200px] mx-auto space-y-4">
-        <Button variant="outline" onClick={() => router.back()} className="rounded-xl">
+      <div className="case-detail-page">
+        <Button variant="outline" onClick={() => router.back()} className="rounded-xl w-fit">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        <div className="py-16 text-center bg-white rounded-2xl border border-red-100">
-          <p className="font-semibold text-red-600">{error || 'Case not found'}</p>
-        </div>
+        <div className="case-detail-error">{error || 'Case not found'}</div>
       </div>
     )
   }
@@ -161,9 +169,9 @@ export default function EmergencyCaseDetailPage() {
   const driverReports = logs.filter((log) => log.notes?.includes('[Driver Report]'))
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+    <div className="case-detail-page">
+      <div className="case-detail-toolbar">
+        <div className="case-detail-toolbar-group">
           <Button variant="outline" onClick={() => router.back()} className="rounded-xl">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
@@ -175,7 +183,7 @@ export default function EmergencyCaseDetailPage() {
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="case-detail-toolbar-group">
           <Button variant="outline" onClick={loadCase} className="rounded-xl">
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
@@ -189,258 +197,214 @@ export default function EmergencyCaseDetailPage() {
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-8 text-white shadow-xl">
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <header className="case-detail-hero">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">
-              Case file
-            </p>
-            <h1 className="text-3xl font-black tracking-tight">{request.trackingCode}</h1>
-            <p className="text-red-100/80 mt-2 flex items-center gap-2 text-sm">
+            <p className="case-detail-hero-kicker">Case file</p>
+            <h1 className="case-detail-hero-title">{request.trackingCode}</h1>
+            <p className="case-detail-hero-meta">
               <Clock className="w-4 h-4" />
               Created {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
-              <span className="text-red-200/60">·</span>
+              <span>·</span>
               {format(new Date(request.createdAt), 'PPp')}
             </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <PriorityBadge priority={request.priority} size="sm" />
-            <StatusBadge status={request.status} size="sm" />
+            <div className="case-detail-hero-badges">
+              <PriorityBadge priority={request.priority} size="sm" />
+              <StatusBadge status={request.status} size="sm" />
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+      <div className="case-detail-layout">
+        <div className="case-detail-main">
+          <section className="case-detail-card">
+            <h2 className="case-detail-section-title">
               <User className="w-4 h-4" />
               Patient
             </h2>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Name</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
-                  {request.patient?.fullName || 'Unknown'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1 flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+            <div className="case-detail-grid">
+              <CaseField label="Name" value={request.patient?.fullName || 'Unknown'} />
+              <div className="case-detail-field">
+                <p className="case-detail-label">Phone</p>
+                <p className="case-detail-value flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 opacity-60" />
                   {request.patient?.phone || request.callerPhone || '—'}
                 </p>
               </div>
             </div>
-          </div>
+          </section>
 
           {nurseRecords.length > 0 && (
-            <div className="bg-white rounded-2xl border border-rose-100 shadow-sm p-6">
-              <h2 className="text-sm font-black uppercase tracking-wider text-rose-700 mb-4 flex items-center gap-2">
+            <section className="case-detail-card case-detail-card--accent">
+              <h2 className="case-detail-section-title case-detail-section-title--rose">
                 <Stethoscope className="w-4 h-4" />
                 Nurse clinical documents & notes
               </h2>
-              <div className="space-y-4">
+              <div>
                 {nurseRecords.map((record) => (
-                  <article key={record.id} className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-                      <div>
-                        <p className="text-sm font-black text-slate-800">{clinicalRecordTitle(record)}</p>
-                        <p className="text-xs text-slate-500">
-                          {nurseName(record)} · {format(new Date(record.createdAt), 'PPp')}
-                        </p>
-                      </div>
+                  <article key={record.id} className="case-detail-clinical-item">
+                    <div className="mb-3">
+                      <p className="case-detail-value">{clinicalRecordTitle(record)}</p>
+                      <p className="case-detail-subvalue">
+                        {nurseName(record)} · {format(new Date(record.createdAt), 'PPp')}
+                      </p>
                     </div>
-                    <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="case-detail-grid">
                       {clinicalRecordLines(record)
                         .filter(([, value]) => value)
                         .map(([label, value]) => (
-                          <div key={label} className="rounded-lg bg-white/80 border border-rose-100 p-3">
-                            <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{label}</p>
-                            <p className="text-sm text-slate-700 mt-1 whitespace-pre-wrap">{value}</p>
+                          <div key={label} className="case-detail-clinical-cell">
+                            <p className="case-detail-label">{label}</p>
+                            <p className="case-detail-value case-detail-value--muted">{value}</p>
                           </div>
                         ))}
                     </div>
                   </article>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+          <section className="case-detail-card">
+            <h2 className="case-detail-section-title">
               <MapPin className="w-4 h-4" />
               Locations
             </h2>
             <div className="space-y-4">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pickup</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">{request.pickupLocation}</p>
+              <div className="case-detail-field">
+                <p className="case-detail-label">Pickup</p>
+                <p className="case-detail-value">{request.pickupLocation}</p>
                 {request.pickupLandmark && (
-                  <p className="text-xs text-slate-500 mt-1">{request.pickupLandmark}</p>
+                  <p className="case-detail-subvalue">{request.pickupLandmark}</p>
                 )}
               </div>
               <PickupGpsPanel request={request} />
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Destination
-                </p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
-                  {request.destination || 'Not set'}
-                </p>
-              </div>
+              <CaseField label="Destination" value={request.destination || 'Not set'} />
             </div>
-          </div>
+          </section>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+          <section className="case-detail-card">
+            <h2 className="case-detail-section-title">
               <Stethoscope className="w-4 h-4" />
               Clinical information
             </h2>
-            <div className="grid sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Condition
-                </p>
-                <p className="font-medium text-slate-700 mt-1">
-                  {request.patientCondition || '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Symptoms
-                </p>
-                <p className="font-medium text-slate-700 mt-1">{request.symptoms || '—'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Conscious / Breathing
-                </p>
-                <p className="font-medium text-slate-700 mt-1">
-                  {request.consciousStatus || '—'} / {request.breathingStatus || '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Equipment needs
-                </p>
-                <p className="font-medium text-slate-700 mt-1">
-                  {[request.needsOxygen && 'Oxygen', request.needsStretcher && 'Stretcher']
+            <div className="case-detail-grid">
+              <CaseField label="Condition" value={request.patientCondition} />
+              <CaseField label="Symptoms" value={request.symptoms} />
+              <CaseField
+                label="Conscious / Breathing"
+                value={`${request.consciousStatus || '—'} / ${request.breathingStatus || '—'}`}
+              />
+              <CaseField
+                label="Equipment needs"
+                value={
+                  [request.needsOxygen && 'Oxygen', request.needsStretcher && 'Stretcher']
                     .filter(Boolean)
-                    .join(', ') || 'None noted'}
-                </p>
-              </div>
+                    .join(', ') || 'None noted'
+                }
+              />
             </div>
             {(request.notes || request.manualDispatchNotes) && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mb-2">
+              <div className="case-detail-divider">
+                <p className="case-detail-label flex items-center gap-1 mb-2">
                   <FileText className="w-3 h-3" />
                   Notes
                 </p>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                <p className="case-detail-value case-detail-value--muted whitespace-pre-wrap">
                   {request.manualDispatchNotes || request.notes}
                 </p>
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+          <section className="case-detail-card">
+            <h2 className="case-detail-section-title">
               <Truck className="w-4 h-4" />
               Assignment
             </h2>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Ambulance
-                </p>
-                <p className="text-sm font-bold text-red-600 mt-1">
+            <div className="case-detail-grid case-detail-grid--3">
+              <div className="case-detail-stat-tile">
+                <p className="case-detail-label">Ambulance</p>
+                <p className="case-detail-value highlight">
                   {request.ambulance?.ambulanceNumber || 'Unassigned'}
                 </p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Driver
-                </p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
+              <div className="case-detail-stat-tile">
+                <p className="case-detail-label">Driver</p>
+                <p className="case-detail-value">
                   {request.driver
                     ? `${request.driver.firstName} ${request.driver.lastName}`
                     : 'Unassigned'}
                 </p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Nurse
-                </p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
+              <div className="case-detail-stat-tile">
+                <p className="case-detail-label">Nurse</p>
+                <p className="case-detail-value">
                   {request.nurse
                     ? `${request.nurse.firstName} ${request.nurse.lastName}`
                     : 'Unassigned'}
                 </p>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-4 italic">
+            <p className="case-detail-hint">
               Mission status is updated by the assigned driver in the field.
             </p>
-          </div>
+          </section>
 
           {driverReports.length > 0 && (
-            <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6">
-              <h2 className="text-sm font-black uppercase tracking-wider text-amber-700 mb-4 flex items-center gap-2">
+            <section className="case-detail-card case-detail-card--warn">
+              <h2 className="case-detail-section-title case-detail-section-title--amber">
                 <FileText className="w-4 h-4" />
                 Driver run report
               </h2>
               <div className="space-y-3">
                 {driverReports.map((log) => (
-                  <div key={log.id} className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
-                    <p className="text-xs text-slate-500 mb-1">{format(new Date(log.createdAt), 'PPp')}</p>
-                    <p className="text-sm text-slate-800 whitespace-pre-wrap">
+                  <div key={log.id} className="case-detail-note-block">
+                    <p className="case-detail-subvalue mb-1">
+                      {format(new Date(log.createdAt), 'PPp')}
+                    </p>
+                    <p className="case-detail-value case-detail-value--muted whitespace-pre-wrap">
                       {log.notes?.replace('[Driver Report]', '').trim()}
                     </p>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           )}
         </div>
 
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sticky top-6">
-            <h2 className="text-sm font-black uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+        <aside className="case-detail-aside">
+          <section className="case-detail-card lg:sticky lg:top-6">
+            <h2 className="case-detail-section-title">
               <Activity className="w-4 h-4" />
               Status history
             </h2>
             {logs.length === 0 ? (
-              <p className="text-sm text-slate-500">No status updates yet.</p>
+              <p className="case-detail-value case-detail-value--muted">No status updates yet.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="case-detail-timeline">
                 {logs.map((log, idx) => (
-                  <div key={log.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          idx === 0 ? 'bg-red-500 ring-4 ring-red-100' : 'bg-slate-300'
-                        }`}
-                      />
-                      {idx < logs.length - 1 && (
-                        <div className="w-px flex-1 bg-slate-200 min-h-[1rem] mt-1" />
-                      )}
+                  <div key={log.id} className="case-detail-timeline-item">
+                    <div className="case-detail-timeline-rail">
+                      <div className={`case-detail-timeline-dot${idx === 0 ? ' active' : ''}`} />
+                      {idx < logs.length - 1 && <div className="case-detail-timeline-line" />}
                     </div>
-                    <div className="pb-2 min-w-0">
-                      <p className="text-sm font-bold text-slate-800">{log.toStatus}</p>
-                      <p className="text-xs text-slate-500">
+                    <div className="case-detail-timeline-body">
+                      <p className="case-detail-timeline-status">{log.toStatus}</p>
+                      <p className="case-detail-timeline-time">
                         {format(new Date(log.createdAt), 'PPp')}
                       </p>
                       {log.notes && (
-                        <p className="text-xs text-slate-600 mt-1 italic">{log.notes}</p>
+                        <p className="case-detail-timeline-notes">{log.notes}</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
     </div>
   )

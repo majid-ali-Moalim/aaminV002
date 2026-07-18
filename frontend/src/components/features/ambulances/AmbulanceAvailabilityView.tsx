@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -28,7 +28,6 @@ import {
   FileSpreadsheet,
   FileText,
   Eye,
-  User,
   X,
   Loader2,
   AlertCircle,
@@ -38,7 +37,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ambulancesService, employeesService, systemSetupService } from '@/lib/api'
+import { ambulancesService } from '@/lib/api'
 import {
   type AmbulanceAvailabilityOverview,
   type AmbulanceAvailabilityRow,
@@ -47,7 +46,6 @@ import {
   OPERATIONAL_STATUS_CONFIG,
   formatTimeAgo,
 } from '@/lib/ambulance/availability'
-import { Employee, EmployeeRole } from '@/types'
 
 const STATUS_TABS: { id: StatusFilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -74,8 +72,6 @@ export default function AmbulanceAvailabilityView() {
   const [detailLoading, setDetailLoading] = useState(false)
 
   const [statusModal, setStatusModal] = useState<Pick<AmbulanceAvailabilityRow, 'id' | 'ambulanceNumber'> | null>(null)
-  const [assignDriverModal, setAssignDriverModal] = useState<Pick<AmbulanceAvailabilityRow, 'id' | 'ambulanceNumber'> | null>(null)
-  const [drivers, setDrivers] = useState<Employee[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const { data, isLoading, isValidating, mutate, error } = useSWR<AmbulanceAvailabilityOverview>(
@@ -83,21 +79,6 @@ export default function AmbulanceAvailabilityView() {
     () => ambulancesService.getAvailabilityOverview(),
     { refreshInterval: 15000, revalidateOnFocus: true },
   )
-
-  const fetchCrew = useCallback(async () => {
-    try {
-      const roles = await systemSetupService.getRoles()
-      const driverRole = roles.find((r: EmployeeRole) => r.name.toUpperCase().includes('DRIVER'))
-      const driverList = driverRole ? await employeesService.getAll(driverRole.id) : []
-      setDrivers(driverList)
-    } catch {
-      /* optional */
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchCrew()
-  }, [fetchCrew])
 
   const openDetail = async (id: string) => {
     setDetailId(id)
@@ -130,20 +111,6 @@ export default function AmbulanceAvailabilityView() {
     }
   }
 
-  const handleAssignDriver = async (ambulanceId: string, driverId: string) => {
-    try {
-      setSubmitting(true)
-      await ambulancesService.assignDriver(ambulanceId, driverId)
-      setAssignDriverModal(null)
-      mutate()
-      fetchCrew()
-    } catch (error: any) {
-      alert(error?.response?.data?.message || error?.message || 'Failed to assign driver')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const filteredRows = useMemo(() => {
     if (!data?.ambulances) return []
     const q = search.trim().toLowerCase()
@@ -171,7 +138,7 @@ export default function AmbulanceAvailabilityView() {
     'Vehicle Number': r.plateNumber,
     Type: r.vehicleType,
     Status: OPERATIONAL_STATUS_CONFIG[r.operationalStatus].label,
-    Driver: r.driver?.name ?? '—',
+    Driver: r.driver?.name ?? 'Per dispatch',
     'Current Case': r.currentCase?.trackingCode ?? '—',
     Region: r.region?.name ?? '—',
     District: r.district?.name ?? '—',
@@ -253,7 +220,7 @@ export default function AmbulanceAvailabilityView() {
         <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ambulance ID, vehicle number, driver, case…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ambulance ID, vehicle number, mission crew, case…" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30" />
           </div>
           <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="lg:w-44 px-3 py-2.5 rounded-xl border border-slate-200 text-sm">
             <option value="">All Regions</option>
@@ -289,7 +256,7 @@ export default function AmbulanceAvailabilityView() {
                   <th className="px-4 py-3">Vehicle No.</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Driver</th>
+                  <th className="px-4 py-3">Mission driver</th>
                   <th className="px-4 py-3">Current Case</th>
                   <th className="px-4 py-3">Region</th>
                   <th className="px-4 py-3">District</th>
@@ -306,7 +273,7 @@ export default function AmbulanceAvailabilityView() {
                     <td className="px-4 py-3 font-mono text-slate-600">{row.plateNumber}</td>
                     <td className="px-4 py-3">{row.vehicleType}</td>
                     <td className="px-4 py-3"><StatusBadge status={row.operationalStatus} /></td>
-                    <td className="px-4 py-3">{row.driver?.name ?? '—'}</td>
+                    <td className="px-4 py-3">{row.driver?.name ?? 'Per dispatch'}</td>
                     <td className="px-4 py-3">
                       {row.currentCase ? (
                         <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link>
@@ -411,7 +378,10 @@ export default function AmbulanceAvailabilityView() {
                 <InfoField label="Current Status"><StatusBadge status={detailData.ambulance.operationalStatus} /></InfoField>
                 <InfoField label="Region" value={detailData.ambulance.region?.name ?? '—'} />
                 <InfoField label="District" value={detailData.ambulance.district?.name ?? '—'} />
-                <InfoField label="Driver" value={detailData.driver ? `${detailData.driver.firstName} ${detailData.driver.lastName}` : '—'} />
+                <InfoField label="Mission driver" value={detailData.driver ? `${detailData.driver.firstName} ${detailData.driver.lastName}` : 'Assigned per dispatch'} />
+                {detailData.nurse ? (
+                  <InfoField label="Mission nurse" value={`${detailData.nurse.firstName} ${detailData.nurse.lastName}`} />
+                ) : null}
               </div>
               {detailData.currentCase && (
                 <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
@@ -441,7 +411,6 @@ export default function AmbulanceAvailabilityView() {
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setStatusModal({ id: detailData.ambulance.id, ambulanceNumber: detailData.ambulance.ambulanceNumber })}>Change Status</Button>
-                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAssignDriverModal({ id: detailData.ambulance.id, ambulanceNumber: detailData.ambulance.ambulanceNumber })}><User className="w-4 h-4 mr-1" /> Assign Driver</Button>
                 {detailData.currentCase && (
                   <Link href={`/admin/emergency-requests/${detailData.currentCase.id}`}>
                     <Button size="sm" className="rounded-xl bg-red-600 hover:bg-red-700">View Case <ChevronRight className="w-4 h-4 ml-1" /></Button>
@@ -467,10 +436,6 @@ export default function AmbulanceAvailabilityView() {
             })}
           </div>
         </Modal>
-      )}
-
-      {assignDriverModal && (
-        <CrewAssignModal title="Assign Driver" unit={assignDriverModal.ambulanceNumber} crew={drivers.filter((d) => !d.assignedAmbulanceId || d.assignedAmbulanceId === assignDriverModal.id)} onClose={() => setAssignDriverModal(null)} onSelect={(id) => handleAssignDriver(assignDriverModal.id, id)} submitting={submitting} icon={User} />
       )}
 
     </div>
@@ -511,21 +476,6 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         <div className="p-5">{children}</div>
       </div>
     </div>
-  )
-}
-
-function CrewAssignModal({ title, unit, crew, onClose, onSelect, submitting, icon: Icon }: { title: string; unit: string; crew: Employee[]; onClose: () => void; onSelect: (id: string) => void; submitting: boolean; icon: typeof User }) {
-  return (
-    <Modal onClose={onClose} title={`${title} — ${unit}`}>
-      <div className="max-h-72 overflow-y-auto space-y-2">
-        {crew.length === 0 ? <p className="text-center py-8 text-sm text-slate-500">No available crew</p> : crew.map((m) => (
-          <button key={m.id} type="button" disabled={submitting} onClick={() => onSelect(m.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border hover:border-red-200 hover:bg-red-50 text-left">
-            <div className="p-2 rounded-lg bg-red-100 text-red-600"><Icon className="w-4 h-4" /></div>
-            <div><p className="text-sm font-bold">{m.firstName} {m.lastName}</p><p className="text-xs text-slate-500">{m.employeeRole?.name}</p></div>
-          </button>
-        ))}
-      </div>
-    </Modal>
   )
 }
 

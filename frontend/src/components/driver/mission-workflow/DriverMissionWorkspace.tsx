@@ -8,7 +8,6 @@ import Link from 'next/link'
 import {
   Building2,
   ChevronRight,
-  Clock,
   FileText,
   History,
   Loader2,
@@ -24,7 +23,6 @@ import MissionHorizontalTimeline from '@/components/mission-workflow/MissionHori
 import { driverMissionsApi } from '@/lib/driverApi'
 import { useDriverStore, type DriverMission } from '@/lib/stores/driverStore'
 import { useDriverSocket } from '@/lib/useDriverSocket'
-import { useElapsedTimer } from '@/lib/useElapsedTimer'
 import { MissionStatusBadge, PriorityBadge } from '@/components/driver/DriverUI'
 import DriverMissionDetailModal from '@/components/driver/DriverMissionDetailModal'
 import {
@@ -33,13 +31,21 @@ import {
   getStepTimestamp,
   getWorkflowMeta,
   MISSION_EXECUTION_STEPS,
+  markDriverMilestoneComplete,
   patchWorkflowMeta,
   setStoredPhase,
   stampWorkflowStage,
-  type WorkflowActionId,
   type WorkflowStepId,
 } from '@/lib/driver/missionWorkflow'
 import { useDriverWorkflowState } from '@/lib/driver/useDriverWorkflowState'
+import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
+import { formatSomaliaPhoneDisplay, resolvePatientPhone } from '@/lib/phoneContact'
+import MissionWorkflowButtons from '@/components/mission-workflow/MissionWorkflowButtons'
+import {
+  getDriverWorkflowButtons,
+  type DriverWorkflowButtonId,
+} from '@/lib/mission/driverWorkflowButtons'
+import { hasMedicalNotesSaved } from '@/lib/mission/workflowMilestones'
 
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
@@ -128,28 +134,21 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const missionClosed = currentStepId === 'MISSION_COMPLETED' || (mission ? CLOSED.includes(mission.status) : false)
   const readOnly = missionClosed
   const runReportSubmitted = Boolean(meta.runReportSubmitted)
-  const enRouteStartedAt =
-    meta.enRouteStartedAt || meta.timestamps.EN_ROUTE_SCENE || null
-  const enRouteElapsed = useElapsedTimer(
-    currentStepId === 'EN_ROUTE_SCENE' ? enRouteStartedAt : null,
-  )
   const timelineIndex = getDriverTimelineIndex(currentStepId)
   const progressPct = missionClosed
     ? 100
     : Math.round(((timelineIndex + 1) / DRIVER_TIMELINE_STEPS.length) * 100)
-  const onDuty = profile?.shiftStatus === 'ON_DUTY'
+
+  const careRecords = mission?.patientCareRecords ?? []
+
+  const workflowButtons = useMemo(
+    () => getDriverWorkflowButtons(mission, careRecords, readOnly),
+    [mission, careRecords, readOnly],
+  )
 
   const stickyPrimary = useMemo(() => {
-    const actions = currentStep.actions.filter((a) => a.id !== 'submit_report' && a.id !== 'accept')
-    return actions.find((a) => a.variant === 'primary') ?? actions[0] ?? null
-  }, [currentStep.actions])
-
-  const stickyPrimaryDisabled =
-    stickyPrimary &&
-    (!onDuty &&
-      ['mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
-        stickyPrimary.id,
-      ))
+    return workflowButtons.find((b) => b.state === 'active') ?? null
+  }, [workflowButtons])
 
   const refresh = async () => {
     setRefreshing(true)
@@ -165,10 +164,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
 
   const updateBackend = async (status: string, notes?: string) => {
     if (!mission) return
-    if (!onDuty) {
-      toast.error('Clock in under Shift & Attendance to update mission status')
-      return
-    }
     await driverMissionsApi.updateStatus(mission.id, status, notes)
     emitMissionStatus(mission.id, status, notes)
     await refreshMission(mission.id)
@@ -189,55 +184,77 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     setDetailId(id)
   }
 
-  const handleAction = async (actionId: WorkflowActionId) => {
+  const handleWorkflowButton = async (buttonId: DriverWorkflowButtonId) => {
     if (!mission || readOnly) return
+    const wasComplete = Boolean(getWorkflowMeta(mission.id).completedMilestones?.[buttonId])
 
-    switch (actionId) {
-      case 'view_details':
-        setDetailId(mission.id)
-        break
-      case 'start_navigation':
-        patchWorkflowMeta(mission.id, {
-          enRouteStartedAt: new Date().toISOString(),
-        })
+    switch (buttonId) {
+      case 'start_case':
+        markDriverMilestoneComplete(mission.id, 'start_case')
+        patchWorkflowMeta(mission.id, { enRouteStartedAt: new Date().toISOString() })
         stampWorkflowStage(mission.id, 'EN_ROUTE_SCENE', null)
         setStoredPhase(mission.id, 'EN_ROUTE_SCENE')
         if (mission.status === 'ASSIGNED') {
-          await updateBackend('DISPATCHED', 'Driver en route to scene')
+          await updateBackend('DISPATCHED', 'Driver started case — en route to patient')
         }
         syncWorkflow()
-        toast.success('En route to scene')
+        toast.success('Case started')
         break
-      case 'update_eta': {
-        const eta = prompt('Estimated arrival (minutes):')
-        if (eta) {
-          patchWorkflowMeta(mission.id, { eta })
-          syncWorkflow()
-          toast.success('ETA updated')
+      case 'going_to_patient':
+        markDriverMilestoneComplete(mission.id, 'going_to_patient')
+        logDriverNote(mission.id, 'Driver en route to patient')
+        syncWorkflow()
+        toast.success('Going to patient')
+        break
+      case 'arrived_at_patient':
+        markDriverMilestoneComplete(mission.id, 'arrived_at_patient')
+        await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at patient')
+        break
+      case 'going_to_hospital': {
+        if (!hasMedicalNotesSaved(careRecords, mission.id)) {
+          toast.error('Waiting for nurse to save medical notes before transport.')
+          return
         }
-        break
-      }
-      case 'request_backup':
-        toast.success('Backup request sent to dispatch')
-        break
-      case 'report_delay':
-        toast('Delay reported to dispatch', { icon: '⚠️' })
-        break
-      case 'mark_arrival':
-        await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at scene')
-        break
-      case 'start_transport':
+        markDriverMilestoneComplete(mission.id, 'going_to_hospital')
         await advanceStep('EN_ROUTE_HOSPITAL', 'TRANSPORTING', 'Transport to hospital started')
         break
-      case 'mark_hospital_arrival':
-        await advanceStep('ARRIVED_HOSPITAL', 'ARRIVED_HOSPITAL', 'Arrived at hospital')
-        break
-      case 'submit_report':
-        setReportOpen(true)
+      }
+      case 'arrived_at_hospital':
+        markDriverMilestoneComplete(mission.id, 'arrived_at_hospital')
+        await advanceStep('ARRIVED_HOSPITAL', 'ARRIVED_HOSPITAL', 'Driver arrived at hospital')
         break
       default:
         break
     }
+
+    if (wasComplete) {
+      toast.success('Step updated')
+    }
+  }
+
+  const openRunReport = () => {
+    setReportDraft({
+      fuel: meta.fuel || '',
+      mileage: meta.mileage || '',
+      notes: meta.notes?.ARRIVED_HOSPITAL || '',
+    })
+    setReportOpen(true)
+  }
+
+  const handleAction = async (actionId: string) => {
+    if (!mission || readOnly) return
+    if (actionId === 'view_details') {
+      setDetailId(mission.id)
+    } else if (actionId === 'submit_report') {
+      openRunReport()
+    }
+  }
+
+  function logDriverNote(missionId: string, text: string) {
+    const meta = getWorkflowMeta(missionId)
+    patchWorkflowMeta(missionId, {
+      notes: { ...meta.notes, EN_ROUTE_SCENE: text },
+    })
   }
 
   const submitReport = async () => {
@@ -291,7 +308,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     return (
       <div className="driver-loading-inline">
         <Loader2 className="animate-spin" size={28} />
-        <span>Loading case workspace…</span>
+        <span>Loading case details…</span>
       </div>
     )
   }
@@ -313,7 +330,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
               <p className="text-sm text-zinc-400">{m.pickupLocation}</p>
               <div className="dcw-queue-actions">
                 <button type="button" className="driver-btn-sm primary" onClick={() => openCase(m.id)}>
-                  Open Case Workspace
+                  Open Case Details
                 </button>
               </div>
             </article>
@@ -341,6 +358,10 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const nurseName = mission.nurse
     ? `${mission.nurse.firstName || ''} ${mission.nurse.lastName || ''}`.trim()
     : '—'
+  const destinationLabel =
+    mission.destination || mission.destinationHospital?.name || '—'
+  const regionLabel = [mission.region?.name, mission.district?.name].filter(Boolean).join(' · ')
+  const patientPhone = resolvePatientPhone(mission)
 
   return (
     <div className={`dcw-dashboard${readOnly ? ' dcw-readonly' : ''}`}>
@@ -352,7 +373,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       )}
       <header className="dcw-hero">
         <div>
-          <p className="dcw-kicker">Case Workspace · Transport Ops</p>
+          <p className="dcw-kicker">Case Details · Transport Ops</p>
           <h2 className="dcw-code">{mission.trackingCode}</h2>
           <div className="dcw-badges">
             <PriorityBadge priority={mission.priority} />
@@ -377,7 +398,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       <div className="dcw-case-strip">
         <span><User size={14} /> {mission.patient?.fullName || mission.callerName || 'Patient'}</span>
         <span><MapPin size={14} /> {mission.pickupLocation || '—'}</span>
-        <span><Building2 size={14} /> {mission.destination || meta.hospital || 'Hospital TBD'}</span>
+        <span><Building2 size={14} /> {destinationLabel}</span>
         <span><User size={14} /> Nurse: {nurseName}</span>
       </div>
 
@@ -390,13 +411,15 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             label: s.label,
             shortLabel: s.shortLabel,
             icon:
-              s.id === 'EN_ROUTE'
+              s.id === 'START'
                 ? Navigation2
-                : s.id === 'ON_SCENE'
-                  ? MapPin
-                  : s.id === 'TRANSPORT'
-                    ? Truck
-                    : CheckCircle2,
+                : s.id === 'EN_ROUTE'
+                  ? Navigation2
+                  : s.id === 'ON_SCENE'
+                    ? MapPin
+                    : s.id === 'TRANSPORT'
+                      ? Truck
+                      : Building2,
           }))}
           activeIndex={timelineIndex}
           completed={missionClosed}
@@ -417,36 +440,44 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           <p className="dcw-stage-name">{currentStep.label}</p>
           <p className="dcw-stage-desc">{currentStep.description}</p>
 
-          {currentStepId === 'EN_ROUTE_SCENE' && enRouteStartedAt && (
-            <div className="dcw-en-route-timer">
-              <Clock size={16} />
-              <span>En route time</span>
-              <strong>{enRouteElapsed}</strong>
-            </div>
-          )}
-
-          {!readOnly && !onDuty && (
-            <p className="dcw-warn">Clock in to update mission status.</p>
-          )}
           {!readOnly && currentStepId === 'ARRIVED_HOSPITAL' && (
-            <p className="dcw-warn">Mission completion is handled by the nurse after clinical handover.</p>
+            <p className="dcw-warn">Your timeline is complete. The nurse will hand over and close the case.</p>
           )}
 
           {!readOnly && (
-          <div className="dcw-action-grid">
+            <MissionWorkflowButtons
+              buttons={workflowButtons}
+              onAction={(id) => handleWorkflowButton(id as DriverWorkflowButtonId)}
+              classPrefix="dcw"
+              readOnly={readOnly}
+            />
+          )}
+
+          {!readOnly && runReportSubmitted && currentStepId === 'ARRIVED_HOSPITAL' && (
+            <div className="dcw-run-report-summary">
+              <p className="dcw-run-report-kicker">Run report complete</p>
+              <ul className="dcw-run-report-list">
+                <li><span>Fuel</span> {meta.fuel ? `${meta.fuel} L` : '—'}</li>
+                <li><span>Mileage</span> {meta.mileage ? `${meta.mileage} km` : '—'}</li>
+                {meta.notes?.ARRIVED_HOSPITAL && (
+                  <li className="dcw-run-report-notes"><span>Notes</span> {meta.notes.ARRIVED_HOSPITAL}</li>
+                )}
+              </ul>
+              <button type="button" className="driver-btn-sm ghost w-full" onClick={openRunReport}>
+                Edit Run Report
+              </button>
+            </div>
+          )}
+
+          {!readOnly && !runReportSubmitted && (
+          <div className="dcw-action-grid dcw-action-grid--secondary">
             {currentStep.actions
-              .filter((action) => action.id !== 'accept')
+              .filter((action) => action.id === 'view_details' || action.id === 'submit_report')
               .map((action) => (
               <button
                 key={action.id}
                 type="button"
-                className={`dcw-action-btn${action.variant === 'primary' ? ' primary' : ''}${action.variant === 'danger' ? ' danger' : ''}`}
-                disabled={
-                  !onDuty &&
-                  ['mark_arrival', 'start_transport', 'mark_hospital_arrival', 'start_navigation'].includes(
-                    action.id,
-                  )
-                }
+                className="dcw-action-btn"
                 onClick={() => handleAction(action.id)}
               >
                 {action.label}
@@ -454,17 +485,46 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             ))}
           </div>
           )}
+
+          {!readOnly && runReportSubmitted && (
+            <button type="button" className="dcw-action-btn w-full mt-3" onClick={() => handleAction('view_details')}>
+              View Case Summary
+            </button>
+          )}
         </section>
 
         <section className="dcw-card">
           <h3 className="dcw-card-title">Case Details</h3>
           <div className="dcw-info-grid">
-            <InfoItem label="Ambulance" value={mission.ambulance?.ambulanceNumber || profile?.assignedAmbulance?.ambulanceNumber} />
-            <InfoItem label="Dispatcher" value={mission.dispatcher?.user?.username} />
+            <InfoItem label="Case ID" value={mission.trackingCode} />
+            <InfoItem label="Status" value={mission.status?.replace(/_/g, ' ')} />
             <InfoItem label="Priority" value={mission.priority} />
             <InfoItem label="Case type" value={mission.incidentCategory?.name} />
-            <InfoItem label="Destination" value={mission.destination || meta.hospital} />
-            <InfoItem label="ETA" value={meta.eta ? `${meta.eta} min` : undefined} />
+            <InfoItem label="Patient" value={mission.patient?.fullName || mission.callerName} />
+            <InfoItem label="Patient phone" value={formatSomaliaPhoneDisplay(patientPhone)} />
+            <div className="dcw-info-item dcw-info-item--full">
+              <DispatcherContactActions
+                dispatcher={mission.dispatcher}
+                chatHref="/driver/chat"
+                variant="driver"
+              />
+            </div>
+            <InfoItem
+              label="Age / Gender"
+              value={[mission.patient?.age, mission.patient?.gender].filter(Boolean).join(' · ')}
+            />
+            <InfoItem label="Pickup" value={mission.pickupLocation} />
+            <InfoItem label="Landmark" value={mission.pickupLandmark} />
+            <InfoItem label="Region" value={regionLabel} />
+            <InfoItem label="Destination" value={destinationLabel} />
+            <InfoItem label="Condition" value={mission.patientCondition} />
+            <InfoItem label="Ambulance" value={mission.ambulance?.ambulanceNumber || profile?.assignedAmbulance?.ambulanceNumber} />
+            <InfoItem label="Nurse" value={nurseName !== '—' ? nurseName : undefined} />
+            <InfoItem label="Dispatcher" value={mission.dispatcher?.user?.username} />
+            <InfoItem
+              label="Assigned"
+              value={mission.assignedAt ? format(new Date(mission.assignedAt), 'MMM d, h:mm a') : undefined}
+            />
             {mission.completedAt && (
               <InfoItem label="Completed" value={format(new Date(mission.completedAt), 'MMM d, h:mm a')} />
             )}
@@ -514,8 +574,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           <button
             type="button"
             className="dcw-sticky-btn primary"
-            disabled={Boolean(stickyPrimaryDisabled)}
-            onClick={() => handleAction(stickyPrimary.id)}
+            onClick={() => handleWorkflowButton(stickyPrimary.id)}
           >
             {stickyPrimary.label}
           </button>
@@ -527,7 +586,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           <button type="button" className="driver-modal-backdrop" onClick={() => setReportOpen(false)} aria-label="Close" />
           <div className="driver-modal-panel">
             <div className="driver-modal-header">
-              <h2 className="driver-modal-title">Run Report</h2>
+              <h2 className="driver-modal-title">{runReportSubmitted ? 'Edit Run Report' : 'Run Report'}</h2>
             </div>
             <div className="driver-modal-body mew-form">
               <input className="mew-input" placeholder="Fuel usage (L)" value={reportDraft.fuel} onChange={(e) => setReportDraft((d) => ({ ...d, fuel: e.target.value }))} />
@@ -536,7 +595,9 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             </div>
             <div className="driver-modal-footer">
               <button type="button" className="driver-btn-sm ghost flex-1" onClick={() => setReportOpen(false)}>Cancel</button>
-              <button type="button" className="driver-btn-sm primary flex-1" onClick={submitReport}>Save Report</button>
+              <button type="button" className="driver-btn-sm primary flex-1" onClick={submitReport} disabled={savingReport}>
+                {savingReport ? 'Saving…' : runReportSubmitted ? 'Update Report' : 'Save Report'}
+              </button>
             </div>
           </div>
         </div>

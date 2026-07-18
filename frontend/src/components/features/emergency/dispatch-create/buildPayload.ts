@@ -1,12 +1,13 @@
+import { ageFromGroup } from '@/lib/patients/updatePatientCaseValidation'
 import { UNKNOWN_PATIENT_NAME, isUnknownPatientName } from '@/lib/emergency/patientName'
-import { Priority, RequestSource } from '@/types'
+import { Gender, Priority, RequestSource } from '@/types'
 import { normalizePhoneDigits } from '@/lib/driverFormValidation'
 import {
   resolveIncidentCategoryId,
   isOtherEmergencyType,
   type EmergencyTypeOption,
 } from '@/lib/emergency/emergencyTypes'
-import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES } from '@/lib/emergency/dispatchFormShared'
+import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES, isFuneralTransport } from '@/lib/emergency/dispatchFormShared'
 import type {
   DispatchRequestType,
   EmergencyDispatchForm,
@@ -19,13 +20,20 @@ function formatPatientName(value: string): string {
   return isUnknownPatientName(trimmed) ? UNKNOWN_PATIENT_NAME : trimmed
 }
 
+function patientDemographics(data: { ageGroup: string; gender: string }) {
+  const age = ageFromGroup(data.ageGroup)
+  return {
+    gender: data.gender ? (data.gender as Gender) : undefined,
+    age: age ?? undefined,
+  }
+}
+
 function phone(value: string) {
   return normalizePhoneDigits(value)
 }
 
 function pickupFromEmergency(data: EmergencyDispatchForm): string {
-  const parts = [data.landmark.trim(), data.areaStreet.trim()].filter(Boolean)
-  return parts.join(', ') || 'Banaadir'
+  return data.areaStreet.trim() || 'Banaadir'
 }
 
 function transportLabel(data: NonEmergencyDispatchForm): string {
@@ -69,7 +77,7 @@ export function buildEmergencyPayload(
     priority: data.priority,
     requestSource: RequestSource.PHONE_CALL,
     pickupLocation,
-    pickupLandmark: data.landmark.trim() || undefined,
+    pickupLandmark: data.areaStreet.trim() || undefined,
     patientCondition: data.briefDescription.trim(),
     consciousStatus: 'CONSCIOUS',
     breathingStatus: 'NORMAL',
@@ -93,20 +101,23 @@ export function buildEmergencyPayload(
 
 export function buildNonEmergencyPayload(data: NonEmergencyDispatchForm) {
   const label = transportLabel(data)
+  const funeral = isFuneralTransport(data.transportType)
+  const needsNurse = funeral ? false : data.needsNurse
   const bookingDate = data.bookingDateTime.slice(0, 10)
   const bookingTime = data.bookingDateTime.slice(11, 16)
 
-  const destinationName =
-    data.destinationHospitalBranchName ||
-    data.destinationHospitalName ||
-    data.destination.trim()
+  const destinationName = funeral
+    ? data.destinationHospitalName || data.destination.trim()
+    : data.destinationHospitalBranchName ||
+      data.destinationHospitalName ||
+      data.destination.trim()
 
   const notes = [
     'Request Type: Non-Emergency',
     `Transport Type: ${label}`,
     `Booking: ${bookingDate} ${bookingTime}`,
     data.specialInstructions.trim() ? `Special Instructions: ${data.specialInstructions.trim()}` : '',
-    nurseLine(data.needsNurse),
+    nurseLine(needsNurse),
   ]
     .filter(Boolean)
     .join('\n')
@@ -117,8 +128,10 @@ export function buildNonEmergencyPayload(data: NonEmergencyDispatchForm) {
     pickupLocation: data.pickupAddress.trim(),
     destination: destinationName || undefined,
     destinationHospitalId: data.destinationHospitalId || undefined,
-    destinationHospitalBranchId: data.destinationHospitalBranchId || undefined,
-    destinationHospitalBranchName: data.destinationHospitalBranchName || data.destinationHospitalName || undefined,
+    destinationHospitalBranchId: funeral ? undefined : data.destinationHospitalBranchId || undefined,
+    destinationHospitalBranchName: funeral
+      ? data.destinationHospitalName || undefined
+      : data.destinationHospitalBranchName || data.destinationHospitalName || undefined,
     regionId: data.regionId,
     districtId: data.districtId,
     stationId: data.stationId || undefined,
@@ -127,12 +140,13 @@ export function buildNonEmergencyPayload(data: NonEmergencyDispatchForm) {
     callerName: formatPatientName(data.patientName),
     callerPhone: phone(data.phone),
     notes,
-    manualDispatchNotes: nurseManualNotes(data.needsNurse),
+    manualDispatchNotes: nurseManualNotes(needsNurse),
     newPatient: {
       fullName: formatPatientName(data.patientName),
       phone: phone(data.phone),
       nationalityType: 'LOCAL',
       country: 'Somalia',
+      ...patientDemographics(data),
     },
   }
 }
@@ -172,6 +186,7 @@ export function buildReferralPayload(data: ReferralDispatchForm) {
       phone: phone(data.phone),
       nationalityType: 'LOCAL',
       country: 'Somalia',
+      ...patientDemographics(data),
     },
   }
 }

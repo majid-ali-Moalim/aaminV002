@@ -12,7 +12,6 @@ import {
   FileText,
   MapPin,
   Navigation,
-  Phone,
   Radio,
   RefreshCw,
   Shield,
@@ -28,6 +27,8 @@ import { useDriverSocket } from '@/lib/useDriverSocket'
 import { MissionStatusBadge, PriorityBadge, DriverSkeleton } from '@/components/driver/DriverUI'
 import DriverMissionDetailModal from '@/components/driver/DriverMissionDetailModal'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
+import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
+import { resolvePatientPhone, formatSomaliaPhoneDisplay } from '@/lib/phoneContact'
 import { googleMapsUrl, resolvePickupGps } from '@/lib/pickupGps'
 import {
   clearStoredPhase,
@@ -101,7 +102,6 @@ export default function MissionExecutionDashboard({
   const progressPct = Math.round(((stepIndex + 1) / MISSION_EXECUTION_STEPS.length) * 100)
   const meta = mission ? getWorkflowMeta(mission.id) : null
   const pickupGps = mission ? resolvePickupGps(mission) : null
-  const onDuty = profile?.shiftStatus === 'ON_DUTY'
 
   const load = useCallback(async () => {
     try {
@@ -156,10 +156,6 @@ export default function MissionExecutionDashboard({
 
   const updateBackend = async (status: string, notes?: string) => {
     if (!mission) return
-    if (!onDuty) {
-      toast.error('Clock in under Shift & Attendance to update mission status')
-      return
-    }
     await driverMissionsApi.updateStatus(mission.id, status, notes)
     emitMissionStatus(mission.id, status, notes)
     await refreshMission(mission.id)
@@ -196,29 +192,6 @@ export default function MissionExecutionDashboard({
       case 'open_gps':
         if (pickupGps) window.open(googleMapsUrl(pickupGps.lat, pickupGps.lng), '_blank')
         else toast.error('No GPS coordinates on this case')
-        break
-      case 'update_eta':
-        setPanel(null)
-        if (formDraft.eta) {
-          patchWorkflowMeta(mission.id, { eta: formDraft.eta })
-          logActivity(`ETA updated: ${formDraft.eta}`)
-          toast.success('ETA sent to dispatch')
-        } else {
-          const eta = prompt('Estimated arrival (minutes):')
-          if (eta) {
-            patchWorkflowMeta(mission.id, { eta })
-            logActivity(`ETA updated: ${eta} min`)
-            toast.success('ETA sent to dispatch')
-          }
-        }
-        break
-      case 'request_backup':
-        logActivity('Backup requested')
-        toast.success('Backup request sent to dispatch')
-        break
-      case 'report_delay':
-        logActivity('Delay reported')
-        toast('Delay reported to dispatch', { icon: '⚠️' })
         break
       case 'mark_arrival':
         await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at scene')
@@ -428,11 +401,6 @@ export default function MissionExecutionDashboard({
         <Link href="/driver/missions/assigned" className="driver-btn-sm ghost">
           Go to Assigned Missions
         </Link>
-        {isActivePage && (
-          <p className="driver-btn-sm ghost mt-2 text-zinc-400 text-sm">
-            Clock in from the dashboard to accept mission updates.
-          </p>
-        )}
       </div>
     )
   }
@@ -442,6 +410,9 @@ export default function MissionExecutionDashboard({
   const primaryAction = currentStep.actions.find((a) => a.variant === 'primary')
   const liveConnected = socketConnected || isSocketConnected
   const heroKicker = isActivePage ? 'Active Mission · Live Ops' : 'Mission Execution · Live'
+  const destinationLabel =
+    mission.destination || mission.destinationHospital?.name || 'To be confirmed'
+  const patientPhone = resolvePatientPhone(mission)
 
   return (
     <>
@@ -449,9 +420,6 @@ export default function MissionExecutionDashboard({
         {/* Active page status strip */}
         {isActivePage && (
           <div className="mew-active-topbar">
-            <span className={`mew-status-chip${onDuty ? ' on-duty' : ' off-duty'}`}>
-              {onDuty ? '● On Duty' : '○ Clock In Required'}
-            </span>
             <span className={`mew-status-chip${liveConnected ? ' live' : ''}`}>
               {liveConnected ? '● Live Sync' : '○ Offline'}
             </span>
@@ -459,11 +427,6 @@ export default function MissionExecutionDashboard({
               <span className="mew-status-chip gps">
                 <MapPin size={12} /> GPS {liveGps.lat.toFixed(4)}, {liveGps.lng.toFixed(4)}
               </span>
-            )}
-            {!onDuty && (
-              <Link href="/driver" className="mew-status-link">
-                Clock in on dashboard →
-              </Link>
             )}
           </div>
         )}
@@ -565,15 +528,11 @@ export default function MissionExecutionDashboard({
                   type="button"
                   className={`mew-action-btn ${action.variant || 'secondary'}`}
                   onClick={() => handleAction(action.id)}
-                  disabled={!onDuty && ['accept', 'mark_arrival', 'start_transport', 'mark_hospital_arrival', 'mark_available'].includes(action.id)}
                 >
                   {action.label}
                 </button>
               ))}
             </div>
-            {!onDuty && (
-              <p className="driver-warning-text mt-3">Clock in to execute workflow actions.</p>
-            )}
           </section>
 
           {/* Communication */}
@@ -581,10 +540,13 @@ export default function MissionExecutionDashboard({
             <h2 className="mew-card-title">
               <Radio size={16} /> Communication Center
             </h2>
-            <div className="mew-comm-grid">
-              <a href={`tel:${mission.patient?.phone || ''}`} className="mew-comm-btn">
-                <Phone size={16} /> Call Patient
-              </a>
+            <DispatcherContactActions
+              dispatcher={mission.dispatcher}
+              chatHref="/driver/chat"
+              variant="driver"
+              layout="stack"
+            />
+            <div className="mew-comm-grid mt-3">
               <button type="button" className="mew-comm-btn" onClick={() => handleAction('contact_dispatcher')}>
                 <Radio size={16} /> Contact Dispatcher
               </button>
@@ -625,7 +587,7 @@ export default function MissionExecutionDashboard({
             <InfoGrid
               rows={[
                 { label: 'Name', value: mission.patient?.fullName },
-                { label: 'Phone', value: mission.patient?.phone },
+                { label: 'Phone', value: mission.patient?.phone ? formatSomaliaPhoneDisplay(mission.patient.phone) : undefined },
                 { label: 'Age / Gender', value: [mission.patient?.age, mission.patient?.gender].filter(Boolean).join(' · ') },
                 { label: 'Condition', value: mission.patientCondition || meta?.notes?.PATIENT_ASSESSMENT },
                 { label: 'Severity', value: meta?.severity },
@@ -656,8 +618,7 @@ export default function MissionExecutionDashboard({
             </h2>
             <InfoGrid
               rows={[
-                { label: 'Destination', value: meta?.hospital || mission.destination || 'To be confirmed' },
-                { label: 'ETA', value: meta?.eta ? `${meta.eta} min` : '—' },
+                { label: 'Destination', value: destinationLabel },
               ]}
             />
             {stepIndex >= getStepIndex('EN_ROUTE_HOSPITAL') && (
@@ -716,7 +677,6 @@ export default function MissionExecutionDashboard({
             type="button"
             className="mew-sticky-btn primary"
             onClick={() => handleAction(primaryAction.id)}
-            disabled={!onDuty && ['accept', 'mark_arrival', 'start_transport', 'mark_hospital_arrival', 'mark_available', 'advance'].includes(primaryAction.id)}
           >
             {primaryAction.label}
           </button>

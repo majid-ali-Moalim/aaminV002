@@ -7,10 +7,11 @@ import {
   Activity,
   ClipboardList,
   HeartPulse,
+  Building2,
+  MessageCircle,
   Stethoscope,
   Truck,
   User,
-  Zap,
 } from 'lucide-react'
 import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
@@ -48,26 +49,22 @@ export default function NurseDashboardView() {
 
   const kpis = useMemo(() => {
     const today = new Date().toDateString()
+    const totalCases = myCases.length
+    const completed = myCases.filter((r) => r.status === 'COMPLETED').length
+    const active = myCases.filter((r) => !CLOSED.includes(r.status)).length
     const assignedToday = myCases.filter(
       (r) => r.assignedAt && new Date(r.assignedAt).toDateString() === today,
     ).length
-    const active = myCases.filter((r) => !CLOSED.includes(r.status)).length
-    const completed = myCases.filter((r) => r.status === 'COMPLETED').length
-    const transporting = myCases.filter((r) => r.status === 'TRANSPORTING').length
-    const pendingHandover = myCases.filter((r) =>
-      ['TRANSPORTING', 'ARRIVED_HOSPITAL'].includes(r.status),
-    ).length
-    const critical = myCases.filter(
-      (r) => !CLOSED.includes(r.status) && r.priority === 'CRITICAL',
-    ).length
+    const onCase = myCases.some((r) => !CLOSED.includes(r.status))
+    const onDuty = (shiftStatus === 'ON_DUTY' || shiftStatus === 'AVAILABLE') && !onCase
 
     return {
-      assignedToday,
-      active,
+      totalCases,
       completed,
-      transporting,
-      pendingHandover,
-      critical,
+      active,
+      assignedToday,
+      onCase,
+      onDuty,
       treatments: records.length,
       shiftStatus: shiftStatus || 'AVAILABLE',
     }
@@ -99,11 +96,14 @@ export default function NurseDashboardView() {
 
   const quickActions = [
     { label: 'Open Mission Workspace', href: '/nurse/mission', icon: HeartPulse },
+    { label: 'Find Hospitals', href: '/nurse/hospitals', icon: Building2 },
+    { label: 'Chat Dispatcher', href: '/nurse/chat', icon: MessageCircle },
     { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
     { label: 'Record Vital Signs', href: '/nurse/mission', icon: Activity },
-    { label: 'Add Treatment', href: '/nurse/mission', icon: Zap },
     { label: 'Complete Handover', href: '/nurse/mission', icon: ClipboardList },
   ]
+
+  const presenceLabel = kpis.onCase ? 'On Case' : kpis.onDuty ? 'Present' : 'Absent'
 
   return (
     <div className="nurse-dashboard">
@@ -114,16 +114,18 @@ export default function NurseDashboardView() {
           <h2>Clinical Operations Dashboard</h2>
           <p>Real-time patient care synchronized with drivers and dispatch.</p>
         </div>
-        <span className="nurse-shift-badge on">{kpis.shiftStatus.replace(/_/g, ' ')}</span>
+        <span className={`nurse-shift-badge${kpis.onCase ? ' on-case' : kpis.onDuty ? ' on' : ' off'}`}>
+          {presenceLabel}
+        </span>
       </div>
 
       <div className="nurse-kpi-grid">
         {[
+          { label: 'Total Cases', value: kpis.totalCases },
+          { label: 'Completed Cases', value: kpis.completed },
+          { label: 'Active Cases', value: kpis.active },
           { label: 'Assigned Today', value: kpis.assignedToday },
-          { label: 'Active Patients', value: kpis.active },
-          { label: 'Completed Treatments', value: kpis.treatments },
-          { label: 'Pending Handovers', value: kpis.pendingHandover },
-          { label: 'Emergency Cases', value: kpis.critical },
+          { label: 'Care Records', value: kpis.treatments },
           { label: 'Unread Alerts', value: notifStats?.unread ?? 0 },
         ].map((k) => (
           <div key={k.label} className="nurse-stat-card">

@@ -14,6 +14,29 @@ export const DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES = [
   { value: 'OTHER', label: 'Other' },
 ] as const
 
+export function isFuneralTransport(transportType: string): boolean {
+  return transportType === 'FUNERAL'
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
+
+export function getBookingDateTimeBounds(within24Hours: boolean): { min: string; max?: string } {
+  const now = new Date()
+  const min = now.toISOString().slice(0, 16)
+  if (!within24Hours) return { min }
+  return {
+    min,
+    max: new Date(now.getTime() + TWENTY_FOUR_HOURS_MS).toISOString().slice(0, 16),
+  }
+}
+
+export function isBookingWithin24Hours(bookingDateTime: string): boolean {
+  const booking = new Date(bookingDateTime)
+  if (Number.isNaN(booking.getTime())) return false
+  const now = Date.now()
+  return booking.getTime() >= now - 60_000 && booking.getTime() <= now + TWENTY_FOUR_HOURS_MS
+}
+
 export type SharedDispatchContact = {
   patientName: string
   phone: string
@@ -57,7 +80,7 @@ export function extractSharedContactFromDraft(draft: DispatchCreateDraft): Share
       regionId: f.regionId,
       districtId: f.districtId,
       stationId: f.stationId,
-      locationHint: [f.landmark, f.areaStreet].filter(Boolean).join(', '),
+      locationHint: f.areaStreet,
       needsNurse: f.needsNurse,
     }
   }
@@ -105,7 +128,7 @@ export function applySharedContactToDraft(
     const emergency: EmergencyDispatchForm = {
       ...draft.emergency,
       ...base,
-      landmark: shared.locationHint || draft.emergency.landmark,
+      areaStreet: shared.locationHint || draft.emergency.areaStreet,
       needsNurse: true,
     }
     return { ...draft, emergency }

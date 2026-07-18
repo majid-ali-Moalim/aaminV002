@@ -352,7 +352,66 @@ export class EmployeesService {
   }
 
   private normalizeUpdateData(data: Record<string, unknown>): Prisma.EmployeeUpdateInput {
-    const payload: Prisma.EmployeeUpdateInput = { ...data } as Prisma.EmployeeUpdateInput;
+    const raw: Record<string, unknown> = { ...data };
+
+    if (raw.nationalIdNumber && !raw.nationalId) raw.nationalId = raw.nationalIdNumber;
+    if (raw.joinDate && !raw.employmentDate) raw.employmentDate = raw.joinDate;
+    if (raw.residentialAddress && !raw.address) raw.address = raw.residentialAddress;
+    if (raw.alternativePhone && !raw.alternatePhone) raw.alternatePhone = raw.alternativePhone;
+    if (raw.drivingLicenseNumber && !raw.licenseNumber) {
+      raw.licenseNumber = raw.drivingLicenseNumber;
+    }
+    if (raw.emergencyContactPhone && !raw.emergencyPhone) {
+      raw.emergencyPhone = raw.emergencyContactPhone;
+    }
+    if (raw.emergencyContactRelationship && !raw.relationship) {
+      raw.relationship = raw.emergencyContactRelationship;
+    }
+
+    const payload: Prisma.EmployeeUpdateInput = {};
+
+    const scalarFields = [
+      'firstName',
+      'lastName',
+      'phone',
+      'alternatePhone',
+      'status',
+      'shiftStatus',
+      'gender',
+      'nationalId',
+      'profilePhoto',
+      'emergencyContactName',
+      'emergencyPhone',
+      'relationship',
+      'address',
+      'licenseNumber',
+      'licenseType',
+      'licenseClass',
+      'medicalFitness',
+      'medicalCertificate',
+      'typicalStartTime',
+      'typicalEndTime',
+      'defaultShift',
+      'qualification',
+      'specialization',
+      'certificationUpload',
+      'bloodGroup',
+      'medicalClearanceStatus',
+      'workDays',
+      'backupShift',
+    ] as const;
+
+    for (const field of scalarFields) {
+      if (!(field in raw)) continue;
+      const value = raw[field];
+      if (value === undefined) continue;
+      if (value === '' || value === null) {
+        if (field === 'gender') continue;
+        (payload as Record<string, unknown>)[field] = null;
+        continue;
+      }
+      (payload as Record<string, unknown>)[field] = value;
+    }
 
     const dateFields = [
       'dateOfBirth',
@@ -363,26 +422,44 @@ export class EmployeesService {
     ] as const;
 
     for (const field of dateFields) {
-      if (field in data) {
-        const raw = data[field];
-        if (raw === null || raw === '') {
-          (payload as Record<string, unknown>)[field] = null;
-        } else if (typeof raw === 'string') {
-          (payload as Record<string, unknown>)[field] = this.parseDate(raw) ?? null;
-        }
+      if (!(field in raw)) continue;
+      const value = raw[field];
+      if (value === null || value === '') {
+        (payload as Record<string, unknown>)[field] = null;
+      } else if (typeof value === 'string') {
+        (payload as Record<string, unknown>)[field] = this.parseDate(value) ?? null;
       }
     }
 
-    if ('yearsOfExperience' in data && data.yearsOfExperience !== undefined && data.yearsOfExperience !== null) {
-      const years = Number(data.yearsOfExperience);
-      payload.yearsOfExperience = Number.isFinite(years) ? years : undefined;
+    if ('yearsOfExperience' in raw && raw.yearsOfExperience !== undefined && raw.yearsOfExperience !== null) {
+      const years = Number(raw.yearsOfExperience);
+      if (Number.isFinite(years)) payload.yearsOfExperience = years;
     }
 
-    // Strip fields that are not on Employee model
-    delete (payload as Record<string, unknown>).notes;
-    delete (payload as Record<string, unknown>).password;
-    delete (payload as Record<string, unknown>).email;
-    delete (payload as Record<string, unknown>).username;
+    if ('departmentId' in raw) {
+      const id = raw.departmentId;
+      payload.department =
+        typeof id === 'string' && id.trim()
+          ? { connect: { id: id.trim() } }
+          : { disconnect: true };
+    }
+
+    if ('stationId' in raw) {
+      const id = raw.stationId;
+      payload.station =
+        typeof id === 'string' && id.trim()
+          ? { connect: { id: id.trim() } }
+          : { disconnect: true };
+    }
+
+    if ('assignedAmbulanceId' in raw) {
+      const id = raw.assignedAmbulanceId;
+      if (typeof id === 'string' && id.trim()) {
+        payload.assignedAmbulance = { connect: { id: id.trim() } };
+      } else if (id === null || id === '') {
+        payload.assignedAmbulance = { disconnect: true };
+      }
+    }
 
     return payload;
   }
@@ -395,12 +472,11 @@ export class EmployeesService {
     if (!existing) throw new NotFoundException('Employee not found');
 
     const normalized = this.normalizeUpdateData(data);
-    if (typeof data.assignedAmbulanceId === 'string') {
+    if (typeof data.assignedAmbulanceId === 'string' && data.assignedAmbulanceId.trim()) {
       if (this.isDriverRoleName(existing.employeeRole?.name)) {
         await this.assertAmbulanceAssignableToDriver(data.assignedAmbulanceId, id);
-      } else {
-        delete (normalized as Record<string, unknown>).assignedAmbulanceId;
-        (normalized as Record<string, unknown>).assignedAmbulance = { disconnect: true };
+      } else if ('assignedAmbulance' in normalized) {
+        delete (normalized as Record<string, unknown>).assignedAmbulance;
       }
     }
     const statusChanged =
@@ -408,27 +484,39 @@ export class EmployeesService {
     const shiftChanged =
       typeof normalized.shiftStatus === 'string' && normalized.shiftStatus !== existing.shiftStatus;
 
-    const result = await this.prisma.employee.update({
-      where: { id },
-      data: normalized,
-      include: {
-        user: true,
-        employeeRole: true,
-        department: true,
-        station: {
-          include: {
-            region: true,
-            district: true,
+    let result;
+    try {
+      result = await this.prisma.employee.update({
+        where: { id },
+        data: normalized,
+        include: {
+          user: true,
+          employeeRole: true,
+          department: true,
+          station: {
+            include: {
+              region: true,
+              district: true,
+            },
+          },
+          assignedAmbulance: {
+            include: {
+              equipmentLevel: true,
+              station: true,
+            },
           },
         },
-        assignedAmbulance: {
-          include: {
-            equipmentLevel: true,
-            station: true,
-          },
-        },
-      },
-    });
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const target = error.meta?.target?.[0] || 'field';
+        throw new ConflictException(`An employee with this ${target} already exists.`);
+      }
+      if (error?.code === 'P2025') {
+        throw new NotFoundException('Related record not found for this update.');
+      }
+      throw error;
+    }
 
     if (statusChanged || shiftChanged) {
       try {

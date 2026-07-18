@@ -20,6 +20,7 @@ export type NurseTaskId =
   | 'assessment'
   | 'vitals'
   | 'notes'
+  | 'medical_notes'
   | 'load_patient'
   | 'treatment'
   | 'monitoring'
@@ -55,47 +56,43 @@ export type NurseTimelineStep = {
 
 export const NURSE_TIMELINE_STEPS: NurseTimelineStep[] = [
   {
-    id: 'PATIENT_CARE',
-    label: 'Patient Care',
-    shortLabel: 'Care',
-    description: 'Assessment, vital signs, medical notes, and patient loading at the scene.',
-    stepIds: ['MISSION_ASSIGNED', 'PATIENT_ASSESSMENT', 'VITAL_SIGNS', 'MEDICAL_NOTES', 'PATIENT_LOADED'],
+    id: 'LOAD',
+    label: 'Load Patient',
+    shortLabel: 'Load',
+    description: 'Confirm the patient is loaded into the ambulance.',
+    stepIds: ['PATIENT_LOADED', 'MISSION_ASSIGNED'],
   },
   {
-    id: 'TREATMENT',
-    label: 'Treatment',
-    shortLabel: 'Treatment',
-    description: 'Record interventions during transport to hospital.',
-    stepIds: ['TREATMENT'],
+    id: 'NOTES',
+    label: 'Medical Notes',
+    shortLabel: 'Notes',
+    description: 'Record assessment, vitals, and clinical observations.',
+    stepIds: ['MEDICAL_NOTES', 'PATIENT_ASSESSMENT'],
   },
   {
     id: 'HANDOVER',
-    label: 'Hospital Handover',
+    label: 'Handover Patient',
     shortLabel: 'Handover',
-    description: 'Transfer patient information to receiving staff.',
-    stepIds: ['HOSPITAL_HANDOVER', 'COMPLETE_DOCUMENTATION'],
+    description: 'Transfer patient information to receiving hospital staff.',
+    stepIds: ['HOSPITAL_HANDOVER'],
   },
   {
     id: 'CLOSED',
-    label: 'Mission Complete',
+    label: 'Complete Case',
     shortLabel: 'Done',
-    description: 'All clinical records saved and case closed.',
-    stepIds: ['MISSION_CLOSED'],
+    description: 'Close the case and release crew resources.',
+    stepIds: ['MISSION_CLOSED', 'COMPLETE_DOCUMENTATION'],
   },
 ]
 
 export const NURSE_WORKFLOW_STEPS: NurseWorkflowStep[] = [
   {
     id: 'MISSION_ASSIGNED',
-    label: 'Mission Assigned',
-    shortLabel: 'Assigned',
-    description: 'Review the case. Start patient care when the crew is on scene.',
+    label: 'Waiting for Driver',
+    shortLabel: 'Waiting',
+    description: 'All actions are visible but unlock as the driver progresses.',
     backendStatus: 'ASSIGNED',
-    primaryTask: 'begin_care',
-    actions: [
-      { id: 'begin_care', label: 'Start Patient Care', variant: 'primary' },
-      { id: 'view_case', label: 'Review Case Details', variant: 'secondary' },
-    ],
+    actions: [],
   },
   {
     id: 'PATIENT_ASSESSMENT',
@@ -299,29 +296,32 @@ export function canCloseMission(status: string): boolean {
 
 export function getNurseTransportPhaseMessage(status: string): string | null {
   if (status === 'ASSIGNED' || PRE_SCENE_STATUSES.includes(status)) {
-    return 'Waiting for the driver to arrive on scene. Patient care unlocks when the crew marks scene arrival.'
+    return 'Waiting for driver…'
   }
   if (ON_SCENE_STATUSES.includes(status)) {
-    return 'On scene — complete assessment and notes. Treatment unlocks when the driver starts transport.'
+    return 'Driver is on scene — load the patient, then complete medical notes.'
   }
   if (status === 'TRANSPORTING') {
-    return 'Patient is en route to hospital. Handover unlocks when the driver marks hospital arrival.'
+    return 'En route to hospital — handover unlocks when the driver arrives.'
+  }
+  if (status === 'ARRIVED_HOSPITAL') {
+    return 'At hospital — complete handover, then close the case.'
   }
   return null
 }
 
 export function getNurseTaskBlockReason(taskId: string, status: string): string | null {
-  if (['assessment', 'vitals', 'notes', 'load_patient', 'begin_care'].includes(taskId) && !canDoPatientCareTasks(status)) {
-    return 'Patient care requires the driver to be on scene (Arrived at Scene).'
+  if (taskId === 'load_patient' && !canStartPatientCare(status)) {
+    return 'Waiting for driver to arrive at patient.'
   }
-  if (['treatment'].includes(taskId) && !canDoTreatmentMonitoring(status)) {
-    return 'Treatment records unlock when the driver starts transport to hospital.'
+  if (taskId === 'medical_notes' && !canStartPatientCare(status)) {
+    return 'Medical notes unlock after the driver arrives and the patient is loaded.'
   }
-  if (['handover', 'documentation', 'close_mission'].includes(taskId) && !canDoHandover(status) && status !== 'COMPLETED') {
-    if (status === 'TRANSPORTING') {
-      return 'Handover unlocks when the driver marks arrival at the hospital.'
-    }
-    return 'Hospital handover requires the driver to arrive at the receiving facility.'
+  if (taskId === 'handover' && !canDoHandover(status)) {
+    return 'Handover unlocks when the driver marks arrival at the hospital.'
+  }
+  if (taskId === 'close_mission' && !canDoHandover(status) && status !== 'COMPLETED') {
+    return 'Complete handover before closing the case.'
   }
   return null
 }

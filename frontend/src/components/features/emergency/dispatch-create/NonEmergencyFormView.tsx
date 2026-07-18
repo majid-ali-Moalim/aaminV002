@@ -1,10 +1,11 @@
 'use client'
 
 import { Truck } from 'lucide-react'
-import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES } from '@/lib/emergency/dispatchFormShared'
+import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES, getBookingDateTimeBounds, isBookingWithin24Hours, isFuneralTransport } from '@/lib/emergency/dispatchFormShared'
 import type { District } from '@/types'
 import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import PatientNameField from './PatientNameField'
+import PatientDemographicsFields from './PatientDemographicsFields'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
@@ -35,7 +36,28 @@ export default function NonEmergencyDispatchFormView({
   onSubmit,
   submitting,
 }: Props) {
-  const minDateTime = new Date().toISOString().slice(0, 16)
+  const isFuneral = isFuneralTransport(form.transportType)
+  const bookingBounds = getBookingDateTimeBounds(isFuneral)
+
+  const handleTransportTypeChange = (transportType: string) => {
+    const patch: Partial<NonEmergencyDispatchForm> = {
+      transportType,
+      transportTypeOther: '',
+    }
+    if (isFuneralTransport(transportType)) {
+      patch.wheelchairNeeded = false
+      patch.needsNurse = false
+      patch.destinationHospitalBranchId = ''
+      patch.destinationHospitalBranchName = ''
+      if (form.patientName.trim().toUpperCase() === 'UNKNOWN') {
+        patch.patientName = ''
+      }
+      if (form.bookingDateTime && !isBookingWithin24Hours(form.bookingDateTime)) {
+        patch.bookingDateTime = ''
+      }
+    }
+    onChange(patch)
+  }
 
   return (
     <div className="space-y-6">
@@ -48,6 +70,9 @@ export default function NonEmergencyDispatchFormView({
             value={form.patientName}
             error={errors.patientName}
             onChange={(patientName) => onChange({ patientName })}
+            label={isFuneral ? 'Relative Name' : 'Patient Name'}
+            placeholder={isFuneral ? 'Full name of caller / relative' : 'Full name or UNKNOWN'}
+            showUnknownButton={!isFuneral}
           />
           <div>
             <FieldLabel required error={errors.phone}>Phone Number</FieldLabel>
@@ -60,12 +85,19 @@ export default function NonEmergencyDispatchFormView({
               placeholder="61XXXXXXX"
             />
           </div>
+          <PatientDemographicsFields
+            ageGroup={form.ageGroup}
+            gender={form.gender}
+            ageGroupError={errors.ageGroup}
+            genderError={errors.gender}
+            onChange={(patch) => onChange(patch)}
+          />
           <div className="sm:col-span-2">
             <FieldLabel required error={errors.transportType}>Transport Type</FieldLabel>
             <select
               className={fieldInputClass(errors.transportType)}
               value={form.transportType}
-              onChange={(e) => onChange({ transportType: e.target.value, transportTypeOther: '' })}
+              onChange={(e) => handleTransportTypeChange(e.target.value)}
             >
               <option value="">Select transport type</option>
               {DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES.map((t) => (
@@ -128,6 +160,7 @@ export default function NonEmergencyDispatchFormView({
             <HospitalDestinationPicker
               combobox
               branchRequired={false}
+              hideBranch={isFuneral}
               hospitals={hospitals}
               hospitalId={form.destinationHospitalId}
               hospitalName={form.destinationHospitalName}
@@ -136,13 +169,17 @@ export default function NonEmergencyDispatchFormView({
               required
               hospitalError={errors.destinationHospitalId}
               branchError={errors.destinationHospitalBranchId}
+              hospitalLabel={isFuneral ? 'Graveyard' : 'Destination Hospital or Place'}
+              hospitalPlaceholder={
+                isFuneral ? 'Type or select graveyard' : 'Type or select hospital or place'
+              }
               onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
                 onChange({
                   destinationHospitalId: hospitalId,
                   destinationHospitalName: hospitalName,
-                  destinationHospitalBranchId: branchId,
-                  destinationHospitalBranchName: branchName,
-                  destination: branchName || hospitalName,
+                  destinationHospitalBranchId: isFuneral ? '' : branchId,
+                  destinationHospitalBranchName: isFuneral ? '' : branchName,
+                  destination: isFuneral ? hospitalName : branchName || hospitalName,
                 })
               }
             />
@@ -151,22 +188,30 @@ export default function NonEmergencyDispatchFormView({
             <FieldLabel required error={errors.bookingDateTime}>Booking Date & Time</FieldLabel>
             <input
               type="datetime-local"
-              min={minDateTime}
+              min={bookingBounds.min}
+              max={bookingBounds.max}
               className={fieldInputClass(errors.bookingDateTime)}
               value={form.bookingDateTime}
               onChange={(e) => onChange({ bookingDateTime: e.target.value })}
             />
+            {isFuneral && (
+              <p className="mt-1.5 text-xs text-slate-500">
+                Funeral bookings must be scheduled within the next 24 hours.
+              </p>
+            )}
           </div>
           <div className="sm:col-span-2 flex flex-wrap gap-6">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.wheelchairNeeded}
-                onChange={(e) => onChange({ wheelchairNeeded: e.target.checked })}
-                className="h-4 w-4 accent-blue-600"
-              />
-              Wheelchair needed
-            </label>
+            {!isFuneral && (
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.wheelchairNeeded}
+                  onChange={(e) => onChange({ wheelchairNeeded: e.target.checked })}
+                  className="h-4 w-4 accent-blue-600"
+                />
+                Wheelchair needed
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
               <input
                 type="checkbox"
@@ -189,11 +234,13 @@ export default function NonEmergencyDispatchFormView({
         </div>
       </SectionCard>
 
-      <NurseRequiredField
-        needsNurse={form.needsNurse}
-        error={errors.needsNurse}
-        onChange={(value) => onChange({ needsNurse: value })}
-      />
+      {!isFuneral && (
+        <NurseRequiredField
+          needsNurse={form.needsNurse}
+          error={errors.needsNurse}
+          onChange={(value) => onChange({ needsNurse: value })}
+        />
+      )}
 
       <FormActions
         onCancel={onCancel}

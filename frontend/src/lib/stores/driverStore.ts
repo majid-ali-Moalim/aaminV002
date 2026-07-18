@@ -12,6 +12,7 @@ export interface DriverMission {
   pickupLatitude?: number | null
   pickupLongitude?: number | null
   destination?: string
+  destinationHospital?: { name: string }
   patientCondition?: string
   notes?: string
   assignedAt?: string
@@ -34,9 +35,11 @@ export interface DriverMission {
   incidentCategory?: { name: string }
   region?: { name: string }
   district?: { name: string }
-  dispatcher?: { user?: { username: string } }
+  dispatcher?: { user?: { username?: string }; firstName?: string; lastName?: string; phone?: string }
   nurse?: { firstName?: string; lastName?: string }
   callerName?: string
+  callerPhone?: string
+  patientCareRecords?: Array<{ id: string; clinicalNotes?: string | null; createdAt?: string }>
   statusLogs?: Array<{ toStatus: string; createdAt: string; notes?: string }>
 }
 

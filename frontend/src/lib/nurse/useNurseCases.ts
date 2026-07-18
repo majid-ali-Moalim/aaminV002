@@ -19,6 +19,9 @@ export function useNurseCases(pollMs = 15000) {
         if (showLoader) setLoading(true)
         const data = await nursesService.getMyCases(nurseId)
         setCases(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Failed to load nurse cases:', err)
+        setCases([])
       } finally {
         setLoading(false)
       }

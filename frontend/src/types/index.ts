@@ -343,6 +343,9 @@ export interface EmergencyRequest {
   pickupLongitude?: number | null;
   destination?: string | null;
   destinationLandmark?: string | null;
+  destinationHospitalId?: string | null;
+  destinationHospitalBranchName?: string | null;
+  destinationHospital?: { id?: string; name?: string } | null;
 
   patientCondition?: string | null;
   symptoms?: string | null;

@@ -424,6 +424,48 @@
   min-width: 0;
 }
 
+.driver-presence-badge {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(113, 113, 122, 0.25);
+  color: #a1a1aa;
+}
+
+.driver-presence-badge.present {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.driver-presence-badge.on-case {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+}
+
+.driver-app--light .driver-presence-badge {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #64748b;
+}
+
+.driver-app--light .driver-presence-badge.present {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.driver-app--light .driver-presence-badge.on-case {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
 .driver-dash-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -438,6 +480,16 @@
 
 .driver-stats-grid--2x2 {
   grid-template-columns: repeat(2, 1fr);
+}
+
+.driver-stats-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 639px) {
+  .driver-stats-grid--3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Red box active states (dark theme) */
@@ -1565,7 +1617,7 @@
 }
 
 @media (min-width: 640px) {
-  .driver-quick-actions-grid { grid-template-columns: repeat(4, 1fr); }
+  .driver-quick-actions-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 .driver-action-tile {
@@ -3378,6 +3430,141 @@
   cursor: not-allowed;
 }
 
+.dcw-workflow-buttons,
+.nmw-workflow-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dcw-workflow-btn,
+.nmw-workflow-btn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e4e4e7;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.dcw-workflow-btn.active,
+.nmw-workflow-btn.active {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #fecaca;
+}
+
+.dcw-workflow-btn.done,
+.nmw-workflow-btn.done {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+  cursor: default;
+  opacity: 0.95;
+}
+
+.dcw-workflow-btn.done.editable,
+.nmw-workflow-btn.done.editable {
+  cursor: pointer;
+  opacity: 1;
+}
+
+.dcw-workflow-btn.done.editable:hover,
+.nmw-workflow-btn.done.editable:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.dcw-run-report-summary {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.dcw-run-report-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #86efac;
+  margin: 0 0 10px;
+}
+
+.dcw-run-report-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.dcw-run-report-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #d4d4d8;
+}
+
+.dcw-run-report-list li span {
+  font-weight: 700;
+  color: #86efac;
+}
+
+.dcw-run-report-notes {
+  flex-direction: column;
+  align-items: flex-start !important;
+}
+
+.dcw-workflow-btn.locked,
+.nmw-workflow-btn.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  color: #71717a;
+}
+
+.dcw-workflow-btn-wait,
+.nmw-workflow-btn-wait {
+  width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  margin-left: 26px;
+}
+
+.dcw-workflow-btn-icon,
+.nmw-workflow-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.dcw-workflow-btn-dot,
+.nmw-workflow-btn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.dcw-action-grid--secondary {
+  margin-top: 12px;
+}
+
 .dcw-quick-label {
   font-size: 11px;
   font-weight: 800;
@@ -3426,6 +3613,10 @@
   font-size: 13px;
   font-weight: 600;
   color: #e4e4e7;
+}
+
+.dcw-info-item--full {
+  grid-column: 1 / -1;
 }
 
 .dcw-gps-live {

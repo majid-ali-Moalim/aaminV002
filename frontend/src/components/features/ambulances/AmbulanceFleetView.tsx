@@ -2,32 +2,31 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import {
   Search,
   Plus,
-  Eye,
+  Pencil,
   Trash2,
   Truck,
   MapPin,
-  User,
   AlertCircle,
   X,
   Loader2,
   RefreshCw,
-  Stethoscope,
   Wind,
   HeartPulse,
   Gauge,
   Droplet,
   Warehouse,
+  Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ambulancesService, employeesService, systemSetupService } from '@/lib/api'
-import { Ambulance, Employee, EmployeeRole } from '@/types'
+import { ambulancesService, systemSetupService } from '@/lib/api'
+import { Ambulance, AmbulanceStatus, Station } from '@/types'
 import {
   ADMIN_AMBULANCE_STATUS_OPTIONS,
   getAdminAmbulanceStatusValue,
-  getAmbulanceStatusLabel,
   getAmbulanceStatusStyles,
   isAmbulanceAvailable,
   isAmbulanceUnavailable,
@@ -35,10 +34,53 @@ import {
 
 const UNAVAILABLE_FILTER = '__UNAVAILABLE__'
 
-function getEmployeeByRole(ambulance: Ambulance, roleHint: string) {
-  return ambulance.employees?.find((e) =>
-    e.employeeRole?.name?.toUpperCase().includes(roleHint),
-  )
+const inputClass =
+  'w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300'
+
+const labelClass = 'text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block'
+
+type EditAmbulanceForm = {
+  ambulanceNumber: string
+  plateNumber: string
+  fleetNumber: string
+  vehicleType: string
+  vehicleBrand: string
+  vehicleModel: string
+  vehicleYear: string
+  status: AmbulanceStatus
+  stationId: string
+  regionId: string
+  districtId: string
+  oxygenAvailable: boolean
+  defibrillatorAvailable: boolean
+  registrationExpiry: string
+  fuelLevel: string
+  mileage: string
+  notes: string
+}
+
+function buildEditForm(ambulance: Ambulance): EditAmbulanceForm {
+  return {
+    ambulanceNumber: ambulance.ambulanceNumber ?? '',
+    plateNumber: ambulance.plateNumber ?? '',
+    fleetNumber: ambulance.fleetNumber ?? '',
+    vehicleType: ambulance.vehicleType ?? '',
+    vehicleBrand: ambulance.vehicleBrand ?? '',
+    vehicleModel: ambulance.vehicleModel ?? '',
+    vehicleYear: ambulance.vehicleYear != null ? String(ambulance.vehicleYear) : '',
+    status: getAdminAmbulanceStatusValue(ambulance.status) as AmbulanceStatus,
+    stationId: ambulance.stationId ?? '',
+    regionId: ambulance.regionId ?? '',
+    districtId: ambulance.districtId ?? '',
+    oxygenAvailable: Boolean(ambulance.oxygenAvailable),
+    defibrillatorAvailable: Boolean(ambulance.defibrillatorAvailable),
+    registrationExpiry: ambulance.registrationExpiry
+      ? ambulance.registrationExpiry.slice(0, 10)
+      : '',
+    fuelLevel: ambulance.fuelLevel != null ? String(ambulance.fuelLevel) : '',
+    mileage: ambulance.mileage != null ? String(ambulance.mileage) : '',
+    notes: ambulance.notes ?? '',
+  }
 }
 
 export interface AmbulanceFleetViewConfig {
@@ -67,12 +109,9 @@ export default function AmbulanceFleetView({
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [selectedAmbulance, setSelectedAmbulance] = useState<Ambulance | null>(null)
-  const [showDetails, setShowDetails] = useState(false)
-  const [drivers, setDrivers] = useState<Employee[]>([])
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
-  const [selectedAmbulanceToAssign, setSelectedAmbulanceToAssign] = useState<Ambulance | null>(null)
-  const [availableDrivers, setAvailableDrivers] = useState<Employee[]>([])
+  const [stations, setStations] = useState<Station[]>([])
+  const [editAmbulance, setEditAmbulance] = useState<Ambulance | null>(null)
+  const [editForm, setEditForm] = useState<EditAmbulanceForm | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const fetchAmbulances = useCallback(async (showLoader = false) => {
@@ -89,27 +128,21 @@ export default function AmbulanceFleetView({
     }
   }, [])
 
-  const fetchDrivers = useCallback(async () => {
+  const fetchStations = useCallback(async () => {
     try {
-      const roles = await systemSetupService.getRoles()
-      const driverRole = roles.find((r: EmployeeRole) =>
-        r.name.toUpperCase().includes('DRIVER'),
-      )
-      if (driverRole) {
-        const data = await employeesService.getAll(driverRole.id)
-        setDrivers(data)
-      }
+      const data = await systemSetupService.getStations()
+      setStations(data)
     } catch (err) {
-      console.error('Error fetching drivers:', err)
+      console.error('Error fetching stations:', err)
     }
   }, [])
 
   useEffect(() => {
     fetchAmbulances(true)
-    fetchDrivers()
+    fetchStations()
     const interval = setInterval(() => fetchAmbulances(false), 10000)
     return () => clearInterval(interval)
-  }, [fetchAmbulances, fetchDrivers])
+  }, [fetchAmbulances, fetchStations])
 
   const scopedAmbulances = presetStatuses
     ? ambulances.filter((a) => presetStatuses.includes(a.status))
@@ -138,9 +171,62 @@ export default function AmbulanceFleetView({
     unavailableOnDuty: scopedAmbulances.filter((a) => a.status === 'ON_DUTY').length,
   }
 
-  const handleViewDetails = (ambulance: Ambulance) => {
-    setSelectedAmbulance(ambulance)
-    setShowDetails(true)
+  const openEditModal = (ambulance: Ambulance) => {
+    setEditAmbulance(ambulance)
+    setEditForm(buildEditForm(ambulance))
+  }
+
+  const closeEditModal = () => {
+    setEditAmbulance(null)
+    setEditForm(null)
+  }
+
+  const setEditField = <K extends keyof EditAmbulanceForm>(key: K, value: EditAmbulanceForm[K]) => {
+    setEditForm((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editAmbulance || !editForm) return
+    if (!editForm.stationId) {
+      toast.error('Base station is required')
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      const station = stations.find((s) => s.id === editForm.stationId)
+      await ambulancesService.update(editAmbulance.id, {
+        ambulanceNumber: editForm.ambulanceNumber.trim(),
+        plateNumber: editForm.plateNumber.trim(),
+        fleetNumber: editForm.fleetNumber.trim() || null,
+        vehicleType: editForm.vehicleType.trim() || null,
+        vehicleBrand: editForm.vehicleBrand.trim() || null,
+        vehicleModel: editForm.vehicleModel.trim() || null,
+        vehicleYear: editForm.vehicleYear ? Number(editForm.vehicleYear) : null,
+        status: editForm.status,
+        stationId: editForm.stationId,
+        regionId: station?.regionId || editForm.regionId || null,
+        districtId: station?.districtId || editForm.districtId || null,
+        oxygenAvailable: editForm.oxygenAvailable,
+        defibrillatorAvailable: editForm.defibrillatorAvailable,
+        registrationExpiry: editForm.registrationExpiry
+          ? new Date(editForm.registrationExpiry).toISOString()
+          : null,
+        fuelLevel: editForm.fuelLevel ? Number(editForm.fuelLevel) : null,
+        mileage: editForm.mileage ? Number(editForm.mileage) : null,
+        notes: editForm.notes.trim() || null,
+      })
+      toast.success(`Ambulance ${editForm.ambulanceNumber} updated`)
+      closeEditModal()
+      fetchAmbulances(false)
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Failed to update ambulance'
+      toast.error(message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleUpdateStatus = async (id: string, status: string) => {
@@ -149,27 +235,6 @@ export default function AmbulanceFleetView({
       fetchAmbulances(false)
     } catch {
       alert('Failed to update status')
-    }
-  }
-
-  const openAssignModal = (ambulance: Ambulance) => {
-    setSelectedAmbulanceToAssign(ambulance)
-    setAvailableDrivers(drivers.filter((d) => !d.assignedAmbulanceId))
-    setIsAssignModalOpen(true)
-  }
-
-  const handleAssignDriver = async (driverId: string) => {
-    if (!selectedAmbulanceToAssign) return
-    try {
-      setIsSubmitting(true)
-      await ambulancesService.assignDriver(selectedAmbulanceToAssign.id, driverId)
-      setIsAssignModalOpen(false)
-      fetchAmbulances(false)
-      fetchDrivers()
-    } catch {
-      alert('Failed to assign driver')
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -307,8 +372,6 @@ export default function AmbulanceFleetView({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredAmbulances.map((ambulance) => {
             const style = getAmbulanceStatusStyles(ambulance.status)
-            const driver = getEmployeeByRole(ambulance, 'DRIVER')
-            const nurse = getEmployeeByRole(ambulance, 'NURSE')
             const readiness = ambulance.readinessScore ?? 100
 
             return (
@@ -361,29 +424,13 @@ export default function AmbulanceFleetView({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                        <User className="w-3 h-3" /> Driver
-                      </p>
-                      <p className="text-xs font-semibold text-slate-800 mt-1 truncate">
-                        {driver
-                          ? `${driver.firstName || ''} ${driver.lastName || ''}`.trim() ||
-                            driver.user?.username
-                          : 'Unassigned'}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                        <Stethoscope className="w-3 h-3" /> Nurse
-                      </p>
-                      <p className="text-xs font-semibold text-slate-800 mt-1 truncate">
-                        {nurse
-                          ? `${nurse.firstName || ''} ${nurse.lastName || ''}`.trim() ||
-                            nurse.user?.username
-                          : 'Unassigned'}
-                      </p>
-                    </div>
+                  <div className="rounded-xl bg-slate-50 p-3 border border-slate-100 flex gap-2">
+                    <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Driver and nurse are assigned per case from the{' '}
+                      <span className="font-semibold">Dispatch Assign Team</span> form — not on the
+                      ambulance record.
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -422,22 +469,12 @@ export default function AmbulanceFleetView({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleViewDetails(ambulance)}
+                    onClick={() => openEditModal(ambulance)}
                     className="rounded-xl flex-1 min-w-[80px]"
                   >
-                    <Eye className="w-4 h-4 mr-1" />
-                    View
+                    <Pencil className="w-4 h-4 mr-1" />
+                    Edit
                   </Button>
-                  {!driver && (
-                    <Button
-                      size="sm"
-                      onClick={() => openAssignModal(ambulance)}
-                      className="rounded-xl bg-red-600 hover:bg-red-700 flex-1 min-w-[80px]"
-                    >
-                      <User className="w-4 h-4 mr-1" />
-                      Assign
-                    </Button>
-                  )}
                   <select
                     value={getAdminAmbulanceStatusValue(ambulance.status)}
                     onChange={(e) => handleUpdateStatus(ambulance.id, e.target.value)}
@@ -470,137 +507,205 @@ export default function AmbulanceFleetView({
         </div>
       )}
 
-      {isAssignModalOpen && selectedAmbulanceToAssign && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex justify-center items-center z-[110] p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-red-600 to-red-700 p-5 text-white flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black">Assign Driver</h2>
-                <p className="text-xs text-red-100 mt-0.5">
-                  {selectedAmbulanceToAssign.ambulanceNumber}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAssignModalOpen(false)}
-                className="text-white/70 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-5 max-h-[320px] overflow-y-auto space-y-2">
-              {availableDrivers.length === 0 ? (
-                <p className="text-center py-8 text-sm text-slate-500 border-2 border-dashed border-slate-200 rounded-xl">
-                  No unassigned drivers available
-                </p>
-              ) : (
-                availableDrivers.map((driver) => (
-                  <button
-                    key={driver.id}
-                    type="button"
-                    onClick={() => handleAssignDriver(driver.id)}
-                    disabled={isSubmitting}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-red-200 hover:bg-red-50 transition-all text-left"
-                  >
-                    <div className="p-2 rounded-lg bg-red-100 text-red-600">
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">
-                        {driver.firstName} {driver.lastName}
-                      </p>
-                      <p className="text-xs text-slate-500">{driver.user?.username}</p>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDetails && selectedAmbulance && (
+      {editAmbulance && editForm && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="bg-gradient-to-r from-red-600 to-red-700 p-6 text-white flex items-start justify-between gap-4">
+            <div className="bg-gradient-to-r from-red-600 to-red-700 p-6 text-white flex items-start justify-between gap-4 sticky top-0 z-10">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-red-200">
-                  Ambulance details
+                  Edit ambulance
                 </p>
-                <h2 className="text-2xl font-black mt-1">{selectedAmbulance.ambulanceNumber}</h2>
-                <p className="text-sm text-red-100 font-mono mt-1">{selectedAmbulance.plateNumber}</p>
+                <h2 className="text-2xl font-black mt-1">{editAmbulance.ambulanceNumber}</h2>
+                <p className="text-sm text-red-100 font-mono mt-1">{editAmbulance.plateNumber}</p>
               </div>
-              <button type="button" onClick={() => setShowDetails(false)} className="text-white/70 hover:text-white">
+              <button type="button" onClick={closeEditModal} className="text-white/70 hover:text-white">
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-6 grid sm:grid-cols-2 gap-6">
-              {[
-                { label: 'Fleet Number', value: selectedAmbulance.fleetNumber || '—' },
-                { label: 'Status', value: getAmbulanceStatusLabel(selectedAmbulance.status) },
-                { label: 'Type', value: selectedAmbulance.vehicleType || '—' },
-                {
-                  label: 'Brand / Model / Year',
-                  value:
-                    [selectedAmbulance.vehicleBrand, selectedAmbulance.vehicleModel, selectedAmbulance.vehicleYear]
-                      .filter(Boolean)
-                      .join(' · ') || '—',
-                },
-                { label: 'Readiness', value: `${selectedAmbulance.readinessScore ?? 100}%` },
-                { label: 'Base Station', value: selectedAmbulance.station?.name || '—' },
-                {
-                  label: 'Fuel / Mileage',
-                  value: `${selectedAmbulance.fuelLevel ?? '—'}% · ${selectedAmbulance.mileage?.toLocaleString() ?? '—'} km`,
-                },
-                {
-                  label: 'Registration Expiry',
-                  value: selectedAmbulance.registrationExpiry
-                    ? new Date(selectedAmbulance.registrationExpiry).toLocaleDateString()
-                    : '—',
-                },
-                {
-                  label: 'Equipment',
-                  value: `${selectedAmbulance.oxygenAvailable ? 'Oxygen' : 'No O₂'} · ${selectedAmbulance.defibrillatorAvailable ? 'AED' : 'No AED'}`,
-                },
-              ].map((row) => (
-                <div key={row.label}>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{row.label}</p>
-                  <p className="text-sm font-semibold text-slate-800 mt-1">{row.value}</p>
+            <div className="p-6 space-y-5">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Ambulance ID</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.ambulanceNumber}
+                    onChange={(e) => setEditField('ambulanceNumber', e.target.value)}
+                  />
                 </div>
-              ))}
-              {selectedAmbulance.notes && (
-                <div className="sm:col-span-2 rounded-xl bg-slate-50 p-4 border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notes</p>
-                  <p className="text-sm text-slate-700 mt-1">{selectedAmbulance.notes}</p>
+                <div>
+                  <label className={labelClass}>Plate Number</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.plateNumber}
+                    onChange={(e) => setEditField('plateNumber', e.target.value)}
+                  />
                 </div>
-              )}
-              {selectedAmbulance.employees && selectedAmbulance.employees.length > 0 && (
-                <div className="sm:col-span-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Assigned crew
-                  </p>
-                  <div className="space-y-2">
-                    {selectedAmbulance.employees.map((emp) => (
-                      <div
-                        key={emp.id}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100"
-                      >
-                        <User className="w-4 h-4 text-red-500" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">
-                            {emp.firstName} {emp.lastName}
-                          </p>
-                          <p className="text-xs text-slate-500">{emp.employeeRole?.name}</p>
-                        </div>
-                      </div>
+                <div>
+                  <label className={labelClass}>Fleet Number</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.fleetNumber}
+                    onChange={(e) => setEditField('fleetNumber', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Base Station *</label>
+                  <select
+                    className={inputClass}
+                    value={editForm.stationId}
+                    onChange={(e) => {
+                      const station = stations.find((s) => s.id === e.target.value)
+                      setEditForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              stationId: e.target.value,
+                              regionId: station?.regionId || prev.regionId,
+                              districtId: station?.districtId || prev.districtId,
+                            }
+                          : prev,
+                      )
+                    }}
+                  >
+                    <option value="">Select base station</option>
+                    {stations.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-              )}
+                <div>
+                  <label className={labelClass}>Vehicle Type</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.vehicleType}
+                    onChange={(e) => setEditField('vehicleType', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Brand</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.vehicleBrand}
+                    onChange={(e) => setEditField('vehicleBrand', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Model</label>
+                  <input
+                    className={inputClass}
+                    value={editForm.vehicleModel}
+                    onChange={(e) => setEditField('vehicleModel', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Year</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    value={editForm.vehicleYear}
+                    onChange={(e) => setEditField('vehicleYear', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Status</label>
+                  <select
+                    className={inputClass}
+                    value={editForm.status}
+                    disabled={editAmbulance.status === 'ON_DUTY'}
+                    onChange={(e) => setEditField('status', e.target.value as AmbulanceStatus)}
+                  >
+                    {ADMIN_AMBULANCE_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Registration Expiry</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={editForm.registrationExpiry}
+                    onChange={(e) => setEditField('registrationExpiry', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Fuel Level (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className={inputClass}
+                    value={editForm.fuelLevel}
+                    onChange={(e) => setEditField('fuelLevel', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Mileage (km)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={editForm.mileage}
+                    onChange={(e) => setEditField('mileage', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.oxygenAvailable}
+                    onChange={(e) => setEditField('oxygenAvailable', e.target.checked)}
+                    className="rounded text-red-600"
+                  />
+                  Oxygen available
+                </label>
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.defibrillatorAvailable}
+                    onChange={(e) => setEditField('defibrillatorAvailable', e.target.checked)}
+                    className="rounded text-red-600"
+                  />
+                  Defibrillator available
+                </label>
+              </div>
+              <div>
+                <label className={labelClass}>Notes</label>
+                <textarea
+                  className={`${inputClass} min-h-[96px] resize-y`}
+                  value={editForm.notes}
+                  onChange={(e) => setEditField('notes', e.target.value)}
+                />
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 flex gap-2">
+                <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-600">
+                  Crew assignment is handled in dispatch when you assign a case — not here.
+                </p>
+              </div>
             </div>
-            <div className="p-6 pt-0 flex justify-end">
-              <Button onClick={() => setShowDetails(false)} className="rounded-xl bg-red-600 hover:bg-red-700">
-                Close
+            <div className="p-6 pt-0 flex justify-end gap-3 sticky bottom-0 bg-white border-t border-slate-100">
+              <Button variant="outline" onClick={closeEditModal} className="rounded-xl">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={isSubmitting}
+                className="rounded-xl bg-red-600 hover:bg-red-700 min-w-[120px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save changes'
+                )}
               </Button>
             </div>
           </div>

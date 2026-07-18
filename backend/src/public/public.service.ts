@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemSetupService } from '../system-setup/system-setup.service';
+import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
 
 @Injectable()
 export class PublicService {
@@ -83,11 +84,9 @@ export class PublicService {
 
   /** Fleet availability for public hire-ambulance form */
   async getFleetAvailability() {
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-
     const busyAmbulanceIds = (
       await this.prisma.emergencyRequest.findMany({
-        where: { status: { in: activeStatuses as any } },
+        where: { status: { in: ACTIVE_CASE_STATUSES } },
         select: { ambulanceId: true },
       })
     )

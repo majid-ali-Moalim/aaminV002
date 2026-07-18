@@ -6,6 +6,7 @@ const STORAGE_KEY = 'dispatcher-ui-store'
 
 export function applyDispatcherTheme(theme: DispatcherTheme) {
   if (typeof document === 'undefined') return
+  document.documentElement.classList.remove('dark')
   document.documentElement.classList.toggle('dispatcher-dark', theme === 'dark')
 }
 

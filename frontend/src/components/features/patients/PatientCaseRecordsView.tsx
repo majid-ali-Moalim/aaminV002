@@ -25,6 +25,7 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
 import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
+import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -75,6 +76,8 @@ export default function PatientCaseRecordsView({
   const [priorityFilter, setPriorityFilter] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
+  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
+  const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
 
   useEffect(() => {
     if (patientFilter) setSearchTerm(patientFilter)
@@ -369,12 +372,18 @@ export default function PatientCaseRecordsView({
                             <Pencil className="w-3.5 h-3.5" />
                             Update
                           </Button>
-                          <Link href={paths.emergencyCase(req.id)}>
-                            <Button variant="outline" size="sm" className="rounded-lg h-8 gap-1">
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              Open
-                            </Button>
-                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-lg h-8 gap-1"
+                            onClick={() => {
+                              setDetailCaseId(req.id)
+                              setDetailPreview(req)
+                            }}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Open
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -412,6 +421,17 @@ export default function PatientCaseRecordsView({
           }}
         />
       )}
+
+      <CaseDetailModal
+        caseId={detailCaseId}
+        open={Boolean(detailCaseId)}
+        preview={detailPreview}
+        onClose={() => {
+          setDetailCaseId(null)
+          setDetailPreview(null)
+        }}
+        casePageBase={portal === 'dispatcher' ? '/dispatcher/emergency-requests' : '/admin/emergency-requests'}
+      />
     </div>
   )
 }

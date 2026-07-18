@@ -1,5 +1,6 @@
 'use client'
 
+import '../active-missions.css'
 import { Suspense, useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -15,7 +16,8 @@ import {
   ExternalLink,
   ChevronDown,
   Filter,
-  Eye,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmergencyRequest } from '@/types'
@@ -23,6 +25,9 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar'
 import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
+import CompleteCaseModal from '@/components/features/emergency/CompleteCaseModal'
+import CancelModal from '@/components/features/emergency/CancelModal'
+import { CLOSED_EMERGENCY_STATUSES } from '@/lib/emergency/dateFilters'
 import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import {
@@ -81,6 +86,8 @@ function ActiveMissionsContent() {
   const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
   const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
+  const [completeTarget, setCompleteTarget] = useState<EmergencyRequest | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<EmergencyRequest | null>(null)
 
   const openCaseDetail = useCallback((request: EmergencyRequest) => {
     setDetailCaseId(request.id)
@@ -154,8 +161,15 @@ function ActiveMissionsContent() {
   const activeFilterLabel =
     MISSION_PHASE_FILTERS.find((f) => f.value === phaseFilter)?.label ?? 'All Active'
 
+  const handleActionSuccess = useCallback(() => {
+    void fetchRequests(false)
+  }, [fetchRequests])
+
+  const isCaseClosed = (status: string) =>
+    CLOSED_EMERGENCY_STATUSES.includes(status as (typeof CLOSED_EMERGENCY_STATUSES)[number])
+
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+    <div className="active-missions-page p-6 max-w-[1600px] mx-auto space-y-6">
       {/* Hero */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 p-8 opacity-10">
@@ -198,7 +212,7 @@ function ActiveMissionsContent() {
               key={filter.value}
               type="button"
               onClick={() => setPhaseFilter(filter.value)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all active-missions-filter-pill ${
                 isActive
                   ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-200'
                   : 'bg-white border-slate-200 text-slate-600 hover:border-red-200 hover:text-red-600'
@@ -227,7 +241,7 @@ function ActiveMissionsContent() {
             placeholder="Search by code, patient, location, unit…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300 active-missions-input"
           />
         </div>
         <div className="relative sm:w-72 shrink-0">
@@ -235,7 +249,7 @@ function ActiveMissionsContent() {
           <select
             value={phaseFilter}
             onChange={(e) => setPhaseFilter(e.target.value as MissionPhaseFilter)}
-            className="w-full appearance-none pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300"
+            className="w-full appearance-none pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300 active-missions-input"
           >
             {MISSION_PHASE_FILTERS.map((filter) => (
               <option key={filter.value} value={filter.value}>
@@ -250,12 +264,12 @@ function ActiveMissionsContent() {
       {/* Mission rows */}
       <div className="grid grid-cols-1 gap-5">
         {isLoading && requests.length === 0 ? (
-          <div className="py-20 text-center bg-white rounded-2xl border border-slate-100 shadow-sm">
+          <div className="py-20 text-center bg-white rounded-2xl border border-slate-100 shadow-sm active-missions-card">
             <RefreshCw className="w-10 h-10 animate-spin mx-auto text-red-500 mb-4" />
             <p className="text-sm font-semibold text-slate-500">Loading active missions…</p>
           </div>
         ) : filteredRequests.length === 0 ? (
-          <div className="py-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
+          <div className="py-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200 active-missions-card">
             <Activity className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="font-semibold text-slate-700">No missions in this view</p>
             <p className="text-sm text-slate-500 mt-1">
@@ -274,7 +288,7 @@ function ActiveMissionsContent() {
               <div
                 key={request.id}
                 id={`case-row-${request.id}`}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 ${
+                className={`active-missions-card bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 ${
                   highlightId === request.id
                     ? 'border-red-400 ring-2 ring-red-300 shadow-lg'
                     : 'border-slate-100 hover:border-red-100'
@@ -395,25 +409,36 @@ function ActiveMissionsContent() {
                     </div>
                   </div>
 
-                  {/* Actions — view only */}
-                  <div className="p-5 lg:w-40 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
-                    <Button
-                      variant="outline"
-                      onClick={() => openCaseDetail(request)}
-                      className="w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
-                      title="View all case information"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View
-                    </Button>
-                    <Button
-                      variant="outline"
+                  {/* Actions */}
+                  <div className="p-5 lg:w-44 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
+                    {!isCaseClosed(request.status) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCompleteTarget(request)}
+                          className="active-missions-action-btn active-missions-action-btn--complete w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Completed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCancelTarget(request)}
+                          className="active-missions-action-btn active-missions-action-btn--cancel w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
                       onClick={() => router.push(paths.caseDetail(request.id))}
-                      className="w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                      className="active-missions-action-btn active-missions-action-btn--open w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                     >
                       <ExternalLink className="w-4 h-4" />
                       Open case
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -426,11 +451,28 @@ function ActiveMissionsContent() {
         caseId={detailCaseId}
         open={Boolean(detailCaseId)}
         preview={detailPreview}
+        casePageBase={paths.base}
         onClose={() => {
           setDetailCaseId(null)
           setDetailPreview(null)
         }}
       />
+
+      {completeTarget && (
+        <CompleteCaseModal
+          request={completeTarget}
+          onClose={() => setCompleteTarget(null)}
+          onSuccess={handleActionSuccess}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelModal
+          request={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onSuccess={handleActionSuccess}
+        />
+      )}
     </div>
   )
 }

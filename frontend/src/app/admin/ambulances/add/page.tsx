@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Hash,
   MapPin,
-  User,
   RefreshCw,
   Shield,
   Warehouse,
@@ -25,15 +24,12 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   ambulancesService,
-  employeesService,
   mdmService,
   systemSetupService,
   uploadService,
 } from '@/lib/api'
 import {
   AmbulanceStatus,
-  Employee,
-  EmployeeRole,
   Station,
 } from '@/types'
 import { ADMIN_AMBULANCE_STATUS_OPTIONS } from '@/lib/ambulance/status'
@@ -47,7 +43,7 @@ import {
 const STEPS = [
   { id: 'identity', label: 'Registration', icon: Hash },
   { id: 'vehicle', label: 'Vehicle', icon: Truck },
-  { id: 'station', label: 'Station & Crew', icon: MapPin },
+  { id: 'station', label: 'Station', icon: MapPin },
   { id: 'equipment', label: 'Equipment', icon: Shield },
   { id: 'review', label: 'Review', icon: CheckCircle2 },
 ] as const
@@ -75,8 +71,6 @@ const initialForm = {
   regionId: '',
   districtId: '',
   stationId: '',
-  assignedDriverId: '',
-  assignedNurseId: '',
   oxygenAvailable: false,
   defibrillatorAvailable: false,
   registrationExpiry: '',
@@ -99,7 +93,6 @@ export default function AddAmbulancePage() {
   const [fieldErrors, setFieldErrors] = useState<AmbulanceFormErrors>({})
 
   const [stations, setStations] = useState<Station[]>([])
-  const [drivers, setDrivers] = useState<Employee[]>([])
   const [ambulanceTypes, setAmbulanceTypes] = useState<AmbulanceTypeOption[]>([])
 
   const currentStep = STEPS[stepIndex]
@@ -112,9 +105,8 @@ export default function AddAmbulancePage() {
   const loadMasterData = useCallback(async () => {
     try {
       setIsLoading(true)
-      const [stationsData, roles, typesData] = await Promise.all([
+      const [stationsData, typesData] = await Promise.all([
         systemSetupService.getStations(),
-        systemSetupService.getRoles(),
         mdmService.listAll('ambulance-types', { status: 'active' }).catch(() => []),
       ])
 
@@ -128,14 +120,6 @@ export default function AddAmbulancePage() {
           vehicleType: prev.vehicleType || types[0].name,
         }))
       }
-
-      const driverRole = roles.find((r: EmployeeRole) =>
-        r.name.toUpperCase().includes('DRIVER'),
-      )
-      if (driverRole) {
-        const driverList = await employeesService.getAll(driverRole.id)
-        setDrivers(driverList.filter((d) => !d.assignedAmbulanceId))
-      }
     } catch {
       toast.error('Failed to load form data')
     } finally {
@@ -148,7 +132,6 @@ export default function AddAmbulancePage() {
   }, [loadMasterData])
 
   const stationName = stations.find((s) => s.id === form.stationId)?.name
-  const driverName = drivers.find((d) => d.id === form.assignedDriverId)
   const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
     setFieldErrors((prev) => {
@@ -250,9 +233,6 @@ export default function AddAmbulancePage() {
 
       const created = await ambulancesService.create(payload)
 
-      if (form.assignedDriverId) {
-        await ambulancesService.assignDriver(created.id, form.assignedDriverId)
-      }
       toast.success(`Ambulance ${created.ambulanceNumber} registered successfully`)
       router.push('/admin/ambulances')
     } catch (err: unknown) {
@@ -538,21 +518,12 @@ export default function AddAmbulancePage() {
                     <p className="mt-1 text-xs text-red-600 font-medium">{fieldErrors.stationId}</p>
                   ) : null}
                 </div>
-                <div>
-                  <label className={labelClass}>Primary Driver</label>
-                  <select
-                    className={inputClass}
-                    value={form.assignedDriverId}
-                    onChange={(e) => setField('assignedDriverId', e.target.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {drivers.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.firstName} {d.lastName}
-                        {d.user?.username ? ` (${d.user.username})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
+                  <p className="text-sm text-slate-600">
+                    Drivers and nurses are assigned when you dispatch a case using the{' '}
+                    <span className="font-semibold">Assign Team</span> form — not when registering
+                    the ambulance.
+                  </p>
                 </div>
               </div>
             )}
@@ -608,12 +579,6 @@ export default function AddAmbulancePage() {
                   },
                   { label: 'Status', value: form.status.replace('_', ' ') },
                   { label: 'Base Station', value: stationName || '—' },
-                  {
-                    label: 'Primary Driver',
-                    value: driverName
-                      ? `${driverName.firstName} ${driverName.lastName}`
-                      : 'Unassigned',
-                  },
                   {
                     label: 'Oxygen / Defibrillator',
                     value: `${form.oxygenAvailable ? 'O₂ Yes' : 'O₂ No'} · ${form.defibrillatorAvailable ? 'AED Yes' : 'AED No'}`,

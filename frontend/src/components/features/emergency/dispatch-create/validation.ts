@@ -1,5 +1,6 @@
+import { isFuneralTransport, isBookingWithin24Hours } from '@/lib/emergency/dispatchFormShared'
 import { isValidSomaliaPhone } from '@/lib/driverFormValidation'
-import { isValidDispatchPatientName } from '@/lib/emergency/patientName'
+import { isValidDispatchPatientName, isUnknownPatientName } from '@/lib/emergency/patientName'
 import { isOtherEmergencyType } from '@/lib/emergency/emergencyTypes'
 import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
 import { Priority } from '@/types'
@@ -61,9 +62,23 @@ export function validateEmergencyDispatchForm(
   return errors
 }
 
+function relativeName(errors: DispatchFormErrors, field: string, value: string) {
+  if (!value.trim()) {
+    errors[field] = 'Relative name is required'
+    return
+  }
+  if (isUnknownPatientName(value) || !isValidDispatchPatientName(value)) {
+    errors[field] = 'Enter the relative\'s full name'
+  }
+}
+
 export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
-  patientName(errors, 'patientName', data.patientName)
+  if (isFuneralTransport(data.transportType)) {
+    relativeName(errors, 'patientName', data.patientName)
+  } else {
+    patientName(errors, 'patientName', data.patientName)
+  }
   phone(errors, 'phone', data.phone)
   if (!data.transportType) errors.transportType = 'Transport type is required'
   if (data.transportType === 'OTHER' && !data.transportTypeOther.trim()) {
@@ -71,10 +86,15 @@ export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm)
   }
   if (!data.regionId) errors.regionId = 'Pickup region is required'
   if (!data.districtId) errors.districtId = 'Pickup district is required'
+  if (!data.ageGroup) errors.ageGroup = 'Age group is required'
+  if (!data.gender) errors.gender = 'Gender is required'
   req(errors, 'pickupAddress', data.pickupAddress, 'Pickup address')
   const hasHospital =
     Boolean(data.destinationHospitalId) || Boolean(data.destinationHospitalName.trim())
-  if (!hasHospital) errors.destinationHospitalId = 'Destination hospital or place is required'
+  const destinationLabel = isFuneralTransport(data.transportType)
+    ? 'Graveyard'
+    : 'Destination hospital or place'
+  if (!hasHospital) errors.destinationHospitalId = `${destinationLabel} is required`
   if (!data.bookingDateTime) errors.bookingDateTime = 'Booking date and time is required'
   else {
     const booking = new Date(data.bookingDateTime)
@@ -82,9 +102,13 @@ export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm)
       errors.bookingDateTime = 'Enter a valid booking date and time'
     } else if (booking.getTime() < Date.now() - 60_000) {
       errors.bookingDateTime = 'Booking cannot be in the past'
+    } else if (isFuneralTransport(data.transportType) && !isBookingWithin24Hours(data.bookingDateTime)) {
+      errors.bookingDateTime = 'Funeral booking must be within the next 24 hours'
     }
   }
-  needsNurseCheck(errors, data.needsNurse)
+  if (!isFuneralTransport(data.transportType)) {
+    needsNurseCheck(errors, data.needsNurse)
+  }
   return errors
 }
 
@@ -93,6 +117,8 @@ export function validateReferralDispatchForm(data: ReferralDispatchForm): Dispat
   patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
   req(errors, 'referringHospital', data.referringHospital, 'Referring hospital')
+  if (!data.ageGroup) errors.ageGroup = 'Age group is required'
+  if (!data.gender) errors.gender = 'Gender is required'
   const hasReceiving =
     Boolean(data.receivingHospitalId) || Boolean(data.receivingHospital.trim())
   if (!hasReceiving) errors.receivingHospitalId = 'Receiving hospital is required'

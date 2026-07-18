@@ -57,6 +57,19 @@ export type HandoverData = {
   receivingStaff: string
   notes: string
   signature: string
+  acceptedHospital?: string
+  rejectedHospitals?: Array<{
+    id: string
+    hospitalName: string
+    reason: string
+    notes: string
+  }>
+  ageGroup?: string
+  gender?: string
+  nationalityType?: string
+  maritalStatus?: string
+  driverName?: string
+  nurseName?: string
 }
 
 export function encodeMonitoring(data: Omit<MonitoringData, '_type'>): string {
@@ -91,6 +104,36 @@ export function parseHandover(notes?: string | null): HandoverData | null {
 
 export function isHandoverRecord(record: { clinicalNotes?: string | null }): boolean {
   return Boolean(parseHandover(record.clinicalNotes))
+}
+
+const LOAD_PATIENT_PREFIX = '[EADS_LOAD_PATIENT]'
+
+export type LoadPatientData = {
+  _type: 'load_patient'
+  loadedAt: string
+  notes?: string
+}
+
+export function encodeLoadPatient(data?: { notes?: string }): string {
+  const payload: LoadPatientData = {
+    _type: 'load_patient',
+    loadedAt: new Date().toISOString(),
+    notes: data?.notes,
+  }
+  return `${LOAD_PATIENT_PREFIX}${JSON.stringify(payload)}`
+}
+
+export function parseLoadPatient(notes?: string | null): LoadPatientData | null {
+  if (!notes?.startsWith(LOAD_PATIENT_PREFIX)) return null
+  try {
+    return JSON.parse(notes.slice(LOAD_PATIENT_PREFIX.length)) as LoadPatientData
+  } catch {
+    return null
+  }
+}
+
+export function isLoadPatientRecord(record: { clinicalNotes?: string | null }): boolean {
+  return Boolean(parseLoadPatient(record.clinicalNotes))
 }
 
 export function isMedicalNoteRecord(record: {

@@ -6,6 +6,7 @@ const STORAGE_KEY = 'admin-ui-store'
 
 export function applyAdminTheme(theme: AdminTheme) {
   if (typeof document === 'undefined') return
+  document.documentElement.classList.remove('dispatcher-dark')
   document.documentElement.classList.toggle('dark', theme === 'dark')
 }
 

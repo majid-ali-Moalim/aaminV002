@@ -13,6 +13,7 @@ import ChatAlerts from '@/components/chat/ChatAlerts'
 import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
 import './admin.css'
+import '@/components/features/emergency/case-detail.css'
 
 export default function AdminLayout({
   children,

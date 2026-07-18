@@ -27,6 +27,12 @@
   --sidebar-secondary: 215 16% 40%;
   --sidebar-muted: 215 20% 60%;
   --sidebar-border: 214 32% 91%;
+  --case-surface: var(--admin-surface);
+  --case-bg-subtle: var(--admin-bg-subtle);
+  --case-border: var(--admin-border);
+  --case-text: var(--admin-text);
+  --case-text-secondary: var(--admin-text-secondary);
+  --case-text-muted: var(--admin-text-muted);
   color-scheme: light;
 }
 
@@ -58,6 +64,12 @@
   --sidebar-secondary: 215 20% 68%;
   --sidebar-muted: 215 16% 48%;
   --sidebar-border: 217 25% 20%;
+  --case-surface: var(--admin-surface);
+  --case-bg-subtle: var(--admin-bg-subtle);
+  --case-border: var(--admin-border);
+  --case-text: var(--admin-text);
+  --case-text-secondary: var(--admin-text-secondary);
+  --case-text-muted: var(--admin-text-muted);
   color-scheme: dark;
 }
 
@@ -148,4 +160,167 @@
   padding: 0.375rem 0.75rem;
   background-color: hsl(var(--admin-success-bg));
   color: hsl(var(--admin-success-text));
+}
+
+/* Active missions (shared with dispatcher portal) — admin dark mode */
+.dark .active-missions-card {
+  background-color: hsl(var(--admin-surface)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-page .text-slate-800,
+.dark .active-missions-page .text-slate-700,
+.dark .active-missions-page .text-slate-900 {
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .active-missions-page .text-slate-600,
+.dark .active-missions-page .text-slate-500,
+.dark .active-missions-page .text-slate-400 {
+  color: hsl(var(--admin-text-secondary)) !important;
+}
+
+.dark .active-missions-page .border-slate-100,
+.dark .active-missions-page .border-slate-200 {
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-page .bg-slate-50\/50 {
+  background-color: hsl(var(--admin-bg-subtle) / 0.85) !important;
+}
+
+.dark .active-missions-input,
+.dark .active-missions-field {
+  background-color: hsl(var(--admin-input)) !important;
+  border-color: hsl(var(--admin-input-border)) !important;
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .active-missions-field.readonly {
+  background-color: hsl(var(--admin-surface-muted)) !important;
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .active-missions-filter-pill:not(.bg-red-600) {
+  background-color: hsl(var(--admin-surface)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .active-missions-action-btn--open {
+  background: hsl(var(--admin-surface));
+  color: #fff !important;
+  border-color: hsl(var(--admin-border));
+}
+
+.dark .active-missions-action-btn--cancel {
+  background: hsl(var(--admin-surface));
+  color: #fca5a5 !important;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.dark .active-missions-modal {
+  background-color: hsl(var(--admin-surface)) !important;
+  color: hsl(var(--admin-text));
+}
+
+.dark .active-missions-modal-footer {
+  background-color: hsl(var(--admin-bg-subtle)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-btn-outline {
+  background: hsl(var(--admin-surface)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+  color: #fff !important;
+}
+
+.dark .active-missions-btn-secondary {
+  background: hsl(var(--admin-surface)) !important;
+  color: #fff !important;
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-btn-primary,
+.dark .active-missions-btn-danger {
+  color: #fff !important;
+}
+
+.dark .active-missions-status-table {
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-status-table thead {
+  background: hsl(var(--admin-bg-subtle)) !important;
+}
+
+.dark .active-missions-status-table th,
+.dark .active-missions-status-table td {
+  color: hsl(var(--admin-text)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .active-missions-rejected-card {
+  background: hsl(var(--admin-bg-subtle)) !important;
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+/* Global dark-mode shims for legacy Tailwind utility classes (admin portal) */
+.dark .bg-white,
+.dark .bg-white\/80 {
+  background-color: hsl(var(--admin-surface)) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/50 {
+  background-color: hsl(var(--admin-bg-subtle)) !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: hsl(var(--admin-text-secondary)) !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .bg-rose-50\/40,
+.dark .bg-rose-50\/50 {
+  background-color: hsl(var(--admin-surface-muted) / 0.85) !important;
+}
+
+.dark .bg-amber-50\/50 {
+  background-color: hsl(var(--admin-surface-muted) / 0.85) !important;
+}
+
+.dark .border-rose-100,
+.dark .border-amber-100 {
+  border-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .text-rose-700,
+.dark .text-amber-700 {
+  color: hsl(var(--admin-text)) !important;
+}
+
+.dark .ring-red-100 {
+  --tw-ring-color: hsl(var(--admin-border)) !important;
+}
+
+.dark .bg-slate-300 {
+  background-color: hsl(var(--admin-text-muted)) !important;
+}
+
+.dark .bg-slate-200 {
+  background-color: hsl(var(--admin-border)) !important;
 }
