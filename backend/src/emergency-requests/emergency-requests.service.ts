@@ -23,6 +23,10 @@ import {
   filterDispatchEligibleEmployees,
   getPresentEmployeeIdsToday,
 } from '../employee-attendance/dispatch-staff-eligibility';
+import {
+  ACTIVE_CASE_STATUSES,
+  ASSIGNABLE_SHIFT_STATUSES,
+} from '../common/active-case-statuses';
 
 type AuthUser = {
   sub?: string;
@@ -666,8 +670,6 @@ export class EmergencyRequestsService {
 
     await this.assertDispatcherCanAccessCase(user, existing, 'assign');
 
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-
     if (!data.driverId) {
       throw new BadRequestException('A driver must be assigned before dispatch');
     }
@@ -688,7 +690,7 @@ export class EmergencyRequestsService {
       const busyNurse = await this.prisma.emergencyRequest.findFirst({
         where: {
           nurseId: data.nurseId,
-          status: { in: activeStatuses as any },
+          status: { in: ACTIVE_CASE_STATUSES },
           id: { not: id },
         },
       });
@@ -701,7 +703,7 @@ export class EmergencyRequestsService {
       const busyDriver = await this.prisma.emergencyRequest.findFirst({
         where: { 
           driverId: data.driverId, 
-          status: { in: activeStatuses as any },
+          status: { in: ACTIVE_CASE_STATUSES },
           id: { not: id } 
         }
       });
@@ -712,7 +714,7 @@ export class EmergencyRequestsService {
       const busyAmbulance = await this.prisma.emergencyRequest.findFirst({
         where: { 
           ambulanceId: data.ambulanceId, 
-          status: { in: activeStatuses as any },
+          status: { in: ACTIVE_CASE_STATUSES },
           id: { not: id } 
         }
       });
@@ -1201,11 +1203,8 @@ export class EmergencyRequestsService {
   }
 
   async getAvailableAmbulances() {
-    // Only get ambulances that are marked as AVAILABLE and NOT currently on a mission
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-    
     const busyAmbulanceIds = (await this.prisma.emergencyRequest.findMany({
-      where: { status: { in: activeStatuses as any } },
+      where: { status: { in: ACTIVE_CASE_STATUSES } },
       select: { ambulanceId: true }
     })).map(r => r.ambulanceId).filter(Boolean);
 
@@ -1229,11 +1228,9 @@ export class EmergencyRequestsService {
     
     if (!driverRole) return [];
 
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-    
     const [busyDriverIds, presentIds, drivers] = await Promise.all([
       this.prisma.emergencyRequest.findMany({
-        where: { status: { in: activeStatuses as any } },
+        where: { status: { in: ACTIVE_CASE_STATUSES } },
         select: { driverId: true },
       }).then((rows) => rows.map((r) => r.driverId).filter(Boolean) as string[]),
       getPresentEmployeeIdsToday(this.prisma),
@@ -1241,7 +1238,7 @@ export class EmergencyRequestsService {
         where: {
           employeeRoleId: driverRole.id,
           status: 'ACTIVE',
-          shiftStatus: 'AVAILABLE',
+          shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
         },
         include: {
           user: {
@@ -1268,11 +1265,9 @@ export class EmergencyRequestsService {
     
     if (!nurseRole) return [];
 
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-    
     const [busyNurseIds, presentIds, nurses] = await Promise.all([
       this.prisma.emergencyRequest.findMany({
-        where: { status: { in: activeStatuses as any } },
+        where: { status: { in: ACTIVE_CASE_STATUSES } },
         select: { nurseId: true },
       }).then((rows) => rows.map((r) => r.nurseId).filter(Boolean) as string[]),
       getPresentEmployeeIdsToday(this.prisma),
@@ -1280,7 +1275,7 @@ export class EmergencyRequestsService {
         where: {
           employeeRoleId: nurseRole.id,
           status: 'ACTIVE',
-          shiftStatus: 'AVAILABLE',
+          shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
         },
         include: {
           user: {

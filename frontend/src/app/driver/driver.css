@@ -424,6 +424,48 @@
   min-width: 0;
 }
 
+.driver-presence-badge {
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(113, 113, 122, 0.25);
+  color: #a1a1aa;
+}
+
+.driver-presence-badge.present {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.driver-presence-badge.on-case {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+}
+
+.driver-app--light .driver-presence-badge {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #64748b;
+}
+
+.driver-app--light .driver-presence-badge.present {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.driver-app--light .driver-presence-badge.on-case {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
 .driver-dash-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -438,6 +480,16 @@
 
 .driver-stats-grid--2x2 {
   grid-template-columns: repeat(2, 1fr);
+}
+
+.driver-stats-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 639px) {
+  .driver-stats-grid--3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Red box active states (dark theme) */
@@ -1565,7 +1617,7 @@
 }
 
 @media (min-width: 640px) {
-  .driver-quick-actions-grid { grid-template-columns: repeat(4, 1fr); }
+  .driver-quick-actions-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 .driver-action-tile {
@@ -3426,6 +3478,10 @@
   font-size: 13px;
   font-weight: 600;
   color: #e4e4e7;
+}
+
+.dcw-info-item--full {
+  grid-column: 1 / -1;
 }
 
 .dcw-gps-live {

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { isDriverUser, getPostLoginPath } from '@/lib/authRedirect'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import { useDriverSocket } from '@/lib/useDriverSocket'
-import { driverProfileApi, driverDashboardApi, driverMissionsApi, driverShiftApi, driverNotificationsApi } from '@/lib/driverApi'
+import { driverProfileApi, driverDashboardApi, driverMissionsApi, driverNotificationsApi } from '@/lib/driverApi'
 import { DriverPageLayout } from '@/components/driver/DriverPageLayout'
 import { DriverDashboardOverview } from '@/components/driver/DriverDashboardOverview'
 import toast from 'react-hot-toast'
@@ -19,10 +19,7 @@ export default function DriverDashboard() {
   const { connected, emitMissionStatus } = useDriverSocket()
 
   const [loadingProfile, setLoadingProfile] = useState(true)
-  const [loadingShift, setLoadingShift] = useState(false)
-  const [shiftStatus, setShiftStatus] = useState<string>('')
 
-  // Auth guard
   useEffect(() => {
     if (authLoading) return
     if (!isAuthenticated || !token) {
@@ -34,7 +31,6 @@ export default function DriverDashboard() {
     }
   }, [isAuthenticated, token, router, authLoading, user])
 
-  // Load data
   const loadData = useCallback(async () => {
     try {
       const [profileData, statsData, missionData, notifData] = await Promise.allSettled([
@@ -44,47 +40,17 @@ export default function DriverDashboard() {
         driverNotificationsApi.get(1, 1),
       ])
 
-      if (profileData.status === 'fulfilled') {
-        setProfile(profileData.value)
-        setShiftStatus(profileData.value.shiftStatus)
-      }
+      if (profileData.status === 'fulfilled') setProfile(profileData.value)
       if (statsData.status === 'fulfilled') setStats(statsData.value)
       if (missionData.status === 'fulfilled') setActiveMission(missionData.value)
       if (notifData.status === 'fulfilled') setUnreadCount(notifData.value.unreadCount)
     } catch (_) {}
     setLoadingProfile(false)
-  }, [])
+  }, [setProfile, setActiveMission, setStats, setUnreadCount])
 
   useEffect(() => { if (isAuthenticated) loadData() }, [isAuthenticated, loadData])
 
-  const handleStartShift = async () => {
-    setLoadingShift(true)
-    try {
-      await driverShiftApi.start()
-      setShiftStatus('ON_DUTY')
-      toast.success('Shift started — you are now on duty')
-      loadData()
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to start shift')
-    } finally { setLoadingShift(false) }
-  }
-
-  const handleEndShift = async () => {
-    if (!confirm('End your current shift?')) return
-    setLoadingShift(true)
-    try {
-      await driverShiftApi.end()
-      setShiftStatus('AVAILABLE')
-      toast.success('Shift ended')
-      loadData()
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to end shift')
-    } finally { setLoadingShift(false) }
-  }
-
   if (!isAuthenticated) return null
-
-  const currentShift = shiftStatus || profile?.shiftStatus || 'AVAILABLE'
 
   const NEXT_ACTIONS: Record<string, { label: string; status: string; cls: string }> = {
     ASSIGNED:         { label: 'Start Trip (En Route)', status: 'DISPATCHED',        cls: 'btn-orange' },
@@ -111,17 +77,13 @@ export default function DriverDashboard() {
   return (
     <DriverPageLayout title="Dashboard Overview" mainClassName="driver-main--dashboard">
       <DriverDashboardOverview
-          profile={profile}
-          activeMission={activeMission}
-          stats={stats}
-          loadingProfile={loadingProfile}
-          loadingShift={loadingShift}
-          currentShift={currentShift}
-          connected={connected}
-          onStartShift={handleStartShift}
-          onEndShift={handleEndShift}
-          onQuickAction={handleQuickAction}
-          nextAction={nextAction}
+        profile={profile}
+        activeMission={activeMission}
+        stats={stats}
+        loadingProfile={loadingProfile}
+        connected={connected}
+        onQuickAction={handleQuickAction}
+        nextAction={nextAction}
       />
     </DriverPageLayout>
   )

@@ -19,7 +19,7 @@ type TaskShellProps = {
 
 export function TaskShell({ title, subtitle, saving, onSubmit, submitLabel, children }: TaskShellProps) {
   return (
-    <form onSubmit={onSubmit} className="nmw-task-form">
+    <form onSubmit={onSubmit} className="nmw-task-form nmw-task-form--comfortable">
       <div className="nmw-task-head">
         <h4>{title}</h4>
         {subtitle && <p>{subtitle}</p>}
@@ -266,6 +266,32 @@ export function HandoverTaskFields({
         Digital signature (full name) *
         <input value={form.signature} onChange={(e) => setForm({ ...form, signature: e.target.value })} required />
       </label>
+    </>
+  )
+}
+
+export type MedicalNotesFormState = AssessmentFormState &
+  VitalsFormState &
+  NotesFormState &
+  TreatmentFormState
+
+export function MedicalNotesCombinedFields({
+  form,
+  setForm,
+}: {
+  form: MedicalNotesFormState
+  setForm: (f: MedicalNotesFormState) => void
+}) {
+  return (
+    <>
+      <p className="nmw-form-section-label span-2">Assessment</p>
+      <AssessmentTaskFields form={form} setForm={setForm} />
+      <p className="nmw-form-section-label span-2">Vital signs</p>
+      <VitalsTaskFields form={form} setForm={setForm} />
+      <p className="nmw-form-section-label span-2">Clinical notes</p>
+      <NotesTaskFields form={form} setForm={setForm} />
+      <p className="nmw-form-section-label span-2">Treatment (if given)</p>
+      <TreatmentTaskFields form={form} setForm={setForm} />
     </>
   )
 }

@@ -18,7 +18,7 @@ export type NurseNavItem = {
 
 export const NURSE_NAV_ITEMS: NurseNavItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/nurse/dashboard', icon: LayoutGrid, exact: true },
-  { id: 'mission', label: 'Case Workspace', href: '/nurse/mission', icon: Route },
+  { id: 'mission', label: 'Case Details', href: '/nurse/mission', icon: Route },
   { id: 'mission-history', label: 'Case History', href: '/nurse/mission/history', icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', href: '/nurse/notifications', icon: Bell },
   { id: 'messages', label: 'Messages', href: '/nurse/chat', icon: MessageSquare },

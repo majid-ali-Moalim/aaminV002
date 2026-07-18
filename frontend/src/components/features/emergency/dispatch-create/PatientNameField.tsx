@@ -7,21 +7,32 @@ type Props = {
   value: string
   error?: string
   onChange: (value: string) => void
+  label?: string
+  placeholder?: string
+  showUnknownButton?: boolean
 }
 
-export default function PatientNameField({ value, error, onChange }: Props) {
+export default function PatientNameField({
+  value,
+  error,
+  onChange,
+  label = 'Patient Name',
+  placeholder = 'Full name or UNKNOWN',
+  showUnknownButton = true,
+}: Props) {
   const isUnknown = value.trim().toUpperCase() === UNKNOWN_PATIENT_NAME
 
   return (
     <div>
-      <FieldLabel required error={error}>Patient Name</FieldLabel>
+      <FieldLabel required error={error}>{label}</FieldLabel>
       <div className="flex gap-2">
         <input
           className={fieldInputClass(error)}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Full name or UNKNOWN"
+          placeholder={placeholder}
         />
+        {showUnknownButton && (
         <button
           type="button"
           onClick={() => onChange(UNKNOWN_PATIENT_NAME)}
@@ -33,6 +44,7 @@ export default function PatientNameField({ value, error, onChange }: Props) {
         >
           Unknown
         </button>
+        )}
       </div>
     </div>
   )

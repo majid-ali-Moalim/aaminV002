@@ -115,9 +115,6 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     primaryAdvance: 'mark_arrival',
     actions: [
       { id: 'mark_arrival', label: 'Mark Arrival at Scene', variant: 'primary' },
-      { id: 'update_eta', label: 'Update ETA', variant: 'secondary' },
-      { id: 'request_backup', label: 'Request Backup', variant: 'secondary' },
-      { id: 'report_delay', label: 'Report Delay', variant: 'danger' },
     ],
   },
   {
@@ -141,7 +138,6 @@ export const MISSION_EXECUTION_STEPS: WorkflowStep[] = [
     primaryAdvance: 'mark_hospital_arrival',
     actions: [
       { id: 'mark_hospital_arrival', label: 'Mark Hospital Arrival', variant: 'primary' },
-      { id: 'update_eta', label: 'Update ETA', variant: 'secondary' },
     ],
   },
   {

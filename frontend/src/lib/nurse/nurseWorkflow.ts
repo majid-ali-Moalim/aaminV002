@@ -20,6 +20,7 @@ export type NurseTaskId =
   | 'assessment'
   | 'vitals'
   | 'notes'
+  | 'medical_notes'
   | 'load_patient'
   | 'treatment'
   | 'monitoring'
@@ -311,13 +312,14 @@ export function getNurseTransportPhaseMessage(status: string): string | null {
 }
 
 export function getNurseTaskBlockReason(taskId: string, status: string): string | null {
-  if (['assessment', 'vitals', 'notes', 'load_patient', 'begin_care'].includes(taskId) && !canDoPatientCareTasks(status)) {
-    return 'Patient care requires the driver to be on scene (Arrived at Scene).'
+  if (
+    ['medical_notes', 'assessment', 'vitals', 'notes', 'load_patient', 'begin_care'].includes(taskId) &&
+    !canDoPatientCareTasks(status) &&
+    !canDoTreatmentMonitoring(status)
+  ) {
+    return 'Medical notes are available once the crew is on scene or during transport.'
   }
-  if (['treatment'].includes(taskId) && !canDoTreatmentMonitoring(status)) {
-    return 'Treatment records unlock when the driver starts transport to hospital.'
-  }
-  if (['handover', 'documentation', 'close_mission'].includes(taskId) && !canDoHandover(status) && status !== 'COMPLETED') {
+  if (['handover', 'close_mission'].includes(taskId) && !canDoHandover(status) && status !== 'COMPLETED') {
     if (status === 'TRANSPORTING') {
       return 'Handover unlocks when the driver marks arrival at the hospital.'
     }

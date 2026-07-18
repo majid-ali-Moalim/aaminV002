@@ -5,7 +5,7 @@ import DriverMissionWorkspace from '@/components/driver/mission-workflow/DriverM
 
 export default function DriverCaseWorkspacePage() {
   return (
-    <DriverPageLayout title="Case Workspace">
+    <DriverPageLayout title="Case Details">
       <DriverMissionWorkspace />
     </DriverPageLayout>
   )

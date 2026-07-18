@@ -22,6 +22,7 @@ import {
   getAdminStaffStatusValue,
   getStaffStatusLabel,
   getStaffStatusStyles,
+  mapStaffShiftStatus,
 } from '@/lib/staff/status'
 import { SOMALIA_DRIVER_LICENSE_CLASSES } from '@/lib/drivers/somaliaDriverLicense'
 import SomaliaDriverLicenseInfo from '@/components/drivers/SomaliaDriverLicenseInfo'
@@ -34,6 +35,8 @@ interface Driver {
   alternativePhone?: string
   email?: string
   nationalIdNumber?: string
+  nationalId?: string
+  address?: string
   stationId?: string
   station?: { id: string; name: string }
   assignedAmbulanceId?: string
@@ -53,6 +56,9 @@ interface Driver {
   employmentType?: string
   joinDate?: string
   employmentStatus?: string
+  status?: string
+  employeeCode?: string
+  employmentDate?: string
   profilePhoto?: string
   isActive?: boolean
   dateOfBirth?: string
@@ -259,20 +265,24 @@ export default function DriversPage() {
 
   const handleEdit = (driver: Driver) => {
     setEditingDriver(driver)
+    const employmentDate =
+      driver.employmentDate || driver.joinDate
+        ? String(driver.employmentDate || driver.joinDate).slice(0, 10)
+        : ''
     setFormData({
       // Personal Information (8 fields)
       profilePhoto: driver.profilePhoto || '',
       firstName: driver.firstName || '',
       lastName: driver.lastName || '',
       gender: driver.gender || '',
-      dateOfBirth: driver.dateOfBirth || '',
+      dateOfBirth: driver.dateOfBirth ? String(driver.dateOfBirth).slice(0, 10) : '',
       phone: driver.phone || '',
       alternativePhone: driver.alternativePhone || '',
       email: driver.email || '',
-      nationalIdNumber: driver.nationalIdNumber || '',
+      nationalIdNumber: driver.nationalIdNumber || driver.nationalId || '',
       
       // Address & Location (4 fields)
-      residentialAddress: driver.residentialAddress || '',
+      residentialAddress: driver.residentialAddress || driver.address || '',
       regionId: driver.regionId || '',
       districtId: driver.districtId || '',
       currentArea: driver.currentArea || '',
@@ -286,8 +296,8 @@ export default function DriversPage() {
       employeeCode: driver.employeeCode || '',
       departmentId: driver.departmentId || '',
       employmentType: driver.employmentType || '',
-      joinDate: driver.joinDate || '',
-      employmentStatus: driver.employmentStatus || '',
+      joinDate: employmentDate,
+      employmentStatus: driver.status || driver.employmentStatus || 'ACTIVE',
       
       // Dispatch & Operational Status (3 fields)
       shiftStatus: getAdminStaffStatusValue(driver.shiftStatus || ''),
@@ -297,7 +307,9 @@ export default function DriversPage() {
       // Driver Professional Details (3 fields)
       drivingLicenseNumber: driver.drivingLicenseNumber || driver.licenseNumber || '',
       licenseClass: driver.licenseClass || 'B',
-      licenseExpiryDate: driver.licenseExpiryDate || '',
+      licenseExpiryDate: driver.licenseExpiryDate
+        ? String(driver.licenseExpiryDate).slice(0, 10)
+        : '',
       yearsOfExperience: driver.yearsOfExperience || '',
       
       // Ambulance Assignment (2 fields)
@@ -323,27 +335,28 @@ export default function DriversPage() {
     try {
       if (editingDriver) {
         const updatePayload = {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
           gender: formData.gender || undefined,
-          phone: formData.phone,
-          alternatePhone: formData.alternativePhone,
-          address: formData.residentialAddress,
-          nationalId: formData.nationalIdNumber,
+          phone: formData.phone.trim(),
+          alternatePhone: formData.alternativePhone.trim() || undefined,
+          address: formData.residentialAddress.trim() || undefined,
+          nationalId: formData.nationalIdNumber.trim() || undefined,
+          dateOfBirth: formData.dateOfBirth || undefined,
+          profilePhoto: formData.profilePhoto || undefined,
           departmentId: formData.departmentId || undefined,
           stationId: formData.stationId || undefined,
-          regionId: formData.regionId || undefined,
-          districtId: formData.districtId || undefined,
-          emergencyContactName: formData.emergencyContactName || undefined,
-          emergencyPhone: formData.emergencyContactPhone || undefined,
+          emergencyContactName: formData.emergencyContactName.trim() || undefined,
+          emergencyPhone: formData.emergencyContactPhone.trim() || undefined,
           relationship: formData.emergencyContactRelationship || undefined,
-          employmentType: formData.employmentType || undefined,
           employmentDate: formData.joinDate || undefined,
-          status: formData.employmentStatus || undefined,
-          shiftStatus: formData.shiftStatus,
-          licenseNumber: formData.drivingLicenseNumber,
-          licenseClass: formData.licenseClass,
-          licenseType: `Class ${formData.licenseClass}`,
+          status: formData.employmentStatus || 'ACTIVE',
+          shiftStatus: formData.shiftStatus
+            ? mapStaffShiftStatus(formData.shiftStatus)
+            : undefined,
+          licenseNumber: formData.drivingLicenseNumber.trim() || undefined,
+          licenseClass: formData.licenseClass || undefined,
+          licenseType: formData.licenseClass ? `Class ${formData.licenseClass}` : undefined,
           licenseExpiryDate: formData.licenseExpiryDate || undefined,
           yearsOfExperience: formData.yearsOfExperience
             ? Number(formData.yearsOfExperience)
@@ -352,14 +365,22 @@ export default function DriversPage() {
         await employeesService.update(editingDriver.id, updatePayload)
         toast.success('Driver updated successfully')
       } else {
-        await employeesService.create(formData)
-        toast.success('Driver created successfully')
+        toast.error('Use Add Driver to register a new driver with a full profile and login account.')
+        setIsLoading(false)
+        return
       }
       setIsModalOpen(false)
       fetchData()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to save driver:', error)
-      toast.error('Failed to save driver')
+      const message =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { data?: { message?: string | string[] } } }).response?.data?.message
+          : error instanceof Error
+            ? error.message
+            : undefined
+      const text = Array.isArray(message) ? message.join(', ') : message
+      toast.error(text || 'Failed to save driver')
     } finally {
       setIsLoading(false)
     }
@@ -382,8 +403,9 @@ export default function DriversPage() {
     if (!driver) return
     
     try {
-      await employeesService.update(id, { status: driver.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })
-      toast.success(`Driver ${driver.status === 'ACTIVE' ? 'deactivated' : 'activated'} successfully`)
+      const nextStatus = driver.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+      await employeesService.update(id, { status: nextStatus })
+      toast.success(`Driver ${nextStatus === 'ACTIVE' ? 'activated' : 'deactivated'} successfully`)
       fetchData()
     } catch (error) {
       console.error('Failed to toggle status:', error)
@@ -765,9 +787,12 @@ export default function DriversPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1 text-sm">
-                          <p className="font-semibold text-slate-800">{driver.employmentStatus || driver.employmentType || '—'}</p>
+                          <p className="font-semibold text-slate-800">{driver.status || driver.employmentType || '—'}</p>
                           <p className="text-xs text-slate-500">
-                            Joined {driver.joinDate ? format(new Date(driver.joinDate), 'MMM yyyy') : '—'}
+                            Joined{' '}
+                            {driver.employmentDate || driver.joinDate
+                              ? format(new Date(driver.employmentDate || driver.joinDate!), 'MMM yyyy')
+                              : '—'}
                           </p>
                           <span className={cn(
                             'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',

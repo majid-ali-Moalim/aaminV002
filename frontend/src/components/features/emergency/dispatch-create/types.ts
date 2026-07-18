@@ -24,6 +24,8 @@ export type EmergencyDispatchForm = {
 export type NonEmergencyDispatchForm = {
   patientName: string
   phone: string
+  ageGroup: string
+  gender: string
   transportType: string
   transportTypeOther: string
   regionId: string
@@ -46,6 +48,8 @@ export type NonEmergencyDispatchForm = {
 export type ReferralDispatchForm = {
   patientName: string
   phone: string
+  ageGroup: string
+  gender: string
   referringHospital: string
   receivingHospital: string
   receivingHospitalId: string
@@ -92,6 +96,8 @@ export const defaultEmergencyForm = (): EmergencyDispatchForm => ({
 export const defaultNonEmergencyForm = (): NonEmergencyDispatchForm => ({
   patientName: '',
   phone: '',
+  ageGroup: '',
+  gender: '',
   transportType: '',
   transportTypeOther: '',
   regionId: '',
@@ -114,6 +120,8 @@ export const defaultNonEmergencyForm = (): NonEmergencyDispatchForm => ({
 export const defaultReferralForm = (): ReferralDispatchForm => ({
   patientName: '',
   phone: '',
+  ageGroup: '',
+  gender: '',
   referringHospital: '',
   receivingHospital: '',
   receivingHospitalId: '',
@@ -164,11 +172,15 @@ export function normalizeDispatchDraft(raw: Partial<DispatchCreateDraft>): Dispa
     nonEmergency.destinationHospitalName = nonEmergency.destination || ''
   }
   if (!('needsNurse' in nonEmergency)) nonEmergency.needsNurse = null
+  if (!('ageGroup' in nonEmergency)) nonEmergency.ageGroup = ''
+  if (!('gender' in nonEmergency)) nonEmergency.gender = ''
 
   const referral = { ...base.referral, ...(raw.referral ?? {}) } as ReferralDispatchForm & {
     medicalNotes?: string
   }
   if (!('needsNurse' in referral)) referral.needsNurse = null
+  if (!('ageGroup' in referral)) referral.ageGroup = ''
+  if (!('gender' in referral)) referral.gender = ''
 
   return {
     ...base,

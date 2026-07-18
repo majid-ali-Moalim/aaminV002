@@ -3,7 +3,10 @@
 .nurse-shell {
   display: flex;
   min-height: 100dvh;
-  min-height: 100vh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  overflow: hidden;
   background: #0c0c0e;
   color: #e4e4e7;
 }
@@ -11,7 +14,10 @@
 .nurse-viewport {
   flex: 1;
   min-width: 0;
+  min-height: 100dvh;
+  min-height: 100svh;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .nurse-sidebar {
@@ -22,6 +28,13 @@
   background: linear-gradient(180deg, #450a0a 0%, #18181b 40%);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   padding: 16px 12px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100dvh;
+  height: 100svh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .nurse-sidebar-brand {
@@ -1772,9 +1785,92 @@
 }
 
 .nmw-stage-desc {
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.55;
   color: #a1a1aa;
   margin: 6px 0 14px;
+}
+
+.nmw-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.nmw-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nmw-info-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+}
+
+.nmw-info-value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #f4f4f5;
+}
+
+.nmw-info-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.nmw-task-form--comfortable .nmw-task-head h4 {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fafafa;
+}
+
+.nmw-task-form--comfortable .nmw-task-head p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #a1a1aa;
+}
+
+.nmw-form-section-label {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #f87171;
+  margin: 8px 0 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nmw-task-form--comfortable .nurse-form-grid label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e4e7;
+  gap: 8px;
+}
+
+.nmw-task-form--comfortable .nurse-form-grid input,
+.nmw-task-form--comfortable .nurse-form-grid textarea,
+.nmw-task-form--comfortable .nurse-form-grid select {
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 11px 12px;
+}
+
+.nurse-page--light .nmw-info-value,
+.nurse-shell--light .nmw-info-value {
+  color: #0f172a;
+}
+
+.nurse-page--light .nmw-task-form--comfortable .nmw-task-head h4,
+.nurse-shell--light .nmw-task-form--comfortable .nmw-task-head h4 {
+  color: #0f172a;
 }
 
 .nmw-warn {
@@ -2449,4 +2545,207 @@
   .nmw-progress-fill {
     transition: none;
   }
+}
+
+/* ─── Nurse theme toggle & light mode ─────────────────────────────── */
+
+.nurse-sidebar-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nurse-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nurse-theme-toggle:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #fca5a5;
+}
+
+.nurse-theme-toggle--compact {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 10px;
+}
+
+.nurse-shift-badge.on-case {
+  background: rgba(220, 38, 38, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.nurse-shell--light {
+  background: #f9fafb;
+  color: #0f172a;
+}
+
+.nurse-shell--light .nurse-sidebar {
+  background: #ffffff;
+  border-right-color: #e5e7eb;
+}
+
+.nurse-shell--light .nurse-sidebar-brand {
+  border-bottom-color: #e5e7eb;
+}
+
+.nurse-shell--light .nurse-sidebar-brand-title {
+  color: #0f172a;
+}
+
+.nurse-shell--light .nurse-sidebar-brand-sub {
+  color: #64748b;
+}
+
+.nurse-shell--light .nurse-sidebar-profile {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.nurse-shell--light .nurse-sidebar-name {
+  color: #0f172a;
+}
+
+.nurse-shell--light .nurse-sidebar-meta {
+  color: #64748b;
+}
+
+.nurse-shell--light .nurse-sidebar-link {
+  color: #475569;
+}
+
+.nurse-shell--light .nurse-sidebar-link:hover {
+  background: #f3f4f6;
+  color: #0f172a;
+}
+
+.nurse-shell--light .nurse-sidebar-link.active {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.nurse-shell--light .nurse-sidebar-logout {
+  border-color: #e5e7eb;
+  color: #64748b;
+}
+
+.nurse-shell--light .nurse-sidebar-logout:hover {
+  background: #f3f4f6;
+  color: #0f172a;
+}
+
+.nurse-shell--light .nurse-sidebar-footer {
+  border-top-color: #e5e7eb;
+}
+
+.nurse-shell--light .nurse-theme-toggle {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #64748b;
+}
+
+.nurse-shell--light .nurse-theme-toggle:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.nurse-page--light {
+  background: #f9fafb;
+}
+
+.nurse-page--light .nurse-header {
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom-color: #e5e7eb;
+}
+
+.nurse-page--light .nurse-header-title {
+  color: #0f172a;
+}
+
+.nurse-page--light .nurse-header-sub {
+  color: #64748b;
+}
+
+.nurse-page--light .nurse-notif-btn {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.nurse-page--light .nurse-theme-toggle--compact {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.nurse-page--light .nurse-theme-toggle--compact:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.nurse-page--light .nurse-dash-hero {
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  border-color: #fecaca;
+}
+
+.nurse-page--light .nurse-dash-hero h2 {
+  color: #0f172a;
+}
+
+.nurse-page--light .nurse-dash-hero p {
+  color: #64748b;
+}
+
+.nurse-page--light .nurse-stat-card {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.nurse-page--light .nurse-stat-value {
+  color: #0f172a;
+}
+
+.nurse-page--light .nurse-stat-label {
+  color: #64748b;
+}
+
+.nurse-page--light .nurse-quick-action-btn {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #374151;
+}
+
+.nurse-page--light .nurse-quick-action-btn:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.nurse-page--light .nurse-mission-row {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+.nurse-page--light .nurse-dash-section h3 {
+  color: #64748b;
 }

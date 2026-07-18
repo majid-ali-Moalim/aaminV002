@@ -24,11 +24,7 @@ import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
   encodeAssessment,
   encodeHandover,
-  isAssessmentRecord,
   isHandoverRecord,
-  isMedicalNoteRecord,
-  isMonitoringRecord,
-  parseClinicalRecord,
   TREATMENT_TYPES,
 } from '@/lib/nurse/patientCareTypes'
 import {
@@ -55,18 +51,15 @@ import {
 import { useNurseWorkflowState } from '@/lib/nurse/useNurseWorkflowState'
 import MissionHorizontalTimeline from '@/components/mission-workflow/MissionHorizontalTimeline'
 import {
-  AssessmentTaskFields,
   HandoverTaskFields,
-  NotesTaskFields,
+  MedicalNotesCombinedFields,
   TaskShell,
-  TreatmentTaskFields,
-  VitalsTaskFields,
-  type AssessmentFormState,
   type HandoverFormState,
-  type NotesFormState,
-  type TreatmentFormState,
-  type VitalsFormState,
+  type MedicalNotesFormState,
 } from './NurseWorkflowTasks'
+import { FieldCaseDetailModal } from '@/components/shared/FieldCaseDetailModal'
+import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
+import { formatSomaliaPhoneDisplay, resolvePatientPhone } from '@/lib/phoneContact'
 
 type Props = {
   selectedCaseId?: string | null
@@ -83,8 +76,10 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const [activeTask, setActiveTask] = useState<NurseTaskId | null>(null)
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
 
-  const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState>({
+  const [medicalNotesForm, setMedicalNotesForm] = useState<MedicalNotesFormState>({
     chiefComplaint: '',
     symptoms: '',
     consciousnessLevel: 'Alert',
@@ -92,16 +87,14 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     breathingStatus: 'Normal',
     injuryDescription: '',
     assessmentNotes: '',
-  })
-  const [vitalsForm, setVitalsForm] = useState<VitalsFormState>({
     bloodPressure: '',
     heartRate: '',
     temperature: '',
     oxygenSaturation: '',
     respiratoryRate: '',
-  })
-  const [notesForm, setNotesForm] = useState<NotesFormState>({ observations: '', condition: '', progress: '' })
-  const [treatmentForm, setTreatmentForm] = useState<TreatmentFormState>({
+    observations: '',
+    condition: '',
+    progress: '',
     treatmentType: TREATMENT_TYPES[0],
     medication: '',
     notes: '',
@@ -178,22 +171,15 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
   const stickyPrimaryDisabled = stickyPrimary && stickyPrimary.id === 'begin_care' && !onScene
 
-  const visibleTaskChips = useMemo((): [NurseTaskId, string, typeof Stethoscope][] => {
+  const visibleTaskChips = useMemo((): [NurseTaskId, string, typeof ClipboardList][] => {
     if (!mission) return []
     const status = mission.status
-    const chips: [NurseTaskId, string, typeof Stethoscope][] = []
-    if (canDoPatientCareTasks(status)) {
-      chips.push(['assessment', 'Assessment', Stethoscope])
-      chips.push(['vitals', 'Vital Signs', Activity])
-      chips.push(['notes', 'Medical Notes', ClipboardList])
-      chips.push(['load_patient', 'Load Patient', Truck])
-    }
-    if (canDoTreatmentMonitoring(status)) {
-      chips.push(['treatment', 'Treatment', HeartPulse])
+    const chips: [NurseTaskId, string, typeof ClipboardList][] = []
+    if (canDoPatientCareTasks(status) || canDoTreatmentMonitoring(status)) {
+      chips.push(['medical_notes', 'Medical Notes', ClipboardList])
     }
     if (canDoHandover(status)) {
       chips.push(['handover', 'Handover', Building2])
-      chips.push(['documentation', 'Documentation', ClipboardList])
     }
     return chips
   }, [mission])
@@ -219,11 +205,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   )
 
   const docSummary = useMemo(() => ({
-    assessments: caseRecords.filter(isAssessmentRecord).length,
-    vitals: caseRecords.filter((r) => r.bloodPressure || r.heartRate || r.temperature).length,
-    notes: caseRecords.filter(isMedicalNoteRecord).length,
-    treatments: caseRecords.filter((r) => r.treatmentGiven && !isAssessmentRecord(r)).length,
-    monitoring: caseRecords.filter(isMonitoringRecord).length,
     handovers: caseRecords.filter(isHandoverRecord).length,
   }), [caseRecords])
 
@@ -247,6 +228,17 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     toast.success(`Stage: ${NURSE_WORKFLOW_STEPS.find((s) => s.id === next)?.label}`)
   }
 
+  const detailCase = useMemo(() => {
+    if (!detailCaseId) return mission
+    return myCases.find((c) => c.id === detailCaseId) || mission
+  }, [detailCaseId, myCases, mission])
+
+  const openCaseDetails = (id: string) => {
+    setDetailCaseId(id)
+    setDetailOpen(true)
+    markNurseCaseReviewed(id)
+  }
+
   const openCase = (id: string) => {
     setMissionId(id)
     markNurseCaseReviewed(id)
@@ -258,57 +250,29 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
     switch (taskId) {
       case 'view_case':
-        markNurseCaseReviewed(mission.id)
+        openCaseDetails(mission.id)
         syncWorkflow()
         setActiveTask(null)
-        logNurseActivity(mission.id, 'Case details reviewed')
-        toast.success('Case details reviewed')
+        logNurseActivity(mission.id, 'Case details opened')
         break
       case 'review_emergency':
-        markNurseCaseReviewed(mission.id)
+        openCaseDetails(mission.id)
         syncWorkflow()
         setActiveTask(null)
-        logNurseActivity(mission.id, 'Case details reviewed')
-        toast.success('Case details reviewed')
+        logNurseActivity(mission.id, 'Case details opened')
         break
       case 'begin_care':
         if (!guardTask('begin_care')) return
         advanceTo('PATIENT_ASSESSMENT', 'Patient care started')
-        setActiveTask('assessment')
+        setActiveTask('medical_notes')
         break
-      case 'assessment':
-        if (!guardTask('assessment')) return
-        setActiveTask('assessment')
-        break
-      case 'vitals':
-        if (!guardTask('vitals')) return
-        setActiveTask('vitals')
-        break
-      case 'notes':
-        if (!guardTask('notes')) return
-        setActiveTask('notes')
-        break
-      case 'load_patient':
-        if (!guardTask('load_patient')) return
-        await saveRecord(
-          { clinicalNotes: 'Patient loaded into ambulance and ready for transport.' },
-          'PATIENT_LOADED',
-          'Patient loaded into ambulance',
-        )
-        advanceTo('PATIENT_LOADED', 'Patient loaded and ready for transport')
-        setActiveTask(null)
-        break
-      case 'treatment':
-        if (!guardTask('treatment')) return
-        setActiveTask('treatment')
+      case 'medical_notes':
+        if (!guardTask('medical_notes')) return
+        setActiveTask('medical_notes')
         break
       case 'handover':
         if (!guardTask('handover')) return
         setActiveTask('handover')
-        break
-      case 'documentation':
-        if (!guardTask('documentation')) return
-        setActiveTask('documentation')
         break
       case 'close_mission':
         if (!handoverComplete) {
@@ -344,13 +308,11 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     if (!nurseId || !mission || readOnly) return
     if (stepId) {
       const taskMap: Partial<Record<NurseWorkflowStepId, NurseTaskId>> = {
-        PATIENT_ASSESSMENT: 'assessment',
-        VITAL_SIGNS: 'vitals',
-        MEDICAL_NOTES: 'notes',
-        PATIENT_LOADED: 'load_patient',
-        TREATMENT: 'treatment',
+        PATIENT_ASSESSMENT: 'medical_notes',
+        VITAL_SIGNS: 'medical_notes',
+        MEDICAL_NOTES: 'medical_notes',
+        TREATMENT: 'medical_notes',
         HOSPITAL_HANDOVER: 'handover',
-        COMPLETE_DOCUMENTATION: 'documentation',
       }
       const task = taskMap[stepId]
       if (task && !guardTask(task)) return
@@ -378,60 +340,44 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
   }
 
-  const submitAssessment = async (e: React.FormEvent) => {
+  const submitMedicalNotes = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!assessmentForm.chiefComplaint.trim()) {
+    if (!medicalNotesForm.chiefComplaint.trim()) {
       toast.error('Chief complaint is required')
       return
     }
-    await saveRecord({ clinicalNotes: encodeAssessment(assessmentForm) }, 'PATIENT_ASSESSMENT', 'Patient assessment recorded')
-    advanceTo('VITAL_SIGNS')
-    setActiveTask('vitals')
-  }
+    const noteSections = [
+      encodeAssessment({
+        chiefComplaint: medicalNotesForm.chiefComplaint,
+        symptoms: medicalNotesForm.symptoms,
+        consciousnessLevel: medicalNotesForm.consciousnessLevel,
+        painLevel: medicalNotesForm.painLevel,
+        breathingStatus: medicalNotesForm.breathingStatus,
+        injuryDescription: medicalNotesForm.injuryDescription,
+        assessmentNotes: medicalNotesForm.assessmentNotes,
+      }),
+      [medicalNotesForm.observations, medicalNotesForm.condition, medicalNotesForm.progress]
+        .filter(Boolean)
+        .join('\n\n'),
+      medicalNotesForm.notes ? `Treatment notes: ${medicalNotesForm.notes}` : '',
+    ].filter(Boolean)
 
-  const submitVitals = async (e: React.FormEvent) => {
-    e.preventDefault()
     await saveRecord(
       {
-        bloodPressure: vitalsForm.bloodPressure || undefined,
-        heartRate: vitalsForm.heartRate || undefined,
-        temperature: vitalsForm.temperature || undefined,
-        oxygenSaturation: vitalsForm.oxygenSaturation || undefined,
-        respiratoryRate: vitalsForm.respiratoryRate || undefined,
+        clinicalNotes: noteSections.join('\n\n'),
+        bloodPressure: medicalNotesForm.bloodPressure || undefined,
+        heartRate: medicalNotesForm.heartRate || undefined,
+        temperature: medicalNotesForm.temperature || undefined,
+        oxygenSaturation: medicalNotesForm.oxygenSaturation || undefined,
+        respiratoryRate: medicalNotesForm.respiratoryRate || undefined,
+        treatmentGiven: medicalNotesForm.treatmentType || undefined,
+        medications: medicalNotesForm.medication || undefined,
       },
-      'VITAL_SIGNS',
-      'Vital signs recorded',
+      'PATIENT_ASSESSMENT',
+      'Medical notes saved',
     )
     advanceTo('MEDICAL_NOTES')
-    setVitalsForm({ bloodPressure: '', heartRate: '', temperature: '', oxygenSaturation: '', respiratoryRate: '' })
-  }
-
-  const submitNotes = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const text = [notesForm.observations, notesForm.condition, notesForm.progress].filter(Boolean).join('\n\n')
-    if (!text.trim()) {
-      toast.error('Enter at least one note field')
-      return
-    }
-    await saveRecord({ clinicalNotes: text }, 'MEDICAL_NOTES', 'Medical notes added')
-    advanceTo('PATIENT_LOADED')
-    setNotesForm({ observations: '', condition: '', progress: '' })
-  }
-
-  const submitTreatment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    await saveRecord(
-      {
-        treatmentGiven: treatmentForm.treatmentType,
-        medications: treatmentForm.medication || undefined,
-        clinicalNotes: treatmentForm.notes || undefined,
-      },
-      'TREATMENT',
-      `Treatment recorded: ${treatmentForm.treatmentType}`,
-    )
-    advanceTo('TREATMENT')
     setActiveTask(null)
-    setTreatmentForm({ treatmentType: TREATMENT_TYPES[0], medication: '', notes: '' })
   }
 
   const submitHandover = async (e: React.FormEvent) => {
@@ -441,8 +387,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       return
     }
     await saveRecord({ clinicalNotes: encodeHandover(handoverForm) }, 'HOSPITAL_HANDOVER', 'Hospital handover completed')
-    advanceTo('COMPLETE_DOCUMENTATION')
-    setActiveTask('documentation')
+    advanceTo('HOSPITAL_HANDOVER')
+    setActiveTask(null)
   }
 
   const closeMission = async () => {
@@ -487,13 +433,25 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               </div>
               <p className="text-sm text-zinc-400">{m.patient?.fullName || m.callerName} · {m.pickupLocation}</p>
               <div className="nmw-queue-actions">
+                <button type="button" className="nurse-btn ghost" onClick={() => openCaseDetails(m.id)}>
+                  Case Details
+                </button>
                 <button type="button" className="nurse-btn primary" onClick={() => openCase(m.id)}>
-                  Open Case Workspace
+                  Open Mission
                 </button>
               </div>
             </article>
           ))}
         </div>
+        <FieldCaseDetailModal
+          open={detailOpen}
+          onClose={() => {
+            setDetailOpen(false)
+            setDetailCaseId(null)
+          }}
+          caseData={detailCase}
+          variant="nurse"
+        />
       </div>
     )
   }
@@ -513,6 +471,10 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const driverName = mission.driver
     ? `${mission.driver.firstName || ''} ${mission.driver.lastName || ''}`.trim()
     : '—'
+  const patientPhone = resolvePatientPhone(mission)
+  const destinationLabel =
+    mission.destination || mission.destinationHospital?.name || '—'
+  const regionLabel = [mission.region?.name, mission.district?.name].filter(Boolean).join(' · ')
 
   const activityLog = [
     ...(meta?.activityLog || []).map((e) => ({
@@ -532,7 +494,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       {/* Hero */}
       <header className="nmw-hero">
         <div>
-          <p className="nmw-kicker">Case Workspace · Live Clinical Ops</p>
+          <p className="nmw-kicker">Case Details · Live Clinical Ops</p>
           <h2 className="nmw-code">{mission.trackingCode}</h2>
           <div className="nmw-badges">
             <span className={`nurse-priority ${mission.priority?.toLowerCase()}`}>{mission.priority}</span>
@@ -559,7 +521,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         <span><User size={14} /> {mission.patient?.fullName || mission.callerName || 'Patient'}</span>
         <span><MapPin size={14} /> {mission.pickupLocation || '—'}</span>
         <span><Truck size={14} /> {driverName}</span>
-        <span><Building2 size={14} /> {mission.destination || 'Hospital TBD'}</span>
+        <span><Building2 size={14} /> {destinationLabel}</span>
       </div>
 
       <section className="nmw-card nmw-timeline-card nmw-span-2">
@@ -645,108 +607,69 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
             </div>
           </div>
           )}
-        </section>
 
-        {/* Task panel */}
-        <section className="nmw-card nmw-task-card">
-          <h3 className="nmw-card-title">Task Workspace</h3>
-
-          {readOnly && (
-            <div className="nmw-task-placeholder">
-              <p>This case is closed. View the read-only summary here or in Case History.</p>
-            </div>
-          )}
-
-          {!readOnly && !activeTask && (
-            <div className="nmw-task-placeholder">
-              <p>Select an activity from the current stage or use the quick task chips above.</p>
-              <p className="text-sm text-zinc-500 mt-2">
-                Your workflow: Patient care → Treatment → Handover → Close. Transport is handled by the driver.
-              </p>
-            </div>
-          )}
-
-          {!readOnly && activeTask === 'assessment' && (
-            <TaskShell title="Patient Assessment" subtitle="Chief complaint, symptoms, injuries" saving={saving} onSubmit={submitAssessment} submitLabel="Save Assessment">
-              <AssessmentTaskFields form={assessmentForm} setForm={setAssessmentForm} />
-            </TaskShell>
-          )}
-
-          {!readOnly && activeTask === 'vitals' && (
-            <TaskShell title="Vital Signs" subtitle="BP, pulse, temperature, SpO₂, respiratory rate" saving={saving} onSubmit={submitVitals} submitLabel="Save Vital Signs">
-              <VitalsTaskFields form={vitalsForm} setForm={setVitalsForm} />
-            </TaskShell>
-          )}
-
-          {!readOnly && activeTask === 'notes' && (
-            <TaskShell title="Medical Notes" subtitle="Observations, condition, progress" saving={saving} onSubmit={submitNotes} submitLabel="Save Medical Notes">
-              <NotesTaskFields form={notesForm} setForm={setNotesForm} />
-            </TaskShell>
-          )}
-
-          {!readOnly && activeTask === 'treatment' && (
-            <TaskShell title="Treatment Record" subtitle="Interventions performed" saving={saving} onSubmit={submitTreatment} submitLabel="Save Treatment">
-              <TreatmentTaskFields form={treatmentForm} setForm={setTreatmentForm} />
+          {!readOnly && activeTask === 'medical_notes' && (
+            <TaskShell
+              title="Medical Notes"
+              subtitle="Assessment, vitals, observations, and treatment in one record"
+              saving={saving}
+              onSubmit={submitMedicalNotes}
+              submitLabel="Save Medical Notes"
+            >
+              <MedicalNotesCombinedFields form={medicalNotesForm} setForm={setMedicalNotesForm} />
             </TaskShell>
           )}
 
           {!readOnly && activeTask === 'handover' && (
-            <TaskShell title="Hospital Handover" subtitle="Transfer to receiving facility" saving={saving} onSubmit={submitHandover} submitLabel="Complete Handover">
-              <HandoverTaskFields form={handoverForm} setForm={setHandoverForm} nurseName={fullName} />
-            </TaskShell>
-          )}
-
-          {!readOnly && activeTask === 'documentation' && (
-            <div className="nmw-doc-panel">
-              <h4>Clinical Documentation Summary</h4>
-              <div className="nmw-doc-grid">
-                <DocStat label="Assessments" count={docSummary.assessments} />
-                <DocStat label="Vital Signs" count={docSummary.vitals} />
-                <DocStat label="Medical Notes" count={docSummary.notes} />
-                <DocStat label="Treatments" count={docSummary.treatments} />
-                <DocStat label="Monitoring" count={docSummary.monitoring} />
-                <DocStat label="Handovers" count={docSummary.handovers} />
-              </div>
-              {recordsLoading ? (
-                <Loader2 className="animate-spin mx-auto mt-4" size={24} />
-              ) : caseRecords.length === 0 ? (
-                <p className="nurse-empty-inline mt-4">No records yet for this case.</p>
-              ) : (
-                <ul className="nmw-doc-list">
-                  {caseRecords.slice(0, 8).map((r) => (
-                    <li key={r.id}>
-                      <span>{format(new Date(r.createdAt), 'h:mm a')}</span>
-                      <span>
-                        {isAssessmentRecord(r)
-                          ? `Assessment: ${parseClinicalRecord(r.clinicalNotes)?.chiefComplaint || '—'}`
-                          : r.treatmentGiven
-                            ? `Treatment: ${r.treatmentGiven}`
-                            : r.bloodPressure
-                              ? `Vitals: BP ${r.bloodPressure}`
-                              : 'Clinical note'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!handoverComplete && (
-                <p className="nmw-warn mt-4">
-                  Fill out and save the handover form (Handover activity above) before completing this case.
-                </p>
-              )}
-              <button
-                type="button"
-                className="nurse-btn primary w-full mt-4"
-                disabled={!handoverComplete}
-                onClick={closeMission}
+            <>
+              <TaskShell
+                title="Hospital Handover"
+                subtitle="Complete transfer details for receiving staff"
+                saving={saving}
+                onSubmit={submitHandover}
+                submitLabel="Save Handover"
               >
-                Mark Mission Complete & Close
-              </button>
-            </div>
+                <HandoverTaskFields form={handoverForm} setForm={setHandoverForm} nurseName={fullName} />
+              </TaskShell>
+              {handoverComplete && canCloseMission(mission.status) && (
+                <button type="button" className="nurse-btn primary w-full mt-4" onClick={closeMission}>
+                  Mark Mission Complete & Close
+                </button>
+              )}
+            </>
           )}
         </section>
 
-        {/* Activity log */}
+        <section className="nmw-card">
+          <h3 className="nmw-card-title">Case Details</h3>
+          <div className="nmw-info-grid">
+            <NurseInfoItem label="Case ID" value={mission.trackingCode} />
+            <NurseInfoItem label="Status" value={mission.status?.replace(/_/g, ' ')} />
+            <NurseInfoItem label="Priority" value={mission.priority} />
+            <NurseInfoItem label="Patient" value={mission.patient?.fullName || mission.callerName} />
+            <NurseInfoItem label="Phone" value={formatSomaliaPhoneDisplay(patientPhone)} />
+            <NurseInfoItem label="Pickup" value={mission.pickupLocation} />
+            <NurseInfoItem label="Destination" value={destinationLabel} />
+            <NurseInfoItem label="Region" value={regionLabel} />
+            <NurseInfoItem label="Driver" value={driverName !== '—' ? driverName : undefined} />
+            <NurseInfoItem label="Ambulance" value={mission.ambulance?.ambulanceNumber} />
+            <NurseInfoItem label="Dispatcher" value={mission.dispatcher?.user?.username || mission.dispatcher?.firstName} />
+          </div>
+          <div className="nmw-info-contact">
+            <DispatcherContactActions
+              dispatcher={mission.dispatcher}
+              chatHref="/nurse/chat"
+              variant="nurse"
+              layout="stack"
+            />
+          </div>
+          <button type="button" className="nurse-btn ghost w-full mt-3" onClick={() => openCaseDetails(mission.id)}>
+            Open full case details
+          </button>
+        </section>
+      </div>
+
+        {/* Activity log — moved outside grid */}
         <section className="nmw-card nmw-span-2">
           <h3 className="nmw-card-title">Activity Log</h3>
           {activityLog.length === 0 ? (
@@ -759,7 +682,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
             </ul>
           )}
         </section>
-      </div>
 
       {activeCases.length > 1 && (
         <div className="nmw-case-switcher">
@@ -797,15 +719,25 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           </button>
         </div>
       )}
+
+      <FieldCaseDetailModal
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false)
+          setDetailCaseId(null)
+        }}
+        caseData={detailCase}
+        variant="nurse"
+      />
     </div>
   )
 }
 
-function DocStat({ label, count }: { label: string; count: number }) {
+function NurseInfoItem({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="nmw-doc-stat">
-      <span className="nmw-doc-count">{count}</span>
-      <span className="nmw-doc-label">{label}</span>
+    <div className="nmw-info-item">
+      <span className="nmw-info-label">{label}</span>
+      <span className="nmw-info-value">{value || '—'}</span>
     </div>
   )
 }

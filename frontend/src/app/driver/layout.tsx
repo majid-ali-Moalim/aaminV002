@@ -8,6 +8,7 @@ import { DriverNotificationProvider } from '@/components/driver/DriverNotificati
 import ChatAlerts from '@/components/chat/ChatAlerts'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import './driver.css'
+import '@/components/shared/field-case-detail.css'
 
 export default function DriverLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -18,7 +19,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
     return <>{children}</>
   }
 
-  const shellClass = `driver-shell driver-shell--light${theme === 'dark' ? ' driver-shell--dark-content' : ''}`
+  const shellClass = theme === 'light' ? 'driver-shell driver-shell--light' : 'driver-shell'
 
   return (
     <DriverGuard>

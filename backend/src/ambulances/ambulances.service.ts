@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { AmbulanceStatus, Prisma, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -49,18 +49,11 @@ export class AmbulancesService {
   }
 
   async create(data: any) {
-    // We use 'any' to allow incoming IDs for relations before DTOs are fully strictly typed
-    const { regionId, districtId, stationId, equipmentLevelId, ...rest } = data;
+    const normalized = this.normalizeCreateData(data);
 
     try {
       const result = await this.prisma.ambulance.create({
-        data: {
-          ...rest,
-          region: regionId ? { connect: { id: regionId } } : undefined,
-          district: districtId ? { connect: { id: districtId } } : undefined,
-          station: stationId ? { connect: { id: stationId } } : undefined,
-          equipmentLevel: equipmentLevelId ? { connect: { id: equipmentLevelId } } : undefined,
-        },
+        data: normalized,
         include: {
           employees: {
             include: {
@@ -86,20 +79,26 @@ export class AmbulancesService {
   }
 
   async update(id: string, data: any) {
-    const { regionId, districtId, stationId, equipmentLevelId, ...rest } = data;
-
     try {
       const existing = await this.prisma.ambulance.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException('Ambulance not found');
 
+      const normalized = this.normalizeUpdateData(data);
+
       const result = await this.prisma.ambulance.update({
         where: { id },
-        data: {
-          ...rest,
-          region: regionId ? { connect: { id: regionId } } : undefined,
-          district: districtId ? { connect: { id: districtId } } : undefined,
-          station: stationId ? { connect: { id: stationId } } : undefined,
-          equipmentLevel: equipmentLevelId ? { connect: { id: equipmentLevelId } } : undefined,
+        data: normalized,
+        include: {
+          employees: {
+            include: {
+              user: true,
+              employeeRole: true,
+            },
+          },
+          region: true,
+          district: true,
+          station: true,
+          equipmentLevel: true,
         },
       });
 
@@ -132,6 +131,9 @@ export class AmbulancesService {
         const target = error.meta?.target?.[0] || 'field';
         const friendlyName = target.replace(/([A-Z])/g, ' $1').toLowerCase();
         throw new ConflictException(`An ambulance with this ${friendlyName} already exists.`);
+      }
+      if (error?.code === 'P2025') {
+        throw new NotFoundException('Related record not found for this update.');
       }
       throw error;
     }
@@ -193,63 +195,11 @@ export class AmbulancesService {
   }
 
   async assignDriver(id: string, driverEmployeeId: string) {
-    const [employee, result] = await this.prisma.$transaction(async (tx) => {
-      const existingDriver = await tx.employee.findFirst({
-        where: {
-          id: { not: driverEmployeeId },
-          assignedAmbulanceId: id,
-          employeeRole: { name: { contains: 'Driver', mode: 'insensitive' } },
-        },
-        select: { firstName: true, lastName: true, employeeCode: true },
-      });
-      if (existingDriver) {
-        const name =
-          [existingDriver.firstName, existingDriver.lastName].filter(Boolean).join(' ') ||
-          existingDriver.employeeCode ||
-          'another driver';
-        throw new ConflictException(`This ambulance is already assigned to ${name}. Change that driver's ambulance first.`);
-      }
-
-      const updatedEmployee = await tx.employee.update({
-        where: { id: driverEmployeeId },
-        data: {
-          assignedAmbulanceId: id,
-        },
-        include: {
-          user: true,
-          assignedAmbulance: true,
-        },
-      });
-
-      const updatedAmbulance = await tx.ambulance.update({
-        where: { id },
-        data: {
-          status: AmbulanceStatus.AVAILABLE,
-        },
-        include: {
-          employees: {
-            include: {
-              user: true,
-              employeeRole: true,
-            },
-          },
-        },
-      });
-
-      return [updatedEmployee, updatedAmbulance];
-    });
-
-    await this.notifications.create({
-      title: 'Ambulance Crew Assigned',
-      message: `Driver ${employee.user.username} has been assigned to Ambulance ${result.ambulanceNumber}`,
-      type: 'AMBULANCE' as any,
-      priority: 'MEDIUM',
-      relatedModule: 'Ambulance',
-      relatedId: result.id,
-      actionUrl: `/admin/ambulances?id=${result.id}`,
-    });
-
-    return [employee, result];
+    void id;
+    void driverEmployeeId;
+    throw new ConflictException(
+      'Drivers and nurses are assigned when dispatching a case. Use the Dispatch Assign Team form.',
+    );
   }
 
   async assignNurse(id: string, nurseEmployeeId: string) {
@@ -278,22 +228,18 @@ export class AmbulancesService {
   private resolveOperationalStatus(
     dbStatus: AmbulanceStatus,
     hasActiveCase: boolean,
-    hasAssignedDriver: boolean,
   ): 'available' | 'unavailable' | 'maintenance' {
     if (dbStatus === 'MAINTENANCE') return 'maintenance';
-    if (hasAssignedDriver && !hasActiveCase && dbStatus !== 'UNAVAILABLE') {
-      return 'available';
-    }
-    return 'unavailable';
+    if (hasActiveCase || dbStatus === 'ON_DUTY') return 'unavailable';
+    if (dbStatus === 'UNAVAILABLE') return 'unavailable';
+    return 'available';
   }
 
   private getUnavailableReason(
     dbStatus: AmbulanceStatus,
     hasActiveCase: boolean,
-    hasAssignedDriver: boolean,
   ): string | null {
-    if (hasActiveCase) return 'Assigned to active case';
-    if (!hasAssignedDriver) return 'No driver assigned';
+    if (hasActiveCase || dbStatus === 'ON_DUTY') return 'Assigned to active case';
     if (dbStatus === 'UNAVAILABLE') return 'Out of service';
     return null;
   }
@@ -321,6 +267,8 @@ export class AmbulancesService {
                 status: true,
                 updatedAt: true,
                 patient: { select: { fullName: true } },
+                driver: { select: { id: true, firstName: true, lastName: true } },
+                nurse: { select: { id: true, firstName: true, lastName: true } },
               },
               take: 1,
               orderBy: { updatedAt: 'desc' },
@@ -369,23 +317,18 @@ export class AmbulancesService {
       activeCases.map((c) => [c.ambulanceId!, c]),
     );
 
-    const getEmployeeByRole = (employees: any[], hint: string) =>
-      employees?.find((e) =>
-        e.employeeRole?.name?.toUpperCase().includes(hint),
-      );
-
     const rows = ambulances.map((amb) => {
       const activeCase =
         amb.emergencyRequests?.[0] ?? activeCaseByAmbulance.get(amb.id) ?? null;
-      const driver = getEmployeeByRole(amb.employees ?? [], 'DRIVER');
+      const missionDriver = (activeCase as any)?.driver ?? null;
+      const missionNurse = (activeCase as any)?.nurse ?? null;
       const operationalStatus = this.resolveOperationalStatus(
         amb.status,
         !!activeCase,
-        Boolean(driver),
       );
       const unavailableReason =
         operationalStatus === 'unavailable'
-          ? this.getUnavailableReason(amb.status, !!activeCase, Boolean(driver))
+          ? this.getUnavailableReason(amb.status, !!activeCase)
           : null;
 
       return {
@@ -396,8 +339,17 @@ export class AmbulancesService {
         vehicleType: amb.vehicleType ?? amb.equipmentLevel?.name ?? 'Standard',
         dbStatus: amb.status,
         operationalStatus,
-        driver: driver
-          ? { id: driver.id, name: [driver.firstName, driver.lastName].filter(Boolean).join(' ') }
+        driver: missionDriver
+          ? {
+              id: missionDriver.id,
+              name: [missionDriver.firstName, missionDriver.lastName].filter(Boolean).join(' '),
+            }
+          : null,
+        nurse: missionNurse
+          ? {
+              id: missionNurse.id,
+              name: [missionNurse.firstName, missionNurse.lastName].filter(Boolean).join(' '),
+            }
           : null,
         currentCase: activeCase
           ? {
@@ -528,6 +480,8 @@ export class AmbulancesService {
             createdAt: true,
             completedAt: true,
             patient: { select: { fullName: true } },
+            driver: { select: { id: true, firstName: true, lastName: true } },
+            nurse: { select: { id: true, firstName: true, lastName: true } },
           },
         },
       },
@@ -539,10 +493,8 @@ export class AmbulancesService {
       this.ACTIVE_CASE_STATUSES.includes(r.status as any),
     );
 
-    const getEmployeeByRole = (hint: string) =>
-      ambulance.employees?.find((e) =>
-        e.employeeRole?.name?.toUpperCase().includes(hint),
-      );
+    const missionDriver = activeCase?.driver ?? null;
+    const missionNurse = activeCase?.nurse ?? null;
 
     const statusHistory = await this.prisma.notification.findMany({
       where: { relatedModule: 'Ambulance', relatedId: id },
@@ -564,7 +516,6 @@ export class AmbulancesService {
         operationalStatus: this.resolveOperationalStatus(
           ambulance.status,
           !!activeCase,
-          Boolean(getEmployeeByRole('DRIVER')),
         ),
         region: ambulance.region,
         district: ambulance.district,
@@ -573,10 +524,101 @@ export class AmbulancesService {
         fuelLevel: ambulance.fuelLevel,
         updatedAt: ambulance.updatedAt.toISOString(),
       },
-      driver: getEmployeeByRole('DRIVER'),
+      driver: missionDriver,
+      nurse: missionNurse,
       currentCase: activeCase ?? null,
       caseHistory: ambulance.emergencyRequests,
       statusHistory,
     };
+  }
+
+  private parseDate(value: string): Date | undefined {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
+  private normalizeCreateData(data: Record<string, unknown>): Prisma.AmbulanceCreateInput {
+    const payload = this.normalizeUpdateData(data) as Prisma.AmbulanceCreateInput;
+    if (!payload.ambulanceNumber || !payload.plateNumber) {
+      throw new BadRequestException('Ambulance number and plate number are required.');
+    }
+    return payload;
+  }
+
+  private normalizeUpdateData(data: Record<string, unknown>): Prisma.AmbulanceUpdateInput {
+    const raw: Record<string, unknown> = { ...data };
+    const payload: Prisma.AmbulanceUpdateInput = {};
+
+    const scalarFields = [
+      'ambulanceNumber',
+      'plateNumber',
+      'fleetNumber',
+      'status',
+      'location',
+      'vehicleBrand',
+      'vehicleModel',
+      'vehicleType',
+      'vehicleYear',
+      'crewCount',
+      'readinessScore',
+      'oxygenAvailable',
+      'defibrillatorAvailable',
+      'registrationDocumentUrl',
+      'isActive',
+      'fuelLevel',
+      'mileage',
+      'notes',
+    ] as const;
+
+    for (const field of scalarFields) {
+      if (!(field in raw)) continue;
+      const value = raw[field];
+      if (value === undefined) continue;
+      if (value === '' || value === null) {
+        if (field === 'oxygenAvailable' || field === 'defibrillatorAvailable' || field === 'isActive') {
+          continue;
+        }
+        (payload as Record<string, unknown>)[field] = null;
+        continue;
+      }
+      if (field === 'vehicleYear' || field === 'crewCount' || field === 'readinessScore' || field === 'fuelLevel' || field === 'mileage') {
+        const num = Number(value);
+        if (!Number.isNaN(num)) {
+          (payload as Record<string, unknown>)[field] = num;
+        }
+        continue;
+      }
+      (payload as Record<string, unknown>)[field] = value;
+    }
+
+    const dateFields = ['registrationExpiry', 'lastMaintenance', 'nextMaintenance'] as const;
+    for (const field of dateFields) {
+      if (!(field in raw)) continue;
+      const value = raw[field];
+      if (value === null || value === '') {
+        (payload as Record<string, unknown>)[field] = null;
+      } else if (typeof value === 'string') {
+        (payload as Record<string, unknown>)[field] = this.parseDate(value) ?? null;
+      }
+    }
+
+    const relationMap = {
+      regionId: 'region',
+      districtId: 'district',
+      stationId: 'station',
+      equipmentLevelId: 'equipmentLevel',
+    } as const;
+
+    for (const [idField, relation] of Object.entries(relationMap)) {
+      if (!(idField in raw)) continue;
+      const value = raw[idField];
+      if (value === null || value === '') {
+        (payload as Record<string, unknown>)[relation] = { disconnect: true };
+      } else if (typeof value === 'string') {
+        (payload as Record<string, unknown>)[relation] = { connect: { id: value } };
+      }
+    }
+
+    return payload;
   }
 }

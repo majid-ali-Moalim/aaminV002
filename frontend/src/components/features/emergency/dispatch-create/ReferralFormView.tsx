@@ -6,6 +6,7 @@ import type { District } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import PatientNameField from './PatientNameField'
+import PatientDemographicsFields from './PatientDemographicsFields'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
@@ -66,6 +67,13 @@ export default function ReferralDispatchFormView({
               placeholder="61XXXXXXX"
             />
           </div>
+          <PatientDemographicsFields
+            ageGroup={form.ageGroup}
+            gender={form.gender}
+            ageGroupError={errors.ageGroup}
+            genderError={errors.gender}
+            onChange={(patch) => onChange(patch)}
+          />
           <div>
             <FieldLabel required error={errors.referringHospital}>Referring Hospital</FieldLabel>
             <input

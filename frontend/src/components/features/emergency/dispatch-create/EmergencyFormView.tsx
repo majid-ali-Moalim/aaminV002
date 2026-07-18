@@ -132,17 +132,6 @@ export default function EmergencyDispatchFormView({
             onChange={(stationId) => onChange({ stationId })}
           />
           <div className="sm:col-span-2">
-            <FieldLabel error={errors.landmark}>
-              Landmark <span className="text-slate-400 font-normal">(optional)</span>
-            </FieldLabel>
-            <input
-              className={fieldInputClass(errors.landmark)}
-              value={form.landmark}
-              onChange={(e) => onChange({ landmark: e.target.value })}
-              placeholder="Near main mosque, market, etc."
-            />
-          </div>
-          <div className="sm:col-span-2">
             <FieldLabel error={errors.areaStreet}>
               Area / Street <span className="text-slate-400 font-normal">(optional)</span>
             </FieldLabel>

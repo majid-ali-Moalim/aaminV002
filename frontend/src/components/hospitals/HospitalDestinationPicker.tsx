@@ -27,6 +27,7 @@ type Props = {
   required?: boolean
   branchRequired?: boolean
   combobox?: boolean
+  hideBranch?: boolean
   hospitalLabel?: string
   hospitalPlaceholder?: string
 }
@@ -43,6 +44,7 @@ export default function HospitalDestinationPicker({
   required,
   branchRequired = false,
   combobox = false,
+  hideBranch = false,
   hospitalLabel = 'Destination Hospital or Place',
   hospitalPlaceholder = 'Type or select hospital or place',
 }: Props) {
@@ -67,8 +69,8 @@ export default function HospitalDestinationPicker({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
+    <div className={`grid grid-cols-1 ${hideBranch ? '' : 'sm:grid-cols-2'} gap-4`}>
+      <div className={hideBranch ? 'sm:col-span-2' : undefined}>
         <FieldLabel required={required} error={hospitalError}>{hospitalLabel}</FieldLabel>
         {combobox ? (
           <>
@@ -104,6 +106,7 @@ export default function HospitalDestinationPicker({
           </select>
         )}
       </div>
+      {!hideBranch && (
       <div>
         <FieldLabel
           required={branchRequired && branches.length > 0}
@@ -142,6 +145,7 @@ export default function HospitalDestinationPicker({
           </select>
         )}
       </div>
+      )}
     </div>
   )
 }

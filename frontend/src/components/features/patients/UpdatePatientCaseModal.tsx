@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, User, ClipboardList, X } from 'lucide-react'
+import { Loader2, User, ClipboardList, X, Activity } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +9,7 @@ import {
   patientsService,
   systemSetupService,
 } from '@/lib/api'
+import CaseMissionRecordsPanel from '@/components/features/emergency/CaseMissionRecordsPanel'
 import {
   BloodType,
   EmergencyRequest,
@@ -92,10 +93,12 @@ type Props = {
 }
 
 export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: Props) {
-  const [tab, setTab] = useState<'patient' | 'case'>('patient')
+  const [tab, setTab] = useState<'patient' | 'case' | 'mission'>('patient')
   const [form, setForm] = useState<UpdateCaseFormValues>(() => toFormValues(request))
   const [errors, setErrors] = useState<UpdateCaseFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
+  const [fullRequest, setFullRequest] = useState<EmergencyRequest | null>(request)
+  const [loadingMission, setLoadingMission] = useState(true)
   const [regions, setRegions] = useState<Region[]>([])
   const [patientDistricts, setPatientDistricts] = useState<District[]>([])
   const [caseDistricts, setCaseDistricts] = useState<District[]>([])
@@ -106,6 +109,15 @@ export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: 
       setRegions(Array.isArray(rows) ? rows : [])
     })
   }, [])
+
+  useEffect(() => {
+    setLoadingMission(true)
+    emergencyRequestsService
+      .getById(request.id)
+      .then((data) => setFullRequest(data))
+      .catch(() => setFullRequest(request))
+      .finally(() => setLoadingMission(false))
+  }, [request])
 
   const loadDistricts = useCallback(async (regionId: string, target: 'patient' | 'case') => {
     if (!regionId) {
@@ -259,6 +271,18 @@ export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: 
           >
             <ClipboardList className="w-4 h-4" />
             Case Details
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('mission')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-sm font-bold transition ${
+              tab === 'mission'
+                ? 'bg-white text-red-700 border border-b-0 border-slate-200 -mb-px'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            Crew & Records
           </button>
         </div>
 
@@ -644,6 +668,19 @@ export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: 
                   />
                 </div>
               </div>
+            </>
+          )}
+
+          {tab === 'mission' && (
+            <>
+              {loadingMission || !fullRequest ? (
+                <div className="py-12 text-center">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-red-500 mb-3" />
+                  <p className="text-sm text-slate-500">Loading mission records…</p>
+                </div>
+              ) : (
+                <CaseMissionRecordsPanel request={fullRequest} compact />
+              )}
             </>
           )}
         </div>

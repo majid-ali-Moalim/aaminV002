@@ -327,6 +327,16 @@ export class NursesService {
         destinationHospital: true,
         region: true,
         district: true,
+        incidentCategory: true,
+        dispatcher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            user: { select: { username: true } },
+          },
+        },
         statusLogs: {
           orderBy: { createdAt: 'desc' },
           take: 20,

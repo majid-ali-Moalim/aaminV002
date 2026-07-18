@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
 
 @Injectable()
 export class DriversAppService {
@@ -131,12 +132,10 @@ export class DriversAppService {
     const employee = await this.prisma.employee.findFirst({ where: { userId } });
     if (!employee) throw new NotFoundException('Driver profile not found');
 
-    const activeStatuses = ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'];
-
     const mission = await this.prisma.emergencyRequest.findFirst({
       where: {
         driverId: employee.id,
-        status: { in: activeStatuses as any },
+        status: { in: ACTIVE_CASE_STATUSES },
       },
       include: {
         patient: true,
@@ -144,7 +143,17 @@ export class DriversAppService {
         region: true,
         district: true,
         incidentCategory: true,
-        dispatcher: { include: { user: { select: { username: true } } } },
+        nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        destinationHospital: { select: { id: true, name: true } },
+        dispatcher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            user: { select: { username: true } },
+          },
+        },
         statusLogs: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
@@ -199,7 +208,17 @@ export class DriversAppService {
         region: true,
         district: true,
         incidentCategory: true,
-        dispatcher: { include: { user: { select: { username: true } } } },
+        nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        destinationHospital: { select: { id: true, name: true } },
+        dispatcher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            user: { select: { username: true } },
+          },
+        },
         statusLogs: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -406,7 +425,7 @@ export class DriversAppService {
       this.prisma.emergencyRequest.count({
         where: {
           driverId: employee.id,
-          status: { in: ['ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL'] as any },
+          status: { in: ACTIVE_CASE_STATUSES },
         },
       }),
       this.prisma.shiftRecord.findMany({

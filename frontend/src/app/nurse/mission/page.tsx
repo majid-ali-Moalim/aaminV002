@@ -15,8 +15,8 @@ function MissionContent() {
 export default function NurseMissionPage() {
   return (
     <NursePageLayout
-      title="Case Workspace"
-      subtitle="Mission command center — patient care, treatment, monitoring, and handover"
+      title="Case Details"
+      subtitle="Patient care, medical notes, handover, and case records"
     >
       <Suspense
         fallback={
