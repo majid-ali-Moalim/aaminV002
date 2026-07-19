@@ -677,10 +677,6 @@ export default function AddAmbulancePage() {
                   <Warehouse className="w-4 h-4 text-slate-400" />
                   {stationName || 'Base station'}
                 </div>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <User className="w-4 h-4 text-slate-400" />
-                  {driverName ? `${driverName.firstName} ${driverName.lastName}` : 'No driver'}
-                </div>
                 <div className="flex gap-2 pt-1">
                   {form.oxygenAvailable && (
                     <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">

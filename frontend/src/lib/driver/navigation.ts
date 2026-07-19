@@ -50,18 +50,18 @@ export const DRIVER_MODULES: DriverNavModule[] = [
   },
   {
     id: 'mission',
-    label: 'Case Details',
+    label: 'Active Case',
     icon: Siren,
     basePath: '/driver/mission',
     singlePage: true,
-    items: [{ slug: 'workspace', label: 'Case Details', icon: Siren, exact: true }],
+    items: [{ slug: 'workspace', label: 'Active Case', icon: Siren, exact: true }],
   },
   {
     id: 'missions',
-    label: 'Mission History',
+    label: 'Case History',
     icon: History,
     basePath: '/driver/missions',
-    items: [{ slug: 'history', label: 'Mission History', icon: History }],
+    items: [{ slug: 'history', label: 'Case History', icon: History }],
   },
   {
     id: 'ambulance',

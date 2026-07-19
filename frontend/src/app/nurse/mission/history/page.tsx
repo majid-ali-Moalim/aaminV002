@@ -7,7 +7,7 @@ export default function NurseMissionHistoryPage() {
   return (
     <NursePageLayout
       title="Case History"
-      subtitle="Completed missions — read-only review"
+      subtitle="Completed cases — read-only review"
     >
       <NurseMissionHistoryView />
     </NursePageLayout>

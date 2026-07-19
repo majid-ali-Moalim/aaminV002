@@ -136,6 +136,36 @@ export function isLoadPatientRecord(record: { clinicalNotes?: string | null }): 
   return Boolean(parseLoadPatient(record.clinicalNotes))
 }
 
+const TRANSFER_HOSPITAL_PREFIX = '[EADS_TRANSFER_HOSPITAL]'
+
+export type TransferHospitalData = {
+  _type: 'transfer_hospital'
+  confirmedAt: string
+  notes?: string
+}
+
+export function encodeTransferToHospital(data?: { notes?: string }): string {
+  const payload: TransferHospitalData = {
+    _type: 'transfer_hospital',
+    confirmedAt: new Date().toISOString(),
+    notes: data?.notes,
+  }
+  return `${TRANSFER_HOSPITAL_PREFIX}${JSON.stringify(payload)}`
+}
+
+export function parseTransferToHospital(notes?: string | null): TransferHospitalData | null {
+  if (!notes?.startsWith(TRANSFER_HOSPITAL_PREFIX)) return null
+  try {
+    return JSON.parse(notes.slice(TRANSFER_HOSPITAL_PREFIX.length)) as TransferHospitalData
+  } catch {
+    return null
+  }
+}
+
+export function isTransferToHospitalRecord(record: { clinicalNotes?: string | null }): boolean {
+  return Boolean(parseTransferToHospital(record.clinicalNotes))
+}
+
 export function isMedicalNoteRecord(record: {
   clinicalNotes?: string | null
   treatmentGiven?: string | null

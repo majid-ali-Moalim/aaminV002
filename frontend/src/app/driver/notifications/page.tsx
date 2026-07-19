@@ -85,7 +85,7 @@ export default function DriverNotificationsPage() {
     <DriverPageLayout title="Notifications">
       <DriverModuleShell
         module={getModuleById('notifications')!}
-        description="Mission assignments and dispatch alerts open in Case Details."
+        description="Case assignments and dispatch alerts open in Active Case."
       >
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black uppercase text-zinc-400 tracking-widest flex items-center gap-2">

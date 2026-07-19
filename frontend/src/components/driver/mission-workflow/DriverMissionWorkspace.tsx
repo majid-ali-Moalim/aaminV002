@@ -27,10 +27,10 @@ import { MissionStatusBadge, PriorityBadge } from '@/components/driver/DriverUI'
 import DriverMissionDetailModal from '@/components/driver/DriverMissionDetailModal'
 import {
   DRIVER_TIMELINE_STEPS,
-  getDriverTimelineIndex,
   getStepTimestamp,
   getWorkflowMeta,
   MISSION_EXECUTION_STEPS,
+  markCaseReviewed,
   markDriverMilestoneComplete,
   patchWorkflowMeta,
   setStoredPhase,
@@ -38,14 +38,17 @@ import {
   type WorkflowStepId,
 } from '@/lib/driver/missionWorkflow'
 import { useDriverWorkflowState } from '@/lib/driver/useDriverWorkflowState'
+import { CaseReviewPanel } from '@/components/shared/CaseReviewPanel'
 import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
 import { formatSomaliaPhoneDisplay, resolvePatientPhone } from '@/lib/phoneContact'
 import MissionWorkflowButtons from '@/components/mission-workflow/MissionWorkflowButtons'
 import {
   getDriverWorkflowButtons,
+  DRIVER_STAGE_DESCRIPTIONS,
   type DriverWorkflowButtonId,
 } from '@/lib/mission/driverWorkflowButtons'
-import { hasMedicalNotesSaved } from '@/lib/mission/workflowMilestones'
+import { getTimelineActiveIndex, getTimelineButtonStates } from '@/lib/mission/workflowTimeline'
+import { hasLoadPatientSaved } from '@/lib/mission/workflowMilestones'
 
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
@@ -130,21 +133,38 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   }, [mission, missionId])
 
   const { currentStepId, meta, syncWorkflow } = useDriverWorkflowState(mission)
-  const currentStep = MISSION_EXECUTION_STEPS.find((s) => s.id === currentStepId) ?? MISSION_EXECUTION_STEPS[0]
   const missionClosed = currentStepId === 'MISSION_COMPLETED' || (mission ? CLOSED.includes(mission.status) : false)
   const readOnly = missionClosed
   const runReportSubmitted = Boolean(meta.runReportSubmitted)
-  const timelineIndex = getDriverTimelineIndex(currentStepId)
+
+  const careRecords = mission?.patientCareRecords ?? []
+  const caseReviewed = Boolean(meta.reviewedAt)
+
+  const workflowButtons = useMemo(
+    () => getDriverWorkflowButtons(mission, careRecords, readOnly, caseReviewed),
+    [mission, careRecords, readOnly, caseReviewed],
+  )
+
+  const timelineIndex = useMemo(
+    () => getTimelineActiveIndex(workflowButtons),
+    [workflowButtons],
+  )
   const progressPct = missionClosed
     ? 100
     : Math.round(((timelineIndex + 1) / DRIVER_TIMELINE_STEPS.length) * 100)
 
-  const careRecords = mission?.patientCareRecords ?? []
+  const activeWorkflowButton = workflowButtons.find((b) => b.state === 'active') ?? null
+  const nextLockedButton = workflowButtons.find((b) => b.state === 'locked') ?? null
+  const stageLabel = activeWorkflowButton?.label
+    ?? nextLockedButton?.label
+    ?? workflowButtons.filter((b) => b.state === 'completed').at(-1)?.label
+    ?? 'Assigned'
+  const stageDescription = activeWorkflowButton
+    ? DRIVER_STAGE_DESCRIPTIONS[activeWorkflowButton.id]
+    : nextLockedButton?.waitReason
+      ?? 'Review the case and complete each transport step in order.'
 
-  const workflowButtons = useMemo(
-    () => getDriverWorkflowButtons(mission, careRecords, readOnly),
-    [mission, careRecords, readOnly],
-  )
+  const arrivedAtHospital = workflowButtons.find((b) => b.id === 'arrived_at_hospital')?.state === 'completed'
 
   const stickyPrimary = useMemo(() => {
     return workflowButtons.find((b) => b.state === 'active') ?? null
@@ -186,6 +206,10 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
 
   const handleWorkflowButton = async (buttonId: DriverWorkflowButtonId) => {
     if (!mission || readOnly) return
+    if (!caseReviewed) {
+      toast.error('Review the case details before starting workflow actions.')
+      return
+    }
     const wasComplete = Boolean(getWorkflowMeta(mission.id).completedMilestones?.[buttonId])
 
     switch (buttonId) {
@@ -211,8 +235,8 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at patient')
         break
       case 'going_to_hospital': {
-        if (!hasMedicalNotesSaved(careRecords, mission.id)) {
-          toast.error('Waiting for nurse to save medical notes before transport.')
+        if (!hasLoadPatientSaved(careRecords, mission.id)) {
+          toast.error('Waiting for nurse to load the patient before transport.')
           return
         }
         markDriverMilestoneComplete(mission.id, 'going_to_hospital')
@@ -308,7 +332,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     return (
       <div className="driver-loading-inline">
         <Loader2 className="animate-spin" size={28} />
-        <span>Loading case details…</span>
+        <span>Loading active case…</span>
       </div>
     )
   }
@@ -330,7 +354,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
               <p className="text-sm text-zinc-400">{m.pickupLocation}</p>
               <div className="dcw-queue-actions">
                 <button type="button" className="driver-btn-sm primary" onClick={() => openCase(m.id)}>
-                  Open Case Details
+                  Open Active Case
                 </button>
               </div>
             </article>
@@ -349,7 +373,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         <p>When dispatch assigns you a run, your transport workflow will appear here.</p>
         <Link href="/driver" className="driver-btn-sm primary">Back to Dashboard</Link>
         <Link href="/driver/missions/history" className="driver-btn-sm ghost">
-          <History size={14} /> Mission History
+          <History size={14} /> Case History
         </Link>
       </div>
     )
@@ -368,17 +392,17 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       {readOnly && (
         <div className="dcw-readonly-banner">
           Case completed — read-only summary. View all closed cases in{' '}
-          <Link href="/driver/missions/history">Mission History</Link>.
+          <Link href="/driver/missions/history">Case History</Link>.
         </div>
       )}
       <header className="dcw-hero">
         <div>
-          <p className="dcw-kicker">Case Details · Transport Ops</p>
+          <p className="dcw-kicker">Active Case · Transport Ops</p>
           <h2 className="dcw-code">{mission.trackingCode}</h2>
           <div className="dcw-badges">
             <PriorityBadge priority={mission.priority} />
             <MissionStatusBadge status={mission.status} />
-            <span className="dcw-stage-pill">{currentStep.shortLabel}</span>
+            <span className="dcw-stage-pill">{stageLabel}</span>
           </div>
         </div>
         <div className="dcw-hero-right">
@@ -403,7 +427,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       </div>
 
       <section className="dcw-card dcw-timeline-card dcw-span-2">
-        <h3 className="dcw-card-title"><Navigation2 size={16} /> Mission Progress</h3>
+        <h3 className="dcw-card-title"><Navigation2 size={16} /> Case Progress</h3>
         <MissionHorizontalTimeline
           classPrefix="dcw"
           steps={DRIVER_TIMELINE_STEPS.map((s) => ({
@@ -423,7 +447,8 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           }))}
           activeIndex={timelineIndex}
           completed={missionClosed}
-          currentStepLabel={currentStep.label}
+          buttonStates={getTimelineButtonStates(workflowButtons)}
+          currentStepLabel={stageLabel}
           getStepTime={(i) => {
             const step = DRIVER_TIMELINE_STEPS[i]
             const ts = step.stepIds
@@ -437,14 +462,26 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       <div className="dcw-grid dcw-grid-stage">
         <section className="dcw-card dcw-stage-card">
           <h3 className="dcw-card-title"><ChevronRight size={16} /> Current Stage</h3>
-          <p className="dcw-stage-name">{currentStep.label}</p>
-          <p className="dcw-stage-desc">{currentStep.description}</p>
+          <p className="dcw-stage-name">{stageLabel}</p>
+          <p className="dcw-stage-desc">{stageDescription}</p>
 
-          {!readOnly && currentStepId === 'ARRIVED_HOSPITAL' && (
+          {!readOnly && workflowButtons.every((b) => b.state === 'completed') && (
             <p className="dcw-warn">Your timeline is complete. The nurse will hand over and close the case.</p>
           )}
 
-          {!readOnly && (
+          {!readOnly && !caseReviewed && (
+            <CaseReviewPanel
+              caseData={mission}
+              variant="driver"
+              onConfirm={() => {
+                markCaseReviewed(mission.id)
+                syncWorkflow()
+                toast.success('Case reviewed — you can start workflow actions')
+              }}
+            />
+          )}
+
+          {!readOnly && caseReviewed && (
             <MissionWorkflowButtons
               buttons={workflowButtons}
               onAction={(id) => handleWorkflowButton(id as DriverWorkflowButtonId)}
@@ -453,7 +490,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             />
           )}
 
-          {!readOnly && runReportSubmitted && currentStepId === 'ARRIVED_HOSPITAL' && (
+          {!readOnly && runReportSubmitted && arrivedAtHospital && (
             <div className="dcw-run-report-summary">
               <p className="dcw-run-report-kicker">Run report complete</p>
               <ul className="dcw-run-report-list">
@@ -469,20 +506,22 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             </div>
           )}
 
-          {!readOnly && !runReportSubmitted && (
+          {!readOnly && !runReportSubmitted && arrivedAtHospital && (
           <div className="dcw-action-grid dcw-action-grid--secondary">
-            {currentStep.actions
-              .filter((action) => action.id === 'view_details' || action.id === 'submit_report')
-              .map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                className="dcw-action-btn"
-                onClick={() => handleAction(action.id)}
-              >
-                {action.label}
-              </button>
-            ))}
+            <button type="button" className="dcw-action-btn" onClick={() => handleAction('view_details')}>
+              View Case Summary
+            </button>
+            <button type="button" className="dcw-action-btn" onClick={() => handleAction('submit_report')}>
+              Submit Run Report
+            </button>
+          </div>
+          )}
+
+          {!readOnly && !runReportSubmitted && !arrivedAtHospital && (
+          <div className="dcw-action-grid dcw-action-grid--secondary">
+            <button type="button" className="dcw-action-btn" onClick={() => handleAction('view_details')}>
+              View Case Summary
+            </button>
           </div>
           )}
 
@@ -494,7 +533,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         </section>
 
         <section className="dcw-card">
-          <h3 className="dcw-card-title">Case Details</h3>
+          <h3 className="dcw-card-title">Active Case Summary</h3>
           <div className="dcw-info-grid">
             <InfoItem label="Case ID" value={mission.trackingCode} />
             <InfoItem label="Status" value={mission.status?.replace(/_/g, ' ')} />

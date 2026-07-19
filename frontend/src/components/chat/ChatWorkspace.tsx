@@ -128,7 +128,7 @@ function AttachmentView({ msg }: { msg: ChatMessage }) {
   )
 }
 
-export default function ChatWorkspace() {
+export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChatOnSelect?: boolean }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
@@ -376,7 +376,7 @@ export default function ChatWorkspace() {
       {/* Contacts panel */}
       <aside
         className={`w-full md:w-[340px] shrink-0 flex flex-col border-r border-slate-200 bg-white ${
-          activeId ? 'hidden md:flex' : 'flex'
+          activeId ? (focusChatOnSelect ? 'hidden' : 'hidden md:flex') : 'flex'
         }`}
       >
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
@@ -474,7 +474,11 @@ export default function ChatWorkspace() {
       </aside>
 
       {/* Conversation panel */}
-      <section className={`flex-1 flex-col bg-[#efeae2] ${activeId ? 'flex' : 'hidden md:flex'}`}>
+      <section
+        className={`flex-1 flex-col bg-[#efeae2] ${
+          activeId ? 'flex w-full' : focusChatOnSelect ? 'hidden' : 'hidden md:flex'
+        }`}
+      >
         {!activeContact ? (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 px-6 text-center">
             <div className="w-20 h-20 rounded-full bg-white/70 flex items-center justify-center mb-4">
@@ -501,7 +505,7 @@ export default function ChatWorkspace() {
                   setActiveId(null)
                   setActiveContact(null)
                 }}
-                className="md:hidden p-2 rounded-full hover:bg-slate-200 text-slate-600"
+                className={`${focusChatOnSelect ? 'flex' : 'md:hidden'} p-2 rounded-full hover:bg-slate-200 text-slate-600`}
                 aria-label="Back to contacts"
               >
                 <ArrowLeft className="w-5 h-5" />

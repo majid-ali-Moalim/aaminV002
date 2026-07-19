@@ -15,7 +15,7 @@ const navItems = [
   {
     href: '/nurse/mission',
     icon: Route,
-    label: 'Cases',
+    label: 'Active Case',
     match: (p: string) => p.startsWith('/nurse/mission'),
   },
   {

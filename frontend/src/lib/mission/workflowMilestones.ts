@@ -1,4 +1,9 @@
-import { isAssessmentRecord, isHandoverRecord, isLoadPatientRecord } from '@/lib/nurse/patientCareTypes'
+import {
+  isAssessmentRecord,
+  isHandoverRecord,
+  isLoadPatientRecord,
+  isTransferToHospitalRecord,
+} from '@/lib/nurse/patientCareTypes'
 
 export type CareRecord = { clinicalNotes?: string | null; requestId?: string; emergencyRequest?: { id?: string } }
 
@@ -10,6 +15,10 @@ export function recordsForCase(records: CareRecord[], caseId: string): CareRecor
 
 export function hasLoadPatientSaved(records: CareRecord[], caseId: string): boolean {
   return recordsForCase(records, caseId).some(isLoadPatientRecord)
+}
+
+export function hasTransferToHospitalSaved(records: CareRecord[], caseId: string): boolean {
+  return recordsForCase(records, caseId).some(isTransferToHospitalRecord)
 }
 
 export function hasMedicalNotesSaved(records: CareRecord[], caseId: string): boolean {

@@ -56,11 +56,18 @@ export type NurseTimelineStep = {
 
 export const NURSE_TIMELINE_STEPS: NurseTimelineStep[] = [
   {
+    id: 'START',
+    label: 'Start Case',
+    shortLabel: 'Start',
+    description: 'Review the case and confirm you are ready.',
+    stepIds: ['MISSION_ASSIGNED'],
+  },
+  {
     id: 'LOAD',
     label: 'Load Patient',
     shortLabel: 'Load',
     description: 'Confirm the patient is loaded into the ambulance.',
-    stepIds: ['PATIENT_LOADED', 'MISSION_ASSIGNED'],
+    stepIds: ['PATIENT_LOADED'],
   },
   {
     id: 'NOTES',
@@ -71,7 +78,7 @@ export const NURSE_TIMELINE_STEPS: NurseTimelineStep[] = [
   },
   {
     id: 'HANDOVER',
-    label: 'Handover Patient',
+    label: 'Patient Handover',
     shortLabel: 'Handover',
     description: 'Transfer patient information to receiving hospital staff.',
     stepIds: ['HOSPITAL_HANDOVER'],
@@ -179,6 +186,8 @@ export type NurseWorkflowMeta = {
   timestamps: Partial<Record<NurseWorkflowStepId, string>>
   acceptedAt?: string
   reviewedAt?: string
+  startCaseAt?: string
+  transferConfirmedAt?: string
   activityLog: Array<{ time: string; text: string }>
   completedTasks: Partial<Record<NurseWorkflowStepId, boolean>>
 }
@@ -296,16 +305,16 @@ export function canCloseMission(status: string): boolean {
 
 export function getNurseTransportPhaseMessage(status: string): string | null {
   if (status === 'ASSIGNED' || PRE_SCENE_STATUSES.includes(status)) {
-    return 'Waiting for driver…'
+    return 'Review the case and start when ready — waiting for driver on scene.'
   }
   if (ON_SCENE_STATUSES.includes(status)) {
-    return 'Driver is on scene — load the patient, then complete medical notes.'
+    return 'Driver is on scene — load the patient, then confirm transfer to hospital.'
   }
   if (status === 'TRANSPORTING') {
-    return 'En route to hospital — handover unlocks when the driver arrives.'
+    return 'En route to hospital — complete medical notes and handover.'
   }
   if (status === 'ARRIVED_HOSPITAL') {
-    return 'At hospital — complete handover, then close the case.'
+    return 'At hospital — complete handover if needed, then close the case.'
   }
   return null
 }
@@ -314,11 +323,11 @@ export function getNurseTaskBlockReason(taskId: string, status: string): string 
   if (taskId === 'load_patient' && !canStartPatientCare(status)) {
     return 'Waiting for driver to arrive at patient.'
   }
-  if (taskId === 'medical_notes' && !canStartPatientCare(status)) {
-    return 'Medical notes unlock after the driver arrives and the patient is loaded.'
+  if (taskId === 'medical_notes' && !canStartPatientCare(status) && status !== 'TRANSPORTING' && status !== 'ARRIVED_HOSPITAL') {
+    return 'Load the patient before medical notes.'
   }
   if (taskId === 'handover' && !canDoHandover(status)) {
-    return 'Handover unlocks when the driver marks arrival at the hospital.'
+    return 'Handover unlocks when the driver arrives at the hospital.'
   }
   if (taskId === 'close_mission' && !canDoHandover(status) && status !== 'COMPLETED') {
     return 'Complete handover before closing the case.'

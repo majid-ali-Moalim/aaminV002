@@ -14,7 +14,7 @@ import {
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { MissionStatusBadge, PriorityBadge } from '@/components/driver/DriverUI'
 import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
-import { formatSomaliaPhoneDisplay, resolvePatientPhone } from '@/lib/phoneContact'
+import { PatientContactActions } from '@/components/shared/PatientContactActions'
 import './field-case-detail.css'
 
 export type FieldCaseDetail = {
@@ -78,7 +78,6 @@ export function FieldCaseDetailModal({
 }: Props) {
   if (!open) return null
 
-  const patientPhone = resolvePatientPhone(caseData)
   const destination =
     caseData?.destination || caseData?.destinationHospital?.name || 'To be confirmed'
   const regionLabel = [caseData?.region?.name, caseData?.district?.name].filter(Boolean).join(' · ')
@@ -97,7 +96,7 @@ export function FieldCaseDetailModal({
       <div className="field-case-modal-panel">
         <div className="field-case-modal-header">
           <div>
-            <p className="field-case-modal-kicker">Case Details</p>
+            <p className="field-case-modal-kicker">Active Case</p>
             <h2 className="field-case-modal-title">{caseData?.trackingCode || 'Loading…'}</h2>
             {caseData && (
               <div className="field-case-badges">
@@ -127,13 +126,13 @@ export function FieldCaseDetailModal({
                 </h3>
                 <div className="field-case-detail-grid">
                   <DetailBlock label="Name" value={caseData.patient?.fullName || caseData.callerName} />
-                  <DetailBlock label="Phone" value={formatSomaliaPhoneDisplay(patientPhone)} />
                   <DetailBlock
                     label="Age / Gender"
                     value={[caseData.patient?.age, caseData.patient?.gender].filter(Boolean).join(' · ')}
                   />
                   <DetailBlock label="Condition" value={caseData.patientCondition} />
                 </div>
+                <PatientContactActions caseData={caseData} variant={variant} />
               </section>
 
               <section className="field-case-detail-section">

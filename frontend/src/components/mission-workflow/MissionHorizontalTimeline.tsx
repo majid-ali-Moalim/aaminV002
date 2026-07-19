@@ -3,6 +3,8 @@
 import { format } from 'date-fns'
 import { Check } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { WorkflowButtonState } from '@/lib/mission/workflowTimeline'
+import { getWorkflowTimelineState } from '@/lib/mission/workflowTimeline'
 
 export type HorizontalTimelineStep = {
   id: string
@@ -19,6 +21,8 @@ type Props = {
   currentStepLabel?: string
   getStepTime?: (stepIndex: number) => string | null
   onStepClick?: (index: number, step: HorizontalTimelineStep) => void
+  /** When provided, timeline dots mirror workflow button states exactly. */
+  buttonStates?: WorkflowButtonState[]
 }
 
 export default function MissionHorizontalTimeline({
@@ -29,23 +33,38 @@ export default function MissionHorizontalTimeline({
   currentStepLabel,
   getStepTime,
   onStepClick,
+  buttonStates,
 }: Props) {
-  const pct =
-    steps.length <= 1
-      ? 100
-      : completed
-        ? 100
-        : Math.round((activeIndex / Math.max(steps.length - 1, 1)) * 100)
+  const synced = buttonStates && buttonStates.length === steps.length
+  const { reachedIndex, activeIndex: syncedActive, allComplete } = synced
+    ? getWorkflowTimelineState(buttonStates.map((state) => ({ state })))
+    : { reachedIndex: completed ? steps.length - 1 : Math.max(activeIndex - 1, -1), activeIndex, allComplete: completed }
+
+  const displayActiveIndex = synced
+    ? syncedActive >= 0
+      ? syncedActive
+      : Math.max(reachedIndex, 0)
+    : activeIndex
+
+  const maxIndex = Math.max(steps.length - 1, 1)
+  const fillPct = allComplete
+    ? 100
+    : Math.round((Math.max(reachedIndex, 0) / maxIndex) * 100)
 
   return (
-    <div className={`${classPrefix}-timeline-h-wrap`} role="list" aria-label="Mission progress">
+    <div className={`${classPrefix}-timeline-h-wrap`} role="list" aria-label="Case progress">
       <div className={`${classPrefix}-timeline-h-track`} aria-hidden>
-        <div className={`${classPrefix}-timeline-h-fill`} style={{ width: `${pct}%` }} />
+        <div className={`${classPrefix}-timeline-h-fill`} style={{ width: `${fillPct}%` }} />
       </div>
       <ol className={`${classPrefix}-timeline-h`}>
         {steps.map((step, i) => {
-          const done = completed || i < activeIndex
-          const active = !completed && i === activeIndex
+          const btnState = synced ? buttonStates[i] : null
+          const done = btnState
+            ? btnState === 'completed'
+            : completed || i < activeIndex
+          const active = btnState
+            ? btnState === 'active'
+            : !completed && i === displayActiveIndex
           const upcoming = !done && !active
           const Icon = step.icon
           const ts = getStepTime?.(i)

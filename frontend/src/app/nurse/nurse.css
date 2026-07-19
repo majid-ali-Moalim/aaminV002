@@ -2117,6 +2117,22 @@
   max-width: 640px;
 }
 
+.nmw-task-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.nmw-task-nav .nurse-btn.primary {
+  justify-self: center;
+}
+
+.nmw-task-nav > span:empty {
+  display: block;
+}
+
 .nmw-task-form label {
   display: flex;
   flex-direction: column;

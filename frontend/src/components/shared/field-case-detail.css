@@ -237,3 +237,40 @@
   gap: 6px;
   margin-top: 8px;
 }
+
+.field-case-review-panel {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.nurse-shell--light .field-case-review-panel,
+.nurse-page--light .field-case-review-panel {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.field-case-review-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.field-case-review-head h4 {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.field-case-review-head p {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.45;
+}
+
+.field-case-review-body {
+  margin-bottom: 14px;
+}

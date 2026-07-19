@@ -257,15 +257,15 @@ export class DriversAppService {
     }
 
     if (status === 'TRANSPORTING') {
-      const notesRecord = await this.prisma.patientCareRecord.findFirst({
+      const loadRecord = await this.prisma.patientCareRecord.findFirst({
         where: {
           requestId: missionId,
-          clinicalNotes: { startsWith: '[EADS_ASSESSMENT]' },
+          clinicalNotes: { startsWith: '[EADS_LOAD_PATIENT]' },
         },
       });
-      if (!notesRecord) {
+      if (!loadRecord) {
         throw new BadRequestException(
-          'Transport cannot start until the nurse saves medical notes.',
+          'Transport cannot start until the nurse confirms the patient is loaded.',
         );
       }
     }

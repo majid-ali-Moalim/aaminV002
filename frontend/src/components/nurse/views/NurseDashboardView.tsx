@@ -95,7 +95,7 @@ export default function NurseDashboardView() {
     .slice(0, 6)
 
   const quickActions = [
-    { label: 'Open Mission Workspace', href: '/nurse/mission', icon: HeartPulse },
+    { label: 'Open Active Case', href: '/nurse/mission', icon: HeartPulse },
     { label: 'Find Hospitals', href: '/nurse/hospitals', icon: Building2 },
     { label: 'Chat Dispatcher', href: '/nurse/chat', icon: MessageCircle },
     { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
@@ -165,9 +165,9 @@ export default function NurseDashboardView() {
         </section>
 
         <section className="nurse-dash-section">
-          <h3>Today&apos;s Mission Summary</h3>
+          <h3>Today&apos;s Case Summary</h3>
           {todayMissions.length === 0 ? (
-            <p className="nurse-empty-inline">No active missions assigned.</p>
+            <p className="nurse-empty-inline">No active cases assigned.</p>
           ) : (
             <div className="nurse-mission-table">
               {todayMissions.map((m) => (

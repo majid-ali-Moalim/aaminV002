@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Save, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   BREATHING_STATUS,
   CONSCIOUSNESS_LEVELS,
@@ -21,9 +21,24 @@ type TaskShellProps = {
   onSubmit: (e: React.FormEvent) => void
   submitLabel: string
   children: React.ReactNode
+  onPrevious?: () => void
+  onNext?: () => void
+  previousLabel?: string
+  nextLabel?: string
 }
 
-export function TaskShell({ title, subtitle, saving, onSubmit, submitLabel, children }: TaskShellProps) {
+export function TaskShell({
+  title,
+  subtitle,
+  saving,
+  onSubmit,
+  submitLabel,
+  children,
+  onPrevious,
+  onNext,
+  previousLabel = 'Previous',
+  nextLabel = 'Next',
+}: TaskShellProps) {
   return (
     <form onSubmit={onSubmit} className="nmw-task-form nmw-task-form--comfortable">
       <div className="nmw-task-head">
@@ -31,10 +46,28 @@ export function TaskShell({ title, subtitle, saving, onSubmit, submitLabel, chil
         {subtitle && <p>{subtitle}</p>}
       </div>
       <div className="nurse-form-grid">{children}</div>
-      <button type="submit" className="nurse-btn primary w-full" disabled={saving}>
-        {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-        {submitLabel}
-      </button>
+      <div className="nmw-task-nav">
+        {onPrevious ? (
+          <button type="button" className="nurse-btn ghost" onClick={onPrevious} disabled={saving}>
+            <ChevronLeft size={16} />
+            {previousLabel}
+          </button>
+        ) : (
+          <span />
+        )}
+        <button type="submit" className="nurse-btn primary" disabled={saving}>
+          {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+          {submitLabel}
+        </button>
+        {onNext ? (
+          <button type="button" className="nurse-btn ghost" onClick={onNext} disabled={saving}>
+            {nextLabel}
+            <ChevronRight size={16} />
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
     </form>
   )
 }

@@ -76,7 +76,7 @@ export const DRIVER_TIMELINE_STEPS: DriverTimelineStep[] = [
     id: 'TRANSPORT',
     label: 'Going to Hospital',
     shortLabel: 'Transport',
-    description: 'Transport after nurse saves medical notes.',
+    description: 'Transport after nurse loads the patient.',
     stepIds: ['EN_ROUTE_HOSPITAL'],
   },
   {

@@ -83,7 +83,7 @@ export function DriverDashboardOverview({
         <div className="driver-quick-actions-grid">
           <Link href="/driver/mission" className="driver-action-tile">
             <Siren size={22} />
-            <span>Case Details</span>
+            <span>Active Case</span>
           </Link>
           <Link href="/driver/chat" className="driver-action-tile">
             <MessageCircle size={22} />
@@ -134,13 +134,13 @@ export function DriverDashboardOverview({
             </button>
           )}
           <Link href="/driver/mission" className="driver-mission-detail-link">
-            Open Case Details <ArrowRight size={16} />
+            Open Active Case <ArrowRight size={16} />
           </Link>
         </div>
       ) : (
         <div className="driver-no-mission-card">
           <div className="driver-no-mission-icon">🟢</div>
-          <p className="driver-no-mission-title">No Active Mission</p>
+          <p className="driver-no-mission-title">No Active Case</p>
           <p className="driver-no-mission-sub">Stand by for dispatch assignment</p>
         </div>
       )}

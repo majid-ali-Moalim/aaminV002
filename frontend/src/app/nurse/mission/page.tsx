@@ -15,7 +15,7 @@ function MissionContent() {
 export default function NurseMissionPage() {
   return (
     <NursePageLayout
-      title="Case Details"
+      title="Active Case"
       subtitle="Patient care, medical notes, handover, and case records"
     >
       <Suspense
