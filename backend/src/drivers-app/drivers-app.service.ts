@@ -144,7 +144,16 @@ export class DriversAppService {
         district: true,
         incidentCategory: true,
         nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
-        destinationHospital: { select: { id: true, name: true } },
+        destinationHospital: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            primaryPhone: true,
+            emergencyHotline: true,
+            emergencyShortCode: true,
+          },
+        },
         dispatcher: {
           select: {
             id: true,
@@ -213,7 +222,16 @@ export class DriversAppService {
         district: true,
         incidentCategory: true,
         nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
-        destinationHospital: { select: { id: true, name: true } },
+        destinationHospital: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            primaryPhone: true,
+            emergencyHotline: true,
+            emergencyShortCode: true,
+          },
+        },
         dispatcher: {
           select: {
             id: true,

@@ -27,6 +27,7 @@ import EmergencyStatsBar from '@/components/features/emergency/EmergencyStatsBar
 import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 import CompleteCaseModal from '@/components/features/emergency/CompleteCaseModal'
 import CancelModal from '@/components/features/emergency/CancelModal'
+import AssignHospitalModal from '@/components/features/emergency/AssignHospitalModal'
 import { CLOSED_EMERGENCY_STATUSES } from '@/lib/emergency/dateFilters'
 import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
@@ -88,6 +89,7 @@ function ActiveMissionsContent() {
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [completeTarget, setCompleteTarget] = useState<EmergencyRequest | null>(null)
   const [cancelTarget, setCancelTarget] = useState<EmergencyRequest | null>(null)
+  const [assignHospitalTarget, setAssignHospitalTarget] = useState<EmergencyRequest | null>(null)
 
   const openCaseDetail = useCallback((request: EmergencyRequest) => {
     setDetailCaseId(request.id)
@@ -385,7 +387,7 @@ function ActiveMissionsContent() {
                           Destination
                         </p>
                         <p className="text-xs font-semibold text-slate-700 mt-1 line-clamp-2">
-                          {request.destination || 'TBD'}
+                          {request.destinationHospital?.name || request.destination || 'TBD'}
                         </p>
                       </div>
                       <div>
@@ -410,9 +412,17 @@ function ActiveMissionsContent() {
                   </div>
 
                   {/* Actions */}
-                  <div className="p-5 lg:w-44 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
+                  <div className="p-5 lg:w-48 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
                     {!isCaseClosed(request.status) ? (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => setAssignHospitalTarget(request)}
+                          className="active-missions-action-btn active-missions-action-btn--assign w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                        >
+                          <Building2 className="w-4 h-4" />
+                          Assign hospital
+                        </button>
                         <button
                           type="button"
                           onClick={() => setCompleteTarget(request)}
@@ -470,6 +480,14 @@ function ActiveMissionsContent() {
         <CancelModal
           request={cancelTarget}
           onClose={() => setCancelTarget(null)}
+          onSuccess={handleActionSuccess}
+        />
+      )}
+
+      {assignHospitalTarget && (
+        <AssignHospitalModal
+          request={assignHospitalTarget}
+          onClose={() => setAssignHospitalTarget(null)}
           onSuccess={handleActionSuccess}
         />
       )}

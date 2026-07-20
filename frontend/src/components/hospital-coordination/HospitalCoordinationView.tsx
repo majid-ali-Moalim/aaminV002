@@ -12,6 +12,11 @@ import {
   XCircle,
   AlertTriangle,
   BarChart3,
+  Eye,
+  User,
+  Truck,
+  Calendar,
+  FileText,
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -54,6 +59,9 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
   const [statusFilter, setStatusFilter] = useState('')
   const [hospitalType, setHospitalType] = useState('')
   const [analyticsRange, setAnalyticsRange] = useState({ startDate: '', endDate: '' })
+  const [rejectedTotalCount, setRejectedTotalCount] = useState(0)
+  const [acceptedTotalCount, setAcceptedTotalCount] = useState(0)
+  const [detailCase, setDetailCase] = useState<any | null>(null)
 
   const titles: Record<CoordinationView, { title: string; desc: string }> = {
     'all-hospitals': { title: 'All Hospitals', desc: 'Hospitals with assigned emergency cases only' },
@@ -88,17 +96,32 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           accepted: 'ACCEPTED',
           refused: 'REFUSED',
         }
-        const [caseRows] = await Promise.all([
-          hospitalCoordinationService.listCases({
-            stage: stageMap[view],
-            search: search || undefined,
-            regionId: regionId || undefined,
-            districtId: districtId || undefined,
-          }),
+        const listFilters = {
+          stage: stageMap[view],
+          search: search || undefined,
+          regionId: regionId || undefined,
+          districtId: districtId || undefined,
+        }
+        const requests = [
+          hospitalCoordinationService.listCases(listFilters),
           locationPromise,
           overviewPromise,
-        ])
+        ]
+        if (view === 'refused') {
+          requests.push(
+            hospitalCoordinationService.listCases({ stage: 'REFUSED' }),
+            hospitalCoordinationService.listCases({ stage: 'ACCEPTED' }),
+          )
+        }
+        const results = await Promise.all(requests)
+        const caseRows = results[0] as any[]
         setCases(caseRows ?? [])
+        if (view === 'refused') {
+          const allRejected = results[3] as any[]
+          const allAccepted = results[4] as any[]
+          setRejectedTotalCount(allRejected?.length ?? 0)
+          setAcceptedTotalCount(allAccepted?.length ?? 0)
+        }
       } else if (view === 'all-hospitals') {
         const [rows] = await Promise.all([
           hospitalCoordinationService.listHospitals({
@@ -148,15 +171,13 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'blue' },
       ],
       refused: [
-        { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
-        { label: 'Full Hospitals', value: k.fullHospitals ?? 0, icon: Building2, accent: 'amber' },
-        { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'teal' },
+        { label: 'Total Rejected Cases', value: rejectedTotalCount, icon: XCircle, accent: 'rose' },
+        { label: 'Total Accepted Cases', value: acceptedTotalCount, icon: CheckCircle2, accent: 'green' },
       ],
       analytics: [],
     }
     return map[view] ?? []
-  }, [view, overview, analytics, cases])
+  }, [view, overview, analytics, cases, rejectedTotalCount, acceptedTotalCount])
 
   const meta = titles[view]
 
@@ -179,7 +200,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${view === 'refused' ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl' : 'grid-cols-2 lg:grid-cols-4'}`}>
         {kpis.map((k) => (
           <KpiCard key={k.label} {...k} value={dataLoading && !overview ? '—' : k.value} />
         ))}
@@ -217,7 +238,13 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           regions={regions}
           loading={dataLoading && !analytics}
         />
-      ) : view === 'accepted' || view === 'refused' ? (
+      ) : view === 'refused' ? (
+        <RefusedCasesTable
+          cases={cases}
+          loading={dataLoading && cases.length === 0}
+          onShow={setDetailCase}
+        />
+      ) : view === 'accepted' ? (
         <div className="space-y-4">
           {dataLoading && cases.length === 0 ? (
             <ContentSkeleton rows={4} />
@@ -233,6 +260,10 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         <HospitalTable hospitals={hospitals} loading={dataLoading && hospitals.length === 0} />
       )}
       </div>
+
+      {detailCase && (
+        <RefusedCaseDetailModal caseRow={detailCase} onClose={() => setDetailCase(null)} />
+      )}
     </div>
   )
 }
@@ -423,6 +454,292 @@ function AnalyticsPanel({
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function formatEmployeeName(person?: { firstName?: string | null; lastName?: string | null; fullName?: string | null } | null) {
+  if (!person) return '—'
+  if (person.fullName) return person.fullName
+  const name = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim()
+  return name || '—'
+}
+
+function RefusedCasesTable({
+  cases,
+  loading,
+  onShow,
+}: {
+  cases: any[]
+  loading?: boolean
+  onShow: (row: any) => void
+}) {
+  if (loading) return <ContentSkeleton rows={5} />
+  if (!cases.length) {
+    return (
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-dashed py-16 text-center">
+        <XCircle className="w-10 h-10 text-rose-300 mx-auto mb-3" />
+        <p className="font-semibold text-gray-700">No rejected cases found</p>
+        <p className="text-sm text-gray-500 mt-1">Hospital refusals will appear here when recorded from active missions.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-gray-800/80 text-[10px] font-black uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-4 py-3 text-left">Case #</th>
+              <th className="px-4 py-3 text-left">Patient</th>
+              <th className="px-4 py-3 text-left">Mission</th>
+              <th className="px-4 py-3 text-left">Hospital</th>
+              <th className="px-4 py-3 text-left">Refusal reason</th>
+              <th className="px-4 py-3 text-left">Rejected at</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+            {cases.map((row) => {
+              const req = row.emergencyRequest
+              const hospitalName = row.hospital?.name ?? row.rejectedHospitals?.[0]?.hospitalName ?? '—'
+              const reason =
+                row.refusalReason
+                  ? refusalReasonLabel(row.refusalReason)
+                  : row.rejectedHospitals?.[0]?.refusalReason ?? 'Not specified'
+
+              return (
+                <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-gray-800/40 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-mono text-xs font-bold text-teal-700">{row.caseNumber}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-gray-900 dark:text-white">{req?.patient?.fullName ?? 'Unknown'}</p>
+                    <p className="text-[10px] text-gray-400 uppercase">{req?.priority ?? row.priority}</p>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{req?.trackingCode ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900 dark:text-white">{hospitalName}</p>
+                    <p className="text-xs text-gray-500">
+                      {row.hospital?.region?.name}
+                      {row.hospital?.district?.name ? ` / ${row.hospital.district.name}` : ''}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex text-[10px] font-bold uppercase px-2 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-100">
+                      {reason}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                    {new Date(row.updatedAt).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg font-bold gap-1.5"
+                      onClick={() => onShow(row)}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Show
+                    </Button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: () => void }) {
+  const req = caseRow.emergencyRequest
+  const hospital = caseRow.hospital
+  const rejected = caseRow.rejectedHospitals ?? []
+  const accepted = caseRow.acceptedHospital
+  const nurse = caseRow.nurseHandover
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-900 w-full max-w-4xl max-h-[92vh] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-gray-800 shadow-2xl overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-rose-600 to-rose-700 px-6 py-5 flex items-start justify-between gap-4 shrink-0">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-100">Rejected case details</p>
+            <h2 className="text-xl font-black text-white mt-1">{caseRow.caseNumber}</h2>
+            <p className="text-rose-100 text-sm mt-1">
+              Mission {req?.trackingCode} · {req?.patient?.fullName ?? 'Patient'}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-white/80 hover:text-white p-1">
+            <XCircle className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-6 space-y-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <DetailStat icon={User} label="Patient" value={req?.patient?.fullName ?? '—'} />
+            <DetailStat icon={AlertTriangle} label="Priority" value={req?.priority ?? caseRow.priority ?? '—'} />
+            <DetailStat icon={Calendar} label="Rejected at" value={new Date(caseRow.updatedAt).toLocaleString()} />
+            <DetailStat icon={FileText} label="Status" value="Rejected" accent="rose" />
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-5">
+            <SectionCard title="Mission information" icon={Truck}>
+              <InfoLine label="Tracking code" value={req?.trackingCode} mono />
+              <InfoLine label="Pickup location" value={req?.pickupLocation} />
+              <InfoLine label="Destination" value={req?.destination ?? accepted?.hospitalName ?? 'TBD'} />
+              <InfoLine label="Incident category" value={req?.incidentCategory?.name} />
+              <InfoLine label="Symptoms" value={req?.symptoms} />
+              <InfoLine label="Dispatcher" value={formatEmployeeName(req?.dispatcher)} />
+            </SectionCard>
+
+            <SectionCard title="Field team" icon={Stethoscope}>
+              <InfoLine label="Ambulance" value={req?.ambulance?.ambulanceNumber ?? req?.ambulance?.plateNumber} />
+              <InfoLine label="Driver" value={formatEmployeeName(req?.driver)} />
+              <InfoLine label="Nurse" value={nurse?.nurseName ?? formatEmployeeName(req?.nurse)} />
+              {req?.driver?.phone && <InfoLine label="Driver phone" value={req.driver.phone} />}
+              {req?.nurse?.phone && <InfoLine label="Nurse phone" value={req.nurse.phone} />}
+            </SectionCard>
+          </div>
+
+          <SectionCard title="Rejected hospital" icon={Building2} accent="rose">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <InfoLine label="Hospital" value={hospital?.name} />
+              <InfoLine label="Hospital code" value={hospital?.hospitalCode} mono />
+              <InfoLine
+                label="Location"
+                value={
+                  hospital?.address
+                    ? `${hospital.address}${hospital.region?.name ? ` — ${hospital.region.name}` : ''}${hospital.district?.name ? ` / ${hospital.district.name}` : ''}`
+                    : [hospital?.region?.name, hospital?.district?.name].filter(Boolean).join(' / ') || '—'
+                }
+              />
+              <InfoLine label="Contact" value={hospital?.primaryPhone} />
+              <InfoLine label="Emergency line" value={hospital?.emergencyHotline ?? hospital?.emergencyShortCode} />
+              <InfoLine label="Email" value={hospital?.email} />
+            </div>
+            <div className="mt-4 p-4 rounded-xl bg-rose-50 border border-rose-100">
+              <p className="text-[10px] font-black uppercase tracking-wider text-rose-700 mb-2">Refusal details</p>
+              <p className="font-bold text-rose-900">{refusalReasonLabel(caseRow.refusalReason)}</p>
+              {caseRow.refusalNotes && <p className="text-sm text-gray-700 mt-2">{caseRow.refusalNotes}</p>}
+            </div>
+          </SectionCard>
+
+          {rejected.length > 0 && (
+            <SectionCard title="All rejected hospitals for this mission" icon={XCircle} accent="rose">
+              <div className="space-y-3">
+                {rejected.map((r: any, i: number) => (
+                  <div key={`${r.hospitalId}-${i}`} className="p-3 rounded-xl border border-rose-100 bg-rose-50/50">
+                    <p className="font-bold text-gray-900">{r.hospitalName}</p>
+                    <p className="text-sm text-rose-700 mt-0.5">{r.refusalReason}</p>
+                    {r.refusalNotes && <p className="text-sm text-gray-600 mt-1">{r.refusalNotes}</p>}
+                    {r.rejectedAt && (
+                      <p className="text-[10px] text-gray-400 mt-2">{new Date(r.rejectedAt).toLocaleString()}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {accepted && (
+            <SectionCard title="Accepted hospital" icon={CheckCircle2} accent="green">
+              <InfoLine label="Hospital" value={accepted.hospitalName} />
+              <InfoLine label="Receiving staff" value={accepted.receivingStaffName} />
+              {accepted.acceptedAt && (
+                <InfoLine label="Accepted at" value={new Date(accepted.acceptedAt).toLocaleString()} />
+              )}
+              {accepted.handoverCompletedAt && (
+                <InfoLine label="Handover completed" value={new Date(accepted.handoverCompletedAt).toLocaleString()} />
+              )}
+            </SectionCard>
+          )}
+
+          {nurse && (
+            <SectionCard title="Nurse handover notes" icon={Stethoscope} accent="blue">
+              <InfoLine label="Nurse" value={nurse.nurseName} />
+              {nurse.interventions && <InfoLine label="Interventions" value={String(nurse.interventions)} />}
+              {nurse.notes && <InfoLine label="Clinical notes" value={nurse.notes} />}
+              {nurse.recordedAt && (
+                <InfoLine label="Recorded at" value={new Date(nurse.recordedAt).toLocaleString()} />
+              )}
+            </SectionCard>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 shrink-0 flex justify-end">
+          <Button variant="outline" className="rounded-xl font-bold" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DetailStat({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  accent?: 'rose' | 'green'
+}) {
+  const accentClass =
+    accent === 'rose' ? 'text-rose-700' : accent === 'green' ? 'text-emerald-700' : 'text-gray-900 dark:text-white'
+  return (
+    <div className="rounded-xl border border-slate-100 dark:border-gray-800 p-4 bg-slate-50/50 dark:bg-gray-800/30">
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </div>
+      <p className={`font-bold text-sm ${accentClass}`}>{value}</p>
+    </div>
+  )
+}
+
+function SectionCard({
+  title,
+  icon: Icon,
+  accent,
+  children,
+}: {
+  title: string
+  icon: React.ElementType
+  accent?: 'rose' | 'green' | 'blue'
+  children: React.ReactNode
+}) {
+  const border =
+    accent === 'rose'
+      ? 'border-rose-100'
+      : accent === 'green'
+        ? 'border-emerald-100'
+        : accent === 'blue'
+          ? 'border-blue-100'
+          : 'border-slate-100 dark:border-gray-800'
+  return (
+    <div className={`rounded-2xl border ${border} p-5 bg-white dark:bg-gray-900 shadow-sm`}>
+      <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2 mb-4">
+        <Icon className="w-4 h-4" />
+        {title}
+      </h3>
+      {children}
+    </div>
+  )
+}
+
+function InfoLine({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
+  if (!value) return null
+  return (
+    <div className="mb-2.5 last:mb-0">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`text-sm font-medium text-gray-800 dark:text-gray-200 ${mono ? 'font-mono' : ''}`}>{value}</p>
     </div>
   )
 }

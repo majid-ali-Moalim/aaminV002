@@ -8,6 +8,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TrackingGateway } from '../tracking/tracking.gateway';
+import { TrackingService } from '../tracking/tracking.service';
 
 const CASE_INCLUDE = {
   hospital: { include: { region: true, district: true } },
@@ -34,7 +36,49 @@ export class HospitalCoordinationService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private trackingGateway: TrackingGateway,
+    private trackingService: TrackingService,
   ) {}
+
+  private async teamUserIds(requestId: string): Promise<string[]> {
+    const req = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      include: { driver: true, nurse: true },
+    });
+    if (!req) return [];
+    return [req.driver?.userId, req.nurse?.userId].filter(Boolean) as string[];
+  }
+
+  private async notifyFieldTeamDestinationUpdate(
+    requestId: string,
+    trackingCode: string,
+    destinationLabel: string,
+    userId?: string,
+  ) {
+    const assignedUserIds = await this.teamUserIds(requestId);
+    if (!assignedUserIds.length) return;
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'MISSION_UPDATED',
+      title: 'Hospital Destination Updated',
+      message: `Case ${trackingCode} — destination set to ${destinationLabel}`,
+      type: 'EMERGENCY',
+      category: 'MISSION',
+      priority: 'HIGH',
+      entityType: 'EmergencyRequest',
+      entityId: requestId,
+      context: { createdById: userId, assignedUserIds },
+    });
+  }
+
+  private async emitDestinationTrackingUpdate(trackingCode: string) {
+    try {
+      const trackingData = await this.trackingService.findByCodeOrPhone(trackingCode);
+      this.trackingGateway.emitTrackingUpdate(trackingCode, trackingData);
+    } catch {
+      // Tracking payload is optional for coordination updates
+    }
+  }
 
   private async nextCaseNumber() {
     const count = await this.prisma.hospitalCoordinationCase.count();
@@ -580,6 +624,243 @@ export class HospitalCoordinationService {
     });
     if (!row) throw new NotFoundException('Coordination case not found');
     return row;
+  }
+
+  async getRequestCoordinationHistory(requestId: string) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      select: {
+        id: true,
+        trackingCode: true,
+        destination: true,
+        destinationHospitalId: true,
+        destinationHospitalBranchName: true,
+      },
+    });
+    if (!request) throw new NotFoundException('Emergency request not found');
+
+    const history = await this.prisma.hospitalCoordinationCase.findMany({
+      where: { emergencyRequestId: requestId, deletedAt: null },
+      include: { hospital: { include: { region: true, district: true } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return {
+      ...request,
+      history: history.map((row) => ({
+        id: row.id,
+        hospitalId: row.hospitalId,
+        hospitalName: row.hospital?.name ?? '—',
+        stage: row.stage,
+        status: row.status,
+        refusalReason: row.refusalReason,
+        refusalNotes: row.refusalNotes,
+        receivingStaffName: row.receivingStaffName,
+        updatedAt: row.updatedAt,
+      })),
+    };
+  }
+
+  async assignHospitalToRequest(
+    requestId: string,
+    data: {
+      hospitalId: string;
+      outcome: 'ACCEPTED' | 'REJECTED';
+      branchId?: string;
+      branchName?: string;
+      receivingStaffName?: string;
+      reason?: HospitalRefusalReason;
+      notes?: string;
+    },
+    userId?: string,
+  ) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: requestId },
+      include: { driver: true, nurse: true },
+    });
+    if (!request) throw new NotFoundException('Emergency request not found');
+
+    const hospital = await this.prisma.hospital.findUnique({
+      where: { id: data.hospitalId },
+      include: { region: true, district: true },
+    });
+    if (!hospital) throw new NotFoundException('Hospital not found');
+
+    let coordCase = await this.prisma.hospitalCoordinationCase.findFirst({
+      where: {
+        emergencyRequestId: requestId,
+        hospitalId: data.hospitalId,
+        deletedAt: null,
+      },
+    });
+
+    if (data.outcome === 'REJECTED') {
+      if (!data.reason) {
+        throw new BadRequestException('Refusal reason is required when rejecting a hospital');
+      }
+
+      if (!coordCase) {
+        coordCase = await this.prisma.hospitalCoordinationCase.create({
+          data: {
+            caseNumber: await this.nextCaseNumber(),
+            emergencyRequestId: requestId,
+            hospitalId: data.hospitalId,
+            stage: 'REFUSED',
+            status: 'REJECTED',
+            priority: request.priority,
+            refusalReason: data.reason,
+            refusalNotes: data.notes,
+            recordedById: userId,
+          },
+          include: CASE_INCLUDE,
+        });
+      } else {
+        coordCase = await this.prisma.hospitalCoordinationCase.update({
+          where: { id: coordCase.id },
+          data: {
+            stage: 'REFUSED',
+            status: 'REJECTED',
+            refusalReason: data.reason,
+            refusalNotes: data.notes,
+            recordedById: userId,
+          },
+          include: CASE_INCLUDE,
+        });
+      }
+
+      if (request.destinationHospitalId === data.hospitalId) {
+        await this.prisma.emergencyRequest.update({
+          where: { id: requestId },
+          data: {
+            destinationHospitalId: null,
+            destination: null,
+            destinationHospitalBranchId: null,
+            destinationHospitalBranchName: null,
+          },
+        });
+
+        await this.notifyFieldTeamDestinationUpdate(
+          requestId,
+          request.trackingCode,
+          'Cleared — hospital assignment removed',
+          userId,
+        );
+        await this.emitDestinationTrackingUpdate(request.trackingCode);
+      }
+
+      await this.notifications.dispatchEvent({
+        eventKey: 'HOSPITAL_RESPONSE',
+        title: 'Hospital Rejected',
+        message: `${hospital.name} refused case ${request.trackingCode}`,
+        type: 'PATIENT_CARE',
+        category: 'HOSPITAL',
+        priority: 'HIGH',
+        entityType: 'HospitalCoordination',
+        entityId: coordCase.id,
+        redirectUrl: '/admin/hospitals/refused',
+        context: { createdById: userId },
+      });
+
+      return { outcome: 'REJECTED' as const, coordinationCase: coordCase };
+    }
+
+    const destinationLabel = data.branchName
+      ? `${hospital.name} — ${data.branchName}`
+      : hospital.name;
+
+    await this.prisma.hospitalCoordinationCase.updateMany({
+      where: {
+        emergencyRequestId: requestId,
+        hospitalId: { not: data.hospitalId },
+        stage: { in: ['ACCEPTED', 'INCOMING'] },
+        deletedAt: null,
+      },
+      data: {
+        stage: 'REFUSED',
+        status: 'REJECTED',
+        refusalReason: 'OTHER',
+        refusalNotes: 'Reassigned to another hospital',
+        recordedById: userId,
+      },
+    });
+
+    await this.prisma.emergencyRequest.update({
+      where: { id: requestId },
+      data: {
+        destinationHospitalId: data.hospitalId,
+        destination: destinationLabel,
+        destinationHospitalBranchId: data.branchId ?? null,
+        destinationHospitalBranchName: data.branchName ?? null,
+      },
+    });
+
+    if (!coordCase) {
+      coordCase = await this.prisma.hospitalCoordinationCase.create({
+        data: {
+          caseNumber: await this.nextCaseNumber(),
+          emergencyRequestId: requestId,
+          hospitalId: data.hospitalId,
+          stage: 'ACCEPTED',
+          status: 'ACCEPTED',
+          priority: request.priority,
+          receivingStaffName: data.receivingStaffName,
+          recordedById: userId,
+        },
+        include: CASE_INCLUDE,
+      });
+    } else {
+      coordCase = await this.prisma.hospitalCoordinationCase.update({
+        where: { id: coordCase.id },
+        data: {
+          stage: 'ACCEPTED',
+          status: 'ACCEPTED',
+          receivingStaffName: data.receivingStaffName,
+          refusalReason: null,
+          refusalNotes: null,
+          recordedById: userId,
+        },
+        include: CASE_INCLUDE,
+      });
+    }
+
+    await this.notifications.notifyHospitalStaff(data.hospitalId, {
+      eventKey: 'HOSPITAL_RESPONSE',
+      title: 'Emergency Case Assigned',
+      message: `Case ${request.trackingCode} has been assigned to ${hospital.name}. Prepare receiving team.`,
+      type: 'PATIENT_CARE',
+      category: 'HOSPITAL',
+      priority: request.priority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+      entityType: 'HospitalCoordinationCase',
+      entityId: coordCase.id,
+      redirectUrl: `/hospital/emergency-cases/${coordCase.id}`,
+    });
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'HOSPITAL_RESPONSE',
+      title: 'Hospital Accepted',
+      message: `${hospital.name} accepted case ${request.trackingCode}`,
+      type: 'PATIENT_CARE',
+      category: 'HOSPITAL',
+      priority: 'MEDIUM',
+      entityType: 'HospitalCoordination',
+      entityId: coordCase.id,
+      redirectUrl: '/admin/hospitals/accepted',
+      context: { createdById: userId },
+    });
+
+    await this.notifyFieldTeamDestinationUpdate(
+      requestId,
+      request.trackingCode,
+      destinationLabel,
+      userId,
+    );
+    await this.emitDestinationTrackingUpdate(request.trackingCode);
+
+    return {
+      outcome: 'ACCEPTED' as const,
+      coordinationCase: coordCase,
+      destination: destinationLabel,
+    };
   }
 
   async getAnalytics(filters?: {

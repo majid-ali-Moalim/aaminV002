@@ -1404,6 +1404,25 @@ export const hospitalCoordinationService = {
     const api = new ApiService()
     return await api.get('/api/hospital-coordination/cases', { params })
   },
+  getRequestCoordinationHistory: async (requestId: string) => {
+    const api = new ApiService()
+    return await api.get(`/api/hospital-coordination/requests/${requestId}/history`)
+  },
+  assignHospital: async (
+    requestId: string,
+    data: {
+      hospitalId: string
+      outcome: 'ACCEPTED' | 'REJECTED'
+      branchId?: string
+      branchName?: string
+      receivingStaffName?: string
+      reason?: string
+      notes?: string
+    },
+  ) => {
+    const api = new ApiService()
+    return await api.post(`/api/hospital-coordination/requests/${requestId}/assign`, data)
+  },
   acceptCase: async (id: string, receivingStaffName?: string) => {
     const api = new ApiService()
     return await api.patch(`/api/hospital-coordination/cases/${id}/accept`, { receivingStaffName })

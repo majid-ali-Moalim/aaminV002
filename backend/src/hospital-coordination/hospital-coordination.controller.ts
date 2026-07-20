@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Body,
   Query,
@@ -15,6 +16,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { HospitalCaseStage, HospitalRefusalReason, HospitalCaseStatus } from '@prisma/client';
+import { AssignHospitalDto } from './dto/assign-hospital.dto';
 
 @ApiTags('hospital-coordination')
 @Controller('hospital-coordination')
@@ -98,6 +100,22 @@ export class HospitalCoordinationController {
   @RequirePermissions('hospital.view')
   getCase(@Param('id') id: string) {
     return this.coordination.getCase(id);
+  }
+
+  @Get('requests/:requestId/history')
+  @RequirePermissions('hospital.view')
+  getRequestHistory(@Param('requestId') requestId: string) {
+    return this.coordination.getRequestCoordinationHistory(requestId);
+  }
+
+  @Post('requests/:requestId/assign')
+  @RequirePermissions('hospital.handover')
+  assignHospital(
+    @Param('requestId') requestId: string,
+    @Body() body: AssignHospitalDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.coordination.assignHospitalToRequest(requestId, body, user?.id);
   }
 
   @Patch('cases/:id/accept')

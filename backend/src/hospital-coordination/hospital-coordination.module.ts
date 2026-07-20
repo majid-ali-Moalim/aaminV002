@@ -5,9 +5,10 @@ import { HospitalsModule } from '../hospitals/hospitals.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
-  imports: [PrismaModule, HospitalsModule, NotificationsModule, AuthModule],
+  imports: [PrismaModule, HospitalsModule, NotificationsModule, AuthModule, TrackingModule],
   controllers: [HospitalCoordinationController],
   providers: [HospitalCoordinationService],
   exports: [HospitalCoordinationService],

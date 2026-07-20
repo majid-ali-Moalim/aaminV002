@@ -35,6 +35,15 @@
   background: #f1f5f9;
 }
 
+.active-missions-action-btn--assign {
+  background: #0f766e;
+  color: #fff;
+}
+
+.active-missions-action-btn--assign:hover {
+  background: #0d9488;
+}
+
 /* Modal footer — explicit light-mode colors (AssignModal-style) */
 .active-missions-btn-secondary {
   background: #ffffff;
