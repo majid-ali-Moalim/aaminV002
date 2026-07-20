@@ -8,6 +8,7 @@ export type NotificationEventKey =
   | 'EMERGENCY_CREATED'
   | 'EMERGENCY_ESCALATED'
   | 'MISSION_ASSIGNED'
+  | 'MISSION_REASSIGNED'
   | 'MISSION_UPDATED'
   | 'MISSION_COMPLETED'
   | 'MISSION_CANCELLED'
@@ -86,6 +87,11 @@ export const EVENT_ROLE_ACCESS: Record<
   MISSION_ASSIGNED: {
     includeUserRoles: ['ADMIN'],
     employeeRoleNames: ['Dispatcher', 'Administrator'],
+    excludeEmployeeRoleNames: [],
+  },
+  MISSION_REASSIGNED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
     excludeEmployeeRoleNames: [],
   },
   MISSION_UPDATED: {

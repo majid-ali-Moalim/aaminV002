@@ -30,6 +30,8 @@ export interface AppNotification {
   readAt?: string | null
   createdAt: string
   updatedAt?: string
+  /** When true, show blocking modal with OK only (e.g. removed from mission on reassign) */
+  requiresAckModal?: boolean
   createdBy?: { username?: string; email?: string } | null
 }
 

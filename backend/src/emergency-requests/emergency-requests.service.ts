@@ -665,7 +665,14 @@ export class EmergencyRequestsService {
     },
     user?: AuthUser,
   ) {
-    const existing = await this.prisma.emergencyRequest.findUnique({ where: { id } });
+    const existing = await this.prisma.emergencyRequest.findUnique({
+      where: { id },
+      include: {
+        ambulance: { select: { ambulanceNumber: true } },
+        driver: { select: { id: true, userId: true, firstName: true, lastName: true } },
+        nurse: { select: { id: true, userId: true, firstName: true, lastName: true } },
+      },
+    });
     if (!existing) throw new NotFoundException('Emergency request not found');
 
     await this.assertDispatcherCanAccessCase(user, existing, 'assign');
@@ -725,7 +732,33 @@ export class EmergencyRequestsService {
     if (data.ambulanceId === '') delete data.ambulanceId;
     if (data.nurseId === '') delete data.nurseId;
 
-    const newStatus = data.status || 'ASSIGNED';
+    const isReassign =
+      Boolean(existing.driverId || existing.ambulanceId || existing.nurseId) &&
+      (data.driverId !== existing.driverId ||
+        data.ambulanceId !== existing.ambulanceId ||
+        (data.nurseId ?? null) !== (existing.nurseId ?? null));
+
+    // Free previous resources when reassigning to a new team/unit
+    if (isReassign) {
+      const previousCrewIds = [existing.driverId, existing.nurseId].filter(
+        (crewId): crewId is string =>
+          Boolean(crewId) && crewId !== data.driverId && crewId !== data.nurseId,
+      );
+      if (previousCrewIds.length) {
+        await this.prisma.employee.updateMany({
+          where: { id: { in: previousCrewIds } },
+          data: { shiftStatus: 'AVAILABLE', assignedAmbulanceId: null },
+        });
+      }
+      if (existing.ambulanceId && existing.ambulanceId !== data.ambulanceId) {
+        await this.prisma.ambulance.update({
+          where: { id: existing.ambulanceId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
+    }
+
+    const newStatus = data.status || existing.status || 'ASSIGNED';
     const updateData: any = { ...data, status: newStatus, assignedAt: new Date() };
 
     const result = await this.prisma.emergencyRequest.update({
@@ -736,7 +769,7 @@ export class EmergencyRequestsService {
           create: {
             fromStatus: existing.status,
             toStatus: newStatus,
-            notes: `Team assigned`,
+            notes: isReassign ? 'Team reassigned' : 'Team assigned',
           }
         }
       },
@@ -778,10 +811,57 @@ export class EmergencyRequestsService {
         )?.userId
       : undefined;
 
+    const createdByUserId = (data as any).createdByUserId ?? user?.sub ?? user?.id;
+
+    if (isReassign) {
+      const removedCrew = [existing.driver, existing.nurse].filter(
+        (member): member is NonNullable<typeof existing.driver> =>
+          Boolean(member?.userId) &&
+          member.id !== data.driverId &&
+          member.id !== data.nurseId,
+      );
+      const removedUserIds = [...new Set(removedCrew.map((m) => m.userId).filter(Boolean))] as string[];
+
+      if (removedUserIds.length) {
+        const oldAmb = existing.ambulance?.ambulanceNumber ?? 'N/A';
+        const newAmb = result.ambulance?.ambulanceNumber ?? 'N/A';
+        const crewNames = removedCrew
+          .map((m) => [m.firstName, m.lastName].filter(Boolean).join(' ').trim())
+          .filter(Boolean)
+          .join(', ');
+
+        await this.notifications.dispatchEvent({
+          eventKey: 'MISSION_REASSIGNED',
+          title: 'Mission reassigned — you are off this case',
+          message: [
+            `Case ${result.trackingCode} has been reassigned to a new team.`,
+            crewNames ? `Previous crew: ${crewNames}.` : '',
+            `Unit change: ${oldAmb} → ${newAmb}.`,
+            'You are no longer assigned to this mission. Tap OK to acknowledge.',
+          ]
+            .filter(Boolean)
+            .join(' '),
+          type: 'EMERGENCY',
+          category: 'MISSION',
+          priority: 'HIGH',
+          entityType: 'EmergencyRequest',
+          entityId: result.id,
+          redirectUrl: undefined,
+          context: {
+            createdById: createdByUserId,
+            directOnly: true,
+            recipientUserIds: removedUserIds,
+          },
+        });
+      }
+    }
+
     await this.notifications.dispatchEvent({
       eventKey: 'MISSION_ASSIGNED',
-      title: 'Mission Assigned',
-      message: `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`,
+      title: isReassign ? 'New mission assignment' : 'Mission Assigned',
+      message: isReassign
+        ? `You are now assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`
+        : `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`,
       type: 'EMERGENCY',
       category: 'MISSION',
       priority: result.priority as any,
@@ -789,7 +869,7 @@ export class EmergencyRequestsService {
       entityId: result.id,
       redirectUrl: `/dispatcher/emergency/active?id=${result.id}`,
       context: {
-        createdById: (data as any).createdByUserId,
+        createdById: createdByUserId,
         regionId: result.regionId ?? existing.regionId ?? null,
         assignedUserIds: [...assignedIds, dispatcherUserId].filter(Boolean) as string[],
         includeEmployeeRoles: ['Driver', 'Nurse'],
@@ -803,14 +883,17 @@ export class EmergencyRequestsService {
     // Audit log
     await this.auditLog.logCaseActivity(
       data.dispatcherId || 'SYSTEM', 
-      'ASSIGNED_TEAM', 
+      isReassign ? 'REASSIGNED_TEAM' : 'ASSIGNED_TEAM', 
       result.id, 
       existing.status, 
       newStatus,
       {
         driverId: data.driverId,
         nurseId: data.nurseId,
-        ambulanceId: data.ambulanceId
+        ambulanceId: data.ambulanceId,
+        previousDriverId: existing.driverId,
+        previousNurseId: existing.nurseId,
+        previousAmbulanceId: existing.ambulanceId,
       }
     );
 

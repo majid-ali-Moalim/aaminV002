@@ -64,6 +64,16 @@ function ensureSocketListeners() {
 
   globalSocket.on('notification', (payload: AppNotification) => {
     prependNotification(payload)
+
+    const needsAckModal =
+      payload.requiresAckModal === true || payload.eventKey === 'MISSION_REASSIGNED'
+
+    if (needsAckModal) {
+      playAlertSound()
+      useNotificationStore.getState().showAckModal(payload)
+      return
+    }
+
     const href = resolveLiveNotificationUrl(payload)
     const toastOpts = {
       duration: payload.priority === 'CRITICAL' ? 8000 : 5000,

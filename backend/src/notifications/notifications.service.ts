@@ -94,6 +94,12 @@ export class NotificationsService {
             ? `/nurse/mission?caseId=${caseId}`
             : '/nurse/mission';
         }
+      } else if (payload.eventKey === 'MISSION_REASSIGNED') {
+        if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {
+          recipientRedirect = '/driver';
+        } else if (recipient?.role === 'EMPLOYEE' && roleName.includes('nurse')) {
+          recipientRedirect = '/nurse/dashboard';
+        }
       }
 
       try {

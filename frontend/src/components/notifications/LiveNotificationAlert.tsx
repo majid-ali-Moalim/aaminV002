@@ -18,6 +18,11 @@ export default function LiveNotificationAlert() {
   useEffect(() => {
     if (!latest || latest.id === seenId.current) return
 
+    if (latest.requiresAckModal || latest.eventKey === 'MISSION_REASSIGNED') {
+      seenId.current = latest.id
+      return
+    }
+
     const createdAt = new Date(latest.createdAt).getTime()
     if (Number.isFinite(createdAt) && createdAt < mountedAt.current - 3000) {
       seenId.current = latest.id

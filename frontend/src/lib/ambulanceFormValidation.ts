@@ -1,3 +1,6 @@
+import { isValidPlateNumber } from '@/lib/ambulance/plateNumber'
+import { AMBULANCE_TYPE_OPTIONS } from '@/lib/ambulance/equipmentOptions'
+
 export type AmbulanceFormStep = 'identity' | 'vehicle' | 'station' | 'equipment' | 'review'
 
 export type AmbulanceFormValues = {
@@ -13,17 +16,17 @@ export type AmbulanceFormValues = {
   stationId: string
   assignedDriverId: string
   assignedNurseId: string
+  stretcherAvailable: boolean
   oxygenAvailable: boolean
   defibrillatorAvailable: boolean
+  suctionAvailable: boolean
+  firstAidKitAvailable: boolean
   registrationExpiry: string
   registrationDocumentUrl: string
   notes: string
 }
 
 export type AmbulanceFormErrors = Partial<Record<keyof AmbulanceFormValues, string>>
-
-const AMBULANCE_ID_PATTERN = /^[A-Za-z0-9-]{3,20}$/
-const PLATE_PATTERN = /^[A-Za-z0-9-\s]{3,15}$/
 
 function parseDateOnly(value: string): Date | null {
   if (!value) return null
@@ -39,15 +42,13 @@ function validateIdentity(form: AmbulanceFormValues, errors: AmbulanceFormErrors
   const id = form.ambulanceNumber.trim()
   if (!id) {
     setError(errors, 'ambulanceNumber', 'Ambulance ID is required')
-  } else if (!AMBULANCE_ID_PATTERN.test(id)) {
-    setError(errors, 'ambulanceNumber', 'Use 3–20 letters, numbers, or hyphens (e.g. AMB-001)')
   }
 
-  const plate = form.plateNumber.trim()
+  const plate = form.plateNumber.trim().toUpperCase()
   if (!plate) {
     setError(errors, 'plateNumber', 'Plate number is required')
-  } else if (!PLATE_PATTERN.test(plate)) {
-    setError(errors, 'plateNumber', 'Enter a valid plate number (e.g. SO-12345)')
+  } else if (!isValidPlateNumber(plate)) {
+    setError(errors, 'plateNumber', 'Use 2 letters then 4 numbers (e.g. AB0000)')
   }
 
   if (form.registrationExpiry) {
@@ -65,12 +66,13 @@ function validateIdentity(form: AmbulanceFormValues, errors: AmbulanceFormErrors
 function validateVehicle(
   form: AmbulanceFormValues,
   errors: AmbulanceFormErrors,
-  allowedTypes: string[],
+  allowedTypes: string[] = [...AMBULANCE_TYPE_OPTIONS],
 ) {
+  const types = allowedTypes.length > 0 ? allowedTypes : [...AMBULANCE_TYPE_OPTIONS]
   if (!form.vehicleType.trim()) {
     setError(errors, 'vehicleType', 'Select an ambulance type')
-  } else if (allowedTypes.length > 0 && !allowedTypes.includes(form.vehicleType)) {
-    setError(errors, 'vehicleType', 'Select a valid ambulance type from master data')
+  } else if (!types.includes(form.vehicleType)) {
+    setError(errors, 'vehicleType', 'Select BLS or ALS')
   }
 
   if (!form.vehicleBrand.trim()) {

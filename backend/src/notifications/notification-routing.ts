@@ -97,6 +97,7 @@ export function enrichNotification<T extends Record<string, any>>(notification: 
     actionUrl: redirectUrl,
     isUnread: notification.status === 'UNREAD',
     isRead: notification.status !== 'UNREAD',
+    requiresAckModal: notification.eventKey === 'MISSION_REASSIGNED',
   };
 }
 

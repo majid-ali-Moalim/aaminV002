@@ -143,11 +143,17 @@ export class NotificationDispatchService {
       unique = unique.filter((id) => !excluded.has(id));
     }
 
-    // Mission updated/cancelled: assigned team only (+ no dispatchers per spec)
-    if (eventKey === 'MISSION_UPDATED' || eventKey === 'MISSION_CANCELLED') {
-      unique = context.assignedUserIds?.length
-        ? [...new Set(context.assignedUserIds)]
-        : [];
+    // Mission updated/cancelled/reassigned (removed crew): direct recipients only
+    if (
+      eventKey === 'MISSION_UPDATED' ||
+      eventKey === 'MISSION_CANCELLED' ||
+      eventKey === 'MISSION_REASSIGNED'
+    ) {
+      unique = context.recipientUserIds?.length
+        ? [...new Set(context.recipientUserIds)]
+        : context.assignedUserIds?.length
+          ? [...new Set(context.assignedUserIds)]
+          : [];
     }
 
     return this.filterSelf(unique, context.createdById);

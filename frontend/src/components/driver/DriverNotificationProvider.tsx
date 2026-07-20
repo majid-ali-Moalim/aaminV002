@@ -3,13 +3,18 @@
 import { useEffect } from 'react'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
 import { driverNotificationsApi } from '@/lib/driverApi'
+import { notificationsService } from '@/lib/api'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { useNotificationStore } from '@/lib/stores/notificationStore'
+import type { AppNotification } from '@/lib/notifications/types'
 import LiveNotificationAlert from '@/components/notifications/LiveNotificationAlert'
+import AckNotificationModal from '@/components/notifications/AckNotificationModal'
 
 /** Real-time mission alerts for drivers (shared notification socket). */
 export function DriverNotificationProvider({ children }: { children: React.ReactNode }) {
   useNotificationSocket()
   const { setUnreadCount } = useDriverStore()
+  const showAckModal = useNotificationStore((s) => s.showAckModal)
 
   useEffect(() => {
     driverNotificationsApi
@@ -20,10 +25,25 @@ export function DriverNotificationProvider({ children }: { children: React.React
       .catch(() => {})
   }, [setUnreadCount])
 
+  useEffect(() => {
+    notificationsService
+      .getInbox({ limit: 20, unreadOnly: true })
+      .then((data) => {
+        const pending = data?.items?.find(
+          (n: AppNotification) =>
+            n.status === 'UNREAD' &&
+            (n.eventKey === 'MISSION_REASSIGNED' || n.requiresAckModal),
+        )
+        if (pending) showAckModal(pending)
+      })
+      .catch(() => {})
+  }, [showAckModal])
+
   return (
     <>
       {children}
       <LiveNotificationAlert />
+      <AckNotificationModal />
     </>
   )
 }

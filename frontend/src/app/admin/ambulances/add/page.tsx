@@ -15,8 +15,6 @@ import {
   RefreshCw,
   Shield,
   Warehouse,
-  Wind,
-  HeartPulse,
   FileText,
   Upload,
   Calendar,
@@ -24,7 +22,6 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   ambulancesService,
-  mdmService,
   systemSetupService,
   uploadService,
 } from '@/lib/api'
@@ -39,6 +36,15 @@ import {
   validateAmbulanceFormStep,
   type AmbulanceFormStep,
 } from '@/lib/ambulanceFormValidation'
+import { formatPlateInput } from '@/lib/ambulance/plateNumber'
+import { computeNextAmbulanceNumber } from '@/lib/ambulance/nextAmbulanceId'
+import {
+  AMBULANCE_TYPE_OPTIONS,
+  AMBULANCE_EQUIPMENT_OPTIONS,
+  buildEquipmentSummary,
+  mergeEquipmentIntoNotes,
+  type AmbulanceEquipmentKey,
+} from '@/lib/ambulance/equipmentOptions'
 
 const STEPS = [
   { id: 'identity', label: 'Registration', icon: Hash },
@@ -48,13 +54,6 @@ const STEPS = [
   { id: 'review', label: 'Review', icon: CheckCircle2 },
 ] as const
 
-type AmbulanceTypeOption = {
-  id: string
-  name: string
-  code: string
-  description?: string | null
-}
-
 const inputClass =
   'w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all'
 
@@ -63,7 +62,7 @@ const labelClass = 'text-sm font-semibold text-slate-700 mb-1.5 block'
 const initialForm = {
   ambulanceNumber: '',
   plateNumber: '',
-  vehicleType: '',
+  vehicleType: AMBULANCE_TYPE_OPTIONS[0],
   vehicleBrand: '',
   vehicleModel: '',
   vehicleYear: new Date().getFullYear(),
@@ -71,8 +70,11 @@ const initialForm = {
   regionId: '',
   districtId: '',
   stationId: '',
+  stretcherAvailable: false,
   oxygenAvailable: false,
   defibrillatorAvailable: false,
+  suctionAvailable: false,
+  firstAidKitAvailable: false,
   registrationExpiry: '',
   registrationDocumentUrl: '',
   notes: '',
@@ -93,33 +95,32 @@ export default function AddAmbulancePage() {
   const [fieldErrors, setFieldErrors] = useState<AmbulanceFormErrors>({})
 
   const [stations, setStations] = useState<Station[]>([])
-  const [ambulanceTypes, setAmbulanceTypes] = useState<AmbulanceTypeOption[]>([])
 
   const currentStep = STEPS[stepIndex]
 
-  const ambulanceTypeNames = useMemo(
-    () => ambulanceTypes.map((t) => t.name),
-    [ambulanceTypes],
+  const ambulanceTypeNames = useMemo(() => [...AMBULANCE_TYPE_OPTIONS], [])
+
+  const equipmentSummary = useMemo(
+    () => buildEquipmentSummary(form as Record<AmbulanceEquipmentKey, boolean>),
+    [form],
   )
 
   const loadMasterData = useCallback(async () => {
     try {
       setIsLoading(true)
-      const [stationsData, typesData] = await Promise.all([
+      const [stationsData, fleetData] = await Promise.all([
         systemSetupService.getStations(),
-        mdmService.listAll('ambulance-types', { status: 'active' }).catch(() => []),
+        ambulancesService.getAll().catch(() => []),
       ])
 
       setStations(stationsData)
 
-      const types = (Array.isArray(typesData) ? typesData : []) as AmbulanceTypeOption[]
-      setAmbulanceTypes(types)
-      if (types.length > 0) {
-        setForm((prev) => ({
-          ...prev,
-          vehicleType: prev.vehicleType || types[0].name,
-        }))
-      }
+      const nextId = computeNextAmbulanceNumber(Array.isArray(fleetData) ? fleetData : [])
+      setForm((prev) => ({
+        ...prev,
+        ambulanceNumber: nextId,
+        vehicleType: prev.vehicleType || AMBULANCE_TYPE_OPTIONS[0],
+      }))
     } catch {
       toast.error('Failed to load form data')
     } finally {
@@ -210,9 +211,11 @@ export default function AddAmbulancePage() {
       setIsSubmitting(true)
       const station = stations.find((s) => s.id === form.stationId)
 
+      const notes = mergeEquipmentIntoNotes(equipmentSummary, form.notes)
+
       const payload = {
         ambulanceNumber: form.ambulanceNumber.trim(),
-        plateNumber: form.plateNumber.trim(),
+        plateNumber: form.plateNumber.trim().toUpperCase(),
         status: form.status,
         regionId: station?.regionId || form.regionId || undefined,
         districtId: station?.districtId || form.districtId || undefined,
@@ -227,7 +230,7 @@ export default function AddAmbulancePage() {
           ? new Date(form.registrationExpiry).toISOString()
           : undefined,
         registrationDocumentUrl: form.registrationDocumentUrl || undefined,
-        notes: form.notes.trim() || undefined,
+        notes,
         isActive: true,
       }
 
@@ -277,7 +280,7 @@ export default function AddAmbulancePage() {
             </p>
             <h1 className="text-3xl font-black tracking-tight">Register Ambulance</h1>
             <p className="text-red-100/80 mt-2 max-w-xl text-sm">
-              Complete vehicle identity, crew assignment, equipment, and registration details.
+              Complete vehicle identity, station assignment, equipment, and registration details.
             </p>
           </div>
         </div>
@@ -327,11 +330,15 @@ export default function AddAmbulancePage() {
                 <div>
                   <label className={labelClass}>Ambulance ID *</label>
                   <input
-                    className={fieldInputClass(fieldErrors.ambulanceNumber)}
+                    className={`${fieldInputClass(fieldErrors.ambulanceNumber)} bg-slate-100 text-slate-700 cursor-not-allowed`}
                     placeholder="AMB-001"
                     value={form.ambulanceNumber}
-                    onChange={(e) => setField('ambulanceNumber', e.target.value.toUpperCase())}
+                    readOnly
+                    aria-readonly
                   />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Auto-generated from the next available fleet number.
+                  </p>
                   {fieldErrors.ambulanceNumber ? (
                     <p className="mt-1 text-xs text-red-600 font-medium">{fieldErrors.ambulanceNumber}</p>
                   ) : null}
@@ -340,10 +347,14 @@ export default function AddAmbulancePage() {
                   <label className={labelClass}>Plate Number *</label>
                   <input
                     className={fieldInputClass(fieldErrors.plateNumber)}
-                    placeholder="SO-12345"
+                    placeholder="AB0000"
+                    maxLength={6}
                     value={form.plateNumber}
-                    onChange={(e) => setField('plateNumber', e.target.value.toUpperCase())}
+                    onChange={(e) => setField('plateNumber', formatPlateInput(e.target.value))}
                   />
+                  <p className="mt-1 text-xs text-slate-500">
+                    2 letters + 4 numbers (e.g. AB0000).
+                  </p>
                   {fieldErrors.plateNumber ? (
                     <p className="mt-1 text-xs text-red-600 font-medium">{fieldErrors.plateNumber}</p>
                   ) : null}
@@ -399,27 +410,18 @@ export default function AddAmbulancePage() {
                     className={fieldInputClass(fieldErrors.vehicleType)}
                     value={form.vehicleType}
                     onChange={(e) => setField('vehicleType', e.target.value)}
-                    disabled={ambulanceTypes.length === 0}
                   >
-                    {ambulanceTypes.length === 0 ? (
-                      <option value="">No types configured — add them in Master Data</option>
-                    ) : (
-                      ambulanceTypes.map((type) => (
-                        <option key={type.id} value={type.name}>
-                          {type.name}
-                          {type.code ? ` (${type.code})` : ''}
-                        </option>
-                      ))
-                    )}
+                    {AMBULANCE_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
                   </select>
                   {fieldErrors.vehicleType ? (
                     <p className="mt-1 text-xs text-red-600 font-medium">{fieldErrors.vehicleType}</p>
                   ) : (
                     <p className="mt-1 text-xs text-slate-500">
-                      Types are managed in{' '}
-                      <Link href="/admin/master-data/ambulance" className="text-red-600 font-semibold hover:underline">
-                        Master Data → Ambulance
-                      </Link>
+                      Basic Life Support (BLS) or Advanced Life Support (ALS).
                     </p>
                   )}
                 </div>
@@ -518,39 +520,29 @@ export default function AddAmbulancePage() {
                     <p className="mt-1 text-xs text-red-600 font-medium">{fieldErrors.stationId}</p>
                   ) : null}
                 </div>
-                <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-                  <p className="text-sm text-slate-600">
-                    Drivers and nurses are assigned when you dispatch a case using the{' '}
-                    <span className="font-semibold">Assign Team</span> form — not when registering
-                    the ambulance.
-                  </p>
-                </div>
               </div>
             )}
 
             {currentStep.id === 'equipment' && (
               <div className="space-y-6">
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 cursor-pointer hover:border-red-200 has-[:checked]:border-red-500 has-[:checked]:bg-red-50">
-                    <input
-                      type="checkbox"
-                      checked={form.oxygenAvailable}
-                      onChange={(e) => setField('oxygenAvailable', e.target.checked)}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
-                    />
-                    <Wind className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm font-semibold text-slate-800">Oxygen Available</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 cursor-pointer hover:border-red-200 has-[:checked]:border-red-500 has-[:checked]:bg-red-50">
-                    <input
-                      type="checkbox"
-                      checked={form.defibrillatorAvailable}
-                      onChange={(e) => setField('defibrillatorAvailable', e.target.checked)}
-                      className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
-                    />
-                    <HeartPulse className="w-5 h-5 text-red-500" />
-                    <span className="text-sm font-semibold text-slate-800">Defibrillator Available</span>
-                  </label>
+                  {AMBULANCE_EQUIPMENT_OPTIONS.map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 cursor-pointer hover:border-red-200 has-[:checked]:border-red-500 has-[:checked]:bg-red-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form[item.key]}
+                        onChange={(e) => setField(item.key, e.target.checked)}
+                        className="w-4 h-4 rounded text-red-600 focus:ring-red-500"
+                      />
+                      <span className="text-xl leading-none" aria-hidden>
+                        {item.emoji}
+                      </span>
+                      <span className="text-sm font-semibold text-slate-800">{item.label}</span>
+                    </label>
+                  ))}
                 </div>
                 <div>
                   <label className={labelClass}>Notes</label>
@@ -580,8 +572,8 @@ export default function AddAmbulancePage() {
                   { label: 'Status', value: form.status.replace('_', ' ') },
                   { label: 'Base Station', value: stationName || '—' },
                   {
-                    label: 'Oxygen / Defibrillator',
-                    value: `${form.oxygenAvailable ? 'O₂ Yes' : 'O₂ No'} · ${form.defibrillatorAvailable ? 'AED Yes' : 'AED No'}`,
+                    label: 'Equipment',
+                    value: equipmentSummary.length > 0 ? equipmentSummary.join(', ') : 'None selected',
                   },
                   {
                     label: 'Registration Expiry',
@@ -677,17 +669,15 @@ export default function AddAmbulancePage() {
                   <Warehouse className="w-4 h-4 text-slate-400" />
                   {stationName || 'Base station'}
                 </div>
-                <div className="flex gap-2 pt-1">
-                  {form.oxygenAvailable && (
-                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
-                      O₂
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {AMBULANCE_EQUIPMENT_OPTIONS.filter((item) => form[item.key]).map((item) => (
+                    <span
+                      key={item.key}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200"
+                    >
+                      {item.emoji} {item.label}
                     </span>
-                  )}
-                  {form.defibrillatorAvailable && (
-                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-red-50 text-red-700 border border-red-100">
-                      AED
-                    </span>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>

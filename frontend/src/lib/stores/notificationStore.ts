@@ -7,10 +7,13 @@ interface NotificationState {
   recent: AppNotification[]
   stats: NotificationStats | null
   connected: boolean
+  ackModalNotification: AppNotification | null
   setRecent: (items: AppNotification[]) => void
   prependNotification: (item: AppNotification) => void
   setStats: (stats: NotificationStats) => void
   setConnected: (connected: boolean) => void
+  showAckModal: (item: AppNotification) => void
+  dismissAckModal: () => void
   markLocalRead: (id: string) => void
   markAllLocalRead: () => void
   removeLocal: (id: string) => void
@@ -20,6 +23,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   recent: [],
   stats: null,
   connected: false,
+  ackModalNotification: null,
 
   setRecent: (items) => set({ recent: items }),
 
@@ -41,6 +45,10 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   setStats: (stats) => set({ stats }),
 
   setConnected: (connected) => set({ connected }),
+
+  showAckModal: (item) => set({ ackModalNotification: item }),
+
+  dismissAckModal: () => set({ ackModalNotification: null }),
 
   markLocalRead: (id) =>
     set((state) => ({

@@ -22,6 +22,8 @@ interface AssignModalProps {
   request: EmergencyRequest;
   onClose: () => void;
   onSuccess: () => void;
+  /** Reassign replaces the current driver, ambulance, and nurse on an active case */
+  mode?: 'assign' | 'reassign';
 }
 
 const getAmbulanceType = (amb?: Ambulance | null) =>
@@ -72,9 +74,15 @@ function CrewEligibilityBadges({ member }: { member: DispatchCrewMember }) {
   )
 }
 
-const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }) => {
+const AssignModal: React.FC<AssignModalProps> = ({
+  request,
+  onClose,
+  onSuccess,
+  mode = 'assign',
+}) => {
   const pathname = usePathname();
   const isDispatcherPortal = pathname?.startsWith('/dispatcher');
+  const isReassign = mode === 'reassign';
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingUnits, setIsFetchingUnits] = useState(false);
   const [availableAmbulances, setAvailableAmbulances] = useState<Ambulance[]>([]);
@@ -86,6 +94,14 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
     driverId: '',
     nurseId: '',
   });
+
+  const currentDriverName = request.driver
+    ? `${request.driver.firstName || ''} ${request.driver.lastName || ''}`.trim()
+    : '—';
+  const currentNurseName = request.nurse
+    ? `${request.nurse.firstName || ''} ${request.nurse.lastName || ''}`.trim()
+    : '—';
+  const currentAmbulance = request.ambulance?.ambulanceNumber || '—';
 
   const fetchUnits = async () => {
     try {
@@ -121,7 +137,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
           nurseId: nurseOk ? prev.nurseId : '',
           ambulanceId: ambOk ? prev.ambulanceId : '',
         };
-        if (next.driverId || next.ambulanceId) return next;
+        // For reassign, do not auto-pick the first available unit —
+        // the admin must explicitly choose the new team.
+        if (isReassign || next.driverId || next.ambulanceId) return next;
         const firstDriver = drivers[0];
         const defaultAmbulanceId =
           firstDriver?.assignedAmbulanceId || ambulances[0]?.id || '';
@@ -177,7 +195,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
             ? error.message
             : undefined;
       const text = Array.isArray(message) ? message.join(', ') : message;
-      alert(`Assignment failed: ${text || 'Unknown error'}`);
+      alert(`${isReassign ? 'Reassignment' : 'Assignment'} failed: ${text || 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -194,11 +212,13 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
         {/* Header */}
         <div className="px-8 py-6 bg-white border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="bg-red-50 p-3 rounded-2xl">
-              <Truck className="w-6 h-6 text-red-600" />
+            <div className={`p-3 rounded-2xl ${isReassign ? 'bg-amber-50' : 'bg-red-50'}`}>
+              <Truck className={`w-6 h-6 ${isReassign ? 'text-amber-600' : 'text-red-600'}`} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900">Assign Dispatch Team</h2>
+              <h2 className="text-xl font-bold text-slate-900">
+                {isReassign ? 'Reassign Dispatch Team' : 'Assign Dispatch Team'}
+              </h2>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Case:</span>
                 <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">{request.trackingCode}</span>
@@ -207,7 +227,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Drivers and nurses must be marked present and on this shift window.
+                {isReassign
+                  ? 'Select a new ambulance, driver, and nurse. The previous team will be released.'
+                  : 'Drivers and nurses must be marked present and on this shift window.'}
               </p>
             </div>
           </div>
@@ -226,6 +248,27 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
         )}
 
         <div className="flex-1 p-8 overflow-y-auto space-y-8 custom-scrollbar">
+          {isReassign && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-3">
+                Current assignment
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600/80">Ambulance</p>
+                  <p className="font-bold text-slate-800">{currentAmbulance}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600/80">Driver</p>
+                  <p className="font-bold text-slate-800">{currentDriverName || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600/80">Nurse</p>
+                  <p className="font-bold text-slate-800">{currentNurseName || '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Summary Card */}
           <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
@@ -237,7 +280,9 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                 {selectedAmbulance && <AmbulanceTypeBadge ambulance={selectedAmbulance} />}
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Primary Driver</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                  {isReassign ? 'New Primary Driver' : 'Primary Driver'}
+                </span>
                 <p className="font-bold text-slate-700 text-lg">
                   {selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : 'Select a driver below'}
                 </p>
@@ -417,7 +462,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
         {/* Footer */}
         <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center sm:text-left">
-            <span>Assignment Queue Ready</span>
+            <span>{isReassign ? 'Reassignment Queue Ready' : 'Assignment Queue Ready'}</span>
             <p className="text-blue-500 mt-0.5">
               {selectedAmbulance?.ambulanceNumber || 'UNITS-TBD'} / {selectedDriver?.firstName || 'STAFF-TBD'}
               {selectedNurse
@@ -443,9 +488,19 @@ const AssignModal: React.FC<AssignModalProps> = ({ request, onClose, onSuccess }
                 !assignmentParams.driverId ||
                 (nurseRequired && !assignmentParams.nurseId)
               }
-              className="flex-1 sm:flex-none px-8 h-12 bg-red-600 hover:bg-red-700 text-white font-bold uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95 disabled:opacity-50"
+              className={`flex-1 sm:flex-none px-8 h-12 text-white font-bold uppercase text-xs tracking-widest rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 ${
+                isReassign
+                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200'
+                  : 'bg-red-600 hover:bg-red-700 shadow-red-200'
+              }`}
             >
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Confirm Dispatch'}
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : isReassign ? (
+                'Confirm Reassign'
+              ) : (
+                'Confirm Dispatch'
+              )}
             </Button>
           </div>
         </div>

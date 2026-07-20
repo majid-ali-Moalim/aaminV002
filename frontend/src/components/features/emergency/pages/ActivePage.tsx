@@ -18,6 +18,7 @@ import {
   Filter,
   CheckCircle2,
   XCircle,
+  RefreshCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmergencyRequest } from '@/types'
@@ -28,6 +29,7 @@ import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 import CompleteCaseModal from '@/components/features/emergency/CompleteCaseModal'
 import CancelModal from '@/components/features/emergency/CancelModal'
 import AssignHospitalModal from '@/components/features/emergency/AssignHospitalModal'
+import AssignModal from '@/components/features/emergency/AssignModal'
 import { CLOSED_EMERGENCY_STATUSES } from '@/lib/emergency/dateFilters'
 import { useFocusedCaseFromUrl } from '@/components/features/emergency/useFocusedCaseFromUrl'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
@@ -90,6 +92,7 @@ function ActiveMissionsContent() {
   const [completeTarget, setCompleteTarget] = useState<EmergencyRequest | null>(null)
   const [cancelTarget, setCancelTarget] = useState<EmergencyRequest | null>(null)
   const [assignHospitalTarget, setAssignHospitalTarget] = useState<EmergencyRequest | null>(null)
+  const [reassignTarget, setReassignTarget] = useState<EmergencyRequest | null>(null)
 
   const openCaseDetail = useCallback((request: EmergencyRequest) => {
     setDetailCaseId(request.id)
@@ -392,19 +395,24 @@ function ActiveMissionsContent() {
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Unit
+                          Unit / Driver
                         </p>
                         <p className="text-xs font-bold text-red-600 mt-1">
                           {request.ambulance?.ambulanceNumber || 'Unassigned'}
                         </p>
+                        <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                          {request.driver
+                            ? `${request.driver.firstName} ${request.driver.lastName}`
+                            : '—'}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Driver
+                          Nurse
                         </p>
                         <p className="text-xs font-semibold text-slate-700 mt-1">
-                          {request.driver
-                            ? `${request.driver.firstName} ${request.driver.lastName}`
+                          {request.nurse
+                            ? `${request.nurse.firstName} ${request.nurse.lastName}`
                             : '—'}
                         </p>
                       </div>
@@ -412,9 +420,17 @@ function ActiveMissionsContent() {
                   </div>
 
                   {/* Actions */}
-                  <div className="p-5 lg:w-48 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
+                  <div className="p-5 lg:w-52 border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col gap-2 justify-center shrink-0">
                     {!isCaseClosed(request.status) ? (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => setReassignTarget(request)}
+                          className="active-missions-action-btn active-missions-action-btn--reassign w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                        >
+                          <RefreshCcw className="w-4 h-4" />
+                          Reassign
+                        </button>
                         <button
                           type="button"
                           onClick={() => setAssignHospitalTarget(request)}
@@ -488,6 +504,15 @@ function ActiveMissionsContent() {
         <AssignHospitalModal
           request={assignHospitalTarget}
           onClose={() => setAssignHospitalTarget(null)}
+          onSuccess={handleActionSuccess}
+        />
+      )}
+
+      {reassignTarget && (
+        <AssignModal
+          request={reassignTarget}
+          mode="reassign"
+          onClose={() => setReassignTarget(null)}
           onSuccess={handleActionSuccess}
         />
       )}
