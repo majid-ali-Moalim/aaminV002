@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import {
+  rethrowPrismaUniqueError,
+  validateDistrictNotAssignedToStation,
+  validateDistrictPayload,
+  validateRegionHasNoActiveDistricts,
+  validateRegionPayload,
+  validateStationLocationPayload,
+} from './location-validation';
 
 export type MdmEntityKey =
   | 'regions'
@@ -162,47 +170,31 @@ export class MasterDataService implements OnModuleInit {
   }
 
   async create(entity: MdmEntityKey, data: Record<string, unknown>, userId?: string) {
-    if (entity === 'districts' && !data.regionId) {
-      throw new BadRequestException('District must belong to a region');
+    if (entity === 'regions') {
+      const normalized = await validateRegionPayload(data);
+      data.code = normalized.code;
+      data.name = normalized.name;
     }
+
+    if (entity === 'districts') {
+      const normalized = await validateDistrictPayload(this.prisma, data);
+      data.code = normalized.code;
+      data.name = normalized.name;
+      data.regionId = normalized.regionId;
+    }
+
     if (entity === 'stations') {
       if (!data.name || !String(data.name).trim()) {
         throw new BadRequestException('Station name is required');
       }
-      if (!data.regionId || !data.districtId) {
-        throw new BadRequestException('Station must belong to a region and district');
-      }
-      const district = await this.prisma.district.findFirst({
-        where: {
-          id: String(data.districtId),
-          regionId: String(data.regionId),
-          deletedAt: null,
-        },
+      const location = await validateStationLocationPayload(this.prisma, {
+        regionId: String(data.regionId ?? ''),
+        districtId: String(data.districtId ?? ''),
+        coverageDistrictIds: data.coverageDistrictIds,
       });
-      if (!district) {
-        throw new BadRequestException('Selected district does not belong to the chosen region');
-      }
-      if (data.coverageDistrictIds !== undefined) {
-        const coverageIds = Array.isArray(data.coverageDistrictIds)
-          ? data.coverageDistrictIds.map(String)
-          : [];
-        if (coverageIds.length) {
-          const valid = await this.prisma.district.findMany({
-            where: {
-              id: { in: coverageIds },
-              regionId: String(data.regionId),
-              deletedAt: null,
-            },
-            select: { id: true },
-          });
-          if (valid.length !== coverageIds.length) {
-            throw new BadRequestException(
-              'One or more coverage districts do not belong to the selected region',
-            );
-          }
-        }
-        data.coverageDistrictIds = coverageIds;
-      }
+      data.regionId = location.regionId;
+      data.districtId = location.districtId;
+      data.coverageDistrictIds = location.coverageDistrictIds;
     }
 
     const usesAuditFields = entity !== 'system-settings' && entity !== 'stations';
@@ -212,48 +204,60 @@ export class MasterDataService implements OnModuleInit {
       ...(userId && entity === 'system-settings' ? { updatedById: userId } : {}),
     };
 
-    const row = await this.model(entity).create({ data: payload });
+    let row;
+    try {
+      row = await this.model(entity).create({ data: payload });
+    } catch (error) {
+      rethrowPrismaUniqueError(error, this.entityLabel(entity));
+    }
     await this.logAudit(userId, 'CREATE', entity, row.id, payload);
     return row;
   }
 
   async update(entity: MdmEntityKey, id: string, data: Record<string, unknown>, userId?: string) {
-    await this.getOne(entity, id);
+    const existing = await this.getOne(entity, id);
+
+    if (entity === 'regions' && (data.code !== undefined || data.name !== undefined)) {
+      const normalized = await validateRegionPayload({
+        code: data.code ?? existing.code,
+        name: data.name ?? existing.name,
+      });
+      data.code = normalized.code;
+      data.name = normalized.name;
+    }
+
+    if (entity === 'districts') {
+      const normalized = await validateDistrictPayload(this.prisma, {
+        code: data.code ?? existing.code,
+        name: data.name ?? existing.name,
+        regionId: data.regionId ?? existing.regionId,
+      });
+      data.code = normalized.code;
+      data.name = normalized.name;
+      data.regionId = normalized.regionId;
+
+      if (data.regionId !== existing.regionId) {
+        await validateDistrictNotAssignedToStation(
+          this.prisma,
+          id,
+          String(existing.name ?? ''),
+        );
+      }
+    }
 
     if (entity === 'stations' && (data.regionId || data.districtId || data.coverageDistrictIds !== undefined)) {
-      const existing = await this.model(entity).findUnique({ where: { id } });
-      const regionId = String(data.regionId ?? existing?.regionId ?? '');
-      const districtId = String(data.districtId ?? existing?.districtId ?? '');
-      if (!regionId || !districtId) {
-        throw new BadRequestException('Station must belong to a region and district');
-      }
-      const district = await this.prisma.district.findFirst({
-        where: { id: districtId, regionId, deletedAt: null },
+      const location = await validateStationLocationPayload(this.prisma, {
+        stationId: id,
+        regionId: String(data.regionId ?? existing.regionId ?? ''),
+        districtId: String(data.districtId ?? existing.districtId ?? ''),
+        coverageDistrictIds:
+          data.coverageDistrictIds !== undefined
+            ? data.coverageDistrictIds
+            : existing.coverageDistrictIds,
       });
-      if (!district) {
-        throw new BadRequestException('Selected district does not belong to the chosen region');
-      }
-      if (data.coverageDistrictIds !== undefined) {
-        const coverageIds = Array.isArray(data.coverageDistrictIds)
-          ? data.coverageDistrictIds.map(String)
-          : [];
-        if (coverageIds.length) {
-          const valid = await this.prisma.district.findMany({
-            where: {
-              id: { in: coverageIds },
-              regionId,
-              deletedAt: null,
-            },
-            select: { id: true },
-          });
-          if (valid.length !== coverageIds.length) {
-            throw new BadRequestException(
-              'One or more coverage districts do not belong to the selected region',
-            );
-          }
-        }
-        data.coverageDistrictIds = coverageIds;
-      }
+      data.regionId = location.regionId;
+      data.districtId = location.districtId;
+      data.coverageDistrictIds = location.coverageDistrictIds;
     }
 
     const usesAuditFields = entity !== 'stations';
@@ -261,18 +265,58 @@ export class MasterDataService implements OnModuleInit {
       ...data,
       ...(userId && usesAuditFields ? { updatedById: userId } : {}),
     };
-    const row = await this.model(entity).update({ where: { id }, data: payload });
+    let row;
+    try {
+      row = await this.model(entity).update({ where: { id }, data: payload });
+    } catch (error) {
+      rethrowPrismaUniqueError(error, this.entityLabel(entity));
+    }
     await this.logAudit(userId, 'UPDATE', entity, id, payload);
     return row;
   }
 
   async setActive(entity: MdmEntityKey, id: string, isActive: boolean, userId?: string) {
     if (entity === 'system-settings') throw new BadRequestException('Not applicable');
+
+    if (!isActive) {
+      const existing = await this.getOne(entity, id);
+      if (entity === 'districts') {
+        await validateDistrictNotAssignedToStation(
+          this.prisma,
+          id,
+          String(existing.name ?? ''),
+        );
+      }
+      if (entity === 'regions') {
+        await validateRegionHasNoActiveDistricts(
+          this.prisma,
+          id,
+          String(existing.name ?? ''),
+        );
+      }
+    }
+
     return this.update(entity, id, { isActive }, userId);
   }
 
   async remove(entity: MdmEntityKey, id: string, userId?: string) {
-    await this.getOne(entity, id);
+    const existing = await this.getOne(entity, id);
+
+    if (entity === 'districts') {
+      await validateDistrictNotAssignedToStation(
+        this.prisma,
+        id,
+        String(existing.name ?? ''),
+      );
+    }
+
+    if (entity === 'regions') {
+      await validateRegionHasNoActiveDistricts(
+        this.prisma,
+        id,
+        String(existing.name ?? ''),
+      );
+    }
 
     if (entity === 'stations') {
       const row = await this.model(entity).update({
@@ -336,6 +380,13 @@ export class MasterDataService implements OnModuleInit {
       entityType: `mdm:${entity}`,
       limit,
     });
+  }
+
+  private entityLabel(entity: MdmEntityKey) {
+    if (entity === 'regions') return 'region';
+    if (entity === 'districts') return 'district';
+    if (entity === 'stations') return 'station';
+    return entity.replace(/-/g, ' ');
   }
 
   private async logAudit(

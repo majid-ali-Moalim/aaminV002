@@ -1,6 +1,7 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { validateStationLocationPayload } from '../master-data/location-validation';
 
 @Injectable()
 export class SystemSetupService {
@@ -24,6 +25,16 @@ export class SystemSetupService {
 
   async create(modelName: string, data: any) {
     try {
+      if (modelName === 'station') {
+        const location = await validateStationLocationPayload(this.prisma, {
+          regionId: String(data.regionId ?? ''),
+          districtId: String(data.districtId ?? ''),
+          coverageDistrictIds: data.coverageDistrictIds,
+        });
+        data.regionId = location.regionId;
+        data.districtId = location.districtId;
+        data.coverageDistrictIds = location.coverageDistrictIds;
+      }
       return await this.getModel(modelName).create({ data });
     } catch (error: any) {
       if (error.code === 'P2002') {
@@ -37,6 +48,22 @@ export class SystemSetupService {
 
   async update(modelName: string, id: string, data: any) {
     try {
+      if (modelName === 'station') {
+        const existing = await this.prisma.station.findUnique({ where: { id } });
+        if (!existing) throw new BadRequestException('Station not found');
+        const location = await validateStationLocationPayload(this.prisma, {
+          stationId: id,
+          regionId: String(data.regionId ?? existing.regionId ?? ''),
+          districtId: String(data.districtId ?? existing.districtId ?? ''),
+          coverageDistrictIds:
+            data.coverageDistrictIds !== undefined
+              ? data.coverageDistrictIds
+              : existing.coverageDistrictIds,
+        });
+        data.regionId = location.regionId;
+        data.districtId = location.districtId;
+        data.coverageDistrictIds = location.coverageDistrictIds;
+      }
       return await this.getModel(modelName).update({
         where: { id },
         data,

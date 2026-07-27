@@ -88,6 +88,7 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
         type: 'multiselect',
         optionsKey: 'districts',
         optionsFilterBy: 'regionId',
+        placeholder: 'Optional — each district can belong to only one station',
       },
       { key: 'address', label: 'Address', placeholder: 'Street, landmark, or coordinates' },
       { key: 'phone', label: 'Phone', placeholder: 'Station contact number' },

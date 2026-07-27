@@ -811,7 +811,7 @@ export class EmergencyRequestsService {
         )?.userId
       : undefined;
 
-    const createdByUserId = (data as any).createdByUserId ?? user?.sub ?? user?.id;
+    const createdByUserId = (data as any).createdByUserId ?? user?.sub;
 
     if (isReassign) {
       const removedCrew = [existing.driver, existing.nurse].filter(

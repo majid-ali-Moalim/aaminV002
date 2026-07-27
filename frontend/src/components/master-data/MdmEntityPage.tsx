@@ -18,6 +18,11 @@ import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { mdmService } from '@/lib/api'
 import { MDM_ENTITIES, type MdmEntityKey } from '@/lib/master-data/config'
+import {
+  buildDistrictAssignmentMap,
+  isDistrictAvailableForStation,
+  validateLocationForm,
+} from '@/lib/master-data/locationValidation'
 
 type Row = Record<string, any>
 
@@ -40,6 +45,20 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
   const [form, setForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [options, setOptions] = useState<Record<string, Row[]>>({})
+  const [allStations, setAllStations] = useState<Row[]>([])
+
+  const districtAssignmentMap = useMemo(
+    () => buildDistrictAssignmentMap(allStations, editRow?.id),
+    [allStations, editRow?.id],
+  )
+
+  const districtNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const district of options.districts ?? []) {
+      map.set(district.id, district.name)
+    }
+    return map
+  }, [options.districts])
 
   const loadOptions = useCallback(async () => {
     const needed = def.fields.filter((f) => f.optionsKey).map((f) => f.optionsKey!)
@@ -47,12 +66,19 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
     const next: Record<string, Row[]> = {}
     await Promise.all(
       unique.map(async (key) => {
-        const data = await mdmService.listAll(key, { status: 'active' })
+        const data = await mdmService.listAll(key, {
+          status: key === 'districts' && entityKey === 'stations' ? 'all' : 'active',
+          includeInactive: key === 'districts' && entityKey === 'stations',
+        })
         next[key] = Array.isArray(data) ? data : []
       }),
     )
     setOptions(next)
-  }, [def.fields])
+    if (entityKey === 'stations') {
+      const stations = await mdmService.listAll('stations', { includeInactive: true })
+      setAllStations(Array.isArray(stations) ? stations : [])
+    }
+  }, [def.fields, entityKey])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -110,6 +136,16 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
       }
     }
 
+    const locationError = validateLocationForm(entityKey, form, {
+      stations: allStations,
+      editStationId: editRow?.id,
+      districtNameById,
+    })
+    if (locationError) {
+      toast.error(locationError)
+      return
+    }
+
     setSaving(true)
     try {
       const payload: Record<string, unknown> = {}
@@ -130,9 +166,11 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
         toast.success(`${def.singular} created`)
       }
       setModalOpen(false)
+      if (entityKey === 'stations') await loadOptions()
       load()
     } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Save failed')
+      const msg = e.response?.data?.message
+      toast.error(Array.isArray(msg) ? msg.join(', ') : msg || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -167,7 +205,7 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
       .map((row) =>
         def.tableColumns
           .map((c) => {
-            const v = renderCell(row, c.key, c.render)
+            const v = renderCell(row, c.key, c.render, districtNameById, 'export')
             return `"${String(v).replace(/"/g, '""')}"`
           })
           .join(','),
@@ -252,7 +290,7 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                   <tr key={row.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
                     {def.tableColumns.map((c) => (
                       <td key={c.key} className="px-4 py-3 text-gray-700 dark:text-gray-300">
-                        {renderCell(row, c.key, c.render)}
+                        {renderCell(row, c.key, c.render, districtNameById)}
                       </td>
                     ))}
                     <td className="px-4 py-3">
@@ -375,9 +413,23 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                           if (!parentVal) return false
                           return o[f.optionsFilterBy] === parentVal
                         })
+                        .filter((o) => {
+                          if (entityKey !== 'stations' || f.key !== 'districtId') return true
+                          return isDistrictAvailableForStation(
+                            o.id,
+                            districtAssignmentMap,
+                            form.districtId,
+                          )
+                        })
                         .map((o) => (
                           <option key={o.id} value={o.id}>
                             {o.name}
+                            {entityKey === 'stations' &&
+                            f.key === 'districtId' &&
+                            districtAssignmentMap.has(o.id) &&
+                            o.id !== form.districtId
+                              ? ' (assigned)'
+                              : ''}
                           </option>
                         ))}
                     </select>
@@ -390,9 +442,15 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                           if (!parentVal) return false
                           return o[f.optionsFilterBy] === parentVal
                         })
+                        .filter((o) => {
+                          if (entityKey !== 'stations' || f.key !== 'coverageDistrictIds') return true
+                          if (o.id === form.districtId) return false
+                          return isDistrictAvailableForStation(o.id, districtAssignmentMap)
+                        })
                         .map((o) => {
                           const selected = (form[f.key] ?? '').split(',').filter(Boolean)
                           const checked = selected.includes(o.id)
+                          const assignedStation = districtAssignmentMap.get(o.id)
                           return (
                             <label key={o.id} className="flex items-center gap-2 text-sm cursor-pointer">
                               <input
@@ -406,10 +464,18 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                                   setForm({ ...form, [f.key]: next.join(',') })
                                 }}
                               />
-                              <span>{o.name}</span>
+                              <span>
+                                {o.name}
+                                {assignedStation ? ` (assigned to ${assignedStation})` : ''}
+                              </span>
                             </label>
                           )
                         })}
+                      {entityKey === 'stations' && f.key === 'coverageDistrictIds' ? (
+                        <p className="text-xs text-gray-500">
+                          Each district can belong to only one station. Home district is excluded from this list.
+                        </p>
+                      ) : null}
                       {f.optionsFilterBy && !form[f.optionsFilterBy] ? (
                         <p className="text-xs text-gray-500">Select region first to choose coverage districts.</p>
                       ) : null}
@@ -448,12 +514,21 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
               </button>
             </div>
             <dl className="p-5 space-y-3 text-sm">
-              {def.tableColumns.map((c) => (
-                <div key={c.key} className="flex justify-between gap-4">
-                  <dt className="text-gray-500 font-medium">{c.label}</dt>
-                  <dd className="font-bold text-right">{renderCell(viewRow, c.key, c.render)}</dd>
-                </div>
-              ))}
+              {def.tableColumns.map((c) =>
+                c.render === 'coverageDistricts' ? (
+                  <div key={c.key} className="space-y-2">
+                    <dt className="text-gray-500 font-medium">{c.label}</dt>
+                    <dd>{renderCell(viewRow, c.key, c.render, districtNameById, 'list')}</dd>
+                  </div>
+                ) : (
+                  <div key={c.key} className="flex justify-between gap-4">
+                    <dt className="text-gray-500 font-medium">{c.label}</dt>
+                    <dd className="font-bold text-right">
+                      {renderCell(viewRow, c.key, c.render, districtNameById)}
+                    </dd>
+                  </div>
+                ),
+              )}
               <div className="flex justify-between gap-4 pt-2 border-t">
                 <dt className="text-gray-500">Created</dt>
                 <dd>{viewRow.createdAt ? new Date(viewRow.createdAt).toLocaleString() : '—'}</dd>
@@ -470,7 +545,13 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
   )
 }
 
-function renderCell(row: Row, key: string, render?: string) {
+function renderCell(
+  row: Row,
+  key: string,
+  render?: string,
+  districtNameById?: Map<string, string>,
+  mode: 'table' | 'list' | 'export' = 'table',
+) {
   if (render === 'status') {
     return (
       <span
@@ -497,8 +578,26 @@ function renderCell(row: Row, key: string, render?: string) {
   if (render === 'sortOrder') return row.sortOrder ?? '—'
   if (render === 'coverageDistricts') {
     const ids = Array.isArray(row.coverageDistrictIds) ? row.coverageDistrictIds : []
-    if (!ids.length) return row.district?.name ? `${row.district.name} (home)` : '—'
-    return `${ids.length} district(s)`
+    const names = ids.map((id: string) => districtNameById?.get(id) ?? id).filter(Boolean)
+
+    if (!names.length) {
+      const fallback = row.district?.name ? `${row.district.name} (home only)` : '—'
+      return mode === 'export' ? fallback : fallback
+    }
+
+    if (mode === 'export') return names.join('; ')
+
+    if (mode === 'list') {
+      return (
+        <ul className="list-disc list-inside space-y-1 font-medium text-gray-800 dark:text-gray-200">
+          {names.map((name: string) => (
+            <li key={name}>{name}</li>
+          ))}
+        </ul>
+      )
+    }
+
+    return names.join(', ')
   }
   return row[key] ?? '—'
 }
