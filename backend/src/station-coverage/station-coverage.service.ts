@@ -52,9 +52,9 @@ export class StationCoverageService implements OnModuleInit {
     station: { districtId: string; coverageDistrictIds: unknown },
     districtId: string,
   ): boolean {
+    if (station.districtId === districtId) return true;
     const coverage = this.parseCoverageDistrictIds(station.coverageDistrictIds);
-    if (coverage.length > 0) return coverage.includes(districtId);
-    return station.districtId === districtId;
+    return coverage.includes(districtId);
   }
 
   async suggestStationForDistrict(districtId: string, regionId?: string) {
@@ -73,6 +73,7 @@ export class StationCoverageService implements OnModuleInit {
     );
 
     const suggested =
+      matching.find((s) => s.districtId === districtId) ??
       matching[0] ??
       (defaultStationId ? stations.find((s) => s.id === defaultStationId) : null) ??
       (regionId ? stations.find((s) => s.regionId === regionId) : null) ??
@@ -93,6 +94,7 @@ export class StationCoverageService implements OnModuleInit {
         name: s.name,
         regionName: s.region.name,
         coversDistrict: this.stationCoversDistrict(s, districtId),
+        isHomeDistrict: s.districtId === districtId,
       })),
     };
   }
@@ -111,6 +113,8 @@ export class StationCoverageService implements OnModuleInit {
         input.regionId ?? undefined,
       );
       const covering = result.alternatives.filter((station) => station.coversDistrict);
+      const homeCovering = covering.find((station) => station.isHomeDistrict);
+      if (homeCovering?.id) return homeCovering.id;
       if (covering[0]?.id) return covering[0].id;
       if (!multiStation && result.suggested?.id) return result.suggested.id;
     }

@@ -27,8 +27,8 @@ export type DriverWorkflowButton = {
 
 const BUTTONS: { id: DriverWorkflowButtonId; label: string }[] = [
   { id: 'start_case', label: 'Start Case' },
-  { id: 'going_to_patient', label: 'To Patient' },
-  { id: 'arrived_at_patient', label: 'Arrived at Patient' },
+  { id: 'going_to_patient', label: 'To Scene' },
+  { id: 'arrived_at_patient', label: 'Arrived at Scene' },
   { id: 'going_to_hospital', label: 'Transfer to Hospital' },
   { id: 'arrived_at_hospital', label: 'Arrived at Hospital' },
 ]
@@ -119,7 +119,7 @@ export { markDriverMilestoneComplete as markDriverMilestone }
 
 export const DRIVER_STAGE_DESCRIPTIONS: Record<DriverWorkflowButtonId, string> = {
   start_case: 'Review the case and begin the run when ready.',
-  going_to_patient: 'Navigate to the patient location.',
+  going_to_patient: 'Navigate to the scene location.',
   arrived_at_patient: 'Confirm arrival on scene — nurse loads the patient.',
   going_to_hospital: 'Start transport after the nurse loads the patient. Nurse can complete medical notes en route.',
   arrived_at_hospital: 'Confirm arrival at the hospital destination.',

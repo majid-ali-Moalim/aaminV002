@@ -4,15 +4,16 @@ import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { 
-  Users, Search, Filter, Plus, Eye, Edit, MoreHorizontal, 
-  MapPin, Phone, Heart, Calendar, Activity, 
-  CheckCircle2, AlertCircle, Clock, Loader2, Download,
-  Stethoscope, GraduationCap, Briefcase
+  Users, Search, Filter, Plus, Eye, Edit, 
+  MapPin, Phone, Activity, 
+  CheckCircle2, AlertCircle, Loader2, Download,
+  Stethoscope
 } from 'lucide-react'
 import { nursesService, systemSetupService } from '@/lib/api'
-import { Employee, Station, Department } from '@/types'
+import { Employee, Station, Department, Region } from '@/types'
 import { format } from 'date-fns'
 import { getStaffStatusLabel, getStaffStatusStyles } from '@/lib/staff/status'
+import { cn } from '@/lib/utils'
 import NurseEditModal from '@/components/nurses/NurseEditModal'
 
 export default function NursesDashboard() {
@@ -21,6 +22,7 @@ export default function NursesDashboard() {
   const [stats, setStats] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [stations, setStations] = useState<Station[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [editingNurse, setEditingNurse] = useState<Employee | null>(null)
   
@@ -53,12 +55,14 @@ export default function NursesDashboard() {
 
   const fetchMasterData = async () => {
     try {
-      const [stationsData, departmentsData] = await Promise.all([
+      const [stationsData, departmentsData, regionsData] = await Promise.all([
         systemSetupService.getStations(),
         systemSetupService.getDepartments(),
+        systemSetupService.getRegions(),
       ])
       setStations(Array.isArray(stationsData) ? stationsData.filter((s) => s.isActive !== false) : [])
       setDepartments(Array.isArray(departmentsData) ? departmentsData : [])
+      setRegions(Array.isArray(regionsData) ? regionsData : [])
     } catch (err) {
       console.error('Failed to fetch master data:', err)
     }
@@ -80,6 +84,26 @@ export default function NursesDashboard() {
   }, [nurses, searchTerm, stationFilter, statusFilter, specializationFilter])
 
   const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
+
+  const getLicenseStatusColor = (status: string) => {
+    switch (status) {
+      case 'VALID': return 'text-green-600 bg-green-50 border-green-200'
+      case 'EXPIRING': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
+      case 'EXPIRED': return 'text-red-600 bg-red-50 border-red-200'
+      default: return 'text-slate-600 bg-slate-50 border-slate-200'
+    }
+  }
+
+  const getNurseRegionName = (nurse: Employee) => {
+    const station = nurse.station ?? stations.find((s) => s.id === nurse.stationId)
+    if (!station) return '—'
+    return station.region?.name ?? regions.find((r) => r.id === station.regionId)?.name ?? '—'
+  }
+
+  type NurseRecord = Employee & {
+    specialization?: string | null
+    qualification?: string | null
+  }
 
   return (
     <div className="space-y-6">
@@ -188,15 +212,18 @@ export default function NursesDashboard() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Nurse</th>
-                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Qualification</th>
-                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Specialization</th>
-                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Shift Status</th>
+                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Role</th>
+                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</th>
+                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Station & Region</th>
+                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Employment</th>
+                  <th className="py-4 px-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">License</th>
                   <th className="py-4 px-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredNurses.map(nurse => (
+                {filteredNurses.map((nurse) => {
+                  const record = nurse as NurseRecord
+                  return (
                   <tr key={nurse.id} className="hover:bg-red-50/20 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
@@ -214,26 +241,65 @@ export default function NursesDashboard() {
                         <div>
                           <div className="font-bold text-gray-900 leading-tight">{nurse.firstName} {nurse.lastName}</div>
                           <div className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">{nurse.employeeCode || 'NUR-000'}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {nurse.employeeRole?.name || 'Nurse'}
+                            {record.specialization ? ` · ${record.specialization}` : ''}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <div className="flex items-center text-xs font-bold text-gray-700">
-                        <GraduationCap className="w-3 h-3 mr-1.5 text-red-500" />
-                        {(nurse as any).qualification || 'BSc Nursing'}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-1">{(nurse as any).yearsOfExperience || 0} Years Experience</div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center text-xs font-bold text-gray-700">
-                        <Briefcase className="w-3 h-3 mr-1.5 text-purple-500" />
-                        {(nurse as any).specialization || 'General'}
+                      <div className="space-y-1">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Phone className="w-3 h-3 mr-1 text-gray-400" />
+                          {nurse.phone || 'N/A'}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate max-w-xs">{nurse.user?.email || 'N/A'}</div>
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black border ${getStatusColor(nurse.shiftStatus || '')}`}>
-                        {getStaffStatusLabel(nurse.shiftStatus || nurse.status || '')}
-                      </span>
+                      <div className="space-y-1">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <MapPin className="w-3 h-3 mr-1 text-red-500" />
+                          {nurse.station?.name || stations.find((s) => s.id === nurse.stationId)?.name || 'Unassigned'}
+                        </div>
+                        <div className="text-xs text-gray-500">{getNurseRegionName(nurse)}</div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="space-y-1 text-sm">
+                        <p className="font-semibold text-gray-800">{nurse.status || '—'}</p>
+                        <p className="text-xs text-gray-500">
+                          Joined{' '}
+                          {nurse.employmentDate
+                            ? format(new Date(nurse.employmentDate), 'MMM yyyy')
+                            : '—'}
+                        </p>
+                        <span className={cn(
+                          'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
+                          getStatusColor(nurse.shiftStatus || '')
+                        )}>
+                          {getStaffStatusLabel(nurse.shiftStatus || nurse.status || '')}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="space-y-1">
+                        <span className={cn(
+                          'inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border',
+                          getLicenseStatusColor(nurse.licenseStatus || '')
+                        )}>
+                          {nurse.licenseStatus || 'UNKNOWN'}
+                        </span>
+                        <div className="text-xs text-gray-600">
+                          {record.qualification || nurse.licenseType || '—'} · #{nurse.licenseNumber || '—'}
+                        </div>
+                        {nurse.licenseExpiryDate && (
+                          <div className="text-xs text-gray-500">
+                            Exp: {format(new Date(nurse.licenseExpiryDate), 'dd MMM yyyy')}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex justify-end gap-2">
@@ -251,7 +317,7 @@ export default function NursesDashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           )}

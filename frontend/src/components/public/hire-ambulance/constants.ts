@@ -111,12 +111,12 @@ export const HOSPITAL_TRANSPORT_TYPES: TransportTypeValue[] = [
 ]
 
 export const AGE_GROUPS = [
-  { value: 'INFANT', label: 'Infant (0ΓÇô1 year)', age: 0 },
-  { value: 'TODDLER', label: 'Toddler (2ΓÇô5 years)', age: 3 },
-  { value: 'CHILD', label: 'Child (6ΓÇô12 years)', age: 9 },
-  { value: 'TEENAGER', label: 'Teenager (13ΓÇô17 years)', age: 15 },
-  { value: 'YOUNG_ADULT', label: 'Young Adult (18ΓÇô35 years)', age: 26 },
-  { value: 'ADULT', label: 'Adult (36ΓÇô59 years)', age: 45 },
+  { value: 'INFANT', label: 'Infant (0-1 year)', age: 0 },
+  { value: 'TODDLER', label: 'Toddler (2-5 years)', age: 3 },
+  { value: 'CHILD', label: 'Child (6-12 years)', age: 9 },
+  { value: 'TEENAGER', label: 'Teenager (13-17 years)', age: 15 },
+  { value: 'YOUNG_ADULT', label: 'Young Adult (18-35 years)', age: 26 },
+  { value: 'ADULT', label: 'Adult (36-59 years)', age: 45 },
   { value: 'SENIOR', label: 'Senior (60+ years)', age: 65 },
 ] as const
 

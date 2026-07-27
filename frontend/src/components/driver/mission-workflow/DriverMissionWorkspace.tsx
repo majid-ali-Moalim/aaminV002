@@ -219,20 +219,20 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         stampWorkflowStage(mission.id, 'EN_ROUTE_SCENE', null)
         setStoredPhase(mission.id, 'EN_ROUTE_SCENE')
         if (mission.status === 'ASSIGNED') {
-          await updateBackend('DISPATCHED', 'Driver started case — en route to patient')
+          await updateBackend('DISPATCHED', 'Driver started case — en route to scene')
         }
         syncWorkflow()
         toast.success('Case started')
         break
       case 'going_to_patient':
         markDriverMilestoneComplete(mission.id, 'going_to_patient')
-        logDriverNote(mission.id, 'Driver en route to patient')
+        logDriverNote(mission.id, 'Driver en route to scene')
         syncWorkflow()
-        toast.success('Going to patient')
+        toast.success('Going to scene')
         break
       case 'arrived_at_patient':
         markDriverMilestoneComplete(mission.id, 'arrived_at_patient')
-        await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at patient')
+        await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at scene')
         break
       case 'going_to_hospital': {
         if (!hasLoadPatientSaved(careRecords, mission.id)) {

@@ -54,7 +54,7 @@ export default function DriverDashboard() {
 
   const NEXT_ACTIONS: Record<string, { label: string; status: string; cls: string }> = {
     ASSIGNED:         { label: 'Start Case',            status: 'DISPATCHED',        cls: 'btn-orange' },
-    DISPATCHED:       { label: 'Arrived at Patient',  status: 'ARRIVED_SCENE',     cls: 'btn-blue' },
+    DISPATCHED:       { label: 'Arrived at Scene',  status: 'ARRIVED_SCENE',     cls: 'btn-blue' },
     ARRIVED_SCENE:    { label: 'Going to Hospital',     status: 'TRANSPORTING',      cls: 'btn-cyan' },
     PATIENT_STABILIZED: { label: 'Going to Hospital',   status: 'TRANSPORTING',      cls: 'btn-cyan' },
     TRANSPORTING:     { label: 'Arrived at Hospital',   status: 'ARRIVED_HOSPITAL',  cls: 'btn-purple' },

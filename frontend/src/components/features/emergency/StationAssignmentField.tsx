@@ -10,6 +10,7 @@ export type StationOption = {
   name: string
   regionName?: string
   coversDistrict?: boolean
+  isHomeDistrict?: boolean
 }
 
 type Props = {
@@ -51,7 +52,9 @@ export default function StationAssignmentField({
           : []
         setSingleStationMode(Boolean(result?.singleStationMode))
         setStations(alternatives)
-        const covering = alternatives.find((s) => s.coversDistrict)
+        const covering =
+          alternatives.find((s) => s.coversDistrict && s.isHomeDistrict) ??
+          alternatives.find((s) => s.coversDistrict)
         const nextId =
           covering?.id ??
           result?.suggested?.id ??
@@ -73,7 +76,10 @@ export default function StationAssignmentField({
   }, [districtId, regionId])
 
   const coveringStation = useMemo(
-    () => stations.find((s) => s.coversDistrict) ?? stations.find((s) => s.id === stationId),
+    () =>
+      stations.find((s) => s.coversDistrict && s.isHomeDistrict) ??
+      stations.find((s) => s.coversDistrict) ??
+      stations.find((s) => s.id === stationId),
     [stations, stationId],
   )
 
