@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { 
   Truck, 
@@ -8,7 +8,8 @@ import {
   Loader2,
   HeartPulse,
   XCircle,
-  Stethoscope
+  Stethoscope,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { emergencyRequestsService } from '@/lib/api';
@@ -17,6 +18,7 @@ import { EmergencyRequest, Ambulance, Employee } from '@/types';
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel';
 import { activeShiftLabel } from '@/lib/employment/shiftTypes';
 import { caseRequiresNurse } from '@/lib/emergency/caseNurseRequirement';
+import { getCaseStationLabels, resourceBelongsToStation } from '@/lib/emergency/caseStationLabels';
 
 interface AssignModalProps {
   request: EmergencyRequest;
@@ -83,11 +85,13 @@ const AssignModal: React.FC<AssignModalProps> = ({
   const pathname = usePathname();
   const isDispatcherPortal = pathname?.startsWith('/dispatcher');
   const isReassign = mode === 'reassign';
+  const { assignedStation, stationId } = getCaseStationLabels(request);
+  const [showStationCrewsOnly, setShowStationCrewsOnly] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingUnits, setIsFetchingUnits] = useState(false);
-  const [availableAmbulances, setAvailableAmbulances] = useState<Ambulance[]>([]);
-  const [availableDrivers, setAvailableDrivers] = useState<DispatchCrewMember[]>([]);
-  const [availableNurses, setAvailableNurses] = useState<DispatchCrewMember[]>([]);
+  const [allAmbulances, setAllAmbulances] = useState<Ambulance[]>([]);
+  const [allDrivers, setAllDrivers] = useState<DispatchCrewMember[]>([]);
+  const [allNurses, setAllNurses] = useState<DispatchCrewMember[]>([]);
   
   const [assignmentParams, setAssignmentParams] = useState({
     ambulanceId: '',
@@ -123,9 +127,9 @@ const AssignModal: React.FC<AssignModalProps> = ({
         ]);
       }
 
-      setAvailableAmbulances(ambulances);
-      setAvailableDrivers(drivers);
-      setAvailableNurses(nurses);
+      setAllAmbulances(ambulances);
+      setAllDrivers(drivers);
+      setAllNurses(nurses);
 
       setAssignmentParams((prev) => {
         const driverOk = !prev.driverId || drivers.some((d) => d.id === prev.driverId);
@@ -161,6 +165,36 @@ const AssignModal: React.FC<AssignModalProps> = ({
     const interval = setInterval(fetchUnits, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const availableAmbulances = useMemo(() => {
+    if (!showStationCrewsOnly || !stationId) return allAmbulances;
+    return allAmbulances.filter((amb) => resourceBelongsToStation(amb, stationId));
+  }, [allAmbulances, showStationCrewsOnly, stationId]);
+
+  const availableDrivers = useMemo(() => {
+    if (!showStationCrewsOnly || !stationId) return allDrivers;
+    return allDrivers.filter((driver) => resourceBelongsToStation(driver, stationId));
+  }, [allDrivers, showStationCrewsOnly, stationId]);
+
+  const availableNurses = useMemo(() => {
+    if (!showStationCrewsOnly || !stationId) return allNurses;
+    return allNurses.filter((nurse) => resourceBelongsToStation(nurse, stationId));
+  }, [allNurses, showStationCrewsOnly, stationId]);
+
+  useEffect(() => {
+    if (!showStationCrewsOnly) return;
+    setAssignmentParams((prev) => {
+      const driverOk = !prev.driverId || availableDrivers.some((d) => d.id === prev.driverId);
+      const nurseOk = !prev.nurseId || availableNurses.some((n) => n.id === prev.nurseId);
+      const ambOk = !prev.ambulanceId || availableAmbulances.some((a) => a.id === prev.ambulanceId);
+      return {
+        ...prev,
+        driverId: driverOk ? prev.driverId : '',
+        nurseId: nurseOk ? prev.nurseId : '',
+        ambulanceId: ambOk ? prev.ambulanceId : '',
+      };
+    });
+  }, [showStationCrewsOnly, availableAmbulances, availableDrivers, availableNurses]);
 
   const nurseRequired = caseRequiresNurse(request);
 
@@ -247,6 +281,34 @@ const AssignModal: React.FC<AssignModalProps> = ({
           </div>
         )}
 
+        {!isDispatcherPortal && assignedStation && stationId && (
+          <div className="mx-8 mt-6 px-4 py-3 rounded-xl border border-teal-200 bg-teal-50 text-teal-900">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Building2 className="w-5 h-5 text-teal-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold">Assign station crews</p>
+                  <p className="text-xs text-teal-800/90 mt-1 leading-relaxed">
+                    This case is routed to <span className="font-bold">{assignedStation}</span>.
+                    You can assign ambulance, driver, and nurse from this station&apos;s crews.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStationCrewsOnly((prev) => !prev)}
+                className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider border transition-colors ${
+                  showStationCrewsOnly
+                    ? 'bg-teal-700 text-white border-teal-700'
+                    : 'bg-white text-teal-800 border-teal-300 hover:bg-teal-100'
+                }`}
+              >
+                {showStationCrewsOnly ? 'Showing station crews' : 'Show station crews only'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 p-8 overflow-y-auto space-y-8 custom-scrollbar">
           {isReassign && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -324,7 +386,9 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 </div>
               ) : availableAmbulances.length === 0 ? (
                 <div className="col-span-full h-24 flex items-center justify-center text-red-400 text-[10px] font-bold uppercase tracking-widest text-center px-4">
-                  No available ambulances
+                  {showStationCrewsOnly
+                    ? `No available ambulances at ${assignedStation || 'this station'}`
+                    : 'No available ambulances'}
                 </div>
               ) : availableAmbulances.map(amb => (
                 <div
@@ -371,7 +435,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                   </div>
                 ) : availableDrivers.length === 0 ? (
                   <div className="h-32 flex flex-col items-center justify-center text-amber-700 text-[10px] font-bold uppercase tracking-widest text-center px-4 gap-1">
-                    <span>No eligible drivers</span>
+                    <span>{showStationCrewsOnly ? `No eligible drivers at ${assignedStation || 'this station'}` : 'No eligible drivers'}</span>
                     <span className="normal-case font-medium text-slate-500">Present + on {activeShiftLabel()} only</span>
                   </div>
                 ) : availableDrivers.map(driver => (
@@ -421,7 +485,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                   </div>
                 ) : availableNurses.length === 0 ? (
                   <div className="h-32 flex flex-col items-center justify-center text-amber-700 text-[10px] font-bold uppercase tracking-widest text-center px-4 gap-1">
-                    <span>No eligible nurses</span>
+                    <span>{showStationCrewsOnly ? `No eligible nurses at ${assignedStation || 'this station'}` : 'No eligible nurses'}</span>
                     <span className="normal-case font-medium text-slate-500">Present + on {activeShiftLabel()} only</span>
                   </div>
                 ) : availableNurses.map(nurse => (

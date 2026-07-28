@@ -64,7 +64,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
   const [detailCase, setDetailCase] = useState<any | null>(null)
 
   const titles: Record<CoordinationView, { title: string; desc: string }> = {
-    'all-hospitals': { title: 'All Hospitals', desc: 'Hospitals with assigned emergency cases only' },
+    'all-hospitals': { title: 'All Hospitals', desc: 'All registered hospitals in the coordination network' },
     accepted: { title: 'Accepted Cases', desc: 'Patients accepted with nurse handover and receiving hospital details' },
     refused: { title: 'Rejected Cases', desc: 'Cases declined with refusal reasons and hospital coordination history' },
     analytics: { title: 'Hospital Performance', desc: 'Acceptance rates, handover times, and capacity trends' },
@@ -129,7 +129,6 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
             regionId: regionId || undefined,
             districtId: districtId || undefined,
             hospitalType: hospitalType || undefined,
-            assignedCasesOnly: true,
           }),
           locationPromise,
           overviewPromise,
@@ -159,7 +158,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
     }
     const map: Record<CoordinationView, typeof kpis> = {
       'all-hospitals': [
-        { label: 'Hospitals with Cases', value: k.totalHospitals ?? 0, icon: Building2, accent: 'teal' },
+        { label: 'Total Hospitals', value: k.totalHospitals ?? 0, icon: Building2, accent: 'teal' },
         { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
         { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
         { label: 'Pending Review', value: k.pendingIncoming ?? 0, icon: Clock, accent: 'amber' },
@@ -333,7 +332,7 @@ function ContentSkeleton({ rows = 3 }: { rows?: number }) {
 function HospitalTable({ hospitals, loading }: { hospitals: any[]; loading?: boolean }) {
   if (loading) return <ContentSkeleton rows={5} />
   if (!hospitals.length) {
-    return <p className="text-center py-16 text-gray-500">No hospitals with assigned cases yet</p>
+    return <p className="text-center py-16 text-gray-500">No hospitals found</p>
   }
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-x-auto shadow-sm">

@@ -31,6 +31,7 @@ import {
   CONSCIOUS_STATUS_OPTIONS,
   TRIAGE_PRIORITY_OPTIONS,
 } from '@/lib/emergency/triageOptions'
+import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
 
 type TriageForm = {
   priority: Priority
@@ -231,6 +232,8 @@ export default function DispatcherTriagePanel({ request, onSaved, onAssign }: Pr
           </div>
         )}
       </section>
+
+      <CaseStationSummary request={request} />
 
       <section className="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
         <div className="flex items-start gap-3">

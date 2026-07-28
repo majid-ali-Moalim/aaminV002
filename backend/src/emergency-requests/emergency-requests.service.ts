@@ -509,6 +509,15 @@ export class EmergencyRequestsService {
         ambulance: true,
         region: true,
         district: true,
+        station: { select: { id: true, name: true, regionId: true } },
+        caseTransfers: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            fromStation: { select: { id: true, name: true } },
+            toStation: { select: { id: true, name: true } },
+          },
+        },
         destinationHospital: true,
         incidentCategory: true,
         referrals: true,

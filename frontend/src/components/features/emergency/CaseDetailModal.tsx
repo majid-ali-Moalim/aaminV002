@@ -20,6 +20,7 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import CaseMissionRecordsPanel from '@/components/features/emergency/CaseMissionRecordsPanel'
+import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
 import '@/components/features/emergency/case-detail.css'
 
 type Props = {
@@ -147,6 +148,8 @@ export default function CaseDetailModal({
                   <DetailField label="Caller phone" value={request.callerPhone} />
                 </div>
               </section>
+
+              <CaseStationSummary request={request} />
 
               <section className="case-detail-card">
                 <h3 className="case-detail-section-title">

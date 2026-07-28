@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Activity,
   ClipboardList,
+  Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
@@ -27,6 +28,7 @@ import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
 import '@/components/features/emergency/case-detail.css'
+import { getCaseStationLabels } from '@/lib/emergency/caseStationLabels'
 
 function nurseName(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
   return [record.nurse?.firstName, record.nurse?.lastName].filter(Boolean).join(' ') || 'Nurse'
@@ -167,6 +169,7 @@ export default function EmergencyCaseDetailPage() {
   )
   const nurseRecords = request.patientCareRecords ?? []
   const driverReports = logs.filter((log) => log.notes?.includes('[Driver Report]'))
+  const { assignedStation, transferredFromStation } = getCaseStationLabels(request)
 
   return (
     <div className="case-detail-page">
@@ -262,6 +265,23 @@ export default function EmergencyCaseDetailPage() {
                     </div>
                   </article>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {(assignedStation || transferredFromStation) && (
+            <section className="case-detail-card">
+              <h2 className="case-detail-section-title">
+                <Building2 className="w-4 h-4" />
+                Station routing
+              </h2>
+              <div className="case-detail-grid">
+                {transferredFromStation && (
+                  <CaseField label="Transferred from" value={transferredFromStation} />
+                )}
+                {assignedStation && (
+                  <CaseField label="Assigned station" value={assignedStation} />
+                )}
               </div>
             </section>
           )}
