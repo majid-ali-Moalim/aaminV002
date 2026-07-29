@@ -15,9 +15,11 @@ import {
   X,
   Hash,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { patientsService } from '@/lib/api'
 import { Patient } from '@/types'
 import { Button } from '@/components/ui/button'
+import { downloadPatientRegistryReportPdf } from '@/lib/patients/exportPatientRegistryPdf'
 import {
   formatBloodType,
   formatDateShort,
@@ -47,6 +49,7 @@ export default function PatientRegistryView({ portal = 'admin' }: PatientRegistr
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
+  const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
     patientsService
@@ -79,6 +82,29 @@ export default function PatientRegistryView({ portal = 'admin' }: PatientRegistr
     return { total: patients.length, withCases }
   }, [patients])
 
+  const exportPdf = async () => {
+    if (!filteredPatients.length) {
+      toast.error('No patients match your filters')
+      return
+    }
+    setPdfExporting(true)
+    const toastId = toast.loading(
+      `Building PDF report for ${filteredPatients.length} patient(s)…`,
+    )
+    try {
+      await downloadPatientRegistryReportPdf(filteredPatients, {
+        search: searchTerm,
+        status: statusFilter,
+      })
+      toast.success('Patient registry PDF downloaded', { id: toastId })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
+      toast.error(message, { id: toastId })
+    } finally {
+      setPdfExporting(false)
+    }
+  }
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6 pb-12">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-8 text-white shadow-xl">
@@ -96,12 +122,29 @@ export default function PatientRegistryView({ portal = 'admin' }: PatientRegistr
               ambulance service many times over years; each mission is stored under Patient Cases.
             </p>
           </div>
-          <Link href={paths.cases}>
-            <Button className="rounded-xl bg-white text-red-700 hover:bg-red-50 font-bold shadow-lg">
-              <FileText className="w-4 h-4 mr-2" />
-              Patient Cases
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button
+              onClick={() => void exportPdf()}
+              disabled={pdfExporting || isLoading || filteredPatients.length === 0}
+              className="rounded-xl bg-white text-red-700 hover:bg-red-50 font-bold shadow-md"
+            >
+              {pdfExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4 mr-2" />
+              )}
+              Generate PDF
             </Button>
-          </Link>
+            <Link href={paths.cases}>
+              <Button
+                variant="outline"
+                className="rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 font-bold shadow-lg"
+              >
+                <Activity className="w-4 h-4 mr-2" />
+                Patient Cases
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

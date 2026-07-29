@@ -7,6 +7,7 @@ import {
   BarChart2,
   Download,
   FileJson,
+  FileText,
   Loader2,
   RefreshCw,
   Search,
@@ -29,6 +30,7 @@ import {
   getAdminReportFilterOptions,
   type AdminReportFilterOptions,
 } from '@/lib/reports/adminReportsApi'
+import { downloadOperationsReportPdf } from '@/lib/reports/exportOperationsPdf'
 
 type SummaryItem = { label: string; value: string | number; suffix?: string }
 type ReportTable = { title: string; columns: string[]; rows: Array<Array<string | number>> }
@@ -42,6 +44,12 @@ type OperationsReport = {
   title: string
   subtitle: string
   period?: { label: string }
+  filterScope?: {
+    mode: 'filtered' | 'full'
+    label: string
+    description: string
+    containsNote: string
+  }
   summary?: SummaryItem[]
   charts?: ChartSpec[]
   sections?: ReportTable[]
@@ -72,6 +80,7 @@ export default function OperationsReportPage() {
   const [report, setReport] = useState<OperationsReport | null>(null)
   const [filterOptions, setFilterOptions] = useState<AdminReportFilterOptions | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
     getAdminReportFilterOptions().then(setFilterOptions).catch(() => {})
@@ -130,6 +139,38 @@ export default function OperationsReportPage() {
     toast.success('CSV downloaded')
   }
 
+  const regionName = filterOptions?.regions.find((r) => r.id === filters.region)?.name
+  const districtName = filterOptions?.districts.find((d) => d.id === filters.district)?.name
+
+  const downloadPdf = async () => {
+    if (!report || pdfExporting) return
+    const hasData =
+      Boolean(report.table?.rows.length) ||
+      Boolean(report.sections?.some((s) => s.rows.length)) ||
+      Boolean(report.charts?.some((c) => c.data.length))
+    if (!hasData) {
+      toast.error('No data to export')
+      return
+    }
+    setPdfExporting(true)
+    try {
+      await downloadOperationsReportPdf(report, mainRows, {
+        range,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        regionName,
+        districtName,
+        search,
+      })
+      toast.success('PDF report downloaded')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
+      toast.error(message)
+    } finally {
+      setPdfExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 pb-16 print:space-y-4">
       <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-red-950 p-6 text-white shadow-xl">
@@ -142,11 +183,22 @@ export default function OperationsReportPage() {
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-200">
                 AADS Analytics
               </p>
-              <h1 className="mt-1 text-2xl font-black">{report?.title || 'Operations Intelligence'}</h1>
+              <h1 className="mt-1 text-2xl font-black">
+                {report?.filterScope?.mode === 'filtered'
+                  ? `${report?.title || 'Operations Intelligence'} — Filtered`
+                  : report?.title || 'Operations Intelligence'}
+              </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                {report?.subtitle ||
+                {report?.filterScope?.containsNote ||
+                  report?.subtitle ||
                   'Case overview, emergency analysis, resources, locations, hospitals, and performance.'}
               </p>
+              {report?.filterScope && (
+                <p className="mt-2 inline-flex items-center rounded-lg bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-200">
+                  {report.filterScope.label}
+                  {report.filterScope.description ? ` · ${report.filterScope.description}` : ''}
+                </p>
+              )}
               {report?.period?.label && (
                 <p className="mt-2 text-xs font-semibold text-slate-400">Period: {report.period.label}</p>
               )}
@@ -171,15 +223,30 @@ export default function OperationsReportPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            {report?.table && (
+            {report && (
               <>
+                {report.table && (
+                  <button
+                    type="button"
+                    onClick={() => downloadCsv(report.table!, 'operations-cases')}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-900"
+                  >
+                    <Download className="h-4 w-4" />
+                    CSV
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => downloadCsv(report.table!, 'operations-cases')}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-900"
+                  onClick={() => void downloadPdf()}
+                  disabled={pdfExporting}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-60"
                 >
-                  <Download className="h-4 w-4" />
-                  CSV
+                  {pdfExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  PDF
                 </button>
                 <button
                   type="button"
@@ -340,7 +407,11 @@ export default function OperationsReportPage() {
           {report.table && (
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="border-b border-slate-100 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-sm font-black text-slate-900">{report.table.title}</h2>
+                <h2 className="text-sm font-black text-slate-900">
+                  {report.filterScope?.mode === 'filtered' || search.trim()
+                    ? `Filtered Cases Overview (${mainRows.length} row(s))`
+                    : report.table.title}
+                </h2>
                 <div className="relative w-full sm:w-72">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input

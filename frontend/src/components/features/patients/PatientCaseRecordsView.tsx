@@ -26,6 +26,7 @@ import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
 import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
 import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
+import { downloadPatientCasesReportPdf } from '@/lib/patients/exportPatientCasesPdf'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -78,6 +79,7 @@ export default function PatientCaseRecordsView({
   const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
   const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
   const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
+  const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
     if (patientFilter) setSearchTerm(patientFilter)
@@ -142,6 +144,33 @@ export default function PatientCaseRecordsView({
     }
   }, [scopedRequests])
 
+  const exportPdf = async () => {
+    if (!filteredRequests.length) {
+      toast.error('No cases match your filters')
+      return
+    }
+    setPdfExporting(true)
+    const toastId = toast.loading(
+      `Building PDF dossier for ${filteredRequests.length} case(s)…`,
+    )
+    try {
+      await downloadPatientCasesReportPdf(filteredRequests, {
+        search: searchTerm,
+        status: statusFilter,
+        priority: priorityFilter,
+        patientFilter: patientFilter || undefined,
+        activeOnly,
+        closedOnly,
+      })
+      toast.success('Patient cases PDF downloaded', { id: toastId })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
+      toast.error(message, { id: toastId })
+    } finally {
+      setPdfExporting(false)
+    }
+  }
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6 pb-12">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 via-red-700 to-red-600 p-8 text-white shadow-xl">
@@ -162,15 +191,29 @@ export default function PatientCaseRecordsView({
                 : 'Every ambulance emergency request and mission. One patient can have many cases — e.g. Ahmed Ali may have CASE-001 through CASE-005 over several years.'}
             </p>
           </div>
-          <Link href={paths.patients}>
+          <div className="flex flex-wrap gap-2 shrink-0">
             <Button
-              variant="outline"
-              className="rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 font-bold"
+              onClick={() => void exportPdf()}
+              disabled={pdfExporting || isLoading || filteredRequests.length === 0}
+              className="rounded-xl bg-white text-red-700 hover:bg-red-50 font-bold shadow-md"
             >
-              <FileText className="w-4 h-4 mr-2" />
-              Patient Registry
+              {pdfExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4 mr-2" />
+              )}
+              Generate PDF
             </Button>
-          </Link>
+            <Link href={paths.patients}>
+              <Button
+                variant="outline"
+                className="rounded-xl border-white/30 bg-white/10 text-white hover:bg-white/20 font-bold"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Patient Registry
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

@@ -1580,11 +1580,12 @@ export class ReportsService {
     const topTransportType = topEntries(transportTypes)[0];
 
     const peakHours = topEntries(hourBuckets, 5);
+    const filterScope = await this.describeAppliedFilters(filters, period);
 
     return {
       title: 'Operations Intelligence',
-      subtitle:
-        'Comprehensive AADS analytics — case mix, patient demographics, resources, locations, hospitals, and response performance.',
+      subtitle: filterScope.containsNote,
+      filterScope,
       period,
       permissions: ['report.view', 'report.kpi', 'report.export', 'report.audit'],
       summary: [
@@ -1690,7 +1691,10 @@ export class ReportsService {
         },
       ],
       table: {
-        title: 'Recent Cases Overview',
+        title:
+          filterScope.mode === 'filtered'
+            ? 'Filtered Cases Overview'
+            : 'Recent Cases Overview',
         columns: [
           'Tracking Code', 'Type', 'Patient', 'Gender', 'Priority', 'Status',
           'District', 'Station', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Total (min)', 'Created',
@@ -1930,6 +1934,66 @@ export class ReportsService {
 
   private percent(value: number, total: number) {
     return total > 0 ? Math.round((value / total) * 100) : 0;
+  }
+
+  private async describeAppliedFilters(filters: AdminReportFilters, period: ReportPeriod) {
+    const parts: string[] = [];
+
+    if (filters.region) {
+      const region = await this.prisma.region.findUnique({
+        where: { id: filters.region },
+        select: { name: true },
+      });
+      parts.push(`Region: ${region?.name ?? filters.region}`);
+    }
+    if (filters.district) {
+      const district = await this.prisma.district.findUnique({
+        where: { id: filters.district },
+        select: { name: true },
+      });
+      parts.push(`District: ${district?.name ?? filters.district}`);
+    }
+    if (filters.priority) parts.push(`Priority: ${filters.priority}`);
+    if (filters.status) parts.push(`Status: ${String(filters.status).replace(/_/g, ' ')}`);
+    if (filters.emergencyType) {
+      const category = await this.prisma.incidentCategory.findUnique({
+        where: { id: filters.emergencyType },
+        select: { name: true },
+      });
+      parts.push(`Emergency type: ${category?.name ?? filters.emergencyType}`);
+    }
+    if (filters.startDate || filters.endDate) {
+      parts.push(`Custom dates: ${filters.startDate || '…'} to ${filters.endDate || '…'}`);
+    } else {
+      const rangeLabels: Record<string, string> = {
+        '7d': 'Last 7 days',
+        '30d': 'Last 30 days',
+        '90d': 'Last 90 days',
+        '365d': 'Last 12 months',
+      };
+      parts.push(`Period: ${rangeLabels[filters.range || '30d'] ?? period.label}`);
+    }
+
+    const filtered = Boolean(
+      filters.region ||
+        filters.district ||
+        filters.priority ||
+        filters.status ||
+        filters.emergencyType ||
+        filters.startDate ||
+        filters.endDate,
+    );
+
+    return {
+      mode: filtered ? ('filtered' as const) : ('full' as const),
+      label: filtered
+        ? 'Specific data according to applied filters'
+        : 'All operations data for the selected period',
+      description: parts.join(' · '),
+      containsNote: filtered
+        ? `This report contains specific data matching your filters (${parts.join(' · ')}). It is not a full "all emergencies" export.`
+        : `This report contains all operations data for the selected time period (${parts.join(' · ')}). No region, district, or status filters were applied.`,
+    };
   }
 
   private reportWhere(period: ReportPeriod, filters: AdminReportFilters = {}) {
