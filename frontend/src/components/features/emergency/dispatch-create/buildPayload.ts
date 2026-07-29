@@ -7,7 +7,12 @@ import {
   isOtherEmergencyType,
   type EmergencyTypeOption,
 } from '@/lib/emergency/emergencyTypes'
-import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES, isFuneralTransport } from '@/lib/emergency/dispatchFormShared'
+import { isFuneralTransportCode, resolveTransportTypeLabel, type TransportTypeOption } from '@/lib/emergency/transportTypes'
+import {
+  CONSCIOUS_STATUS_OPTIONS,
+  BREATHING_STATUS_OPTIONS,
+  BLEEDING_STATUS_OPTIONS,
+} from '@/lib/emergency/triageOptions'
 import type {
   DispatchRequestType,
   EmergencyDispatchForm,
@@ -36,10 +41,19 @@ function pickupFromEmergency(data: EmergencyDispatchForm): string {
   return data.areaStreet.trim() || 'Banaadir'
 }
 
-function transportLabel(data: NonEmergencyDispatchForm): string {
-  if (data.transportType === 'OTHER') return data.transportTypeOther.trim() || 'Other'
-  const row = DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES.find((t) => t.value === data.transportType)
-  return row?.label ?? data.transportType.replace(/_/g, ' ')
+function triageLabel(
+  value: string,
+  options: readonly { value: string; label: string }[],
+): string {
+  return options.find((o) => o.value === value)?.label ?? value.replace(/_/g, ' ')
+}
+
+function transportLabel(data: NonEmergencyDispatchForm, transportTypes: TransportTypeOption[]): string {
+  return resolveTransportTypeLabel(data.transportType, data.transportTypeOther, transportTypes)
+}
+
+function isFuneralTransport(transportType: string): boolean {
+  return isFuneralTransportCode(transportType)
 }
 
 function nurseLine(needsNurse: boolean | null): string {
@@ -68,6 +82,11 @@ export function buildEmergencyPayload(
   const notes = [
     'Request Type: Emergency',
     typeLabel ? `Emergency Type: ${typeLabel}` : '',
+    `Conscious: ${triageLabel(data.consciousStatus, CONSCIOUS_STATUS_OPTIONS)}`,
+    `Breathing: ${triageLabel(data.breathingStatus, BREATHING_STATUS_OPTIONS)}`,
+    `Bleeding: ${triageLabel(data.bleedingStatus, BLEEDING_STATUS_OPTIONS)}`,
+    data.needsOxygen ? 'Needs oxygen: Yes' : '',
+    data.needsStretcher ? 'Needs stretcher: Yes' : '',
     nurseLine(true),
   ]
     .filter(Boolean)
@@ -79,9 +98,11 @@ export function buildEmergencyPayload(
     pickupLocation,
     pickupLandmark: data.areaStreet.trim() || undefined,
     patientCondition: data.briefDescription.trim(),
-    consciousStatus: 'CONSCIOUS',
-    breathingStatus: 'NORMAL',
-    bleedingStatus: 'NONE',
+    consciousStatus: data.consciousStatus,
+    breathingStatus: data.breathingStatus,
+    bleedingStatus: data.bleedingStatus,
+    needsOxygen: data.needsOxygen,
+    needsStretcher: data.needsStretcher,
     incidentCategoryId,
     regionId: data.regionId,
     districtId: data.districtId,
@@ -99,8 +120,11 @@ export function buildEmergencyPayload(
   }
 }
 
-export function buildNonEmergencyPayload(data: NonEmergencyDispatchForm) {
-  const label = transportLabel(data)
+export function buildNonEmergencyPayload(
+  data: NonEmergencyDispatchForm,
+  transportTypes: TransportTypeOption[] = [],
+) {
+  const label = transportLabel(data, transportTypes)
   const funeral = isFuneralTransport(data.transportType)
   const needsNurse = funeral ? false : data.needsNurse
   const bookingDate = data.bookingDateTime.slice(0, 10)
@@ -199,12 +223,13 @@ export function buildPayloadForType(
     referral: ReferralDispatchForm
   },
   emergencyTypes: EmergencyTypeOption[],
+  transportTypes: TransportTypeOption[] = [],
 ) {
   switch (type) {
     case 'EMERGENCY':
       return buildEmergencyPayload(draft.emergency, emergencyTypes)
     case 'NON_EMERGENCY':
-      return buildNonEmergencyPayload(draft.nonEmergency)
+      return buildNonEmergencyPayload(draft.nonEmergency, transportTypes)
     case 'REFERRAL':
       return buildReferralPayload(draft.referral)
   }

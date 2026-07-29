@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { displayAttendanceFlag } from '@/lib/availability/labels'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -80,7 +81,7 @@ export default function ActiveDriversPage() {
           <p className="text-3xl font-black text-slate-900 mt-1">{onCaseDrivers.length}</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Present Today</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available Today</p>
           <p className="text-3xl font-black text-emerald-600 mt-1">{(data?.drivers ?? []).filter((d) => d.attendanceStatus === 'present').length}</p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
@@ -125,7 +126,7 @@ export default function ActiveDriversPage() {
                     <p className="text-xs text-red-100">{driver.employeeCode ?? '—'} · {driver.phone ?? 'No phone'}</p>
                   </div>
                   <span className={`shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${driver.attendanceStatus === 'present' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                    {driver.attendanceStatus === 'present' ? 'Present' : 'Absent'}
+                    {displayAttendanceFlag(driver.attendanceStatus === 'present')}
                   </span>
                 </div>
                 <div className="p-5 space-y-4">

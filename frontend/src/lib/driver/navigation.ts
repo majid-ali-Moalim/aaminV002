@@ -92,11 +92,11 @@ export const DRIVER_MODULES: DriverNavModule[] = [
   },
   {
     id: 'messages',
-    label: 'Messages',
+    label: 'Communication',
     icon: MessageSquare,
     basePath: '/driver/chat',
     singlePage: true,
-    items: [{ slug: 'chat', label: 'Messages', icon: MessageSquare }],
+    items: [{ slug: 'chat', label: 'Communication', icon: MessageSquare }],
   },
   {
     id: 'profile',

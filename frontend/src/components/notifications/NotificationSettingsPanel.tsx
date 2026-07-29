@@ -11,7 +11,7 @@ import type { NotificationCategory } from '@/lib/notifications/types'
 const SETTING_ROWS = [
   { key: 'MISSION' as NotificationCategory, label: 'Mission Notifications', icon: Truck },
   { key: 'COMMUNICATION' as NotificationCategory, label: 'Communication Notifications', icon: MessageSquare },
-  { key: 'ATTENDANCE' as NotificationCategory, label: 'Attendance Notifications', icon: Users },
+  { key: 'ATTENDANCE' as NotificationCategory, label: 'Availability Notifications', icon: Users },
   { key: 'SYSTEM' as NotificationCategory, label: 'Critical Alerts', icon: AlertTriangle },
   { key: 'BROADCAST' as NotificationCategory, label: 'Broadcast Messages', icon: Megaphone },
 ]

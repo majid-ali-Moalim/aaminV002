@@ -62,7 +62,7 @@ function CrewEligibilityBadges({ member }: { member: DispatchCrewMember }) {
   return (
     <div className="flex flex-wrap gap-1 mt-1.5">
       <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
-        Present
+        Available
       </span>
       <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
         On current shift
@@ -263,7 +263,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
               <p className="text-[11px] text-slate-500 mt-1">
                 {isReassign
                   ? 'Select a new ambulance, driver, and nurse. The previous team will be released.'
-                  : 'Drivers and nurses must be marked present and on this shift window.'}
+                  : 'Drivers and nurses must be marked available and on this shift window.'}
               </p>
             </div>
           </div>
@@ -436,7 +436,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 ) : availableDrivers.length === 0 ? (
                   <div className="h-32 flex flex-col items-center justify-center text-amber-700 text-[10px] font-bold uppercase tracking-widest text-center px-4 gap-1">
                     <span>{showStationCrewsOnly ? `No eligible drivers at ${assignedStation || 'this station'}` : 'No eligible drivers'}</span>
-                    <span className="normal-case font-medium text-slate-500">Present + on {activeShiftLabel()} only</span>
+                    <span className="normal-case font-medium text-slate-500">Available + on {activeShiftLabel()} only</span>
                   </div>
                 ) : availableDrivers.map(driver => (
                   <div
@@ -486,7 +486,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 ) : availableNurses.length === 0 ? (
                   <div className="h-32 flex flex-col items-center justify-center text-amber-700 text-[10px] font-bold uppercase tracking-widest text-center px-4 gap-1">
                     <span>{showStationCrewsOnly ? `No eligible nurses at ${assignedStation || 'this station'}` : 'No eligible nurses'}</span>
-                    <span className="normal-case font-medium text-slate-500">Present + on {activeShiftLabel()} only</span>
+                    <span className="normal-case font-medium text-slate-500">Available + on {activeShiftLabel()} only</span>
                   </div>
                 ) : availableNurses.map(nurse => (
                   <div

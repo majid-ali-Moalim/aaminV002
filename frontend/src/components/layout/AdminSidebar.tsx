@@ -89,11 +89,12 @@ const hospitalCoordinationSubMenu = [
 const workforceSubMenu = [
   { href: '/admin/employees', label: 'All Employees', icon: Users, exact: true },
   { href: '/admin/employees/shifts', label: 'Shift Management', icon: Calendar },
-  { href: '/admin/employees/attendance', label: 'Attendance Management', icon: Clock },
-  { href: '/admin/employees/attendance/scores', label: 'Attendance Scores', icon: BarChart2 },
+  { href: '/admin/employees/attendance', label: 'Crew Availability', icon: Clock },
+  { href: '/admin/employees/attendance/scores', label: 'Availability Reports', icon: BarChart2 },
 ]
 
 const analyticsSubMenu = [
+  { href: '/admin/reports/operations', label: 'Operations Intelligence', icon: BarChart2 },
   { href: '/admin/reports/emergency', label: 'Emergency Reports', icon: FileText },
   { href: '/admin/reports/utilization', label: 'Ambulance Utilization', icon: Truck },
   { href: '/admin/reports/performance', label: 'Staff Performance Reports', icon: Users },
@@ -304,7 +305,7 @@ export default function AdminSidebar() {
         <SectionLabel label="Modules" />
         {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
         {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
-        {renderLink('/admin/chat', 'Messages', MessageSquare, isChatActive, chatUnread)}
+        {renderLink('/admin/chat', 'Communication', MessageSquare, isChatActive, chatUnread)}
 
         <SectionLabel label="Emergency Command" />
         <div className="px-0.5">

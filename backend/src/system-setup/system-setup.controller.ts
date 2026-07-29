@@ -49,6 +49,16 @@ export class SystemSetupController {
   getEmergencyTypes() { return this.setupService.getEmergencyTypes(); }
 
   @Public()
+  @Get('cancellation-reasons')
+  @ApiOperation({ summary: 'Get all active mission cancellation reasons' })
+  getCancellationReasons() { return this.setupService.getCancellationReasons(); }
+
+  @Public()
+  @Get('transport-types')
+  @ApiOperation({ summary: 'Get all active non-emergency transport types' })
+  getTransportTypes() { return this.setupService.getTransportTypes(); }
+
+  @Public()
   @Get('stations')
   @ApiOperation({ summary: 'Get all active stations' })
   getStations(@Query('districtId') districtId?: string) { return this.setupService.getStations(districtId); }

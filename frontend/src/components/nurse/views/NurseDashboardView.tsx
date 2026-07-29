@@ -103,7 +103,7 @@ export default function NurseDashboardView() {
     { label: 'Complete Handover', href: '/nurse/mission', icon: ClipboardList },
   ]
 
-  const presenceLabel = kpis.onCase ? 'On Case' : kpis.onDuty ? 'Present' : 'Absent'
+  const presenceLabel = kpis.onCase ? 'On Case' : kpis.onDuty ? 'Available' : 'Unavailable'
 
   return (
     <div className="nurse-dashboard">

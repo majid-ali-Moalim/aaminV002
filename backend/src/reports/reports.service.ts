@@ -982,6 +982,8 @@ export class ReportsService {
         return this.getResponseTimeReport(period, filters);
       case 'outcomes':
         return this.getCaseOutcomeReport(period, filters);
+      case 'operations':
+        return this.getOperationsIntelligenceReport(period, filters);
       case 'export':
         return this.getExportReport(period, filters);
       default:
@@ -1417,6 +1419,329 @@ export class ReportsService {
         ]),
       },
     };
+  }
+
+  private async getOperationsIntelligenceReport(period: ReportPeriod, filters: AdminReportFilters) {
+    const where = this.reportWhere(period, filters);
+    const [cases, trend, fleetStatus, referrals, todayPresence] = await Promise.all([
+      this.prisma.emergencyRequest.findMany({
+        where,
+        include: {
+          patient: true,
+          region: true,
+          district: true,
+          station: true,
+          ambulance: true,
+          driver: true,
+          nurse: true,
+          dispatcher: true,
+          destinationHospital: true,
+          incidentCategory: true,
+          patientCareRecords: { select: { id: true, clinicalNotes: true } },
+        },
+      }),
+      this.getDailyEmergencyTrend(period, {}, filters),
+      this.prisma.ambulance.groupBy({ by: ['status'], where: { isActive: true }, _count: true }),
+      this.prisma.referral.findMany({
+        where: { createdAt: { gte: period.start, lte: period.end } },
+        select: { status: true, hospitalName: true },
+      }),
+      this.attendance.getTodayStaffPresence(),
+    ]);
+
+    const countBy = <T extends string>(map: Record<string, number>, key: T | null | undefined, fallback = 'Unknown') => {
+      const k = key && String(key).trim() ? String(key) : fallback;
+      map[k] = (map[k] ?? 0) + 1;
+    };
+
+    const requestTypes: Record<string, number> = {};
+    const priorities: Record<string, number> = {};
+    const genders: Record<string, number> = {};
+    const bloodTypes: Record<string, number> = {};
+    const districts: Record<string, number> = {};
+    const regions: Record<string, number> = {};
+    const stations: Record<string, number> = {};
+    const ambulances: Record<string, number> = {};
+    const drivers: Record<string, number> = {};
+    const nurses: Record<string, number> = {};
+    const dispatchers: Record<string, number> = {};
+    const hospitals: Record<string, number> = {};
+    const emergencyTypes: Record<string, number> = {};
+    const transportTypes: Record<string, number> = {};
+    const cancelReasons: Record<string, number> = {};
+    const responseBuckets: Record<string, number> = {
+      '<5 min': 0,
+      '5-10 min': 0,
+      '10-15 min': 0,
+      '15+ min': 0,
+    };
+    const hourBuckets: Record<string, number> = {};
+
+    let emergencyCount = 0;
+    let nonEmergencyCount = 0;
+    let referralCount = 0;
+    let completed = 0;
+    let pending = 0;
+    let cancelled = 0;
+    let critical = 0;
+    let handovers = 0;
+    let responseSum = 0;
+    let responseCount = 0;
+    let dispatchSum = 0;
+    let dispatchCount = 0;
+
+    for (const c of cases) {
+      const reqType = this.parseRequestType(c.notes, c.requestSource);
+      countBy(requestTypes, reqType);
+      if (reqType === 'Emergency') emergencyCount += 1;
+      else if (reqType === 'Non-Emergency') nonEmergencyCount += 1;
+      else if (reqType === 'Referral') referralCount += 1;
+
+      countBy(priorities, c.priority);
+      if (c.priority === 'CRITICAL') critical += 1;
+      if (c.status === 'COMPLETED') completed += 1;
+      else if (c.status === 'CANCELLED') cancelled += 1;
+      else if (c.status === 'PENDING' || c.status === 'REVIEWING') pending += 1;
+
+      countBy(genders, c.patient?.gender ?? 'UNKNOWN', 'Unknown');
+      countBy(bloodTypes, c.patient?.bloodType ?? 'UNKNOWN', 'Unknown');
+      countBy(districts, c.district?.name);
+      countBy(regions, c.region?.name);
+      countBy(stations, c.station?.name);
+      if (c.ambulance?.ambulanceNumber) countBy(ambulances, c.ambulance.ambulanceNumber);
+      if (c.driver) countBy(drivers, this.employeeDisplayName(c.driver));
+      if (c.nurse) countBy(nurses, this.employeeDisplayName(c.nurse));
+      if (c.dispatcher) countBy(dispatchers, this.employeeDisplayName(c.dispatcher));
+      const hospitalName = c.destinationHospital?.name || c.destination;
+      if (hospitalName) countBy(hospitals, hospitalName);
+
+      const parsedEmergencyType = this.parseNoteField(c.notes, 'Emergency Type');
+      const parsedTransport = this.parseNoteField(c.notes, 'Transport Type');
+      if (parsedEmergencyType) countBy(emergencyTypes, parsedEmergencyType);
+      else if (c.incidentCategory?.name) countBy(emergencyTypes, c.incidentCategory.name);
+      if (parsedTransport) countBy(transportTypes, parsedTransport);
+
+      if (c.cancellationReason) countBy(cancelReasons, c.cancellationReason);
+
+      handovers += (c.patientCareRecords ?? []).filter((r) =>
+        String(r.clinicalNotes ?? '').includes('[EADS_HANDOVER]'),
+      ).length;
+
+      const responseMin =
+        c.responseMinutes ??
+        this.minutesBetweenDates(
+          c.dispatchedAt ?? c.assignedAt ?? c.createdAt,
+          c.arrivedAtSceneAt,
+        );
+      if (responseMin != null) {
+        responseSum += responseMin;
+        responseCount += 1;
+        if (responseMin < 5) responseBuckets['<5 min'] += 1;
+        else if (responseMin <= 10) responseBuckets['5-10 min'] += 1;
+        else if (responseMin <= 15) responseBuckets['10-15 min'] += 1;
+        else responseBuckets['15+ min'] += 1;
+      }
+
+      const dispatchMin = this.minutesBetweenDates(c.createdAt, c.assignedAt ?? c.dispatchedAt);
+      if (dispatchMin != null) {
+        dispatchSum += dispatchMin;
+        dispatchCount += 1;
+      }
+
+      const hour = new Date(c.createdAt).getHours();
+      const hourLabel = `${String(hour).padStart(2, '0')}:00`;
+      hourBuckets[hourLabel] = (hourBuckets[hourLabel] ?? 0) + 1;
+    }
+
+    const topEntries = (map: Record<string, number>, limit = 10) =>
+      Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit);
+
+    const referralAccepted = referrals.filter((r) => ['ACCEPTED', 'COMPLETED'].includes(r.status)).length;
+    const referralRejected = referrals.filter((r) => r.status === 'REJECTED').length;
+    const referralPending = referrals.filter((r) => r.status === 'PENDING').length;
+
+    const fleetMap = Object.fromEntries(fleetStatus.map((f) => [f.status, f._count]));
+    const availableAmb = fleetMap.AVAILABLE ?? 0;
+    const activeAmbMissions = cases.filter(
+      (r) => !['COMPLETED', 'CANCELLED'].includes(r.status) && r.ambulanceId,
+    ).length;
+    const busyAmb = (fleetMap.ON_DUTY ?? 0) + activeAmbMissions;
+
+    const topDistrict = topEntries(districts)[0];
+    const topDriver = topEntries(drivers)[0];
+    const topNurse = topEntries(nurses)[0];
+    const topDispatcher = topEntries(dispatchers)[0];
+    const topAmbulance = topEntries(ambulances)[0];
+    const topStation = topEntries(stations)[0];
+    const topHospital = topEntries(hospitals)[0];
+    const topEmergencyType = topEntries(emergencyTypes)[0];
+    const topTransportType = topEntries(transportTypes)[0];
+
+    const peakHours = topEntries(hourBuckets, 5);
+
+    return {
+      title: 'Operations Intelligence',
+      subtitle:
+        'Comprehensive AADS analytics — case mix, patient demographics, resources, locations, hospitals, and response performance.',
+      period,
+      permissions: ['report.view', 'report.kpi', 'report.export', 'report.audit'],
+      summary: [
+        { label: 'Total Requests', value: cases.length },
+        { label: 'Emergency Cases', value: emergencyCount },
+        { label: 'Non-Emergency Cases', value: nonEmergencyCount },
+        { label: 'Hospital Referrals', value: referralCount },
+        { label: 'Completed Cases', value: completed },
+        { label: 'Pending Cases', value: pending },
+        { label: 'Cancelled Cases', value: cancelled },
+        { label: 'Critical Cases', value: critical },
+        { label: 'Male Patients', value: genders.MALE ?? 0 },
+        { label: 'Female Patients', value: genders.FEMALE ?? 0 },
+        { label: 'Unknown Gender', value: genders.Unknown ?? genders.UNKNOWN ?? 0 },
+        { label: 'Patient Handovers', value: handovers },
+        { label: 'Avg Response Time', value: responseCount ? Math.round(responseSum / responseCount) : 0, suffix: ' min' },
+        { label: 'Avg Dispatch Time', value: dispatchCount ? Math.round(dispatchSum / dispatchCount) : 0, suffix: ' min' },
+        { label: 'Case Completion Rate', value: this.percent(completed, cases.length), suffix: '%' },
+        { label: 'Available Ambulances', value: availableAmb },
+        { label: 'Busy Ambulances', value: busyAmb },
+        { label: 'Referrals Accepted', value: referralAccepted },
+        { label: 'Referrals Rejected', value: referralRejected },
+        { label: 'Referrals Pending', value: referralPending },
+        { label: 'Staff Available Today', value: todayPresence.presentEmployees },
+        { label: 'Top Station', value: topStation ? topStation[0] : '—' },
+        { label: 'Top Driver', value: topDriver ? topDriver[0] : '—' },
+        { label: 'Top Nurse', value: topNurse ? topNurse[0] : '—' },
+        { label: 'Top Dispatcher', value: topDispatcher ? topDispatcher[0] : '—' },
+        { label: 'Top Ambulance', value: topAmbulance ? topAmbulance[0] : '—' },
+        { label: 'Most Common Emergency', value: topEmergencyType ? topEmergencyType[0] : '—' },
+        { label: 'Most Common Transport', value: topTransportType ? topTransportType[0] : '—' },
+        { label: 'Most Requested District', value: topDistrict ? topDistrict[0] : '—' },
+        { label: 'Most Selected Hospital', value: topHospital ? topHospital[0] : '—' },
+      ],
+      charts: [
+        { title: 'Request Types', type: 'pie', data: this.mapCountChart(requestTypes) },
+        { title: 'Patient Gender', type: 'pie', data: this.mapCountChart(genders) },
+        { title: 'Priority Mix', type: 'pie', data: this.mapCountChart(priorities) },
+        { title: 'Daily Requests', type: 'bar', data: trend.map((t) => ({ name: t.label, value: t.requests })) },
+        { title: 'Response Time Buckets', type: 'bar', data: this.mapCountChart(responseBuckets) },
+        { title: 'Peak Hours', type: 'bar', data: peakHours.map(([name, value]) => ({ name, value })) },
+      ],
+      sections: [
+        {
+          title: 'Top Districts by Requests',
+          columns: ['District', 'Requests'],
+          rows: topEntries(districts).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Regions',
+          columns: ['Region', 'Requests'],
+          rows: topEntries(regions).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Stations',
+          columns: ['Station', 'Cases'],
+          rows: topEntries(stations).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Ambulances',
+          columns: ['Ambulance', 'Missions'],
+          rows: topEntries(ambulances).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Drivers',
+          columns: ['Driver', 'Cases'],
+          rows: topEntries(drivers).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Nurses',
+          columns: ['Nurse', 'Cases'],
+          rows: topEntries(nurses).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Dispatchers',
+          columns: ['Dispatcher', 'Cases Handled'],
+          rows: topEntries(dispatchers).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Top Hospitals',
+          columns: ['Hospital', 'Cases'],
+          rows: topEntries(hospitals).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Emergency Types',
+          columns: ['Type', 'Count'],
+          rows: topEntries(emergencyTypes, 15).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Non-Emergency Transport Types',
+          columns: ['Transport Type', 'Count'],
+          rows: topEntries(transportTypes, 15).map(([name, count]) => [name, count]),
+        },
+        {
+          title: 'Blood Groups',
+          columns: ['Blood Group', 'Patients'],
+          rows: topEntries(bloodTypes).map(([name, count]) => [name.replace(/_/g, ' '), count]),
+        },
+        {
+          title: 'Cancellation Reasons',
+          columns: ['Reason', 'Count'],
+          rows: topEntries(cancelReasons).map(([name, count]) => [name, count]),
+        },
+      ],
+      table: {
+        title: 'Recent Cases Overview',
+        columns: [
+          'Tracking Code', 'Type', 'Patient', 'Gender', 'Priority', 'Status',
+          'District', 'Station', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Total (min)', 'Created',
+        ],
+        rows: cases.slice(0, 100).map((c) => [
+          c.trackingCode,
+          this.parseRequestType(c.notes, c.requestSource),
+          c.patient?.fullName ?? 'Unknown',
+          c.patient?.gender ?? '—',
+          c.priority,
+          c.status,
+          c.district?.name ?? '—',
+          c.station?.name ?? '—',
+          c.ambulance?.ambulanceNumber ?? '—',
+          c.driver ? this.employeeDisplayName(c.driver) : '—',
+          c.nurse ? this.employeeDisplayName(c.nurse) : '—',
+          c.responseMinutes ??
+            this.minutesBetweenDates(c.dispatchedAt ?? c.assignedAt ?? c.createdAt, c.arrivedAtSceneAt) ??
+            '—',
+          c.serviceMinutes ??
+            this.minutesBetweenDates(c.createdAt, c.completedAt ?? c.cancelledAt) ??
+            '—',
+          c.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+        ]),
+      },
+    };
+  }
+
+  private mapCountChart(map: Record<string, number>) {
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }));
+  }
+
+  private parseRequestType(notes?: string | null, requestSource?: string | null) {
+    if (notes?.includes('Request Type: Referral') || requestSource === 'REFERRAL') return 'Referral';
+    if (notes?.includes('Request Type: Non-Emergency')) return 'Non-Emergency';
+    if (notes?.includes('Request Type: Emergency')) return 'Emergency';
+    return 'Emergency';
+  }
+
+  private parseNoteField(notes: string | null | undefined, field: string) {
+    if (!notes) return null;
+    const line = notes.split('\n').find((l) => l.startsWith(`${field}:`));
+    if (!line) return null;
+    return line.slice(field.length + 1).trim() || null;
+  }
+
+  private minutesBetweenDates(from?: Date | null, to?: Date | null) {
+    if (!from || !to) return null;
+    return Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60000));
   }
 
   private async getExportReport(period: ReportPeriod, filters: AdminReportFilters) {

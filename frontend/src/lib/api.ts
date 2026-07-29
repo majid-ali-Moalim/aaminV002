@@ -632,6 +632,14 @@ export const systemSetupService = {
     const api = new ApiService()
     return await api.get('/api/setup/emergency-types')
   },
+  getCancellationReasons: async () => {
+    const api = new ApiService()
+    return await api.get('/api/setup/cancellation-reasons')
+  },
+  getTransportTypes: async () => {
+    const api = new ApiService()
+    return await api.get('/api/setup/transport-types')
+  },
   getStations: async (districtId?: string) => {
     const api = new ApiService()
     const url = districtId ? `/api/setup/stations?districtId=${districtId}` : '/api/setup/stations'

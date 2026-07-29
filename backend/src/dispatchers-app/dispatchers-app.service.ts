@@ -599,6 +599,73 @@ export class DispatchersAppService {
     return { drivers, nurses, dispatchers, region: scope.regionName };
   }
 
+  private async getRegionalStations(scope: DispatcherScope) {
+    if (!scope.regionId) {
+      return this.prisma.station.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+    }
+    return this.prisma.station.findMany({
+      where: { regionId: scope.regionId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  private async getRegionalFleet(userId: string, stationId?: string) {
+    const scope = await this.resolveScope(userId);
+    return this.prisma.ambulance.findMany({
+      where: {
+        ...regionalAmbulanceWhere(scope, false),
+        ...(stationId ? { stationId } : {}),
+      },
+      include: {
+        station: true,
+        equipmentLevel: true,
+        region: true,
+        employees: {
+          where: { employeeRole: { name: 'Driver' } },
+          take: 1,
+        },
+      },
+      orderBy: { status: 'asc' },
+    });
+  }
+
+  private async getRegionalStaff(userId: string, stationId?: string) {
+    const scope = await this.resolveScope(userId);
+    const regional = {
+      ...regionalEmployeeWhere(scope, false),
+      ...(stationId ? { stationId } : {}),
+    };
+
+    const [drivers, nurses, dispatchers] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { ...regional, employeeRole: { name: 'Driver' } },
+        include: { station: true, assignedAmbulance: true, employeeRole: true },
+        orderBy: { firstName: 'asc' },
+      }),
+      this.prisma.employee.findMany({
+        where: { ...regional, employeeRole: { name: 'Nurse' } },
+        include: { station: true, employeeRole: true },
+        orderBy: { firstName: 'asc' },
+      }),
+      this.prisma.employee.findMany({
+        where: {
+          employeeRole: { name: 'Dispatcher' },
+          status: 'ACTIVE',
+          ...(scope.regionId ? { station: { regionId: scope.regionId } } : { id: scope.dispatcherId }),
+        },
+        include: { station: true, employeeRole: true },
+        orderBy: { firstName: 'asc' },
+      }),
+    ]);
+
+    return { drivers, nurses, dispatchers, region: scope.regionName };
+  }
+
   async getEmergenciesByView(userId: string, view: string) {
     const scope = await this.resolveScope(userId);
     const include = {
@@ -697,12 +764,15 @@ export class DispatchersAppService {
     return { view, items, statusLogs, total: items.length, region: scope.regionName };
   }
 
-  async getAmbulancesByView(userId: string, view: string) {
-    const all = await this.getFleetOverview(userId);
+  async getAmbulancesByView(userId: string, view: string, stationId?: string) {
     const scope = await this.resolveScope(userId);
+    const [all, stations] = await Promise.all([
+      this.getRegionalFleet(userId, stationId),
+      this.getRegionalStations(scope),
+    ]);
 
     const activeMissions = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, false),
       select: {
         id: true,
         trackingCode: true,
@@ -747,17 +817,27 @@ export class DispatchersAppService {
         break;
     }
 
-    return { view, items, total: items.length, region: scope.regionName };
+    return {
+      view,
+      items,
+      total: items.length,
+      region: scope.regionName,
+      stations,
+      homeStationId: scope.stationId,
+    };
   }
 
-  async getCrewByView(userId: string, view: string) {
+  async getCrewByView(userId: string, view: string, stationId?: string) {
     const scope = await this.resolveScope(userId);
-    const staff = await this.getStaffOverview(userId);
+    const [staff, stations] = await Promise.all([
+      this.getRegionalStaff(userId, stationId),
+      this.getRegionalStations(scope),
+    ]);
     const onMissionIds = new Set<string>();
     const missionByEmployee = new Map<string, { trackingCode: string; status: string; id: string }>();
 
     const active = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
+      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, false),
       select: {
         id: true,
         trackingCode: true,
@@ -824,7 +904,16 @@ export class DispatchersAppService {
     };
 
     const items = filterEmployees();
-    return { view, items, staff, onMissionCount: onMissionIds.size, region: scope.regionName, activeMissions: active };
+    return {
+      view,
+      items,
+      staff,
+      onMissionCount: onMissionIds.size,
+      region: scope.regionName,
+      activeMissions: active,
+      stations,
+      homeStationId: scope.stationId,
+    };
   }
 
   async getHospitalsByView(userId: string, view: string) {

@@ -132,7 +132,7 @@ export const PERMISSION_CATALOG: PermissionCategory[] = [
       { key: 'employee.create', label: 'Create Employee', description: 'Add staff members' },
       { key: 'employee.edit', label: 'Edit Employee', description: 'Update employee records' },
       { key: 'employee.delete', label: 'Delete Employee', description: 'Remove staff accounts', sensitive: true },
-      { key: 'employee.attendance', label: 'Attendance & Duty Logs', description: 'View and manage attendance' },
+      { key: 'employee.attendance', label: 'Crew Availability & Duty Logs', description: 'View and manage crew availability' },
       { key: 'station.manage', label: 'Manage Stations', description: 'Configure base stations and coverage' },
     ],
   },

@@ -10,6 +10,7 @@ export type MdmEntityKey =
   | 'hospital-types'
   | 'mission-statuses'
   | 'cancellation-reasons'
+  | 'transport-types'
 
 export type MdmFieldType = 'text' | 'textarea' | 'number' | 'color' | 'select' | 'multiselect'
 
@@ -238,6 +239,21 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
       { key: 'isActive', label: 'Status', render: 'status' },
     ],
   },
+  'transport-types': {
+    key: 'transport-types',
+    label: 'Transport Types',
+    singular: 'Transport Type',
+    fields: [
+      { key: 'code', label: 'Type Code', required: true },
+      { key: 'name', label: 'Type Name', required: true },
+      { key: 'description', label: 'Description', type: 'textarea' },
+    ],
+    tableColumns: [
+      { key: 'code', label: 'Code' },
+      { key: 'name', label: 'Name' },
+      { key: 'isActive', label: 'Status', render: 'status' },
+    ],
+  },
 }
 
 export const MDM_SECTIONS = {
@@ -253,6 +269,6 @@ export const MDM_SECTIONS = {
   hospital: { title: 'Hospital Configuration', tabs: ['hospital-types'] as MdmEntityKey[] },
   mission: {
     title: 'Mission Configuration',
-    tabs: ['mission-statuses', 'cancellation-reasons'] as MdmEntityKey[],
+    tabs: ['mission-statuses', 'cancellation-reasons', 'transport-types'] as MdmEntityKey[],
   },
 } as const

@@ -100,7 +100,7 @@ export default function DispatcherSidebarSections({ open = false, onClose }: Pro
             <SidebarMenuLink
               navKey="dispatcher-chat"
               href="/dispatcher/chat"
-              label="Messages"
+              label="Communication"
               icon={MessageSquare}
               sidebar={DISPATCHER_SIDEBAR}
               accentColor={DISPATCHER_SIDEBAR.muted}

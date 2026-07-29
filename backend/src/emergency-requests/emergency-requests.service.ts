@@ -940,6 +940,8 @@ export class EmergencyRequestsService {
     else if (status === 'COMPLETED') updateData.completedAt = new Date();
     else if (status === 'CANCELLED') updateData.cancelledAt = new Date();
 
+    Object.assign(updateData, this.deriveTimingMetrics(existing, updateData));
+
     const updated = await this.prisma.emergencyRequest.update({
       where: { id },
       data: {
@@ -1657,6 +1659,44 @@ export class EmergencyRequestsService {
       pending,
       assigned,
       completed,
+    };
+  }
+
+  private deriveTimingMetrics(
+    existing: {
+      createdAt: Date;
+      assignedAt?: Date | null;
+      dispatchedAt?: Date | null;
+      arrivedAtSceneAt?: Date | null;
+      completedAt?: Date | null;
+      cancelledAt?: Date | null;
+      responseMinutes?: number | null;
+      serviceMinutes?: number | null;
+    },
+    patch: Record<string, unknown> = {},
+  ) {
+    const merged = { ...existing, ...patch };
+    const minutesBetween = (from?: Date | null, to?: Date | null) => {
+      if (!from || !to) return undefined;
+      return Math.max(
+        0,
+        Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60000),
+      );
+    };
+
+    const responseMinutes =
+      merged.responseMinutes ??
+      minutesBetween(
+        merged.dispatchedAt ?? merged.assignedAt ?? merged.createdAt,
+        merged.arrivedAtSceneAt,
+      );
+    const serviceMinutes =
+      merged.serviceMinutes ??
+      minutesBetween(merged.createdAt, merged.completedAt ?? merged.cancelledAt);
+
+    return {
+      ...(responseMinutes != null ? { responseMinutes } : {}),
+      ...(serviceMinutes != null ? { serviceMinutes } : {}),
     };
   }
 }

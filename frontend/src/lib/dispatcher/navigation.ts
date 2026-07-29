@@ -89,7 +89,7 @@ export const DISPATCHER_MODULES: NavModule[] = [
     label: 'Resource Operations',
     icon: Truck,
     basePath: '/dispatcher/resources',
-    description: 'Ambulance, driver, and nurse availability for dispatch',
+    description: 'Professional fleet and crew boards with station filters for dispatch decisions',
     defaultSlug: 'ambulance-availability',
     items: [
       { slug: 'ambulance-availability', label: 'Ambulance Availability', icon: Truck },

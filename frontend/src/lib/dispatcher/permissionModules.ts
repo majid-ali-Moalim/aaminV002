@@ -33,7 +33,7 @@ export const PERMISSION_ACTION_LINKS: Record<string, { href: string; label: stri
   'case.create': { href: '/dispatcher/emergency-requests/new', label: 'Create emergency case' },
   'dispatch.board': { href: '/dispatcher/emergency-requests/pending', label: 'Open dispatch board' },
   'hospital.manage': { href: '/dispatcher/hospital/hospitals', label: 'Manage hospitals' },
-  'employee.attendance': { href: '/dispatcher/permissions/attendance', label: 'Attendance' },
+  'employee.attendance': { href: '/dispatcher/permissions/attendance', label: 'Availability' },
 }
 
 export const GRANTED_SIDEBAR_UNLOCKS: GrantedSidebarUnlock[] = [
@@ -67,12 +67,12 @@ export const GRANTED_SIDEBAR_UNLOCKS: GrantedSidebarUnlock[] = [
     permissionKey: 'employee.attendance',
     module: {
       id: 'permissions' as NavModule['id'],
-      label: 'Staff Attendance',
+      label: 'Crew Availability',
       icon: Users,
       basePath: '/dispatcher/permissions',
-      description: 'View attendance (admin-granted)',
+      description: 'View crew availability (admin-granted)',
       defaultSlug: 'attendance',
-      items: [{ slug: 'attendance', label: 'Attendance', icon: Users }],
+      items: [{ slug: 'attendance', label: 'Availability', icon: Users }],
     },
   },
 ]

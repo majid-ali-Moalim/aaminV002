@@ -1,4 +1,5 @@
 import type { Region } from '@/types'
+import { isFuneralTransportCode } from '@/lib/emergency/transportTypes'
 import type {
   DispatchCreateDraft,
   DispatchRequestType,
@@ -14,8 +15,9 @@ export const DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES = [
   { value: 'OTHER', label: 'Other' },
 ] as const
 
+/** @deprecated Prefer isFuneralTransportCode from transportTypes — kept for legacy form values */
 export function isFuneralTransport(transportType: string): boolean {
-  return transportType === 'FUNERAL'
+  return isFuneralTransportCode(transportType)
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000

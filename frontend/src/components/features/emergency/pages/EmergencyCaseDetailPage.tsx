@@ -29,6 +29,7 @@ import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
 import '@/components/features/emergency/case-detail.css'
 import { getCaseStationLabels } from '@/lib/emergency/caseStationLabels'
+import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
 
 function nurseName(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
   return [record.nurse?.firstName, record.nurse?.lastName].filter(Boolean).join(' ') || 'Nurse'
@@ -237,6 +238,8 @@ export default function EmergencyCaseDetailPage() {
               </div>
             </div>
           </section>
+
+          <CaseTimingPanel request={request} />
 
           {nurseRecords.length > 0 && (
             <section className="case-detail-card case-detail-card--accent">

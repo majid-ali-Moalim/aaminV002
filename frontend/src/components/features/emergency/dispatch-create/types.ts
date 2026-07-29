@@ -19,6 +19,11 @@ export type EmergencyDispatchForm = {
   briefDescription: string
   areaStreet: string
   needsNurse: boolean | null
+  consciousStatus: string
+  breathingStatus: string
+  bleedingStatus: string
+  needsOxygen: boolean
+  needsStretcher: boolean
 }
 
 export type NonEmergencyDispatchForm = {
@@ -91,6 +96,11 @@ export const defaultEmergencyForm = (): EmergencyDispatchForm => ({
   briefDescription: '',
   areaStreet: '',
   needsNurse: true,
+  consciousStatus: 'CONSCIOUS',
+  breathingStatus: 'NORMAL',
+  bleedingStatus: 'NONE',
+  needsOxygen: false,
+  needsStretcher: false,
 })
 
 export const defaultNonEmergencyForm = (): NonEmergencyDispatchForm => ({
@@ -157,6 +167,11 @@ export function normalizeDispatchDraft(raw: Partial<DispatchCreateDraft>): Dispa
   }
   if (!('emergencyTypeOther' in emergency)) emergency.emergencyTypeOther = ''
   if (!('needsNurse' in emergency) || emergency.needsNurse === null) emergency.needsNurse = true
+  if (!('consciousStatus' in emergency)) emergency.consciousStatus = 'CONSCIOUS'
+  if (!('breathingStatus' in emergency)) emergency.breathingStatus = 'NORMAL'
+  if (!('bleedingStatus' in emergency)) emergency.bleedingStatus = 'NONE'
+  if (!('needsOxygen' in emergency)) emergency.needsOxygen = false
+  if (!('needsStretcher' in emergency)) emergency.needsStretcher = false
 
   const nonEmergency = { ...base.nonEmergency, ...(raw.nonEmergency ?? {}) } as NonEmergencyDispatchForm & {
     bookingDate?: string

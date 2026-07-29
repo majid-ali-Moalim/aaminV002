@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { employeeAttendanceService } from '@/lib/api'
+import { displayAttendanceFlag } from '@/lib/availability/labels'
 import { FIELD_SHIFT_ROLES, WORK_SHIFT_TEMPLATES, activeShiftLabel } from '@/lib/employment/shiftTypes'
 
 type RoleBreakdown = {
@@ -98,7 +99,7 @@ function StaffBadges({ row }: { row: ShiftEmployee }) {
           row.present ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
         }`}
       >
-        {row.present ? 'Present' : 'Absent'}
+        {displayAttendanceFlag(row.present)}
       </span>
       <span
         className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
@@ -262,7 +263,7 @@ export default function WorkShiftManagementView() {
           <h1 className="text-2xl font-black text-gray-900">Shift Management</h1>
           <p className="text-sm text-gray-500 mt-1">
             Assign drivers, nurses, and dispatchers to day or night shifts. Dispatch team picks only
-            staff who are <strong>present</strong> and on the <strong>current active shift</strong>.
+            staff who are <strong>available</strong> and on the <strong>current active shift</strong>.
           </p>
           <p className="text-xs font-bold text-emerald-700 mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
             <Clock className="w-3.5 h-3.5" />
@@ -481,8 +482,8 @@ export default function WorkShiftManagementView() {
             <div className="p-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-800 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                Assign Dispatch Team only lists drivers and nurses marked <strong>Present</strong> in
-                attendance whose assigned shift matches the active window ({currentActiveShift || activeShiftLabel()}).
+                Assign Dispatch Team only lists drivers and nurses marked <strong>available</strong> in
+                crew availability whose assigned shift matches the active window ({currentActiveShift || activeShiftLabel()}).
               </span>
             </div>
           </div>

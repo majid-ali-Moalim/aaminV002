@@ -20,6 +20,7 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import CaseMissionRecordsPanel from '@/components/features/emergency/CaseMissionRecordsPanel'
+import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
 import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
 import '@/components/features/emergency/case-detail.css'
 
@@ -197,6 +198,8 @@ export default function CaseDetailModal({
                   </div>
                 )}
               </section>
+
+              <CaseTimingPanel request={request} />
 
               <section className="case-detail-card">
                 <CaseMissionRecordsPanel request={request} />

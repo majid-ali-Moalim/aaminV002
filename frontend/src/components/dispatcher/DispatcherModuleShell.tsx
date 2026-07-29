@@ -26,20 +26,22 @@ export default function DispatcherModuleShell({ module, description, hideHeader,
       )}
 
       <div className="overflow-x-auto -mx-1 px-1 pb-1">
-        <nav className="flex gap-1 min-w-max bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+        <nav className="flex gap-1.5 min-w-max bg-slate-100/80 border border-slate-200 rounded-2xl p-1.5 shadow-inner">
           {module.items.map((item) => {
             const href = moduleHref(module, item.slug)
             const active = pathname === href
+            const ItemIcon = item.icon
             return (
               <Link
                 key={item.slug}
                 href={href}
-                className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                   active
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-white text-red-700 shadow-sm ring-1 ring-red-100'
+                    : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
                 }`}
               >
+                {ItemIcon && <ItemIcon className="w-3.5 h-3.5" />}
                 {item.label}
               </Link>
             )
@@ -124,28 +126,47 @@ export function EmergencyTable({ items, onAssign }: { items: any[]; onAssign?: (
 export function AmbulanceGrid({ items }: { items: any[] }) {
   if (!items?.length) return null
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((a) => (
-        <div key={a.id} className="border border-gray-200 rounded-xl p-4 hover:border-red-200 transition-colors">
-          <p className="font-black text-gray-900">{a.ambulanceNumber}</p>
-          <p className="text-xs text-gray-500">{a.plateNumber}</p>
-          <span className="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-gray-100">
-            {a.status}
-          </span>
-          {a.station?.name && <p className="text-[10px] text-gray-400 mt-1">{a.station.name}</p>}
+        <div
+          key={a.id}
+          className="group border border-slate-200 rounded-2xl p-4 bg-white hover:border-red-300 hover:shadow-md transition-all"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-black text-slate-900 text-lg">{a.ambulanceNumber}</p>
+              <p className="text-xs text-slate-500 font-medium">{a.plateNumber}</p>
+            </div>
+            <span
+              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                a.status === 'AVAILABLE'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : a.status === 'ON_DUTY'
+                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}
+            >
+              {String(a.status ?? '').replace(/_/g, ' ')}
+            </span>
+          </div>
+          {a.station?.name && (
+            <p className="text-xs text-slate-600 mt-3 flex items-center gap-1 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              {a.station.name}
+            </p>
+          )}
           {a.currentMission && (
             <Link
               href={`/dispatcher/emergency-requests/${a.currentMission.id}`}
-              className="block mt-2 text-[10px] font-bold text-red-600 hover:underline"
+              className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-red-600 hover:underline"
             >
-              Case {a.currentMission.trackingCode} · {a.currentMission.status?.replace(/_/g, ' ')}
+              Case {a.currentMission.trackingCode}
             </Link>
           )}
-          {(a.fuelLevel != null || a.readinessScore != null) && (
-            <p className="text-[10px] text-gray-400 mt-1">
-              {a.fuelLevel != null ? `Fuel ${a.fuelLevel}%` : ''}
-              {a.fuelLevel != null && a.readinessScore != null ? ' · ' : ''}
-              {a.readinessScore != null ? `Readiness ${a.readinessScore}` : ''}
+          {(a.fuelLevel != null || a.equipmentLevel?.name) && (
+            <p className="text-[10px] text-slate-400 mt-2 font-medium">
+              {a.equipmentLevel?.name ? `${a.equipmentLevel.name}` : ''}
+              {a.fuelLevel != null ? `${a.equipmentLevel?.name ? ' · ' : ''}Fuel ${a.fuelLevel}%` : ''}
             </p>
           )}
         </div>
@@ -157,24 +178,47 @@ export function AmbulanceGrid({ items }: { items: any[] }) {
 export function CrewGrid({ items }: { items: any[] }) {
   if (!items?.length) return null
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((e) => (
-        <div key={e.id} className="border border-gray-200 rounded-xl p-4">
-          <p className="font-bold text-gray-900">
-            {e.firstName} {e.lastName}
-          </p>
-          <p className="text-xs text-gray-500">{e.employeeRole?.name || 'Staff'}</p>
-          <p className="text-[10px] text-gray-400">{e.employeeCode || ''}</p>
-          <span className="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-            {e.shiftStatus}
-          </span>
-          {e.station?.name && <p className="text-[10px] text-gray-400 mt-1">{e.station.name}</p>}
+        <div
+          key={e.id}
+          className="group border border-slate-200 rounded-2xl p-4 bg-white hover:border-red-300 hover:shadow-md transition-all"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-bold text-slate-900">
+                {e.firstName} {e.lastName}
+              </p>
+              <p className="text-xs text-slate-500">{e.employeeRole?.name || 'Staff'}</p>
+              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{e.employeeCode || ''}</p>
+            </div>
+            <span
+              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                e.shiftStatus === 'AVAILABLE' || e.shiftStatus === 'ON_DUTY'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}
+            >
+              {String(e.shiftStatus ?? '').replace(/_/g, ' ')}
+            </span>
+          </div>
+          {e.station?.name && (
+            <p className="text-xs text-slate-600 mt-3 flex items-center gap-1 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              {e.station.name}
+            </p>
+          )}
+          {e.assignedAmbulance?.ambulanceNumber && (
+            <p className="text-[10px] text-slate-500 mt-1 font-medium">
+              Vehicle: {e.assignedAmbulance.ambulanceNumber}
+            </p>
+          )}
           {e.currentMission && (
             <Link
               href={`/dispatcher/emergency-requests/${e.currentMission.id}`}
-              className="block mt-2 text-[10px] font-bold text-red-600 hover:underline"
+              className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-red-600 hover:underline"
             >
-              On case {e.currentMission.trackingCode} · {e.currentMission.status?.replace(/_/g, ' ')}
+              On case {e.currentMission.trackingCode}
             </Link>
           )}
         </div>

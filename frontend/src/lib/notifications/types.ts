@@ -71,7 +71,7 @@ export interface AlertRecord {
 export const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   MISSION: 'Mission',
   COMMUNICATION: 'Communication',
-  ATTENDANCE: 'Attendance',
+  ATTENDANCE: 'Availability',
   HOSPITAL: 'Hospital',
   INCIDENT: 'Incident',
   SYSTEM: 'System',
@@ -110,7 +110,7 @@ export const DRAWER_TABS = [
   { id: 'CRITICAL', label: 'Critical' },
   { id: 'MISSION', label: 'Mission' },
   { id: 'COMMUNICATION', label: 'Communication' },
-  { id: 'ATTENDANCE', label: 'Attendance' },
+  { id: 'ATTENDANCE', label: 'Availability' },
 ] as const
 
 export type DrawerTabId = (typeof DRAWER_TABS)[number]['id']

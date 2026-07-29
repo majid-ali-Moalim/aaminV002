@@ -147,7 +147,7 @@ export function getAttendanceShiftBlockReason(
 
   return (
     `${empShift.name} staff (${empShift.startTime} – ${empShift.endTime}) can only be marked ` +
-    `present or absent during their shift. Current window: ${activeShiftLabel(at)} ` +
+    `available or unavailable during their shift. Current window: ${activeShiftLabel(at)} ` +
     `(${activeWindow.startTime} – ${activeWindow.endTime}).`
   )
 }

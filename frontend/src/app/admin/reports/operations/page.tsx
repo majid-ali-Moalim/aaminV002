@@ -2,6 +2,6 @@
 
 import OperationsReportPage from '@/components/reports/OperationsReportPage'
 
-export default function ReportsExecutiveDashboardPage() {
+export default function AdminOperationsReportRoute() {
   return <OperationsReportPage />
 }

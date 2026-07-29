@@ -99,13 +99,13 @@ export class DispatchersAppController {
   }
 
   @Get('ambulances')
-  getAmbulances(@Request() req, @Query('view') view = 'all') {
-    return this.service.getAmbulancesByView(req.user.sub, view);
+  getAmbulances(@Request() req, @Query('view') view = 'all', @Query('stationId') stationId?: string) {
+    return this.service.getAmbulancesByView(req.user.sub, view, stationId);
   }
 
   @Get('crew')
-  getCrew(@Request() req, @Query('view') view = 'drivers') {
-    return this.service.getCrewByView(req.user.sub, view);
+  getCrew(@Request() req, @Query('view') view = 'drivers', @Query('stationId') stationId?: string) {
+    return this.service.getCrewByView(req.user.sub, view, stationId);
   }
 
   @Get('hospitals')

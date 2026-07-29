@@ -388,7 +388,7 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h2 className="text-lg font-bold text-slate-900 flex-1">Messages</h2>
+          <h2 className="text-lg font-bold text-slate-900 flex-1">Communication</h2>
         </div>
 
         {caseContext && (

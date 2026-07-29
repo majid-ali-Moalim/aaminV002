@@ -276,6 +276,22 @@ model CancellationReason {
   @@map("cancellation_reasons")
 }
 
+model TransportType {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdById String?
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("transport_types")
+}
+
 model SystemSetting {
   id          String   @id @default(cuid())
   key         String   @unique

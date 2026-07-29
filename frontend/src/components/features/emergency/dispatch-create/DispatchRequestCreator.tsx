@@ -25,6 +25,7 @@ import {
   fetchEmergencyTypesAuthenticated,
   type EmergencyTypeOption,
 } from '@/lib/emergency/emergencyTypes'
+import { fetchTransportTypes, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import { buildPayloadForType } from './buildPayload'
 import EmergencyDispatchFormView from './EmergencyFormView'
 import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
@@ -138,6 +139,7 @@ export default function DispatchRequestCreator({
   const [districts, setDistricts] = useState<District[]>([])
   const [hospitals, setHospitals] = useState<HospitalOption[]>([])
   const [emergencyTypes, setEmergencyTypes] = useState<EmergencyTypeOption[]>([])
+  const [transportTypes, setTransportTypes] = useState<TransportTypeOption[]>([])
   const [loadingDistricts, setLoadingDistricts] = useState(false)
   const [activeRegionId, setActiveRegionId] = useState('')
 
@@ -168,13 +170,15 @@ export default function DispatchRequestCreator({
   useEffect(() => {
     const load = async () => {
       try {
-        const [regionsRes, types, hospitalsRes] = await Promise.all([
+        const [regionsRes, types, transport, hospitalsRes] = await Promise.all([
           systemSetupService.getRegions(),
           fetchEmergencyTypesAuthenticated(),
+          fetchTransportTypes(),
           hospitalsService.getAll(),
         ])
         setRegions(Array.isArray(regionsRes) ? regionsRes : [])
         setEmergencyTypes(types)
+        setTransportTypes(transport)
         setHospitals(
           Array.isArray(hospitalsRes)
             ? hospitalsRes
@@ -272,7 +276,12 @@ export default function DispatchRequestCreator({
       toast.error('Select a request type first')
       return
     }
-    const validationErrors = validateDispatchForm(draft.requestType, draft, emergencyTypes)
+    const validationErrors = validateDispatchForm(
+      draft.requestType,
+      draft,
+      emergencyTypes,
+      transportTypes,
+    )
     setErrors(validationErrors)
     const msg = firstErrorMessage(validationErrors)
     if (msg) {
@@ -283,7 +292,7 @@ export default function DispatchRequestCreator({
     setSubmitting(true)
     try {
       const payload = {
-        ...buildPayloadForType(draft.requestType, draft, emergencyTypes),
+        ...buildPayloadForType(draft.requestType, draft, emergencyTypes, transportTypes),
         ...(user?.id ? { createdByUserId: user.id } : {}),
         ...(user?.employee?.id ? { submitterEmployeeId: user.employee.id } : {}),
       }
@@ -502,6 +511,7 @@ export default function DispatchRequestCreator({
                   banadirRegionName={banadirRegionName}
                   districts={districts}
                   hospitals={hospitals}
+                  transportTypes={transportTypes}
                   loadingDistricts={loadingDistricts}
                   onChange={patchNonEmergency}
                   onCancel={handleCancel}

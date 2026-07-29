@@ -8,6 +8,7 @@ import type { District, Region } from '@/types'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import PatientNameField from './PatientNameField'
+import QuickTriageSection from './QuickTriageSection'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import type { DispatchFormErrors, EmergencyDispatchForm } from './types'
 
@@ -71,23 +72,35 @@ export default function EmergencyDispatchFormView({
           </div>
           <div className="sm:col-span-2">
             <FieldLabel required error={errors.emergencyTypeId}>Emergency Type</FieldLabel>
-            <select
-              className={fieldInputClass(errors.emergencyTypeId)}
-              value={form.emergencyTypeId}
-              onChange={(e) =>
-                onChange({
-                  emergencyTypeId: e.target.value,
-                  emergencyTypeOther: '',
-                })
-              }
-            >
-              <option value="">Select emergency type</option>
-              {emergencyTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            {emergencyTypes.length === 0 ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                No emergency types configured. Add them in Admin → Master Data → Emergency
+                Configuration → Emergency Types.
+              </p>
+            ) : (
+              <select
+                className={fieldInputClass(errors.emergencyTypeId)}
+                value={form.emergencyTypeId}
+                onChange={(e) =>
+                  onChange({
+                    emergencyTypeId: e.target.value,
+                    emergencyTypeOther: '',
+                  })
+                }
+              >
+                <option value="">Select emergency type</option>
+                {emergencyTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.incidentCategory?.name ? `${t.name} (${t.incidentCategory.name})` : t.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {emergencyTypes.length > 0 && (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Options loaded from Master Data → Emergency Configuration
+              </p>
+            )}
           </div>
           {showOtherType && (
             <div className="sm:col-span-2">
@@ -153,6 +166,8 @@ export default function EmergencyDispatchFormView({
           </div>
         </div>
       </SectionCard>
+
+      <QuickTriageSection form={form} onChange={onChange} />
 
       <SectionCard
         title="Priority"

@@ -144,6 +144,48 @@ export class SystemSetupService {
     });
   }
 
+  /** Active rows from Master Data → Mission Configuration → Transport Types */
+  async getTransportTypes() {
+    await this.prisma.transportType.upsert({
+      where: { code: 'OTHER' },
+      create: {
+        code: 'OTHER',
+        name: 'Other',
+        isActive: true,
+      },
+      update: {
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+
+    return this.prisma.transportType.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** Active rows from Master Data → Mission Configuration → Cancellation Reasons */
+  async getCancellationReasons() {
+    await this.prisma.cancellationReason.upsert({
+      where: { code: 'OTHER' },
+      create: {
+        code: 'OTHER',
+        name: 'Other',
+        isActive: true,
+      },
+      update: {
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+
+    return this.prisma.cancellationReason.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async getStations(districtId?: string) {
     return this.prisma.station.findMany({
       where: { 

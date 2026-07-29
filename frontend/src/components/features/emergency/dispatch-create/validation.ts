@@ -1,4 +1,5 @@
 import { isFuneralTransport, isBookingWithin24Hours } from '@/lib/emergency/dispatchFormShared'
+import { isOtherTransportType, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import { isValidSomaliaPhone } from '@/lib/driverFormValidation'
 import { isValidDispatchPatientName, isUnknownPatientName } from '@/lib/emergency/patientName'
 import { isOtherEmergencyType } from '@/lib/emergency/emergencyTypes'
@@ -72,7 +73,10 @@ function relativeName(errors: DispatchFormErrors, field: string, value: string) 
   }
 }
 
-export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm): DispatchFormErrors {
+export function validateNonEmergencyDispatchForm(
+  data: NonEmergencyDispatchForm,
+  transportTypes: TransportTypeOption[] = [],
+): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
   if (isFuneralTransport(data.transportType)) {
     relativeName(errors, 'patientName', data.patientName)
@@ -81,7 +85,12 @@ export function validateNonEmergencyDispatchForm(data: NonEmergencyDispatchForm)
   }
   phone(errors, 'phone', data.phone)
   if (!data.transportType) errors.transportType = 'Transport type is required'
-  if (data.transportType === 'OTHER' && !data.transportTypeOther.trim()) {
+  const selectedTransport = transportTypes.find(
+    (t) => (t.code || '').toUpperCase() === data.transportType.toUpperCase(),
+  )
+  const isOther =
+    (selectedTransport && isOtherTransportType(selectedTransport)) || data.transportType === 'OTHER'
+  if (isOther && !data.transportTypeOther.trim()) {
     errors.transportTypeOther = 'Describe the transport type'
   }
   if (!data.regionId) errors.regionId = 'Pickup region is required'
@@ -138,12 +147,13 @@ export function validateDispatchForm(
     referral: ReferralDispatchForm
   },
   emergencyTypes: EmergencyTypeOption[] = [],
+  transportTypes: TransportTypeOption[] = [],
 ): DispatchFormErrors {
   switch (type) {
     case 'EMERGENCY':
       return validateEmergencyDispatchForm(draft.emergency, emergencyTypes)
     case 'NON_EMERGENCY':
-      return validateNonEmergencyDispatchForm(draft.nonEmergency)
+      return validateNonEmergencyDispatchForm(draft.nonEmergency, transportTypes)
     case 'REFERRAL':
       return validateReferralDispatchForm(draft.referral)
     default:

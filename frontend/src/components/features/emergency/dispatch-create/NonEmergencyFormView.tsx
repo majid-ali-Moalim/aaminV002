@@ -1,7 +1,8 @@
 'use client'
 
 import { Truck } from 'lucide-react'
-import { DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES, getBookingDateTimeBounds, isBookingWithin24Hours, isFuneralTransport } from '@/lib/emergency/dispatchFormShared'
+import { isFuneralTransport, isBookingWithin24Hours, getBookingDateTimeBounds } from '@/lib/emergency/dispatchFormShared'
+import { isOtherTransportType, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import type { District } from '@/types'
 import StationAssignmentField from '@/components/features/emergency/StationAssignmentField'
 import PatientNameField from './PatientNameField'
@@ -17,6 +18,7 @@ type Props = {
   banadirRegionName: string
   districts: District[]
   hospitals: HospitalOption[]
+  transportTypes: TransportTypeOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<NonEmergencyDispatchForm>) => void
   onCancel: () => void
@@ -30,6 +32,7 @@ export default function NonEmergencyDispatchFormView({
   banadirRegionName,
   districts,
   hospitals,
+  transportTypes,
   loadingDistricts,
   onChange,
   onCancel,
@@ -37,6 +40,12 @@ export default function NonEmergencyDispatchFormView({
   submitting,
 }: Props) {
   const isFuneral = isFuneralTransport(form.transportType)
+  const selectedTransport = transportTypes.find(
+    (t) => (t.code || '').toUpperCase() === form.transportType.toUpperCase(),
+  )
+  const showOtherTransport = selectedTransport
+    ? isOtherTransportType(selectedTransport)
+    : form.transportType === 'OTHER'
   const bookingBounds = getBookingDateTimeBounds(isFuneral)
 
   const handleTransportTypeChange = (transportType: string) => {
@@ -94,20 +103,32 @@ export default function NonEmergencyDispatchFormView({
           />
           <div className="sm:col-span-2">
             <FieldLabel required error={errors.transportType}>Transport Type</FieldLabel>
-            <select
-              className={fieldInputClass(errors.transportType)}
-              value={form.transportType}
-              onChange={(e) => handleTransportTypeChange(e.target.value)}
-            >
-              <option value="">Select transport type</option>
-              {DISPATCH_NON_EMERGENCY_TRANSPORT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            {transportTypes.length === 0 ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                No transport types configured. Add them in Admin → Master Data → Mission
+                Configuration → Transport Types.
+              </p>
+            ) : (
+              <select
+                className={fieldInputClass(errors.transportType)}
+                value={form.transportType}
+                onChange={(e) => handleTransportTypeChange(e.target.value)}
+              >
+                <option value="">Select transport type</option>
+                {transportTypes.map((t) => (
+                  <option key={t.id} value={t.code || t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {transportTypes.length > 0 && (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Options loaded from Master Data → Mission Configuration
+              </p>
+            )}
           </div>
-          {form.transportType === 'OTHER' && (
+          {showOtherTransport && (
             <div className="sm:col-span-2">
               <FieldLabel required error={errors.transportTypeOther}>Describe transport type</FieldLabel>
               <input

@@ -32,6 +32,7 @@ import {
   TRIAGE_PRIORITY_OPTIONS,
 } from '@/lib/emergency/triageOptions'
 import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
+import CaseStationTransferPanel from '@/components/features/emergency/CaseStationTransferPanel'
 
 type TriageForm = {
   priority: Priority
@@ -119,9 +120,10 @@ type Props = {
   request: EmergencyRequest
   onSaved: (updated: EmergencyRequest) => void
   onAssign: () => void
+  onTransferred?: (updated: EmergencyRequest) => void
 }
 
-export default function DispatcherTriagePanel({ request, onSaved, onAssign }: Props) {
+export default function DispatcherTriagePanel({ request, onSaved, onAssign, onTransferred }: Props) {
   const [form, setForm] = useState<TriageForm>(() => formFromRequest(request))
   const [intake, setIntake] = useState<IntakeSnapshot>(() => snapshotFromRequest(request))
   const [saving, setSaving] = useState(false)
@@ -374,6 +376,13 @@ export default function DispatcherTriagePanel({ request, onSaved, onAssign }: Pr
       </section>
 
       <PickupGpsPanel request={request} variant="compact" />
+
+      {onTransferred && (
+        <CaseStationTransferPanel
+          request={request}
+          onTransferred={onTransferred}
+        />
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <Button

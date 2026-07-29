@@ -51,7 +51,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
           dispatcherDashboardApi.getAmbulances('busy'),
           dispatcherDashboardApi.getAmbulances('maintenance'),
         ])
-        return { items: available.items ?? [], all, available, busy, maintenance, region: available.region }
+        return { items: available.items ?? [], all, available, busy, maintenance, region: available.region, stations: available.stations ?? [], homeStationId: available.homeStationId }
       }
       if (view === 'driver-availability') {
         const [all, available, onMission, offDuty] = await Promise.all([
@@ -80,6 +80,8 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
             ).length,
           },
           region: available.region,
+          stations: available.stations ?? [],
+          homeStationId: available.homeStationId,
         }
       }
       if (view === 'nurse-availability') {
@@ -105,6 +107,8 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
             ).length,
           },
           region: available.region,
+          stations: available.stations ?? [],
+          homeStationId: available.homeStationId,
         }
       }
       if (view === 'resource-status') {
@@ -118,6 +122,8 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
           drivers: drivers.items ?? [],
           nurses: nurses.items ?? [],
           region: ambulances.region ?? drivers.region,
+          stations: ambulances.stations ?? drivers.stations ?? [],
+          homeStationId: ambulances.homeStationId ?? drivers.homeStationId,
         }
       }
       return { items: [] }
@@ -246,6 +252,8 @@ export default function DispatcherModulePage({
           <AmbulanceAvailabilityView
             data={data as any}
             region={regionLabel}
+            stations={(data as any)?.stations ?? []}
+            homeStationId={(data as any)?.homeStationId}
             onRefresh={refresh}
             refreshing={isValidating}
           />
@@ -262,6 +270,8 @@ export default function DispatcherModulePage({
             onMissionItems={onMissionDrivers}
             stats={(data as any)?.stats ?? {}}
             region={regionLabel}
+            stations={(data as any)?.stations ?? []}
+            homeStationId={(data as any)?.homeStationId}
             onRefresh={refresh}
             refreshing={isValidating}
           />
@@ -278,6 +288,8 @@ export default function DispatcherModulePage({
             onMissionItems={onMissionNurses}
             stats={(data as any)?.stats ?? {}}
             region={regionLabel}
+            stations={(data as any)?.stations ?? []}
+            homeStationId={(data as any)?.homeStationId}
             onRefresh={refresh}
             refreshing={isValidating}
           />
@@ -291,6 +303,8 @@ export default function DispatcherModulePage({
             drivers={(data as any)?.drivers ?? []}
             nurses={(data as any)?.nurses ?? []}
             region={regionLabel}
+            stations={(data as any)?.stations ?? []}
+            homeStationId={(data as any)?.homeStationId}
             onRefresh={refresh}
             refreshing={isValidating}
           />

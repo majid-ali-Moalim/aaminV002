@@ -296,6 +296,7 @@ function PendingRequestsContent() {
                 request={selectedRequest}
                 onSaved={handleTriageSaved}
                 onAssign={() => setIsAssignModalOpen(true)}
+                onTransferred={handleTriageSaved}
               />
             </div>
           ) : (

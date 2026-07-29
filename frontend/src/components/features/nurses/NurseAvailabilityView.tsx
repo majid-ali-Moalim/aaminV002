@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, type ReactNode } from 'react'
+import { displayAttendanceFlag } from '@/lib/availability/labels'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -122,7 +123,7 @@ export default function NurseAvailabilityView() {
     Name: r.fullName,
     Phone: r.phone ?? '—',
     Specialization: r.specialization ?? '—',
-    Attendance: r.attendanceStatus === 'present' ? 'Present' : 'Absent',
+    Availability: displayAttendanceFlag(r.attendanceStatus === 'present'),
     Status: NURSE_STATUS_CONFIG[r.operationalStatus].label,
     'Current Case': r.currentCase?.trackingCode ?? '—',
     Patient: r.currentCase?.patientName ?? '—',
@@ -167,7 +168,7 @@ export default function NurseAvailabilityView() {
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-violet-200 mb-2">Clinical Operations</p>
             <h1 className="text-3xl font-black tracking-tight">Nurse Availability</h1>
             <p className="text-violet-100/80 mt-2 max-w-xl text-sm">
-              Availability follows today&apos;s attendance — present nurses are available; absent nurses are unavailable.
+              Crew marked available today are ready for dispatch; unavailable crew are off the board.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -194,7 +195,7 @@ export default function NurseAvailabilityView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Total Nurses" value={summary.total} icon={Stethoscope} tone="slate" />
-        <KpiCard label="Available (Present)" value={summary.available} icon={Stethoscope} tone="emerald" />
+        <KpiCard label="Available for dispatch" value={summary.available} icon={Stethoscope} tone="emerald" />
         <KpiCard label="On Active Case" value={onCaseCount} icon={Truck} tone="violet" />
       </div>
 
@@ -232,7 +233,7 @@ export default function NurseAvailabilityView() {
                 <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3">Nurse</th>
                   <th className="px-4 py-3">Specialization</th>
-                  <th className="px-4 py-3">Attendance</th>
+                  <th className="px-4 py-3">Availability</th>
                   <th className="px-4 py-3">Current Case</th>
                   <th className="px-4 py-3">Patient</th>
                   <th className="px-4 py-3">Ambulance</th>
@@ -253,7 +254,7 @@ export default function NurseAvailabilityView() {
                     <td className="px-4 py-3">{row.specialization ?? '—'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.operationalStatus} />
-                      <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{row.attendanceStatus ?? 'absent'}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{displayAttendanceFlag(row.attendanceStatus === 'present')}</p>
                     </td>
                     <td className="px-4 py-3">
                       {row.currentCase ? <Link href={`/admin/emergency-requests/${row.currentCase.id}`} className="text-blue-600 hover:underline font-semibold">{row.currentCase.trackingCode}</Link> : '—'}
@@ -300,8 +301,8 @@ export default function NurseAvailabilityView() {
                 <InfoField label="Nurse ID" value={detailData.nurse.employeeCode ?? '—'} />
                 <InfoField label="Phone" value={detailData.nurse.phone ?? '—'} />
                 <InfoField label="Specialization" value={detailData.nurse.specialization ?? '—'} />
-                <InfoField label="Attendance"><StatusBadge status={detailData.nurse.operationalStatus} /></InfoField>
-                <InfoField label="Today's attendance" value={detailData.nurse.attendanceStatus === 'present' ? 'Present' : 'Absent'} />
+                <InfoField label="Dispatch status"><StatusBadge status={detailData.nurse.operationalStatus} /></InfoField>
+                <InfoField label="Today's availability" value={displayAttendanceFlag(detailData.nurse.attendanceStatus === 'present')} />
                 <InfoField label="Station" value={detailData.nurse.station?.name ?? '—'} />
               </div>
               {detailData.currentCase && (

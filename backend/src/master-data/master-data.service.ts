@@ -22,6 +22,7 @@ export type MdmEntityKey =
   | 'hospital-types'
   | 'mission-statuses'
   | 'cancellation-reasons'
+  | 'transport-types'
   | 'system-settings';
 
 const ENTITY_MAP: Record<MdmEntityKey, string> = {
@@ -36,6 +37,7 @@ const ENTITY_MAP: Record<MdmEntityKey, string> = {
   'hospital-types': 'hospitalType',
   'mission-statuses': 'missionStatusConfig',
   'cancellation-reasons': 'cancellationReason',
+  'transport-types': 'transportType',
   'system-settings': 'systemSetting',
 };
 
@@ -472,6 +474,18 @@ export class MasterDataService implements OnModuleInit {
           { code: 'REFUSED', name: 'Patient Refused Transport' },
           { code: 'REASSIGNED', name: 'Mission Reassigned' },
           { code: 'NO_RESOURCE', name: 'Resource Unavailable' },
+          { code: 'OTHER', name: 'Other' },
+        ],
+      },
+      {
+        entity: 'transport-types',
+        rows: [
+          { code: 'HOSPITAL_APPOINTMENT', name: 'Hospital Appointment' },
+          { code: 'HOSPITAL_DISCHARGE', name: 'Hospital Discharge' },
+          { code: 'INTER_HOSPITAL_TRANSFER', name: 'Inter-Hospital Transfer' },
+          { code: 'ROUTINE_MEDICAL', name: 'Routine Medical Transport' },
+          { code: 'FUNERAL', name: 'Funeral / Deceased Person Transport' },
+          { code: 'OTHER', name: 'Other' },
         ],
       },
       {

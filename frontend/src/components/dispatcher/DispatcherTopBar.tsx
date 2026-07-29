@@ -15,6 +15,7 @@ import { dispatcherDashboardApi } from '@/lib/dispatcherApi'
 function resolveTitle(pathname: string): string {
   if (pathname === '/dispatcher/profile') return 'My Profile'
   if (pathname === '/dispatcher/new-emergency') return 'New Emergency Case'
+  if (pathname.startsWith('/dispatcher/chat')) return 'Communication'
 
   const legacyTarget = LEGACY_DISPATCHER_REDIRECTS[pathname]
   if (legacyTarget) {

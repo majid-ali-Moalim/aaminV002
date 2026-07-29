@@ -93,13 +93,13 @@ const SECTIONS: SettingsSection[] = [
   },
   {
     id: 'attendance',
-    title: 'Attendance',
-    description: 'Shift rules for workforce and duty tracking.',
+    title: 'Crew Availability',
+    description: 'Shift rules for dispatch availability and duty tracking.',
     icon: Clock,
     fields: [
       { key: 'attendance.shiftDurationHours', label: 'Standard shift duration (hours)', type: 'number' },
-      { key: 'attendance.gracePeriodMins', label: 'Clock-in grace period (minutes)', type: 'number' },
-      { key: 'attendance.lateThresholdMins', label: 'Late threshold (minutes)', type: 'number' },
+      { key: 'attendance.gracePeriodMins', label: 'Shift start grace period (minutes)', type: 'number' },
+      { key: 'attendance.lateThresholdMins', label: 'Late start threshold (minutes)', type: 'number' },
       { key: 'attendance.overtimeRequiresApproval', label: 'Overtime requires approval', type: 'boolean' },
     ],
   },

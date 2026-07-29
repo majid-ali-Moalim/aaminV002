@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   Download,
+  FileText,
   Loader2,
   Pencil,
   RefreshCw,
@@ -23,6 +24,8 @@ import { Button } from '@/components/ui/button'
 import { employeeAttendanceService } from '@/lib/api'
 import { activeShiftLabel } from '@/lib/employment/shiftTypes'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
+import { AVAILABILITY_LABELS, displayAvailabilityStatus } from '@/lib/availability/labels'
+import { downloadAvailabilityPdf } from '@/lib/availability/exportAvailabilityPdf'
 
 type AttendanceRow = {
   recordId?: string | null
@@ -89,14 +92,14 @@ function formatHours(row: AttendanceRow) {
 }
 
 function statusBadge(status: string) {
-  const present = status === 'Present'
+  const available = status === 'Present'
   return (
     <span
       className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
-        present ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+        available ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
       }`}
     >
-      {present ? 'Present' : 'Absent'}
+      {displayAvailabilityStatus(status)}
     </span>
   )
 }
@@ -124,6 +127,7 @@ function downloadCsv(rows: AttendanceRow[], filename: string) {
         .map((k) => {
           let v: unknown = (r as Record<string, unknown>)[k]
           if (k === 'clockIn' || k === 'clockOut') v = v ? formatClock(String(v)) : ''
+          if (k === 'status') v = displayAvailabilityStatus(String(v ?? ''))
           if (k === 'totalHours') v = r.totalHours ?? ''
           return `"${String(v ?? '').replace(/"/g, '""')}"`
         })
@@ -159,7 +163,7 @@ function EditRecordModal({
 
   const save = async () => {
     if (!row.recordId) {
-      toast.error('No attendance record to update')
+      toast.error(AVAILABILITY_LABELS.noRecord)
       return
     }
     setSaving(true)
@@ -169,7 +173,7 @@ function EditRecordModal({
         checkOut: clockOut ? new Date(clockOut).toISOString() : null,
         status: clockIn ? 'ON_TIME' : 'ABSENT',
       })
-      toast.success('Attendance updated')
+      toast.success(AVAILABILITY_LABELS.updated)
       onSaved()
       onClose()
     } catch (err: unknown) {
@@ -186,10 +190,10 @@ function EditRecordModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-        <h3 className="text-lg font-black text-gray-900">Edit Attendance</h3>
+        <h3 className="text-lg font-black text-gray-900">{AVAILABILITY_LABELS.editStatus}</h3>
         <p className="text-sm text-gray-500">{row.employeeName} · {row.employeeId}</p>
         <label className="block space-y-1">
-          <span className="text-xs font-bold uppercase text-gray-500">Check In</span>
+          <span className="text-xs font-bold uppercase text-gray-500">Shift start</span>
           <input
             type="datetime-local"
             value={clockIn}
@@ -198,7 +202,7 @@ function EditRecordModal({
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs font-bold uppercase text-gray-500">Check Out</span>
+          <span className="text-xs font-bold uppercase text-gray-500">Shift end</span>
           <input
             type="datetime-local"
             value={clockOut}
@@ -240,6 +244,7 @@ export default function EmployeeAttendanceView() {
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState<Set<string>>(() => loadDismissedAlerts())
   const [activeShift, setActiveShift] = useState(activeShiftLabel())
   const [viewingToday, setViewingToday] = useState(true)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   const loadDay = useCallback(async (date: string) => {
     setLoading(true)
@@ -255,7 +260,7 @@ export default function EmployeeAttendanceView() {
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
           : undefined
-      toast.error(message || 'Failed to load attendance')
+      toast.error(message || AVAILABILITY_LABELS.loadFailed)
     } finally {
       setLoading(false)
     }
@@ -290,7 +295,7 @@ export default function EmployeeAttendanceView() {
 
   const markAttendance = async (row: AttendanceRow, action: 'present' | 'absent') => {
     if (row.canMarkAttendance === false) {
-      toast.error(row.attendanceBlockReason || 'Attendance can only be marked during this employee\'s shift')
+      toast.error(row.attendanceBlockReason || AVAILABILITY_LABELS.shiftOnly)
       return
     }
     setMarkingId(row.employeeDbId)
@@ -300,14 +305,14 @@ export default function EmployeeAttendanceView() {
         date: selectedDate,
         action,
       })
-      toast.success(action === 'present' ? 'Marked present' : 'Marked absent')
+      toast.success(action === 'present' ? AVAILABILITY_LABELS.markedAvailable : AVAILABILITY_LABELS.markedUnavailable)
       await loadDay(selectedDate)
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
           : undefined
-      toast.error(message || 'Failed to update attendance')
+      toast.error(message || AVAILABILITY_LABELS.updateFailed)
     } finally {
       setMarkingId(null)
     }
@@ -334,20 +339,44 @@ export default function EmployeeAttendanceView() {
     [rows],
   )
 
+  const exportPdf = async () => {
+    if (!filtered.length) {
+      toast.error('No data to export')
+      return
+    }
+    setExportingPdf(true)
+    try {
+      await downloadAvailabilityPdf({
+        date: selectedDate,
+        rows: filtered,
+        summary,
+        filters: { search, role, statusFilter },
+        activeShift,
+        viewingToday,
+      })
+      toast.success('PDF report downloaded')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
+      toast.error(message)
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 pb-20">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Employee Attendance</h1>
+          <h1 className="text-2xl font-black text-gray-900">{AVAILABILITY_LABELS.module}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Drivers, nurses, dispatchers, and admins — present or absent with check-in and check-out times
+            Mark drivers, nurses, dispatchers, and admins as available or unavailable for dispatch during their shift
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/employees/attendance/scores">
             <Button variant="outline" className="rounded-xl h-10 border-violet-200 text-violet-700 hover:bg-violet-50">
               <BarChart3 className="w-4 h-4 mr-2" />
-              Attendance scores
+              Availability reports
             </Button>
           </Link>
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 h-10">
@@ -365,11 +394,24 @@ export default function EmployeeAttendanceView() {
             Refresh
           </Button>
           <Button
-            onClick={() => downloadCsv(filtered, `attendance-${selectedDate}.csv`)}
-            className="bg-red-600 hover:bg-red-700 rounded-xl h-10"
+            variant="outline"
+            onClick={() => downloadCsv(filtered, `availability-${selectedDate}.csv`)}
+            className="rounded-xl h-10"
           >
             <Download className="w-4 h-4 mr-2" />
             Export CSV
+          </Button>
+          <Button
+            onClick={() => void exportPdf()}
+            disabled={exportingPdf || filtered.length === 0}
+            className="bg-red-600 hover:bg-red-700 rounded-xl h-10"
+          >
+            {exportingPdf ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="w-4 h-4 mr-2" />
+            )}
+            Generate PDF
           </Button>
         </div>
       </div>
@@ -380,7 +422,7 @@ export default function EmployeeAttendanceView() {
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
               <p className="text-sm font-black text-amber-900">
-                Missed shift check-ins ({visibleMissedAlerts.length})
+                Missed shift starts ({visibleMissedAlerts.length})
               </p>
             </div>
             <Button
@@ -417,8 +459,8 @@ export default function EmployeeAttendanceView() {
 
       {viewingToday && (
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          <span className="font-bold">Active shift now:</span> {activeShift}. Present and absent can
-          only be marked for staff whose assigned shift matches this window (drivers, nurses,
+          <span className="font-bold">Active shift now:</span> {activeShift}. Available and unavailable
+          can only be set for staff whose assigned shift matches this window (drivers, nurses,
           dispatchers).
         </div>
       )}
@@ -440,7 +482,7 @@ export default function EmployeeAttendanceView() {
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mt-1">
-              Present today
+              Available today
             </p>
           </div>
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
@@ -449,7 +491,7 @@ export default function EmployeeAttendanceView() {
               <UserX className="w-5 h-5 text-red-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-red-700 mt-1">
-              Absent today
+              Unavailable today
             </p>
           </div>
           <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
@@ -460,7 +502,7 @@ export default function EmployeeAttendanceView() {
               <BarChart3 className="w-5 h-5 text-violet-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-violet-700 mt-1">
-              Present rate
+              Availability rate
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -471,7 +513,7 @@ export default function EmployeeAttendanceView() {
               <UserX className="w-5 h-5 text-slate-500" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mt-1">
-              Absence rate
+              Unavailability rate
             </p>
           </div>
         </div>
@@ -506,8 +548,8 @@ export default function EmployeeAttendanceView() {
             onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Present' | 'Absent')}
           >
             <option value="all">All statuses</option>
-            <option value="Present">Present</option>
-            <option value="Absent">Absent</option>
+            <option value="Present">Available</option>
+            <option value="Absent">Unavailable</option>
           </select>
         </div>
 
@@ -525,10 +567,10 @@ export default function EmployeeAttendanceView() {
                   <th className="p-3">Role</th>
                   <th className="p-3">Department</th>
                   <th className="p-3">Shift</th>
-                  <th className="p-3">Check In</th>
-                  <th className="p-3">Check Out</th>
-                  <th className="p-3">Total Hours</th>
-                  <th className="p-3">Status</th>
+                  <th className="p-3">Shift start</th>
+                  <th className="p-3">Shift end</th>
+                  <th className="p-3">Hours on shift</th>
+                  <th className="p-3">Availability</th>
                   <th className="p-3"></th>
                 </tr>
               </thead>
@@ -536,7 +578,7 @@ export default function EmployeeAttendanceView() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="p-12 text-center text-gray-400">
-                      No attendance records match your filters
+                      No crew availability records match your filters
                     </td>
                   </tr>
                 ) : (
@@ -591,11 +633,11 @@ export default function EmployeeAttendanceView() {
                                 title={
                                   r.canMarkAttendance === false
                                     ? r.attendanceBlockReason ?? 'Not on current shift'
-                                    : 'Mark present'
+                                    : AVAILABILITY_LABELS.markAvailable
                                 }
                                 className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                Present
+                                Available
                               </button>
                             )}
                             {r.present && (
@@ -606,11 +648,11 @@ export default function EmployeeAttendanceView() {
                                 title={
                                   r.canMarkAttendance === false
                                     ? r.attendanceBlockReason ?? 'Not on current shift'
-                                    : 'Mark absent'
+                                    : AVAILABILITY_LABELS.markUnavailable
                                 }
                                 className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                Absent
+                                Unavailable
                               </button>
                             )}
                             {r.recordId && (

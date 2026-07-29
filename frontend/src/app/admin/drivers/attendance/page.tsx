@@ -85,7 +85,7 @@ export default function AttendanceLogsPage() {
   const chartData = [
     { name: 'Early', value: stats.earlyClockIns, color: '#10B981' },
     { name: 'Late', value: logs.filter(l => l.status === 'LATE').length, color: '#F59E0B' },
-    { name: 'Absences', value: stats.absences, color: '#EF4444' },
+    { name: 'Unavailable', value: stats.absences, color: '#EF4444' },
   ]
 
   const weeklyData = [
@@ -118,8 +118,8 @@ export default function AttendanceLogsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Attendance & Logs</h1>
-          <p className="text-gray-500 mt-1 font-medium italic">Track and manage driver attendance records, clock-ins, clock-outs, and logs.</p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Driver Availability & Logs</h1>
+          <p className="text-gray-500 mt-1 font-medium italic">Track driver availability, shift starts, shift ends, and duty logs.</p>
         </div>
         <div className="flex items-center gap-3">
             <Button className="h-12 px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black shadow-lg shadow-orange-500/20 uppercase tracking-widest text-[10px]">
@@ -169,10 +169,10 @@ export default function AttendanceLogsPage() {
           {/* Stats Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Total Hours Worked', value: stats.hoursWorked, icon: TrendingUp, color: 'green', bg: 'bg-green-50', text: 'text-green-600' },
-                { label: 'Early Clock-Ins', value: stats.earlyClockIns, icon: AlertTriangle, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600' },
-                { label: 'Missing Clock-Outs', value: stats.missingClockOuts, icon: History, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600' },
-                { label: 'Absences', value: stats.absences, icon: XCircle, color: 'red', bg: 'bg-red-50', text: 'text-red-600' },
+                { label: 'Shift Hours Logged', value: stats.hoursWorked, icon: TrendingUp, color: 'green', bg: 'bg-green-50', text: 'text-green-600' },
+                { label: 'Early Shift Starts', value: stats.earlyClockIns, icon: AlertTriangle, color: 'orange', bg: 'bg-orange-50', text: 'text-orange-600' },
+                { label: 'Open Shifts (No End)', value: stats.missingClockOuts, icon: History, color: 'blue', bg: 'bg-blue-50', text: 'text-blue-600' },
+                { label: 'Unavailable Today', value: stats.absences, icon: XCircle, color: 'red', bg: 'bg-red-50', text: 'text-red-600' },
               ].map((s, idx) => (
                 <div key={idx} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-2xl ${s.bg} flex items-center justify-center ${s.text}`}>
@@ -189,7 +189,7 @@ export default function AttendanceLogsPage() {
           {/* Tabs & Table */}
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center gap-2 p-4 border-b border-gray-50/50">
-                 {['Attendance Summary', 'Clock-In/Clock-Out Logs', 'Late Clock-Ins', 'Absentee Logs'].map(tab => (
+                 {['Availability Summary', 'Shift Start/End Logs', 'Late Shift Starts', 'Unavailable Logs'].map(tab => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab.toLowerCase().replace(/ /g, '-'))}

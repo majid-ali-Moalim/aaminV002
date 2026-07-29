@@ -60,7 +60,20 @@ export async function fetchEmergencyTypes(): Promise<EmergencyTypeOption[]> {
   return []
 }
 
+/** Active rows from Master Data → Emergency Configuration → Emergency Types */
 export async function fetchEmergencyTypesAuthenticated(): Promise<EmergencyTypeOption[]> {
+  try {
+    const { mdmService } = await import('@/lib/api')
+    const data = await mdmService.listAll('emergency-types', { status: 'active' })
+    const list = Array.isArray(data) ? (data as EmergencyTypeOption[]) : []
+    const active = list.filter((t) => t.isActive !== false)
+    if (active.length > 0) {
+      return sortEmergencyTypes(active)
+    }
+  } catch {
+    /* dispatchers may lack MDM read permission — fall back to setup endpoint (same table) */
+  }
+
   const { systemSetupService } = await import('@/lib/api')
   const data = await systemSetupService.getEmergencyTypes()
   const list = Array.isArray(data) ? (data as EmergencyTypeOption[]) : []

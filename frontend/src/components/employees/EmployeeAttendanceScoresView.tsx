@@ -19,6 +19,7 @@ import {
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { employeeAttendanceService } from '@/lib/api'
+import { AVAILABILITY_LABELS } from '@/lib/availability/labels'
 import { staffRoleLabel, type StaffRoleBucket } from '@/lib/employment/shiftTypes'
 
 type EmployeeScore = {
@@ -96,11 +97,11 @@ function rolePresenceCard(
       <div className="mt-2 flex items-end justify-between gap-3">
         <div>
           <p className={`text-2xl font-black ${accent.text}`}>{stats.present}</p>
-          <p className="text-[10px] font-bold text-emerald-700 uppercase">Present</p>
+          <p className="text-[10px] font-bold text-emerald-700 uppercase">Available</p>
         </div>
         <div className="text-right">
           <p className="text-xl font-black text-red-700">{stats.absent}</p>
-          <p className="text-[10px] font-bold text-red-600 uppercase">Absent</p>
+          <p className="text-[10px] font-bold text-red-600 uppercase">Unavailable</p>
         </div>
       </div>
       <p className="text-[10px] text-gray-500 mt-2">{stats.total} total staff</p>
@@ -112,7 +113,7 @@ function EmployeeChipList({ items, variant }: { items: TodayEmployee[]; variant:
   if (!items.length) {
     return (
       <p className="text-sm text-gray-400 py-4 text-center">
-        No {variant} employees today
+        No {variant === 'present' ? 'available' : 'unavailable'} staff today
       </p>
     )
   }
@@ -238,7 +239,7 @@ export default function EmployeeAttendanceScoresView() {
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
           : undefined
-      toast.error(message || 'Failed to load attendance scores')
+      toast.error(message || AVAILABILITY_LABELS.reportsLoadFailed)
     } finally {
       setLoading(false)
     }
@@ -281,11 +282,11 @@ export default function EmployeeAttendanceScoresView() {
             className="inline-flex items-center gap-1.5 text-sm font-bold text-red-600 hover:text-red-700 mb-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            Daily attendance
+            Daily availability
           </Link>
-          <h1 className="text-2xl font-black text-gray-900">Attendance Scores</h1>
+          <h1 className="text-2xl font-black text-gray-900">{AVAILABILITY_LABELS.reports}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Present and absent day totals with attendance percentage for drivers, nurses, dispatchers, and admins
+            Available and unavailable day totals with availability rate for drivers, nurses, dispatchers, and admins
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -314,7 +315,7 @@ export default function EmployeeAttendanceScoresView() {
           </Button>
           <Button
             onClick={() =>
-              downloadCsv(employees, `attendance-scores-${startDate}-to-${endDate}.csv`)
+              downloadCsv(employees, `availability-reports-${startDate}-to-${endDate}.csv`)
             }
             className="bg-red-600 hover:bg-red-700 rounded-xl h-10"
           >
@@ -328,15 +329,15 @@ export default function EmployeeAttendanceScoresView() {
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-black text-gray-900">Today&apos;s attendance</h2>
-              <p className="text-xs text-gray-500">{today.date} — live present and absent headcount</p>
+              <h2 className="text-lg font-black text-gray-900">{AVAILABILITY_LABELS.todayAvailability}</h2>
+              <p className="text-xs text-gray-500">{today.date} — live available and unavailable headcount</p>
             </div>
             <div className="flex gap-2">
               <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                {today.presentEmployees} present ({today.presentPercentage}%)
+                {today.presentEmployees} available ({today.presentPercentage}%)
               </span>
               <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-700">
-                {today.absentEmployees} absent ({today.absentPercentage}%)
+                {today.absentEmployees} unavailable ({today.absentPercentage}%)
               </span>
             </div>
           </div>
@@ -373,7 +374,7 @@ export default function EmployeeAttendanceScoresView() {
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 <h3 className="text-sm font-black text-emerald-900">
-                  Present employees ({today.presentEmployees})
+                  {AVAILABILITY_LABELS.availableStaff} ({today.presentEmployees})
                 </h3>
               </div>
               <EmployeeChipList items={today.presentEmployeesList} variant="present" />
@@ -382,7 +383,7 @@ export default function EmployeeAttendanceScoresView() {
               <div className="flex items-center gap-2 mb-3">
                 <UserX className="w-5 h-5 text-red-600" />
                 <h3 className="text-sm font-black text-red-900">
-                  Absent employees ({today.absentEmployees})
+                  {AVAILABILITY_LABELS.unavailableStaff} ({today.absentEmployees})
                 </h3>
               </div>
               <EmployeeChipList items={today.absentEmployeesList} variant="absent" />
@@ -408,7 +409,7 @@ export default function EmployeeAttendanceScoresView() {
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mt-1">
-              Total present days
+              Total available days
             </p>
           </div>
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
@@ -417,7 +418,7 @@ export default function EmployeeAttendanceScoresView() {
               <UserX className="w-5 h-5 text-red-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-red-700 mt-1">
-              Total absent days
+              Total unavailable days
             </p>
           </div>
           <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
@@ -426,7 +427,7 @@ export default function EmployeeAttendanceScoresView() {
               <TrendingUp className="w-5 h-5 text-violet-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-violet-700 mt-1">
-              Avg attendance rate
+              {AVAILABILITY_LABELS.avgAvailabilityRate}
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -496,17 +497,17 @@ export default function EmployeeAttendanceScoresView() {
                   <th className="p-3">ID</th>
                   <th className="p-3">Role</th>
                   <th className="p-3">Department</th>
-                  <th className="p-3">Present days</th>
-                  <th className="p-3">Absent days</th>
+                  <th className="p-3">{AVAILABILITY_LABELS.availableDays}</th>
+                  <th className="p-3">{AVAILABILITY_LABELS.unavailableDays}</th>
                   <th className="p-3">Total days</th>
-                  <th className="p-3">Score</th>
+                  <th className="p-3">{AVAILABILITY_LABELS.availabilityScore}</th>
                 </tr>
               </thead>
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="p-12 text-center text-gray-400">
-                      No attendance scores match your filters
+                      No availability reports match your filters
                     </td>
                   </tr>
                 ) : (

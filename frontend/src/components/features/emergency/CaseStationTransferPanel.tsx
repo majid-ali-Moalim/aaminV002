@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { ArrowRightLeft, Building2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +17,8 @@ type Props = {
 }
 
 export default function CaseStationTransferPanel({ request, onTransferred }: Props) {
+  const pathname = usePathname()
+  const isDispatcherPortal = pathname?.startsWith('/dispatcher')
   const [stations, setStations] = useState<StationRow[]>([])
   const [toStationId, setToStationId] = useState('')
   const [reason, setReason] = useState('')
@@ -90,6 +94,17 @@ export default function CaseStationTransferPanel({ request, onTransferred }: Pro
           <p className="text-sm text-slate-600 mt-1">
             Move this case to another station&apos;s pending queue. Current station:{' '}
             <span className="font-semibold">{request.station?.name ?? 'Unassigned'}</span>
+            {isDispatcherPortal ? (
+              <>
+                . Check{' '}
+                <Link href="/dispatcher/resources/resource-status" className="font-semibold text-indigo-700 hover:underline">
+                  resource availability by station
+                </Link>{' '}
+                before transferring.
+              </>
+            ) : (
+              '. Select a receiving station when your station is at capacity.'
+            )}
           </p>
         </div>
       </div>

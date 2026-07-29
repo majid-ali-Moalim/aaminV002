@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, type ReactNode } from 'react'
+import { displayAttendanceFlag } from '@/lib/availability/labels'
 import useSWR from 'swr'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -118,7 +119,7 @@ export default function DriverAvailabilityView() {
     'Driver ID': r.employeeCode ?? r.id.slice(0, 8),
     Name: r.fullName,
     Phone: r.phone ?? '—',
-    Attendance: r.attendanceStatus === 'present' ? 'Present' : 'Absent',
+    Availability: displayAttendanceFlag(r.attendanceStatus === 'present'),
     Status: DRIVER_STATUS_CONFIG[r.operationalStatus].label,
     'Current Case': r.currentCase?.trackingCode ?? '—',
     Patient: r.currentCase?.patientName ?? '—',
@@ -165,7 +166,7 @@ export default function DriverAvailabilityView() {
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-200 mb-2">Dispatch Operations</p>
             <h1 className="text-3xl font-black tracking-tight">Driver Availability</h1>
             <p className="text-red-100/80 mt-2 max-w-xl text-sm">
-              Availability follows today&apos;s attendance — present drivers are available; absent drivers are unavailable.
+              Crew marked available today are ready for dispatch; unavailable crew are off the board.
               Message drivers directly when they are on an active case.
             </p>
           </div>
@@ -199,7 +200,7 @@ export default function DriverAvailabilityView() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <KpiCard label="Total Drivers" value={summary.total} icon={Users} tone="slate" />
-        <KpiCard label="Available (Present)" value={summary.available} icon={Users} tone="emerald" />
+        <KpiCard label="Available for dispatch" value={summary.available} icon={Users} tone="emerald" />
         <KpiCard label="On Active Case" value={onCaseCount} icon={Truck} tone="violet" />
       </div>
 
@@ -241,7 +242,7 @@ export default function DriverAvailabilityView() {
                 <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   <th className="px-4 py-3">Driver</th>
                   <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Attendance</th>
+                  <th className="px-4 py-3">Availability</th>
                   <th className="px-4 py-3">Current Case</th>
                   <th className="px-4 py-3">Patient</th>
                   <th className="px-4 py-3">Ambulance</th>
@@ -262,7 +263,7 @@ export default function DriverAvailabilityView() {
                     <td className="px-4 py-3">{row.phone ?? '—'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge status={row.operationalStatus} />
-                      <p className="text-[10px] text-slate-500 mt-0.5 capitalize">{row.attendanceStatus ?? 'absent'}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{displayAttendanceFlag(row.attendanceStatus === 'present')}</p>
                     </td>
                     <td className="px-4 py-3">
                       {row.currentCase ? (
@@ -319,8 +320,8 @@ export default function DriverAvailabilityView() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <InfoField label="Driver ID" value={detailData.driver.employeeCode ?? '—'} />
                 <InfoField label="Phone" value={detailData.driver.phone ?? '—'} />
-                <InfoField label="Attendance"><StatusBadge status={detailData.driver.operationalStatus} /></InfoField>
-                <InfoField label="Today's attendance" value={detailData.driver.attendanceStatus === 'present' ? 'Present' : 'Absent'} />
+                <InfoField label="Dispatch status"><StatusBadge status={detailData.driver.operationalStatus} /></InfoField>
+                <InfoField label="Today's availability" value={displayAttendanceFlag(detailData.driver.attendanceStatus === 'present')} />
                 <InfoField label="Station" value={detailData.driver.station?.name ?? '—'} />
                 <InfoField label="Region" value={detailData.driver.region?.name ?? '—'} />
                 <InfoField label="License" value={detailData.driver.licenseStatus ?? '—'} />
