@@ -14,6 +14,7 @@ import {
 } from '@/lib/driver/navigation'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import { useChatStore } from '@/lib/stores/chatStore'
+import SidebarNavIconBadge, { NavUnreadCountBadge } from '@/components/navigation/SidebarNavIconBadge'
 import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
 import { DriverThemeToggle } from '@/components/driver/DriverThemeToggle'
 
@@ -34,11 +35,12 @@ function NavSection({ module }: { module: DriverNavModule }) {
       module.id === 'notifications' ? unreadCount : module.id === 'messages' ? chatUnread : 0
     return (
       <Link href={href} className={`driver-sidebar-link driver-sidebar-link--top${active ? ' active' : ''}`}>
-        <Icon size={18} className="driver-sidebar-link-icon" />
+        <SidebarNavIconBadge icon={Icon} iconClassName="w-[18px] h-[18px] driver-sidebar-link-icon" />
         <span className="driver-sidebar-link-label">{module.label}</span>
-        {badgeCount > 0 && (
-          <span className="driver-sidebar-badge">{badgeCount > 9 ? '9+' : badgeCount}</span>
-        )}
+        <NavUnreadCountBadge
+          count={badgeCount}
+          variant={module.id === 'messages' ? 'green' : 'red'}
+        />
       </Link>
     )
   }

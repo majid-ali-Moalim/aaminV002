@@ -2,6 +2,7 @@
 
 import { type LucideIcon } from 'lucide-react'
 import SidebarNavLink from '@/components/navigation/SidebarNavLink'
+import SidebarNavIconBadge, { NavUnreadCountBadge } from '@/components/navigation/SidebarNavIconBadge'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 
 type SidebarPalette = {
@@ -25,6 +26,8 @@ interface SidebarMenuLinkProps {
   iconClassName?: string
   onNavigate?: () => void
   badge?: number
+  /** Green for messages/communication; red for alerts/notifications */
+  badgeVariant?: 'green' | 'red'
 }
 
 export default function SidebarMenuLink({
@@ -39,6 +42,7 @@ export default function SidebarMenuLink({
   iconClassName = 'w-4 h-4 shrink-0',
   onNavigate,
   badge,
+  badgeVariant = 'green',
 }: SidebarMenuLinkProps) {
   const { isActive } = useOptimisticNav()
   const key = navKey ?? `${label}-${href}`
@@ -68,16 +72,13 @@ export default function SidebarMenuLink({
       }}
       onNavigate={onNavigate}
     >
-      <Icon
-        className={iconClassName}
-        style={{ color: active ? activeTextColor : iconColor }}
+      <SidebarNavIconBadge
+        icon={Icon}
+        iconClassName={iconClassName}
+        iconColor={active ? activeTextColor : iconColor}
       />
       <span className="truncate leading-tight flex-1">{label}</span>
-      {badge != null && badge > 0 && (
-        <span className="ml-auto shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
+      <NavUnreadCountBadge count={badge} variant={badgeVariant} />
     </SidebarNavLink>
   )
 }

@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import useSWR from 'swr'
-import { Search, Menu, Bell, Plus, User } from 'lucide-react'
+import { Search, Menu, Bell, Plus, User, MessageSquare } from 'lucide-react'
 import { DispatcherThemeToggle } from '@/components/dispatcher/DispatcherThemeToggle'
 import { format } from 'date-fns'
 import { getModuleByPath, getNavItem, LEGACY_DISPATCHER_REDIRECTS } from '@/lib/dispatcher/navigation'
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess'
 import { profilePhotoUrl } from '@/lib/profilePhoto'
 import { dispatcherDashboardApi } from '@/lib/dispatcherApi'
+import { useChatStore } from '@/lib/stores/chatStore'
 
 function resolveTitle(pathname: string): string {
   if (pathname === '/dispatcher/profile') return 'My Profile'
@@ -48,6 +49,7 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
     { refreshInterval: 30000 },
   )
   const unreadCount = notificationStats?.unread ?? notificationStats?.unreadCount ?? 0
+  const chatUnread = useChatStore((s) => s.unreadTotal)
 
   const firstName = profile?.firstName ?? ''
   const lastName = profile?.lastName ?? ''
@@ -113,15 +115,29 @@ export default function DispatcherTopBar({ onMenuClick }: Props) {
           {/* Theme */}
           <DispatcherThemeToggle compact />
 
-          {/* 1. Notifications */}
+          {/* Communication */}
+          <Link
+            href="/dispatcher/chat"
+            className="relative flex items-center p-2 text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
+            aria-label="Communication"
+          >
+            <MessageSquare className="w-5 h-5 text-emerald-600" />
+            {chatUnread > 0 ? (
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full">
+                {chatUnread > 99 ? '99+' : chatUnread}
+              </span>
+            ) : null}
+          </Link>
+
+          {/* Notifications */}
           <Link
             href="/dispatcher/alerts/all"
-            className="relative p-2 text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
+            className="relative flex items-center p-2 text-gray-500 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
             aria-label="Notifications"
           >
-            <Bell className="w-5 h-5" />
+            <Bell className="w-5 h-5 text-red-600" />
             {unreadCount > 0 ? (
-              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-red-600 text-white text-[9px] font-bold flex items-center justify-center rounded-full border-2 border-white">
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-red-600 text-white text-[9px] font-bold flex items-center justify-center rounded-full">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             ) : null}

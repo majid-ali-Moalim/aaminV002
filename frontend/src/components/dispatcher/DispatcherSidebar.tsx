@@ -103,10 +103,11 @@ export default function DispatcherSidebarSections({ open = false, onClose }: Pro
               label="Communication"
               icon={MessageSquare}
               sidebar={DISPATCHER_SIDEBAR}
-              accentColor={DISPATCHER_SIDEBAR.muted}
+              accentColor="#10B981"
               className="flex items-center gap-2.5 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
               onNavigate={onClose}
               badge={chatUnread}
+              badgeVariant="green"
             />
             <SidebarMenuLink
               navKey="dispatcher-notifications"
@@ -114,10 +115,11 @@ export default function DispatcherSidebarSections({ open = false, onClose }: Pro
               label="Notifications"
               icon={Bell}
               sidebar={DISPATCHER_SIDEBAR}
-              accentColor="#F59E0B"
+              accentColor="#EF4444"
               className="flex items-center gap-2.5 px-2.5 py-2.5 mb-0.5 rounded-lg text-[13px] font-semibold"
               onNavigate={onClose}
               badge={notificationUnread}
+              badgeVariant="red"
             />
           </div>
 

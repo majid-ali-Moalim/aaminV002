@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { useState } from 'react'
+import { type LucideIcon } from 'lucide-react'
 import SidebarNavLink from '@/components/navigation/SidebarNavLink'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
@@ -12,7 +13,10 @@ import DriverManagementSidebar, { isDriverManagementPath } from '@/components/la
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
 import PermissionsAccessControlSidebar, { isAccessControlPath } from '@/components/layout/PermissionsAccessControlSidebar'
 import AdminSidebarProfile from '@/components/layout/AdminSidebarProfile'
+import SidebarNavIconBadge, { NavUnreadCountBadge } from '@/components/navigation/SidebarNavIconBadge'
 import { useChatStore } from '@/lib/stores/chatStore'
+import { notificationsService } from '@/lib/api'
+import useSWR from 'swr'
 import {
   LayoutGrid,
   Users,
@@ -117,6 +121,11 @@ export default function AdminSidebar() {
   const pathname = usePathname()
   const { isActive: isNavActive } = useOptimisticNav()
   const chatUnread = useChatStore((s) => s.unreadTotal)
+  const { data: notificationStats } = useSWR('admin-notification-stats', () => notificationsService.getStats(), {
+    refreshInterval: 30000,
+  })
+  const notificationUnread =
+    notificationStats?.unread ?? notificationStats?.unreadCount ?? 0
 
   const isDashboardActive =
     pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
@@ -152,9 +161,11 @@ export default function AdminSidebar() {
   const renderLink = (
     href: string,
     label: string,
-    Icon: React.ElementType,
+    Icon: LucideIcon,
     isActive: boolean,
     badge?: number,
+    badgeVariant: 'green' | 'red' = 'green',
+    iconAccent?: string,
   ) => (
     <SidebarNavLink
       navKey={`${label}-${href}`}
@@ -176,16 +187,13 @@ export default function AdminSidebar() {
         }
       }}
     >
-      <Icon
-        className="w-4 h-4 mr-2.5 shrink-0"
-        style={{ color: isActive ? SIDEBAR.textActive : SIDEBAR.muted }}
+      <SidebarNavIconBadge
+        icon={Icon}
+        iconClassName="w-4 h-4 mr-2.5"
+        iconColor={isActive ? SIDEBAR.textActive : iconAccent ?? SIDEBAR.muted}
       />
       <span className="truncate flex-1">{label}</span>
-      {badge != null && badge > 0 && (
-        <span className="ml-2 shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge > 9 ? '9+' : badge}
-        </span>
-      )}
+      <NavUnreadCountBadge count={badge} variant={badgeVariant} />
     </SidebarNavLink>
   )
 
@@ -304,8 +312,8 @@ export default function AdminSidebar() {
       <nav className="flex-1 overflow-y-auto py-2 space-y-px px-2.5 custom-scrollbar">
         <SectionLabel label="Modules" />
         {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
-        {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive)}
-        {renderLink('/admin/chat', 'Communication', MessageSquare, isChatActive, chatUnread)}
+        {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive, notificationUnread, 'red', '#EF4444')}
+        {renderLink('/admin/chat', 'Communication', MessageSquare, isChatActive, chatUnread, 'green', '#10B981')}
 
         <SectionLabel label="Emergency Command" />
         <div className="px-0.5">

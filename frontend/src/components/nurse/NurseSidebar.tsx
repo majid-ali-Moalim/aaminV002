@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { HeartPulse, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import SidebarNavIconBadge, { NavUnreadCountBadge } from '@/components/navigation/SidebarNavIconBadge'
 import { profilePhotoUrl, getEmployeeInitials } from '@/lib/profilePhoto'
 import { NURSE_NAV_ITEMS, isNurseNavActive } from '@/lib/nurse/navigation'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
@@ -55,14 +56,18 @@ export function NurseSidebar() {
               href={item.href}
               className={`nurse-sidebar-link${active ? ' active' : ''}`}
             >
-              <Icon size={18} className="shrink-0" />
-              <span>{item.label}</span>
-              {item.id === 'notifications' && unread > 0 && (
-                <span className="nurse-sidebar-badge">{unread > 9 ? '9+' : unread}</span>
-              )}
-              {item.id === 'messages' && chatUnread > 0 && (
-                <span className="nurse-sidebar-badge">{chatUnread > 9 ? '9+' : chatUnread}</span>
-              )}
+              <SidebarNavIconBadge icon={Icon} iconClassName="w-[18px] h-[18px]" />
+              <span className="flex-1">{item.label}</span>
+              <NavUnreadCountBadge
+                count={
+                  item.id === 'notifications'
+                    ? unread
+                    : item.id === 'messages'
+                      ? chatUnread
+                      : undefined
+                }
+                variant={item.id === 'notifications' ? 'red' : 'green'}
+              />
             </Link>
           )
         })}
