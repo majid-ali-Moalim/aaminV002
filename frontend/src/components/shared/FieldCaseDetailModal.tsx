@@ -88,7 +88,6 @@ export function FieldCaseDetailModal({
     ? `${caseData.nurse.firstName || ''} ${caseData.nurse.lastName || ''}`.trim()
     : ''
   const closeBtnClass = variant === 'driver' ? 'driver-btn-sm primary flex-1' : 'nurse-btn primary flex-1'
-  const chatHref = variant === 'driver' ? '/driver/chat' : '/nurse/chat'
 
   return (
     <div className="field-case-modal-overlay" role="dialog" aria-modal="true">
@@ -141,7 +140,9 @@ export function FieldCaseDetailModal({
                 </h3>
                 <DispatcherContactActions
                   dispatcher={caseData.dispatcher}
-                  chatHref={chatHref}
+                  caseId={caseData.id}
+                  trackingCode={caseData.trackingCode}
+                  portal={variant}
                   variant={variant}
                   layout="stack"
                 />

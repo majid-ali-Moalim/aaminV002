@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatGateway } from './chat.gateway';
+import {
+  buildCaseAssignmentMeta,
+  compareChatContacts,
+  roleCategoryFromName,
+} from './chat-contact-context';
 
 type UserWithProfile = {
   id: string;
@@ -39,6 +44,7 @@ export class ChatService {
       userId: user.id,
       name,
       role,
+      roleCategory: roleCategoryFromName(role),
       avatar: emp?.profilePhoto ?? null,
     };
   }
@@ -73,6 +79,8 @@ export class ChatService {
 
   /** All chatable users (staff + admins) with last-message preview + unread count. */
   async getContacts(currentUserId: string) {
+    const assignmentMeta = await buildCaseAssignmentMeta(this.prisma, currentUserId);
+
     const users = (await this.prisma.user.findMany({
       where: { id: { not: currentUserId }, role: { in: CHATABLE_ROLES as any } },
       select: {
@@ -111,6 +119,7 @@ export class ChatService {
 
     const contacts = users.map((u) => {
       const info = this.displayInfo(u);
+      const assignment = assignmentMeta.get(u.id);
       const last = lastByUser.get(u.id);
       const preview = last
         ? last.content?.trim()
@@ -126,15 +135,15 @@ export class ChatService {
         lastMessageAt: last?.createdAt ?? null,
         lastMessageFromMe: last ? last.senderId === currentUserId : false,
         unreadCount: unreadByUser.get(u.id) ?? 0,
+        relationship: assignment?.relationship ?? null,
+        isPrimaryContact: assignment?.isPrimaryContact ?? false,
+        caseTrackingCode: assignment?.caseTrackingCode ?? null,
+        caseId: assignment?.caseId ?? null,
+        sortPriority: assignment?.sortPriority ?? 99,
       };
     });
 
-    contacts.sort((a, b) => {
-      const at = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-      const bt = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-      if (at !== bt) return bt - at;
-      return a.name.localeCompare(b.name);
-    });
+    contacts.sort(compareChatContacts);
 
     return contacts;
   }

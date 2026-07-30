@@ -143,7 +143,7 @@ export class DriversAppService {
         region: true,
         district: true,
         incidentCategory: true,
-        nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        nurse: { select: { id: true, firstName: true, lastName: true, phone: true, userId: true } },
         destinationHospital: {
           select: {
             id: true,
@@ -157,10 +157,11 @@ export class DriversAppService {
         dispatcher: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             phone: true,
-            user: { select: { username: true } },
+            user: { select: { id: true, username: true } },
           },
         },
         statusLogs: { orderBy: { createdAt: 'asc' } },
@@ -221,7 +222,7 @@ export class DriversAppService {
         region: true,
         district: true,
         incidentCategory: true,
-        nurse: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        nurse: { select: { id: true, firstName: true, lastName: true, phone: true, userId: true } },
         destinationHospital: {
           select: {
             id: true,
@@ -235,10 +236,11 @@ export class DriversAppService {
         dispatcher: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             phone: true,
-            user: { select: { username: true } },
+            user: { select: { id: true, username: true } },
           },
         },
         statusLogs: { orderBy: { createdAt: 'asc' } },

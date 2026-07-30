@@ -3,15 +3,21 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 export const PASSWORD_POLICY_MESSAGE =
-  'Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.';
+  'Password must meet minimum length and include uppercase, lowercase, a number, and a special character.';
 
-const PASSWORD_REGEX =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const PASSWORD_COMPLEXITY =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])/;
 
-export function assertPasswordMeetsPolicy(password: string): void {
-  if (!PASSWORD_REGEX.test(password)) {
+export function assertPasswordMeetsPolicy(password: string, minLength = 8): void {
+  const min = Math.max(6, Math.min(32, minLength));
+  if (password.length < min || !PASSWORD_COMPLEXITY.test(password)) {
     throw new BadRequestException('Password does not meet security requirements.');
   }
+}
+
+export function passwordPolicyMessage(minLength = 8): string {
+  const min = Math.max(6, Math.min(32, minLength));
+  return `Password must be at least ${min} characters and include uppercase, lowercase, a number, and a special character.`;
 }
 
 export function passwordsMatch(a: string, b: string): boolean {

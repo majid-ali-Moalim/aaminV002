@@ -14,24 +14,23 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
-import { mdmService } from '@/lib/api'
+import { mdmService, getApiErrorMessage } from '@/lib/api'
+import {
+  buildDefaults,
+  loadSystemSettingsMap,
+  mergeSettingRows,
+  type SettingFieldDef,
+  type SettingValue,
+} from '@/lib/systemSettings'
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
-
-type FieldDef = {
-  key: string
-  label: string
-  type?: 'boolean' | 'number' | 'text' | 'email' | 'select'
-  options?: { value: string; label: string }[]
-  hint?: string
-}
 
 type SettingsSection = {
   id: string
   title: string
   description: string
   icon: LucideIcon
-  fields: FieldDef[]
+  fields: SettingFieldDef[]
 }
 
 const SECTIONS: SettingsSection[] = [
@@ -143,23 +142,31 @@ const SECTIONS: SettingsSection[] = [
   },
 ]
 
+const ALL_DEFAULTS = SECTIONS.reduce<Record<string, SettingValue>>((acc, section) => {
+  Object.assign(acc, buildDefaults(section.fields))
+  return acc
+}, {})
+
 export default function SystemSettingsPage() {
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
-  const [values, setValues] = useState<Record<string, string | boolean | number>>({})
+  const [values, setValues] = useState<Record<string, SettingValue>>(ALL_DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const reload = async () => {
+    setLoading(true)
+    try {
+      const map = await loadSystemSettingsMap(SECTIONS)
+      setValues(map)
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to load system settings'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    Promise.all(SECTIONS.map((s) => mdmService.getSettingsSection(s.id)))
-      .then((results) => {
-        const map: Record<string, string | boolean | number> = {}
-        results.flat().forEach((row: { key: string; value: string | boolean | number }) => {
-          map[row.key] = row.value
-        })
-        setValues(map)
-      })
-      .catch(() => toast.error('Failed to load system settings'))
-      .finally(() => setLoading(false))
+    void reload()
   }, [])
 
   const section = SECTIONS.find((s) => s.id === activeSection) ?? SECTIONS[0]
@@ -169,12 +176,14 @@ export default function SystemSettingsPage() {
     try {
       const settings = section.fields.map((f) => ({
         key: f.key,
-        value: values[f.key] ?? (f.type === 'boolean' ? false : f.type === 'number' ? 0 : ''),
+        value: values[f.key] ?? buildDefaults([f])[f.key],
       }))
-      await mdmService.updateSettingsSection(section.id, settings)
+      const saved = await mdmService.updateSettingsSection(section.id, settings)
+      const sectionDefaults = buildDefaults(section.fields)
+      setValues((prev) => mergeSettingRows(saved, { ...prev, ...sectionDefaults }))
       toast.success(`${section.title} saved`)
-    } catch {
-      toast.error('Failed to save settings')
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to save settings'))
     } finally {
       setSaving(false)
     }
@@ -196,7 +205,8 @@ export default function SystemSettingsPage() {
           System Settings
         </h1>
         <p className="text-admin-text-secondary mt-1">
-          Global configuration for the entire Aamin EMS platform.
+          Global configuration for the entire Aamin EMS platform. Security and dispatch settings
+          take effect after save.
         </p>
       </div>
 
@@ -239,7 +249,7 @@ export default function SystemSettingsPage() {
                 size="sm"
                 className="rounded-xl bg-red-600 hover:bg-red-700 shrink-0"
                 disabled={saving}
-                onClick={saveSection}
+                onClick={() => void saveSection()}
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-1 animate-spin" />

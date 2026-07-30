@@ -84,12 +84,31 @@ export function parseCaseMessageParts(content: string): CaseMessagePart[] {
 }
 
 export function buildDispatchChatUrl(dispatch: EmergencyRequest): string {
-  const params = new URLSearchParams()
-  params.set('caseId', dispatch.id)
-  params.set('trackingCode', dispatch.trackingCode)
-  const dispatcherUserId = dispatch.dispatcher?.userId
-  if (dispatcherUserId) params.set('userId', dispatcherUserId)
-  return `/admin/chat?${params.toString()}`
+  return buildCaseChatUrl('admin', {
+    caseId: dispatch.id,
+    trackingCode: dispatch.trackingCode,
+    userId: dispatch.dispatcher?.userId,
+  })
+}
+
+export type ChatPortal = 'admin' | 'driver' | 'nurse' | 'dispatcher'
+
+export function buildCaseChatUrl(
+  portal: ChatPortal,
+  params: { caseId: string; trackingCode: string; userId?: string | null },
+): string {
+  const search = new URLSearchParams()
+  search.set('caseId', params.caseId)
+  search.set('trackingCode', params.trackingCode)
+  if (params.userId) search.set('userId', params.userId)
+  return `/${portal}/chat?${search.toString()}`
+}
+
+export function chatBasePathFromPathname(pathname: string | null): string {
+  if (pathname?.startsWith('/driver')) return '/driver/chat'
+  if (pathname?.startsWith('/nurse')) return '/nurse/chat'
+  if (pathname?.startsWith('/dispatcher')) return '/dispatcher/chat'
+  return '/admin/chat'
 }
 
 export function parseDispatchCaseFromSearchParams(

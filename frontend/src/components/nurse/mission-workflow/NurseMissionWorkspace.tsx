@@ -862,7 +862,9 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           <div className="nmw-info-contact">
             <DispatcherContactActions
               dispatcher={mission.dispatcher}
-              chatHref="/nurse/chat"
+              caseId={mission.id}
+              trackingCode={mission.trackingCode}
+              portal="nurse"
               variant="nurse"
               layout="stack"
             />

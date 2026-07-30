@@ -28,4 +28,11 @@ export class PublicController {
   getFleetAvailability() {
     return this.publicService.getFleetAvailability();
   }
+
+  @Public()
+  @Get('settings')
+  @ApiOperation({ summary: 'Public system settings (contact, maintenance, feature flags)' })
+  getSettings() {
+    return this.publicService.getPublicSettings();
+  }
 }

@@ -28,6 +28,8 @@ import {
   ASSIGNABLE_SHIFT_STATUSES,
 } from '../common/active-case-statuses';
 
+import { getBusyCrewMaps } from '../common/occupied-crew';
+
 const ACTIVE_MISSION_STATUSES = ACTIVE_CASE_STATUSES;
 
 function startOfToday() {
@@ -1123,16 +1125,13 @@ export class DispatchersAppService {
     };
   }
 
-  async getAssignableResources(userId: string) {
+  async getAssignableResources(userId: string, excludeCaseId?: string) {
     const scope = await this.resolveScope(userId);
 
-    const busy = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, scope.stationScoped),
-      select: { driverId: true, nurseId: true, ambulanceId: true },
-    });
-    const busyDriverIds = busy.map((b) => b.driverId).filter(Boolean) as string[];
-    const busyNurseIds = busy.map((b) => b.nurseId).filter(Boolean) as string[];
-    const busyAmbulanceIds = busy.map((b) => b.ambulanceId).filter(Boolean) as string[];
+    const { busyDriverIds, busyNurseIds, busyAmbulanceIds } = await getBusyCrewMaps(
+      this.prisma,
+      excludeCaseId,
+    );
 
     const driverRole = await this.prisma.employeeRole.findFirst({
       where: { name: { contains: 'Driver', mode: 'insensitive' } },
@@ -1146,7 +1145,8 @@ export class DispatchersAppService {
         where: {
           ...regionalAmbulanceWhere(scope, scope.stationScoped),
           status: 'AVAILABLE',
-          id: { notIn: busyAmbulanceIds },
+          isActive: true,
+          ...(busyAmbulanceIds.length ? { id: { notIn: busyAmbulanceIds } } : {}),
         },
         include: { equipmentLevel: true, station: true, region: true },
       }),
@@ -1157,7 +1157,7 @@ export class DispatchersAppService {
               employeeRoleId: driverRole.id,
               status: 'ACTIVE',
               shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-              id: { notIn: busyDriverIds },
+              ...(busyDriverIds.length ? { id: { notIn: busyDriverIds } } : {}),
             },
             include: { assignedAmbulance: { include: { equipmentLevel: true } } },
           })
@@ -1169,7 +1169,7 @@ export class DispatchersAppService {
               employeeRoleId: nurseRole.id,
               status: 'ACTIVE',
               shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-              id: { notIn: busyNurseIds },
+              ...(busyNurseIds.length ? { id: { notIn: busyNurseIds } } : {}),
             },
             include: { assignedAmbulance: { include: { equipmentLevel: true } } },
           })

@@ -367,19 +367,22 @@ export const emergencyRequestsService = {
     return await api.get(`/api/emergency-requests/track/${code}`)
   },
 
-  getAvailableAmbulances: async () => {
+  getAvailableAmbulances: async (excludeCaseId?: string) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests/available/ambulances')
+    const params = excludeCaseId ? { excludeCaseId } : undefined
+    return await api.get('/api/emergency-requests/available/ambulances', { params })
   },
 
-  getAvailableDrivers: async () => {
+  getAvailableDrivers: async (excludeCaseId?: string) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests/available/drivers')
+    const params = excludeCaseId ? { excludeCaseId } : undefined
+    return await api.get('/api/emergency-requests/available/drivers', { params })
   },
  
-  getAvailableNurses: async () => {
+  getAvailableNurses: async (excludeCaseId?: string) => {
     const api = new ApiService()
-    return await api.get('/api/emergency-requests/available/nurses')
+    const params = excludeCaseId ? { excludeCaseId } : undefined
+    return await api.get('/api/emergency-requests/available/nurses', { params })
   },
 
   cancelRequest: async (id: string, reason: string) => {
@@ -598,6 +601,10 @@ export const publicService = {
   getStats: async () => {
     const api = new ApiService()
     return await api.get('/api/public/stats')
+  },
+  getSettings: async () => {
+    const api = new ApiService()
+    return await api.get<Record<string, unknown>>('/api/public/settings')
   },
 }
 
@@ -1014,16 +1021,24 @@ export const notificationsService = {
   },
 }
 
+export type ChatContactRelationship = 'assigned_dispatcher' | 'assigned_driver' | 'assigned_nurse'
+
 export interface ChatContact {
   userId: string
   name: string
   role: string
+  roleCategory?: 'dispatcher' | 'driver' | 'nurse' | 'admin' | 'staff' | string
   avatar: string | null
   online: boolean
   lastMessage: string | null
   lastMessageAt: string | null
   lastMessageFromMe: boolean
   unreadCount: number
+  relationship?: ChatContactRelationship | null
+  isPrimaryContact?: boolean
+  caseTrackingCode?: string | null
+  caseId?: string | null
+  sortPriority?: number
 }
 
 export interface ChatMessage {

@@ -143,8 +143,10 @@ export const dispatcherDashboardApi = {
     const res = await createDispatcherApi().get('/dispatcher-app/emergencies', { params: { view: 'all-cases' } })
     return res.data?.items ?? res.data
   },
-  getAssignableResources: async () => {
-    const res = await createDispatcherApi().get('/dispatcher-app/available/assign')
+  getAssignableResources: async (excludeCaseId?: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/available/assign', {
+      params: excludeCaseId ? { excludeCaseId } : undefined,
+    })
     return res.data
   },
 }

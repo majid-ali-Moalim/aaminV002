@@ -64,22 +64,25 @@ export class EmergencyRequestsController {
   @Public()
   @Get('available/ambulances')
   @ApiOperation({ summary: 'Get available ambulances' })
-  getAvailableAmbulances() {
-    return this.emergencyRequestsService.getAvailableAmbulances();
+  @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
+  getAvailableAmbulances(@Query('excludeCaseId') excludeCaseId?: string) {
+    return this.emergencyRequestsService.getAvailableAmbulances(excludeCaseId);
   }
 
   @Public()
   @Get('available/drivers')
   @ApiOperation({ summary: 'Get available drivers' })
-  getAvailableDrivers() {
-    return this.emergencyRequestsService.getAvailableDrivers();
+  @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
+  getAvailableDrivers(@Query('excludeCaseId') excludeCaseId?: string) {
+    return this.emergencyRequestsService.getAvailableDrivers(excludeCaseId);
   }
  
   @Public()
   @Get('available/nurses')
   @ApiOperation({ summary: 'Get available nurses' })
-  getAvailableNurses() {
-    return this.emergencyRequestsService.getAvailableNurses();
+  @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
+  getAvailableNurses(@Query('excludeCaseId') excludeCaseId?: string) {
+    return this.emergencyRequestsService.getAvailableNurses(excludeCaseId);
   }
 
   @Get(':id')

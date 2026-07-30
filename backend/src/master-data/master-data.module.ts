@@ -4,9 +4,10 @@ import { MasterDataController } from './master-data.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
 import { AuthModule } from '../auth/auth.module';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
 
 @Module({
-  imports: [PrismaModule, ActivityLogsModule, AuthModule],
+  imports: [PrismaModule, ActivityLogsModule, AuthModule, SystemSettingsModule],
   controllers: [MasterDataController],
   providers: [MasterDataService],
   exports: [MasterDataService],

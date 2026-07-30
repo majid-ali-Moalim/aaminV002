@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MailService } from './mail.service';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 import {
   assertPasswordMeetsPolicy,
   generateOtpCode,
@@ -23,6 +24,7 @@ export class AuthService {
     private jwtService: JwtService,
     private accessControlService: AccessControlService,
     private mailService: MailService,
+    private systemSettings: SystemSettingsService,
   ) {}
 
   private log(message: string) {
@@ -88,8 +90,9 @@ export class AuthService {
 
     const attempts = (user.failedLoginAttempts ?? 0) + 1;
     const lockData: { failedLoginAttempts: number; lockedUntil?: Date } = { failedLoginAttempts: attempts };
-    if (attempts >= 5) {
-      lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+    const security = await this.systemSettings.getSecurityPolicy();
+    if (attempts >= security.maxLoginAttempts) {
+      lockData.lockedUntil = new Date(Date.now() + security.lockoutDurationMins * 60 * 1000);
     }
     await this.prisma.user.update({
       where: { id: user.id },
@@ -395,7 +398,10 @@ export class AuthService {
       throw new BadRequestException('New password cannot be the same as your current password.');
     }
 
-    assertPasswordMeetsPolicy(dto.newPassword);
+    assertPasswordMeetsPolicy(
+      dto.newPassword,
+      (await this.systemSettings.getSecurityPolicy()).passwordMinLength,
+    );
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -577,7 +583,10 @@ export class AuthService {
       throw new BadRequestException('Passwords do not match.');
     }
 
-    assertPasswordMeetsPolicy(password);
+    assertPasswordMeetsPolicy(
+      password,
+      (await this.systemSettings.getSecurityPolicy()).passwordMinLength,
+    );
 
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.user.findFirst({

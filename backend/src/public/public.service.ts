@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SystemSetupService } from '../system-setup/system-setup.service';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class PublicService {
   constructor(
     private prisma: PrismaService,
     private setupService: SystemSetupService,
+    private systemSettings: SystemSettingsService,
   ) {}
 
   async getPublicStats() {
@@ -110,5 +112,9 @@ export class PublicService {
       total: totalActive,
       canAcceptRequests: availableList.length > 0,
     };
+  }
+
+  getPublicSettings() {
+    return this.systemSettings.getPublicSettings();
   }
 }

@@ -11,12 +11,14 @@ import { PermissionsGuard } from './guards/permissions.guard';
 import { MailService } from './mail.service';
 import { AccessControlModule } from '../access-control/access-control.module';
 import { MailModule } from '../mail/mail.module';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
 
 @Module({
   imports: [
     PassportModule,
     AccessControlModule,
     MailModule,
+    SystemSettingsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '15m' },

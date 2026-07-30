@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -28,6 +29,7 @@ import { MissionStatusBadge, PriorityBadge, DriverSkeleton } from '@/components/
 import DriverMissionDetailModal from '@/components/driver/DriverMissionDetailModal'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { DispatcherContactActions } from '@/components/shared/DispatcherContactActions'
+import { buildCaseChatUrl } from '@/lib/dispatchCaseMessage'
 import { resolvePatientPhone, formatSomaliaPhoneDisplay } from '@/lib/phoneContact'
 import { googleMapsUrl, resolvePickupGps } from '@/lib/pickupGps'
 import {
@@ -72,6 +74,7 @@ export default function MissionExecutionDashboard({
   mode = 'workflow',
   showAssignedQueue: showAssignedQueueProp,
 }: Props) {
+  const router = useRouter()
   const showAssignedQueue = showAssignedQueueProp ?? mode === 'assigned'
   const isActivePage = mode === 'active'
   const { activeMission, setActiveMission, profile, isSocketConnected } = useDriverStore()
@@ -186,9 +189,17 @@ export default function MissionExecutionDashboard({
         await advanceStep('EN_ROUTE_SCENE', undefined, 'Driver started navigation to scene')
         if (pickupGps) window.open(googleMapsUrl(pickupGps.lat, pickupGps.lng), '_blank')
         break
-      case 'contact_dispatcher':
-        toast.success('Connecting to dispatch…')
+      case 'contact_dispatcher': {
+        const uid = mission.dispatcher?.userId ?? mission.dispatcher?.user?.id
+        router.push(
+          buildCaseChatUrl('driver', {
+            caseId: mission.id,
+            trackingCode: mission.trackingCode,
+            userId: uid,
+          }),
+        )
         break
+      }
       case 'open_gps':
         if (pickupGps) window.open(googleMapsUrl(pickupGps.lat, pickupGps.lng), '_blank')
         else toast.error('No GPS coordinates on this case')
@@ -542,7 +553,9 @@ export default function MissionExecutionDashboard({
             </h2>
             <DispatcherContactActions
               dispatcher={mission.dispatcher}
-              chatHref="/driver/chat"
+              caseId={mission.id}
+              trackingCode={mission.trackingCode}
+              portal="driver"
               variant="driver"
               layout="stack"
             />

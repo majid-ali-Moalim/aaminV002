@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ArrowLeft,
   Search,
@@ -18,6 +18,9 @@ import {
   Pencil,
   Trash2,
   AlertCircle,
+  Star,
+  Radio,
+  Users,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { chatService, type ChatContact, type ChatMessage } from '@/lib/api'
@@ -28,8 +31,17 @@ import {
   ensureCasePrefix,
   formatCaseMessagePreview,
   parseDispatchCaseFromSearchParams,
+  chatBasePathFromPathname,
   type DispatchCaseMessageContext,
 } from '@/lib/dispatchCaseMessage'
+import {
+  contactRowHighlightClass,
+  relationshipLabel,
+  roleBadgeLabel,
+  roleRingClass,
+  sortChatContacts,
+  splitCaseTeamContacts,
+} from '@/lib/chat/contactPresentation'
 import CaseLinkedMessageText from '@/components/chat/CaseLinkedMessageText'
 
 function initialsOf(name: string) {
@@ -65,28 +77,133 @@ function fmtSize(bytes?: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function Avatar({ name, avatar, size = 48 }: { name: string; avatar: string | null; size?: number }) {
+function Avatar({
+  name,
+  avatar,
+  size = 48,
+  roleCategory,
+  isPrimary,
+}: {
+  name: string
+  avatar: string | null
+  size?: number
+  roleCategory?: string
+  isPrimary?: boolean
+}) {
   const src = profilePhotoUrl(avatar)
   const [broken, setBroken] = useState(false)
-  if (src && !broken) {
+  const ring = roleRingClass(roleCategory, isPrimary)
+  const inner = src && !broken ? (
     // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={src}
-        alt={name}
-        onError={() => setBroken(true)}
-        className="rounded-full object-cover shrink-0"
-        style={{ width: size, height: size }}
-      />
-    )
-  }
-  return (
+    <img
+      src={src}
+      alt={name}
+      onError={() => setBroken(true)}
+      className={`rounded-full object-cover shrink-0 ${ring}`}
+      style={{ width: size, height: size }}
+    />
+  ) : (
     <div
-      className="rounded-full shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold"
+      className={`rounded-full shrink-0 flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold ${ring}`}
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {initialsOf(name)}
     </div>
+  )
+
+  return (
+    <div className="relative shrink-0">
+      {inner}
+      {isPrimary && (
+        <span
+          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center border-2 border-white shadow-sm"
+          title="Primary case contact"
+        >
+          <Star className="w-2.5 h-2.5 fill-current" />
+        </span>
+      )}
+    </div>
+  )
+}
+
+function ContactRow({
+  contact: c,
+  active,
+  onSelect,
+}: {
+  contact: ChatContact
+  active: boolean
+  onSelect: (c: ChatContact) => void
+}) {
+  const relLabel = relationshipLabel(c)
+  const roleLabel = roleBadgeLabel(c)
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(c)}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-50 transition-colors ${contactRowHighlightClass(c, active)}`}
+    >
+      <div className="relative">
+        <Avatar
+          name={c.name}
+          avatar={c.avatar}
+          roleCategory={c.roleCategory}
+          isPrimary={c.isPrimaryContact}
+        />
+        {c.online && (
+          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-slate-900 truncate">{c.name}</span>
+            {c.isPrimaryContact && (
+              <Radio className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-hidden />
+            )}
+          </div>
+          <span className="text-[10px] text-slate-400 shrink-0">{fmtListTime(c.lastMessageAt)}</span>
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {relLabel ? (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md ${
+                c.isPrimaryContact
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-sky-100 text-sky-800'
+              }`}
+            >
+              {relLabel}
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+              {roleLabel}
+            </span>
+          )}
+          {c.caseTrackingCode && c.relationship && (
+            <span className="text-[10px] text-slate-400 truncate">{c.caseTrackingCode}</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <span className="text-xs text-slate-500 truncate">
+            {c.lastMessage ? (
+              <>
+                {c.lastMessageFromMe && <span className="text-slate-400">You: </span>}
+                {c.lastMessage}
+              </>
+            ) : (
+              <span className="text-emerald-600 font-medium">{c.role}</span>
+            )}
+          </span>
+          {c.unreadCount > 0 && (
+            <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {c.unreadCount}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
   )
 }
 
@@ -130,6 +247,7 @@ function AttachmentView({ msg }: { msg: ChatMessage }) {
 
 export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChatOnSelect?: boolean }) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const myId = user?.id ?? ''
@@ -221,8 +339,8 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
       setSearch('dispatcher')
     }
 
-    router.replace('/admin/chat', { scroll: false })
-  }, [contacts, loadingContacts, openConversation, router, searchParams])
+    router.replace(chatBasePathFromPathname(pathname), { scroll: false })
+  }, [contacts, loadingContacts, openConversation, pathname, router, searchParams])
 
   const isForActive = useCallback(
     (senderId: string, recipientId: string) => {
@@ -259,7 +377,8 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
         }
         const next = [...prev]
         next.splice(idx, 1)
-        return [updated, ...next]
+        next.push(updated)
+        return sortChatContacts(next)
       })
     },
     [myId, loadContacts],
@@ -365,11 +484,67 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
     }
   }
 
-  const filteredContacts = useMemo(() => {
+  const { caseTeam, others } = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return contacts
-    return contacts.filter((c) => `${c.name} ${c.role}`.toLowerCase().includes(q))
+    const base = q
+      ? contacts.filter((c) => `${c.name} ${c.role} ${c.caseTrackingCode ?? ''}`.toLowerCase().includes(q))
+      : contacts
+    return splitCaseTeamContacts(base)
   }, [contacts, search])
+
+  const renderContactList = () => {
+    if (loadingContacts) {
+      return (
+        <div className="flex justify-center py-10 text-slate-400">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+      )
+    }
+    if (caseTeam.length === 0 && others.length === 0) {
+      return <p className="text-center text-sm text-slate-400 py-10">No contacts found</p>
+    }
+    return (
+      <>
+        {caseTeam.length > 0 && (
+          <>
+            <div className="px-4 py-2 bg-amber-50/80 border-b border-amber-100 flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-amber-600" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-800">
+                Your case team
+              </span>
+            </div>
+            {caseTeam.map((c) => (
+              <ContactRow
+                key={c.userId}
+                contact={c}
+                active={activeId === c.userId}
+                onSelect={openConversation}
+              />
+            ))}
+          </>
+        )}
+        {others.length > 0 && (
+          <>
+            {caseTeam.length > 0 && (
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  All staff
+                </span>
+              </div>
+            )}
+            {others.map((c) => (
+              <ContactRow
+                key={c.userId}
+                contact={c}
+                active={activeId === c.userId}
+                onSelect={openConversation}
+              />
+            ))}
+          </>
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="flex h-full min-h-0 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
@@ -421,56 +596,7 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
             />
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {loadingContacts ? (
-            <div className="flex justify-center py-10 text-slate-400">
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
-          ) : filteredContacts.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 py-10">No contacts found</p>
-          ) : (
-            filteredContacts.map((c) => (
-              <button
-                key={c.userId}
-                type="button"
-                onClick={() => openConversation(c)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-50 hover:bg-slate-50 transition-colors ${
-                  activeId === c.userId ? 'bg-emerald-50/60' : ''
-                }`}
-              >
-                <div className="relative">
-                  <Avatar name={c.name} avatar={c.avatar} />
-                  {c.online && (
-                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-slate-900 truncate">{c.name}</span>
-                    <span className="text-[10px] text-slate-400 shrink-0">{fmtListTime(c.lastMessageAt)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-slate-500 truncate">
-                      {c.lastMessage ? (
-                        <>
-                          {c.lastMessageFromMe && <span className="text-slate-400">You: </span>}
-                          {c.lastMessage}
-                        </>
-                      ) : (
-                        <span className="text-emerald-600 font-medium">{c.role}</span>
-                      )}
-                    </span>
-                    {c.unreadCount > 0 && (
-                      <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
-                        {c.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
+        <div className="flex-1 overflow-y-auto">{renderContactList()}</div>
       </aside>
 
       {/* Conversation panel */}
@@ -510,11 +636,31 @@ export default function ChatWorkspace({ focusChatOnSelect = false }: { focusChat
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <Avatar name={activeContact.name} avatar={activeContact.avatar} size={42} />
+              <Avatar
+                name={activeContact.name}
+                avatar={activeContact.avatar}
+                size={42}
+                roleCategory={activeContact.roleCategory}
+                isPrimary={activeContact.isPrimaryContact}
+              />
               <div className="min-w-0">
-                <p className="font-bold text-slate-900 truncate">{activeContact.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-slate-900 truncate">{activeContact.name}</p>
+                  {activeContact.isPrimaryContact && (
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
+                  )}
+                </div>
                 <p className="text-xs text-slate-500 truncate">
-                  {activeContact.online ? <span className="text-emerald-600">online</span> : activeContact.role}
+                  {activeContact.online ? (
+                    <span className="text-emerald-600">online</span>
+                  ) : relationshipLabel(activeContact) ? (
+                    <span className="text-amber-700 font-medium">{relationshipLabel(activeContact)}</span>
+                  ) : (
+                    activeContact.role
+                  )}
+                  {activeContact.caseTrackingCode && activeContact.relationship && (
+                    <span className="text-slate-400"> · {activeContact.caseTrackingCode}</span>
+                  )}
                 </p>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 import {
   rethrowPrismaUniqueError,
   validateDistrictNotAssignedToStation,
@@ -9,6 +10,11 @@ import {
   validateRegionPayload,
   validateStationLocationPayload,
 } from './location-validation';
+import {
+  SYSTEM_SETTING_DEFAULTS,
+  defaultsForSection,
+  isValidSettingsSection,
+} from './system-settings.defaults';
 
 export type MdmEntityKey =
   | 'regions'
@@ -58,6 +64,7 @@ export class MasterDataService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private activityLogs: ActivityLogsService,
+    private systemSettings: SystemSettingsService,
   ) {}
 
   async onModuleInit() {
@@ -73,7 +80,7 @@ export class MasterDataService implements OnModuleInit {
 
   private buildWhere(entity: MdmEntityKey, query: ListQuery) {
     const where: Record<string, unknown> = {};
-    if (entity !== 'stations') {
+    if (entity !== 'stations' && entity !== 'system-settings') {
       where.deletedAt = null;
     }
 
@@ -342,10 +349,40 @@ export class MasterDataService implements OnModuleInit {
   }
 
   async getSystemSettingsBySection(section: string) {
-    return this.model('system-settings').findMany({
-      where: { section },
-      orderBy: { key: 'asc' },
+    if (!isValidSettingsSection(section)) {
+      throw new BadRequestException(`Unknown settings section: ${section}`);
+    }
+    await this.ensureSystemSettingsForSection(section);
+    const rows = await this.systemSettings.getSection(section);
+    const byKey = new Map(rows.map((r) => [r.key, r]));
+    return defaultsForSection(section).map((def) => {
+      const existing = byKey.get(def.key);
+      if (existing) return existing;
+      return {
+        id: `default-${def.key}`,
+        key: def.key,
+        value: def.value,
+        section: def.section,
+        description: null,
+        updatedById: null,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      };
     });
+  }
+
+  private async ensureSystemSettingsForSection(section: string) {
+    for (const def of defaultsForSection(section)) {
+      await this.model('system-settings').upsert({
+        where: { key: def.key },
+        create: {
+          key: def.key,
+          value: def.value as any,
+          section: def.section,
+        },
+        update: {},
+      });
+    }
   }
 
   async upsertSystemSettings(
@@ -353,8 +390,15 @@ export class MasterDataService implements OnModuleInit {
     settings: { key: string; value: unknown; description?: string }[],
     userId?: string,
   ) {
+    if (!isValidSettingsSection(section)) {
+      throw new BadRequestException(`Unknown settings section: ${section}`);
+    }
+    const allowedKeys = new Set(defaultsForSection(section).map((d) => d.key));
     const results = [];
     for (const s of settings) {
+      if (!allowedKeys.has(s.key)) {
+        throw new BadRequestException(`Invalid setting key for section ${section}: ${s.key}`);
+      }
       const row = await this.model('system-settings').upsert({
         where: { key: s.key },
         create: {
@@ -373,6 +417,7 @@ export class MasterDataService implements OnModuleInit {
       });
       results.push(row);
     }
+    this.systemSettings.invalidateCache();
     await this.logAudit(userId, 'UPDATE', 'system-settings', section, { count: results.length });
     return results;
   }
@@ -526,43 +571,7 @@ export class MasterDataService implements OnModuleInit {
       }
     }
 
-    const defaultSettings = [
-      { key: 'general.systemName', section: 'general', value: 'Aamin EMS Dispatch' },
-      { key: 'general.organizationName', section: 'general', value: 'Aamin Ambulance Services' },
-      { key: 'general.defaultLanguage', section: 'general', value: 'en' },
-      { key: 'general.timeZone', section: 'general', value: 'Africa/Mogadishu' },
-      { key: 'general.dateFormat', section: 'general', value: 'DD/MM/YYYY' },
-      { key: 'notifications.emailEnabled', section: 'notifications', value: true },
-      { key: 'notifications.inAppEnabled', section: 'notifications', value: true },
-      { key: 'notifications.alertSounds', section: 'notifications', value: true },
-      { key: 'security.sessionTimeoutMins', section: 'security', value: 60 },
-      { key: 'security.maxLoginAttempts', section: 'security', value: 5 },
-      { key: 'security.passwordMinLength', section: 'security', value: 8 },
-      { key: 'security.twoFactorEnabled', section: 'security', value: false },
-      { key: 'attendance.shiftDurationHours', section: 'attendance', value: 8 },
-      { key: 'attendance.gracePeriodMins', section: 'attendance', value: 15 },
-      { key: 'attendance.lateThresholdMins', section: 'attendance', value: 10 },
-      { key: 'attendance.overtimeRequiresApproval', section: 'attendance', value: true },
-      { key: 'security.lockoutDurationMins', section: 'security', value: 15 },
-      { key: 'security.forcePasswordChangeDays', section: 'security', value: 0 },
-      { key: 'notifications.criticalSmsEnabled', section: 'notifications', value: false },
-      { key: 'dispatch.autoRefreshSeconds', section: 'dispatch', value: 30 },
-      { key: 'dispatch.defaultResponseTargetMins', section: 'dispatch', value: 15 },
-      { key: 'dispatch.allowPublicTracking', section: 'dispatch', value: true },
-      { key: 'dispatch.requireHandoverNotes', section: 'dispatch', value: true },
-      { key: 'dispatch.escalateUnassignedMins', section: 'dispatch', value: 10 },
-      { key: 'public.contactPhone', section: 'public', value: '+252 61 0000000' },
-      { key: 'public.contactEmail', section: 'public', value: 'info@aamin.so' },
-      { key: 'public.showFleetStats', section: 'public', value: true },
-      { key: 'public.showHireAmbulanceForm', section: 'public', value: true },
-      { key: 'public.maintenanceMode', section: 'public', value: false },
-      { key: 'email.fromName', section: 'email', value: 'Aamin Ambulance' },
-      { key: 'email.replyTo', section: 'email', value: 'info@aamin.so' },
-      { key: 'email.sendPasswordReset', section: 'email', value: true },
-      { key: 'email.sendWelcomeEmail', section: 'email', value: true },
-    ];
-
-    for (const s of defaultSettings) {
+    for (const s of SYSTEM_SETTING_DEFAULTS) {
       await this.model('system-settings').upsert({
         where: { key: s.key },
         create: s as any,

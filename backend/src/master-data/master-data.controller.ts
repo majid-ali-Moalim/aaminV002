@@ -24,21 +24,21 @@ export class MasterDataController {
   constructor(private readonly mdm: MasterDataService) {}
 
   @Get('settings/section/:section')
-  @RequirePermissions('system.setup')
+  @RequirePermissions('system.settings')
   @ApiOperation({ summary: 'Get system settings by section' })
   getSettingsSection(@Param('section') section: string) {
     return this.mdm.getSystemSettingsBySection(section);
   }
 
   @Patch('settings/section/:section')
-  @RequirePermissions('system.setup')
+  @RequirePermissions('system.settings')
   @ApiOperation({ summary: 'Update system settings section' })
   updateSettingsSection(
     @Param('section') section: string,
     @Body() body: { settings: { key: string; value: unknown; description?: string }[] },
     @CurrentUser() user: any,
   ) {
-    return this.mdm.upsertSystemSettings(section, body.settings ?? [], user?.id);
+    return this.mdm.upsertSystemSettings(section, body.settings ?? [], user?.sub ?? user?.id);
   }
 
   @Get(':entity/all')

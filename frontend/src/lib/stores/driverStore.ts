@@ -35,7 +35,15 @@ export interface DriverMission {
   incidentCategory?: { name: string }
   region?: { name: string }
   district?: { name: string }
-  dispatcher?: { user?: { username?: string }; firstName?: string; lastName?: string; phone?: string }
+  dispatcher?: {
+    id?: string
+    userId?: string
+    user?: { id?: string; username?: string }
+    firstName?: string
+    lastName?: string
+    phone?: string
+  }
+  nurse?: { id?: string; userId?: string; firstName?: string; lastName?: string; phone?: string }
   nurse?: { firstName?: string; lastName?: string }
   callerName?: string
   callerPhone?: string

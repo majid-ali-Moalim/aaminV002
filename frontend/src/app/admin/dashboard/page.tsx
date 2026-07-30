@@ -1,15 +1,23 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { reportsService } from '@/lib/api'
 import { UnifiedAdminDashboard } from '@/components/dashboard/UnifiedAdminDashboard'
+import { getDispatchRefreshMs } from '@/lib/systemSettings'
 import { Loader2 } from 'lucide-react'
 
 export default function AdminDashboard() {
+  const [refreshMs, setRefreshMs] = useState(8000)
+
+  useEffect(() => {
+    void getDispatchRefreshMs().then(setRefreshMs)
+  }, [])
+
   const { data, error, mutate, isValidating } = useSWR(
     'unified-dashboard',
     () => reportsService.getUnifiedDashboard(),
-    { refreshInterval: 8000, revalidateOnFocus: true },
+    { refreshInterval: refreshMs, revalidateOnFocus: true },
   )
 
   const handleRefresh = async () => {

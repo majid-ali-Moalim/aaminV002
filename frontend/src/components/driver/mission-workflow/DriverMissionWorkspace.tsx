@@ -544,7 +544,9 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             <div className="dcw-info-item dcw-info-item--full">
               <DispatcherContactActions
                 dispatcher={mission.dispatcher}
-                chatHref="/driver/chat"
+                caseId={mission.id}
+                trackingCode={mission.trackingCode}
+                portal="driver"
                 variant="driver"
               />
             </div>
