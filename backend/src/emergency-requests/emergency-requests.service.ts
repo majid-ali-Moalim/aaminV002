@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, Optional } from '@nestjs/common';
 import {
   EmergencyRequestStatus,
   Prisma,
@@ -18,21 +18,28 @@ import {
   isCaseAtDispatcherStation,
 } from '../dispatchers-app/dispatcher-scope.util';
 import { StationCoverageService } from '../station-coverage/station-coverage.service';
+import { DriversAppGateway } from '../drivers-app/drivers-app.gateway';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import {
   assertDispatchEligibleStaff,
-  filterDispatchEligibleEmployees,
   getPresentEmployeeIdsToday,
 } from '../employee-attendance/dispatch-staff-eligibility';
 import {
   ACTIVE_CASE_STATUSES,
-  ASSIGNABLE_SHIFT_STATUSES,
+  OCCUPIED_CASE_STATUSES,
 } from '../common/active-case-statuses';
+import { partitionDispatchEmployees } from '../common/dispatch-assignability';
 import {
   getBusyCrewMaps,
   assertCrewAvailableForAssignment,
   occupyCrewForCase,
   releaseCrewForCase,
+  reconcileCrewOccupancy,
 } from '../common/occupied-crew';
+import {
+  filterAmbulancesByStation,
+  assertAssignCrewMatchesCaseStation,
+} from '../common/crew-station-filter';
 
 type AuthUser = {
   sub?: string;
@@ -51,6 +58,17 @@ function caseRequiresNurse(caseRow: {
 
 type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional';
 
+/** In-progress mission statuses (matches frontend ACTIVE_MISSION_STATUSES). */
+const ACTIVE_MISSION_STATUSES = [
+  'ASSIGNED',
+  'DISPATCHED',
+  'EN_ROUTE',
+  'ARRIVED_SCENE',
+  'PATIENT_STABILIZED',
+  'TRANSPORTING',
+  'ARRIVED_HOSPITAL',
+] as const;
+
 @Injectable()
 export class EmergencyRequestsService {
   constructor(
@@ -60,7 +78,45 @@ export class EmergencyRequestsService {
     private trackingService: TrackingService,
     private auditLog: AuditLogService,
     private stationCoverage: StationCoverageService,
+    @Optional() private driverGateway?: DriversAppGateway,
+    @Optional() private notificationsGateway?: NotificationsGateway,
   ) {}
+
+  /** Push assigned mission to driver/nurse apps immediately over websockets. */
+  private pushMissionToAssignedCrew(result: {
+    id: string;
+    trackingCode: string;
+    status: string;
+    priority: string;
+    pickupLocation: string;
+    pickupLatitude?: number | null;
+    pickupLongitude?: number | null;
+    assignedAt?: Date | null;
+    patient?: { fullName?: string | null; phone?: string | null } | null;
+    driver?: { userId?: string | null } | null;
+    nurse?: { userId?: string | null } | null;
+    ambulance?: { ambulanceNumber?: string | null; plateNumber?: string | null } | null;
+  }) {
+    const payload = {
+      id: result.id,
+      trackingCode: result.trackingCode,
+      status: result.status,
+      priority: result.priority,
+      pickupLocation: result.pickupLocation,
+      pickupLatitude: result.pickupLatitude,
+      pickupLongitude: result.pickupLongitude,
+      assignedAt: result.assignedAt,
+      patient: result.patient,
+      ambulance: result.ambulance,
+    };
+
+    if (result.driver?.userId) {
+      this.driverGateway?.emitMissionToDriver(result.driver.userId, payload);
+    }
+    if (result.nurse?.userId) {
+      this.notificationsGateway?.emitMissionAssigned(result.nurse.userId, payload);
+    }
+  }
 
   private async teamUserIds(requestId: string): Promise<string[]> {
     const req = await this.prisma.emergencyRequest.findUnique({
@@ -506,15 +562,22 @@ export class EmergencyRequestsService {
     }
   }
 
-  findAll(user?: AuthUser, queue?: string) {
-    return this.findAllForUser(user, queue);
+  findAll(user?: AuthUser, queue?: string, status?: string) {
+    return this.findAllForUser(user, queue, status);
   }
 
-  async findAllForUser(user?: AuthUser, queue?: string) {
+  async findAllForUser(user?: AuthUser, queue?: string, status?: string) {
     let where: Prisma.EmergencyRequestWhereInput = {};
 
+    if (status === 'active') {
+      where.status = { in: [...ACTIVE_MISSION_STATUSES] };
+    }
+
     if (this.isDispatcherUser(user)) {
-      where = await this.dispatcherWhereForQueue(user!, queue);
+      const queueWhere = await this.dispatcherWhereForQueue(user!, queue);
+      where = Object.keys(where).length
+        ? { AND: [where, queueWhere] }
+        : queueWhere;
     }
 
     return this.prisma.emergencyRequest.findMany({
@@ -720,6 +783,8 @@ export class EmergencyRequestsService {
 
     await this.assertDispatcherCanAccessCase(user, existing, 'assign');
 
+    await reconcileCrewOccupancy(this.prisma);
+
     if (!data.driverId) {
       throw new BadRequestException('A driver must be assigned before dispatch');
     }
@@ -741,6 +806,12 @@ export class EmergencyRequestsService {
       nurseId: data.nurseId,
       ambulanceId: data.ambulanceId,
     }, id);
+
+    await assertAssignCrewMatchesCaseStation(this.prisma, existing.stationId, {
+      driverId: data.driverId,
+      nurseId: data.nurseId,
+      ambulanceId: data.ambulanceId,
+    });
 
     if (data.driverId === '') delete data.driverId;
     if (data.ambulanceId === '') delete data.ambulanceId;
@@ -765,7 +836,11 @@ export class EmergencyRequestsService {
       }
     }
 
-    const newStatus = data.status || existing.status || 'ASSIGNED';
+    const newStatus =
+      data.status ??
+      ((OCCUPIED_CASE_STATUSES as readonly string[]).includes(existing.status)
+        ? existing.status
+        : 'ASSIGNED');
     const updateData: any = { ...data, status: newStatus, assignedAt: new Date() };
 
     const result = await this.prisma.emergencyRequest.update({
@@ -842,7 +917,7 @@ export class EmergencyRequestsService {
           .filter(Boolean)
           .join(', ');
 
-        await this.notifications.dispatchEvent({
+        this.notifications.dispatchEventBackground({
           eventKey: 'MISSION_REASSIGNED',
           title: 'Mission reassigned — you are off this case',
           message: [
@@ -868,7 +943,7 @@ export class EmergencyRequestsService {
       }
     }
 
-    await this.notifications.dispatchEvent({
+    this.notifications.dispatchEventBackground({
       eventKey: 'MISSION_ASSIGNED',
       title: isReassign ? 'New mission assignment' : 'Mission Assigned',
       message: isReassign
@@ -887,6 +962,8 @@ export class EmergencyRequestsService {
         includeEmployeeRoles: ['Driver', 'Nurse'],
       },
     });
+
+    this.pushMissionToAssignedCrew(result);
 
     // Emit real-time tracking update
     const trackingData = await this.trackingService.findByCodeOrPhone(result.trackingCode);
@@ -943,7 +1020,26 @@ export class EmergencyRequestsService {
       });
     }
 
+    const clearingCrewStatuses: EmergencyRequestStatus[] = ['PENDING', 'REVIEWING'];
+    const shouldClearCrew =
+      clearingCrewStatuses.includes(status) &&
+      Boolean(existing.driverId || existing.nurseId || existing.ambulanceId);
+
+    if (shouldClearCrew) {
+      await releaseCrewForCase(this.prisma, {
+        driverId: existing.driverId,
+        nurseId: existing.nurseId,
+        ambulanceId: existing.ambulanceId,
+      });
+    }
+
     const updateData: any = { status };
+    if (shouldClearCrew) {
+      updateData.driverId = null;
+      updateData.nurseId = null;
+      updateData.ambulanceId = null;
+      updateData.assignedAt = null;
+    }
     if (status === 'DISPATCHED') updateData.dispatchedAt = new Date();
     else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
@@ -1305,6 +1401,12 @@ export class EmergencyRequestsService {
       }
     });
 
+    await releaseCrewForCase(this.prisma, {
+      driverId: existing.driverId,
+      nurseId: existing.nurseId,
+      ambulanceId: existing.ambulanceId,
+    });
+
     await this.notifications.dispatchEvent({
       eventKey: 'MISSION_CANCELLED',
       title: 'Mission Failed',
@@ -1443,10 +1545,11 @@ export class EmergencyRequestsService {
     return mapping[type] || null;
   }
 
-  async getAvailableAmbulances(excludeCaseId?: string) {
+  async getAvailableAmbulances(excludeCaseId?: string, stationId?: string) {
+    await reconcileCrewOccupancy(this.prisma);
     const { busyAmbulanceIds } = await getBusyCrewMaps(this.prisma, excludeCaseId);
 
-    return this.prisma.ambulance.findMany({
+    const ambulances = await this.prisma.ambulance.findMany({
       where: {
         status: { in: ['AVAILABLE'] },
         isActive: true,
@@ -1458,14 +1561,17 @@ export class EmergencyRequestsService {
         region: true,
       },
     });
+
+    return filterAmbulancesByStation(ambulances, stationId);
   }
 
-  async getAvailableDrivers(excludeCaseId?: string) {
+  async getAvailableDrivers(excludeCaseId?: string, stationId?: string, includeIneligible?: boolean) {
+    await reconcileCrewOccupancy(this.prisma);
     const driverRole = await this.prisma.employeeRole.findFirst({
       where: { name: { contains: 'Driver', mode: 'insensitive' } }
     });
     
-    if (!driverRole) return [];
+    if (!driverRole) return includeIneligible ? { drivers: [], ineligibleDrivers: [] } : [];
 
     const [{ busyDriverIds }, presentIds] = await Promise.all([
       getBusyCrewMaps(this.prisma, excludeCaseId),
@@ -1476,8 +1582,6 @@ export class EmergencyRequestsService {
       where: {
         employeeRoleId: driverRole.id,
         status: 'ACTIVE',
-        shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-        id: busyDriverIds.length ? { notIn: busyDriverIds } : undefined,
       },
       include: {
         user: {
@@ -1488,19 +1592,36 @@ export class EmergencyRequestsService {
           },
         },
         employeeRole: true,
-        assignedAmbulance: { include: { equipmentLevel: true } },
+        station: true,
+        assignedAmbulance: { include: { equipmentLevel: true, station: true } },
       },
     });
 
-    return filterDispatchEligibleEmployees(drivers, presentIds);
+    const { assignable, ineligible } = partitionDispatchEmployees(drivers, {
+      busyEmployeeIds: new Set(busyDriverIds),
+      stationId: stationId || undefined,
+    });
+
+    const withPresence = (rows: typeof assignable) =>
+      rows.map((e) => ({ ...e, isPresent: presentIds.has(e.id) }));
+
+    if (includeIneligible) {
+      return {
+        drivers: withPresence(assignable),
+        ineligibleDrivers: withPresence(ineligible),
+      };
+    }
+
+    return withPresence(assignable);
   }
 
-  async getAvailableNurses(excludeCaseId?: string) {
+  async getAvailableNurses(excludeCaseId?: string, stationId?: string, includeIneligible?: boolean) {
+    await reconcileCrewOccupancy(this.prisma);
     const nurseRole = await this.prisma.employeeRole.findFirst({
       where: { name: { contains: 'Nurse', mode: 'insensitive' } }
     });
     
-    if (!nurseRole) return [];
+    if (!nurseRole) return includeIneligible ? { nurses: [], ineligibleNurses: [] } : [];
 
     const [{ busyNurseIds }, presentIds] = await Promise.all([
       getBusyCrewMaps(this.prisma, excludeCaseId),
@@ -1511,8 +1632,6 @@ export class EmergencyRequestsService {
       where: {
         employeeRoleId: nurseRole.id,
         status: 'ACTIVE',
-        shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-        id: busyNurseIds.length ? { notIn: busyNurseIds } : undefined,
       },
       include: {
         user: {
@@ -1523,11 +1642,32 @@ export class EmergencyRequestsService {
           },
         },
         employeeRole: true,
-        assignedAmbulance: { include: { equipmentLevel: true } },
+        station: true,
+        assignedAmbulance: { include: { equipmentLevel: true, station: true } },
       },
     });
 
-    return filterDispatchEligibleEmployees(nurses, presentIds);
+    const { assignable, ineligible } = partitionDispatchEmployees(nurses, {
+      busyEmployeeIds: new Set(busyNurseIds),
+      stationId: stationId || undefined,
+    });
+
+    const clearedAssignable = assignable.filter(
+      (n) => n.medicalClearanceStatus !== 'PENDING',
+    );
+    const clearanceBlocked = assignable.filter((n) => n.medicalClearanceStatus === 'PENDING');
+
+    const withPresence = (rows: typeof clearedAssignable) =>
+      rows.map((e) => ({ ...e, isPresent: presentIds.has(e.id) }));
+
+    if (includeIneligible) {
+      return {
+        nurses: withPresence(clearedAssignable),
+        ineligibleNurses: withPresence([...ineligible, ...clearanceBlocked]),
+      };
+    }
+
+    return withPresence(clearedAssignable);
   }
 
   async transferCaseStation(

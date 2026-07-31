@@ -8,6 +8,7 @@ import SidebarNavLink from '@/components/navigation/SidebarNavLink'
 import { useOptimisticNav } from '@/lib/navigation/optimisticNav'
 import EmergencyOperationsSidebar, { isEmergencyOperationsPath } from '@/components/layout/EmergencyOperationsSidebar'
 import AmbulanceManagementSidebar, { isAmbulanceManagementPath } from '@/components/layout/AmbulanceManagementSidebar'
+import StationManagementSidebar, { isStationManagementPath } from '@/components/layout/StationManagementSidebar'
 import PatientsCaseRecordsSidebar, { isPatientsCaseRecordsPath } from '@/components/layout/PatientsCaseRecordsSidebar'
 import DriverManagementSidebar, { isDriverManagementPath } from '@/components/layout/DriverManagementSidebar'
 import NurseManagementSidebar, { isNurseManagementPath } from '@/components/layout/NurseManagementSidebar'
@@ -138,6 +139,7 @@ export default function AdminSidebar() {
   const isDriversActive = isDriverManagementPath(pathname)
   const isNursesActive = isNurseManagementPath(pathname)
   const isAmbulancesActive = isAmbulanceManagementPath(pathname)
+  const isStationsActive = isStationManagementPath(pathname)
   const isHospitalCoordinationActive = pathname.startsWith('/admin/hospitals')
   const isWorkforceActive = pathname.startsWith('/admin/employees')
   const isAccessControlActive = isAccessControlPath(pathname)
@@ -152,6 +154,7 @@ export default function AdminSidebar() {
   const [driversOpen, setDriversOpen] = useState(isDriversActive)
   const [nursesOpen, setNursesOpen] = useState(isNursesActive)
   const [ambulancesOpen, setAmbulancesOpen] = useState(isAmbulancesActive)
+  const [stationsOpen, setStationsOpen] = useState(isStationsActive)
   const [hospitalCoordinationOpen, setHospitalCoordinationOpen] = useState(isHospitalCoordinationActive)
   const [workforceOpen, setWorkforceOpen] = useState(isWorkforceActive)
   const [analyticsOpen, setAnalyticsOpen] = useState(isAnalyticsActive)
@@ -327,6 +330,9 @@ export default function AdminSidebar() {
         </div>
 
         <SectionLabel label="Field Operations" />
+        <div className="px-0.5">
+          <StationManagementSidebar isOpen={stationsOpen} setOpen={setStationsOpen} />
+        </div>
         <div className="px-0.5">
           <DriverManagementSidebar isOpen={driversOpen} setOpen={setDriversOpen} />
         </div>

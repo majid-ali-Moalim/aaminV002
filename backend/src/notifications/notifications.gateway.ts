@@ -70,4 +70,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   emitStats(userId: string, stats: unknown) {
     this.server.to(`user:${userId}`).emit('notification_stats', stats);
   }
+
+  /** Instant mission push for nurse portal (same socket as notifications). */
+  emitMissionAssigned(userId: string, mission: unknown) {
+    this.server.to(`user:${userId}`).emit('mission_assigned', mission);
+  }
 }

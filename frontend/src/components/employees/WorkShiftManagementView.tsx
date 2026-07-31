@@ -482,8 +482,10 @@ export default function WorkShiftManagementView() {
             <div className="p-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-800 flex items-start gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                Assign Dispatch Team only lists drivers and nurses marked <strong>available</strong> in
-                crew availability whose assigned shift matches the active window ({currentActiveShift || activeShiftLabel()}).
+                Assign Dispatch Team lists drivers and nurses whose shift status is{' '}
+                <strong>available</strong> or <strong>on duty</strong>, whose assigned shift matches
+                the active window ({currentActiveShift || activeShiftLabel()}), and who are not on
+                another open case.
               </span>
             </div>
           </div>

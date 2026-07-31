@@ -28,6 +28,13 @@ export const ACTIVE_MISSION_STATUSES = [
   'ARRIVED_HOSPITAL',
 ]
 
+/** Crew is on an in-progress mission (matches backend OCCUPIED_CASE_STATUSES). */
+export const OCCUPIED_MISSION_STATUSES = ACTIVE_MISSION_STATUSES
+
+export function isOccupiedMissionStatus(status: string): boolean {
+  return (OCCUPIED_MISSION_STATUSES as readonly string[]).includes(status)
+}
+
 export const MISSION_PHASE_FILTERS: {
   value: MissionPhaseFilter
   label: string

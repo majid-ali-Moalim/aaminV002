@@ -9,6 +9,13 @@ export const RESOURCE_STATUS_TABS: { id: ResourceStatusTab; label: string }[] = 
   { id: 'all', label: 'All' },
 ]
 
+export const CREW_RESOURCE_STATUS_TABS: { id: ResourceStatusTab; label: string }[] = [
+  { id: 'available', label: 'Available' },
+  { id: 'busy', label: 'On Case' },
+  { id: 'offline', label: 'Absent' },
+  { id: 'all', label: 'All' },
+]
+
 export function getItemStationId(item: Record<string, unknown>) {
   const station = item.station as { id?: string } | undefined
   return (item.stationId as string | undefined) ?? station?.id ?? ''
@@ -63,13 +70,13 @@ export function buildStationSummaries(
       availableAmb: amb.filter((a) => String(a.status) === 'AVAILABLE').length,
       busyAmb: amb.filter((a) => String(a.status) === 'ON_DUTY').length,
       availableDrivers: drv.filter(
-        (d) => ['AVAILABLE', 'ON_DUTY'].includes(String(d.shiftStatus)) && !d.currentMission,
+        (d) => d.operationalStatus === 'available' || String(d.operationalStatus) === 'available',
       ).length,
-      onMissionDrivers: drv.filter((d) => Boolean(d.currentMission)).length,
+      onMissionDrivers: drv.filter((d) => Boolean(d.currentMission || d.currentCase)).length,
       availableNurses: nrs.filter(
-        (n) => ['AVAILABLE', 'ON_DUTY'].includes(String(n.shiftStatus)) && !n.currentMission,
+        (n) => n.operationalStatus === 'available' || String(n.operationalStatus) === 'available',
       ).length,
-      onMissionNurses: nrs.filter((n) => Boolean(n.currentMission)).length,
+      onMissionNurses: nrs.filter((n) => Boolean(n.currentMission || n.currentCase)).length,
       isHome: homeStationId === station.id,
     }
   })

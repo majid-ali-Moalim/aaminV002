@@ -93,7 +93,7 @@ export const MDM_ENTITIES: Record<MdmEntityKey, MdmEntityDef> = {
       },
       { key: 'address', label: 'Address', placeholder: 'Street, landmark, or coordinates' },
       { key: 'phone', label: 'Phone', placeholder: 'Station contact number' },
-      { key: 'description', label: 'Description', type: 'textarea' },
+      { key: 'description', label: 'Description', type: 'textarea', placeholder: 'Brief description of this station...' },
     ],
     tableColumns: [
       { key: 'code', label: 'Code' },

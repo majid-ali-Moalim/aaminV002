@@ -1,6 +1,11 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { activeShiftLabel, isEmployeeOnActiveShift, resolveShiftForEmployee } from './shift-types';
+import {
+  enrichWithDispatchAssignability,
+  filterDispatchAssignableEmployees,
+  hasDispatchAssignableShiftStatus,
+} from '../common/dispatch-assignability';
+import { activeShiftLabel, isEmployeeOnActiveShift } from './shift-types';
 
 function startOfDay(d = new Date()) {
   const x = new Date(d);
@@ -27,33 +32,56 @@ export async function getPresentEmployeeIdsToday(prisma: PrismaService): Promise
 }
 
 export function enrichDispatchEligibleEmployee<
-  T extends { id: string; defaultShift?: string | null; typicalStartTime?: string | null },
->(employee: T, presentIds: Set<string>, at = new Date()) {
+  T extends {
+    id: string;
+    status?: string | null;
+    defaultShift?: string | null;
+    typicalStartTime?: string | null;
+    shiftStatus?: string | null;
+    stationId?: string | null;
+    assignedAmbulance?: { stationId?: string | null } | null;
+  },
+>(
+  employee: T,
+  presentIds: Set<string>,
+  opts: {
+    busyEmployeeIds?: Set<string>;
+    stationId?: string | null;
+    at?: Date;
+  } = {},
+) {
   const present = presentIds.has(employee.id);
-  const onCurrentShift = isEmployeeOnActiveShift(
-    employee.defaultShift,
-    employee.typicalStartTime,
-    at,
-  );
-  const shift = resolveShiftForEmployee(employee.defaultShift, employee.typicalStartTime);
+  const enriched = enrichWithDispatchAssignability(employee, opts);
   return {
-    ...employee,
+    ...enriched,
     isPresent: present,
-    onCurrentShift,
-    shiftCode: shift.code,
-    shiftName: shift.name,
-    dispatchEligible: present && onCurrentShift,
   };
 }
 
+/** Dispatch list: on current shift, not on case, not unavailable shift status. */
 export function filterDispatchEligibleEmployees<
-  T extends { id: string; defaultShift?: string | null; typicalStartTime?: string | null },
->(employees: T[], presentIds: Set<string>, at = new Date()) {
-  return employees
-    .filter(
-      (e) => presentIds.has(e.id) && isEmployeeOnActiveShift(e.defaultShift, e.typicalStartTime, at),
-    )
-    .map((e) => enrichDispatchEligibleEmployee(e, presentIds, at));
+  T extends {
+    id: string;
+    status?: string | null;
+    defaultShift?: string | null;
+    typicalStartTime?: string | null;
+    shiftStatus?: string | null;
+    stationId?: string | null;
+    assignedAmbulance?: { stationId?: string | null } | null;
+  },
+>(
+  employees: T[],
+  presentIds: Set<string>,
+  opts: {
+    busyEmployeeIds?: Set<string>;
+    stationId?: string | null;
+    at?: Date;
+  } = {},
+) {
+  return filterDispatchAssignableEmployees(employees, opts).map((e) => ({
+    ...e,
+    isPresent: presentIds.has(e.id),
+  }));
 }
 
 export async function assertDispatchEligibleStaff(
@@ -69,17 +97,17 @@ export async function assertDispatchEligibleStaff(
       lastName: true,
       defaultShift: true,
       typicalStartTime: true,
+      shiftStatus: true,
       employeeRole: { select: { name: true } },
     },
   });
   if (!emp) throw new NotFoundException(`${roleLabel} not found`);
 
-  const presentIds = await getPresentEmployeeIdsToday(prisma);
   const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || roleLabel;
 
-  if (!presentIds.has(employeeId)) {
+  if (!hasDispatchAssignableShiftStatus(emp.shiftStatus)) {
     throw new BadRequestException(
-      `${name} must be marked present in attendance before they can be dispatched`,
+      `${name} is not available for dispatch (status: ${emp.shiftStatus ?? 'unknown'})`,
     );
   }
 

@@ -194,12 +194,12 @@ export function CrewGrid({ items }: { items: any[] }) {
             </div>
             <span
               className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
-                e.shiftStatus === 'AVAILABLE' || e.shiftStatus === 'ON_DUTY'
+                e.operationalStatus === 'available'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
               }`}
             >
-              {String(e.shiftStatus ?? '').replace(/_/g, ' ')}
+              {e.operationalStatus === 'available' ? 'Available' : 'Unavailable'}
             </span>
           </div>
           {e.station?.name && (

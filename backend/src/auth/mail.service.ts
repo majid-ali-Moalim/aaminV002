@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type Transporter from 'nodemailer/lib/mailer';
+import { isValidEmailAddress } from '../common/email-address';
 
 @Injectable()
 export class MailService implements OnModuleInit {
@@ -148,24 +149,32 @@ export class MailService implements OnModuleInit {
     html: string;
     context: string;
   }): Promise<boolean> {
+    const to = options.to.trim();
+    if (!isValidEmailAddress(to)) {
+      this.logger.warn(
+        `Skipped ${options.context}: invalid recipient address "${to}" (use a real email like name@domain.com)`,
+      );
+      return false;
+    }
+
     if (!this.isConfigured() || !this.transporter) {
-      this.logger.warn(`SMTP not configured — skipped ${options.context} for ${options.to}`);
+      this.logger.warn(`SMTP not configured — skipped ${options.context} for ${to}`);
       return false;
     }
 
     try {
       await this.transporter.sendMail({
         from: this.smtpFrom,
-        to: options.to,
+        to,
         subject: options.subject,
         text: options.text,
         html: options.html,
       });
-      this.logger.log(`${options.context} sent to ${options.to}`);
+      this.logger.log(`${options.context} sent to ${to}`);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send ${options.context} to ${options.to}: ${message}`);
+      this.logger.error(`Failed to send ${options.context} to ${to}: ${message}`);
       return false;
     }
   }

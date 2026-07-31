@@ -17,6 +17,8 @@ import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 
+import { isOccupiedMissionStatus } from '@/components/features/emergency/missionStatusOptions'
+
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
 export default function NurseDashboardView() {
@@ -51,11 +53,11 @@ export default function NurseDashboardView() {
     const today = new Date().toDateString()
     const totalCases = myCases.length
     const completed = myCases.filter((r) => r.status === 'COMPLETED').length
-    const active = myCases.filter((r) => !CLOSED.includes(r.status)).length
+    const active = myCases.filter((r) => isOccupiedMissionStatus(r.status)).length
     const assignedToday = myCases.filter(
       (r) => r.assignedAt && new Date(r.assignedAt).toDateString() === today,
     ).length
-    const onCase = myCases.some((r) => !CLOSED.includes(r.status))
+    const onCase = myCases.some((r) => isOccupiedMissionStatus(r.status))
     const onDuty = (shiftStatus === 'ON_DUTY' || shiftStatus === 'AVAILABLE') && !onCase
 
     return {
@@ -79,7 +81,7 @@ export default function NurseDashboardView() {
       })
     })
     myCases
-      .filter((r) => !CLOSED.includes(r.status))
+      .filter((r) => isOccupiedMissionStatus(r.status))
       .slice(0, 5)
       .forEach((r) => {
         entries.push({
@@ -91,7 +93,7 @@ export default function NurseDashboardView() {
   }, [recent, myCases])
 
   const todayMissions = myCases
-    .filter((r) => !CLOSED.includes(r.status))
+    .filter((r) => isOccupiedMissionStatus(r.status))
     .slice(0, 6)
 
   const quickActions = [

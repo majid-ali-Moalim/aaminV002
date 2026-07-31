@@ -25,10 +25,17 @@ import {
 } from '../employee-attendance/dispatch-staff-eligibility';
 import {
   ACTIVE_CASE_STATUSES,
-  ASSIGNABLE_SHIFT_STATUSES,
 } from '../common/active-case-statuses';
+import {
+  filterAmbulancesByStation,
+} from '../common/crew-station-filter';
+import {
+  buildCrewAvailabilityContext,
+  enrichDriverWithAvailability,
+  enrichNurseWithAvailability,
+} from '../common/crew-operational-status';
 
-import { getBusyCrewMaps } from '../common/occupied-crew';
+import { getBusyCrewMaps, reconcileCrewOccupancy } from '../common/occupied-crew';
 
 const ACTIVE_MISSION_STATUSES = ACTIVE_CASE_STATUSES;
 
@@ -124,8 +131,8 @@ export class DispatchersAppService {
 
   async getDashboardStats(userId: string) {
     const scope = await this.resolveScope(userId);
-    const caseBase = myCasesWhere(scope);
     const regionalEmp = regionalEmployeeWhere(scope, scope.stationScoped);
+    const ctx = await buildCrewAvailabilityContext(this.prisma);
 
     const [pending, active, myCases, ambulances, drivers, nurses] = await Promise.all([
       this.prisma.emergencyRequest.count({
@@ -142,21 +149,22 @@ export class DispatchersAppService {
       this.prisma.ambulance.count({
         where: { ...regionalAmbulanceWhere(scope, scope.stationScoped), status: 'AVAILABLE' },
       }),
-      this.prisma.employee.count({
-        where: {
-          ...regionalEmp,
-          employeeRole: { name: 'Driver' },
-          shiftStatus: { in: ['AVAILABLE', 'ON_DUTY'] },
-        },
+      this.prisma.employee.findMany({
+        where: { ...regionalEmp, employeeRole: { name: 'Driver' } },
+        select: { id: true },
       }),
-      this.prisma.employee.count({
-        where: {
-          ...regionalEmp,
-          employeeRole: { name: 'Nurse' },
-          shiftStatus: { in: ['AVAILABLE', 'ON_DUTY'] },
-        },
+      this.prisma.employee.findMany({
+        where: { ...regionalEmp, employeeRole: { name: 'Nurse' } },
+        select: { id: true },
       }),
     ]);
+
+    const availableDrivers = drivers.filter(
+      (d) => ctx.presentIds.has(d.id) && !ctx.driverCase.has(d.id),
+    ).length;
+    const availableNurses = nurses.filter(
+      (n) => ctx.presentIds.has(n.id) && !ctx.nurseCase.has(n.id),
+    ).length;
 
     const dispatcher = await this.getDispatcherByUserId(userId);
 
@@ -165,8 +173,8 @@ export class DispatchersAppService {
       active,
       myCases,
       availableAmbulances: ambulances,
-      availableDrivers: drivers,
-      availableNurses: nurses,
+      availableDrivers,
+      availableNurses,
       shiftStatus: dispatcher.shiftStatus,
       station: dispatcher.station?.name ?? null,
       region: scope.regionName,
@@ -419,13 +427,9 @@ export class DispatchersAppService {
       })),
       activityFeed,
       crewStatus: {
-        driversAvailable: staff.drivers.filter((d) =>
-          ['AVAILABLE', 'ON_DUTY'].includes(d.shiftStatus),
-        ).length,
+        driversAvailable: staff.drivers.filter((d) => d.operationalStatus === 'available').length,
         driversTotal: staff.drivers.length,
-        nursesAvailable: staff.nurses.filter((n) =>
-          ['AVAILABLE', 'ON_DUTY'].includes(n.shiftStatus),
-        ).length,
+        nursesAvailable: staff.nurses.filter((n) => n.operationalStatus === 'available').length,
         nursesTotal: staff.nurses.length,
         dispatchersOnDuty: staff.dispatchers.filter((d) => d.shiftStatus === 'ON_DUTY').length,
       },
@@ -575,8 +579,9 @@ export class DispatchersAppService {
   async getStaffOverview(userId: string) {
     const scope = await this.resolveScope(userId);
     const regional = regionalEmployeeWhere(scope, scope.stationScoped);
+    const ctx = await buildCrewAvailabilityContext(this.prisma);
 
-    const [drivers, nurses, dispatchers] = await Promise.all([
+    const [driversRaw, nursesRaw, dispatchers] = await Promise.all([
       this.prisma.employee.findMany({
         where: { ...regional, employeeRole: { name: 'Driver' } },
         include: { station: true, assignedAmbulance: true, employeeRole: true },
@@ -597,6 +602,9 @@ export class DispatchersAppService {
         orderBy: { firstName: 'asc' },
       }),
     ]);
+
+    const drivers = driversRaw.map((d) => enrichDriverWithAvailability(d, ctx));
+    const nurses = nursesRaw.map((n) => enrichNurseWithAvailability(n, ctx));
 
     return { drivers, nurses, dispatchers, region: scope.regionName };
   }
@@ -831,39 +839,20 @@ export class DispatchersAppService {
 
   async getCrewByView(userId: string, view: string, stationId?: string) {
     const scope = await this.resolveScope(userId);
-    const [staff, stations] = await Promise.all([
+    const [staffRaw, stations, ctx] = await Promise.all([
       this.getRegionalStaff(userId, stationId),
       this.getRegionalStations(scope),
+      buildCrewAvailabilityContext(this.prisma),
     ]);
-    const onMissionIds = new Set<string>();
-    const missionByEmployee = new Map<string, { trackingCode: string; status: string; id: string }>();
 
-    const active = await this.prisma.emergencyRequest.findMany({
-      where: regionalCasesWhere(scope, { status: { in: ACTIVE_MISSION_STATUSES } }, false),
-      select: {
-        id: true,
-        trackingCode: true,
-        status: true,
-        driverId: true,
-        nurseId: true,
-      },
-    });
-    active.forEach((m) => {
-      const mission = { id: m.id, trackingCode: m.trackingCode, status: m.status };
-      if (m.driverId) {
-        onMissionIds.add(m.driverId);
-        missionByEmployee.set(m.driverId, mission);
-      }
-      if (m.nurseId) {
-        onMissionIds.add(m.nurseId);
-        missionByEmployee.set(m.nurseId, mission);
-      }
-    });
+    const drivers = staffRaw.drivers.map((d) => enrichDriverWithAvailability(d, ctx));
+    const nurses = staffRaw.nurses.map((n) => enrichNurseWithAvailability(n, ctx));
+    const staff = { ...staffRaw, drivers, nurses };
 
-    const attachMission = <T extends { id: string }>(list: T[]) =>
+    const attachMission = <T extends Record<string, unknown>>(list: T[]) =>
       list.map((e) => ({
         ...e,
-        currentMission: missionByEmployee.get(e.id) ?? null,
+        currentMission: (e as { currentCase?: { id: string; trackingCode: string } | null }).currentCase ?? null,
       }));
 
     const filterEmployees = () => {
@@ -875,30 +864,20 @@ export class DispatchersAppService {
         case 'paramedics':
           return attachMission(staff.nurses);
         case 'drivers-available':
-          return attachMission(
-            staff.drivers.filter(
-              (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
-            ),
-          );
+          return attachMission(staff.drivers.filter((e) => e.operationalStatus === 'available'));
         case 'nurses-available':
-          return attachMission(
-            staff.nurses.filter(
-              (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
-            ),
-          );
+          return attachMission(staff.nurses.filter((e) => e.operationalStatus === 'available'));
         case 'available':
           return attachMission(
-            [...staff.drivers, ...staff.nurses].filter(
-              (e) => ['AVAILABLE', 'ON_DUTY'].includes(e.shiftStatus) && !onMissionIds.has(e.id),
-            ),
+            [...staff.drivers, ...staff.nurses].filter((e) => e.operationalStatus === 'available'),
           );
         case 'on-mission':
           return attachMission(
-            [...staff.drivers, ...staff.nurses].filter((e) => onMissionIds.has(e.id)),
+            [...staff.drivers, ...staff.nurses].filter((e) => Boolean(e.currentCase)),
           );
         case 'off-duty':
           return attachMission(
-            [...staff.drivers, ...staff.nurses].filter((e) => e.shiftStatus === 'OFF_DUTY'),
+            [...staff.drivers, ...staff.nurses].filter((e) => e.attendanceStatus === 'absent'),
           );
         default:
           return attachMission([...staff.drivers, ...staff.nurses, ...staff.dispatchers]);
@@ -906,15 +885,23 @@ export class DispatchersAppService {
     };
 
     const items = filterEmployees();
+    const allCrew = [...staff.drivers, ...staff.nurses];
+
     return {
       view,
       items,
       staff,
-      onMissionCount: onMissionIds.size,
+      onMissionCount: allCrew.filter((e) => Boolean(e.currentCase)).length,
       region: scope.regionName,
-      activeMissions: active,
+      activeMissions: allCrew.filter((e) => e.currentCase).map((e) => e.currentCase),
       stations,
       homeStationId: scope.stationId,
+      stats: {
+        total: allCrew.length,
+        available: allCrew.filter((e) => e.operationalStatus === 'available').length,
+        onMission: allCrew.filter((e) => Boolean(e.currentCase)).length,
+        absent: allCrew.filter((e) => e.attendanceStatus === 'absent').length,
+      },
     };
   }
 
@@ -1125,8 +1112,13 @@ export class DispatchersAppService {
     };
   }
 
-  async getAssignableResources(userId: string, excludeCaseId?: string) {
+  async getAssignableResources(userId: string, excludeCaseId?: string, _stationId?: string) {
     const scope = await this.resolveScope(userId);
+    const dispatcher = await this.getDispatcherByUserId(userId);
+    /** Dispatchers always assign crew and ambulances from their home station only. */
+    const dispatcherStationId = scope.stationId ?? undefined;
+
+    await reconcileCrewOccupancy(this.prisma);
 
     const { busyDriverIds, busyNurseIds, busyAmbulanceIds } = await getBusyCrewMaps(
       this.prisma,
@@ -1143,7 +1135,7 @@ export class DispatchersAppService {
     const [ambulances, driversRaw, nursesRaw, presentIds] = await Promise.all([
       this.prisma.ambulance.findMany({
         where: {
-          ...regionalAmbulanceWhere(scope, scope.stationScoped),
+          ...regionalAmbulanceWhere(scope, true),
           status: 'AVAILABLE',
           isActive: true,
           ...(busyAmbulanceIds.length ? { id: { notIn: busyAmbulanceIds } } : {}),
@@ -1153,34 +1145,44 @@ export class DispatchersAppService {
       driverRole
         ? this.prisma.employee.findMany({
             where: {
-              ...regionalEmployeeWhere(scope, scope.stationScoped),
+              ...regionalEmployeeWhere(scope, true),
               employeeRoleId: driverRole.id,
               status: 'ACTIVE',
-              shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-              ...(busyDriverIds.length ? { id: { notIn: busyDriverIds } } : {}),
             },
-            include: { assignedAmbulance: { include: { equipmentLevel: true } } },
+            include: { assignedAmbulance: { include: { equipmentLevel: true, station: true } }, station: true },
           })
         : [],
       nurseRole
         ? this.prisma.employee.findMany({
             where: {
-              ...regionalEmployeeWhere(scope, scope.stationScoped),
+              ...regionalEmployeeWhere(scope, true),
               employeeRoleId: nurseRole.id,
               status: 'ACTIVE',
-              shiftStatus: { in: [...ASSIGNABLE_SHIFT_STATUSES] },
-              ...(busyNurseIds.length ? { id: { notIn: busyNurseIds } } : {}),
             },
-            include: { assignedAmbulance: { include: { equipmentLevel: true } } },
+            include: { assignedAmbulance: { include: { equipmentLevel: true, station: true } }, station: true },
           })
         : [],
       getPresentEmployeeIdsToday(this.prisma),
     ]);
 
-    const drivers = filterDispatchEligibleEmployees(driversRaw, presentIds);
-    const nurses = filterDispatchEligibleEmployees(nursesRaw, presentIds);
+    const drivers = filterDispatchEligibleEmployees(driversRaw, presentIds, {
+      busyEmployeeIds: new Set(busyDriverIds),
+      stationId: dispatcherStationId,
+    });
+    const nurses = filterDispatchEligibleEmployees(nursesRaw, presentIds, {
+      busyEmployeeIds: new Set(busyNurseIds),
+      stationId: dispatcherStationId,
+    }).filter((n) => n.medicalClearanceStatus !== 'PENDING');
 
-    return { ambulances, drivers, nurses, region: scope.regionName };
+    return {
+      ambulances: filterAmbulancesByStation(ambulances, dispatcherStationId),
+      drivers,
+      nurses,
+      region: scope.regionName,
+      station: dispatcher.station
+        ? { id: dispatcher.station.id, name: dispatcher.station.name }
+        : null,
+    };
   }
 
   async getCaseNotifications(userId: string, view = 'all') {

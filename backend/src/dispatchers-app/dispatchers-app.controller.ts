@@ -119,8 +119,12 @@ export class DispatchersAppController {
   }
 
   @Get('available/assign')
-  getAssignable(@Request() req, @Query('excludeCaseId') excludeCaseId?: string) {
-    return this.service.getAssignableResources(req.user.sub, excludeCaseId);
+  getAssignable(
+    @Request() req,
+    @Query('excludeCaseId') excludeCaseId?: string,
+    @Query('stationId') stationId?: string,
+  ) {
+    return this.service.getAssignableResources(req.user.sub, excludeCaseId, stationId);
   }
 
   @Get('notifications')

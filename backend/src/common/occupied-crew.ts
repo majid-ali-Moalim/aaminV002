@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { OCCUPIED_CASE_STATUSES } from './active-case-statuses';
 
 /** Case is closed — crew on this case may be assigned elsewhere. */
 export const TERMINAL_CASE_STATUSES: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
@@ -20,14 +21,109 @@ export type CrewAssignmentIds = {
   ambulanceId?: string | null;
 };
 
-/** Crew assigned to any open (non-terminal) emergency cannot take another case. */
+/**
+ * Clear crew links on pre-dispatch cases (PENDING/REVIEWING) and reset stuck ON_DUTY
+ * employees/ambulances that are not on an in-progress mission.
+ */
+export async function reconcileCrewOccupancy(prisma: PrismaService): Promise<number> {
+  let repaired = 0;
+
+  const orphanedCases = await prisma.emergencyRequest.findMany({
+    where: {
+      status: { notIn: [...TERMINAL_CASE_STATUSES, ...OCCUPIED_CASE_STATUSES] },
+      OR: [{ driverId: { not: null } }, { nurseId: { not: null } }, { ambulanceId: { not: null } }],
+    },
+    select: {
+      id: true,
+      trackingCode: true,
+      status: true,
+      driverId: true,
+      nurseId: true,
+      ambulanceId: true,
+    },
+  });
+
+  for (const row of orphanedCases) {
+    await releaseCrewForCase(prisma, {
+      driverId: row.driverId,
+      nurseId: row.nurseId,
+      ambulanceId: row.ambulanceId,
+    });
+    await prisma.emergencyRequest.update({
+      where: { id: row.id },
+      data: {
+        driverId: null,
+        nurseId: null,
+        ambulanceId: null,
+        assignedAt: null,
+      },
+    });
+    repaired += 1;
+  }
+
+  const occupiedCases = await prisma.emergencyRequest.findMany({
+    where: { status: { in: OCCUPIED_CASE_STATUSES } },
+    select: { driverId: true, nurseId: true, ambulanceId: true },
+  });
+
+  const busyDriverIds = new Set(
+    occupiedCases.map((c) => c.driverId).filter(Boolean) as string[],
+  );
+  const busyNurseIds = new Set(
+    occupiedCases.map((c) => c.nurseId).filter(Boolean) as string[],
+  );
+  const busyAmbulanceIds = new Set(
+    occupiedCases.map((c) => c.ambulanceId).filter(Boolean) as string[],
+  );
+
+  const stuckEmployees = await prisma.employee.findMany({
+    where: {
+      employeeRole: { name: { in: ['Driver', 'Nurse'] } },
+      status: 'ACTIVE',
+      OR: [
+        { shiftStatus: 'ON_DUTY' },
+        { assignedAmbulanceId: { not: null } },
+      ],
+    },
+    select: { id: true, shiftStatus: true, assignedAmbulanceId: true },
+  });
+
+  for (const emp of stuckEmployees) {
+    const onMission = busyDriverIds.has(emp.id) || busyNurseIds.has(emp.id);
+    if (onMission) continue;
+
+    await prisma.employee.update({
+      where: { id: emp.id },
+      data: { shiftStatus: 'AVAILABLE', assignedAmbulanceId: null },
+    });
+    repaired += 1;
+  }
+
+  const stuckAmbulances = await prisma.ambulance.findMany({
+    where: { status: 'ON_DUTY', isActive: true },
+    select: { id: true },
+  });
+
+  for (const amb of stuckAmbulances) {
+    if (busyAmbulanceIds.has(amb.id)) continue;
+    await prisma.ambulance.update({
+      where: { id: amb.id },
+      data: { status: 'AVAILABLE' },
+    });
+    repaired += 1;
+  }
+
+  return repaired;
+}
+
+/** Crew assigned to an in-progress mission cannot take another case. */
 export async function getBusyCrewMaps(
   prisma: PrismaService,
   excludeCaseId?: string,
 ): Promise<BusyCrewMaps> {
   const rows = await prisma.emergencyRequest.findMany({
     where: {
-      status: { notIn: TERMINAL_CASE_STATUSES },
+      status: { in: OCCUPIED_CASE_STATUSES },
       ...(excludeCaseId ? { id: { not: excludeCaseId } } : {}),
       OR: [{ driverId: { not: null } }, { nurseId: { not: null } }, { ambulanceId: { not: null } }],
     },
@@ -61,7 +157,7 @@ export async function getBusyCrewMaps(
   };
 }
 
-/** Block assignment when driver, nurse, or ambulance is already on another open case. */
+/** Block assignment when driver, nurse, or ambulance is already on another in-progress mission. */
 export async function assertCrewAvailableForAssignment(
   prisma: PrismaService,
   params: CrewAssignmentIds,
@@ -95,7 +191,7 @@ export async function assertCrewAvailableForAssignment(
   }
 }
 
-/** Mark crew and ambulance as occupied when linked to an open case. */
+/** Mark crew and ambulance as occupied when linked to an in-progress mission. */
 export async function occupyCrewForCase(prisma: PrismaService, params: CrewAssignmentIds) {
   const crewIds = [params.driverId, params.nurseId].filter(Boolean) as string[];
   if (crewIds.length) {

@@ -19,6 +19,7 @@ import {
 import { AmbulanceGrid, CrewGrid } from '@/components/dispatcher/DispatcherModuleShell'
 import {
   RESOURCE_STATUS_TABS,
+  CREW_RESOURCE_STATUS_TABS,
   buildStationSummaries,
   matchesStation,
   statusBadgeClass,
@@ -152,6 +153,7 @@ function ResourceToolbar({
   viewMode,
   onViewModeChange,
   lastUpdated,
+  statusTabs,
 }: {
   query: string
   onQueryChange: (v: string) => void
@@ -165,7 +167,9 @@ function ResourceToolbar({
   viewMode: ViewMode
   onViewModeChange: (v: ViewMode) => void
   lastUpdated?: string
+  statusTabs?: typeof RESOURCE_STATUS_TABS
 }) {
+  const tabs = statusTabs ?? RESOURCE_STATUS_TABS
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-sm">
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -214,7 +218,7 @@ function ResourceToolbar({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {RESOURCE_STATUS_TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -359,7 +363,8 @@ function CrewTable({ items }: { items: Record<string, unknown>[] }) {
             <th className="px-4 py-3">Name</th>
             <th className="px-4 py-3">Code</th>
             <th className="px-4 py-3">Station</th>
-            <th className="px-4 py-3">Shift</th>
+            <th className="px-4 py-3">Availability</th>
+            <th className="px-4 py-3">Employment</th>
             <th className="px-4 py-3">Mission</th>
           </tr>
         </thead>
@@ -372,12 +377,26 @@ function CrewTable({ items }: { items: Record<string, unknown>[] }) {
               <td className="px-4 py-3 text-slate-600">{String(e.employeeCode ?? '—')}</td>
               <td className="px-4 py-3 text-slate-600">{(e.station as { name?: string })?.name ?? '—'}</td>
               <td className="px-4 py-3">
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusBadgeClass(String(e.shiftStatus ?? ''))}`}>
-                  {String(e.shiftStatus ?? '—').replace(/_/g, ' ')}
+                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                  e.operationalStatus === 'available'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                    : 'bg-red-100 text-red-800 border-red-200'
+                }`}>
+                  {e.operationalStatus === 'available' ? 'Available' : 'Unavailable'}
+                </span>
+                {e.unavailableReason ? (
+                  <p className="text-[10px] text-slate-500 mt-1 max-w-[180px]">{String(e.unavailableReason)}</p>
+                ) : null}
+              </td>
+              <td className="px-4 py-3">
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-slate-100 text-slate-700 border-slate-200">
+                  {String((e as { employmentStatus?: string }).employmentStatus ?? e.status ?? '—')}
                 </span>
               </td>
               <td className="px-4 py-3 text-xs text-red-600 font-semibold">
-                {(e.currentMission as { trackingCode?: string })?.trackingCode ?? '—'}
+                {(e.currentMission as { trackingCode?: string })?.trackingCode
+                  ?? (e.currentCase as { trackingCode?: string })?.trackingCode
+                  ?? '—'}
               </td>
             </tr>
           ))}
@@ -531,25 +550,24 @@ export function DriverAvailabilityView({
 }: {
   items: Record<string, unknown>[]
   onMissionItems: Record<string, unknown>[]
-  stats: { total?: number; available?: number; onMission?: number; offDuty?: number }
+  stats: { total?: number; available?: number; onMission?: number; offDuty?: number; absent?: number }
   region?: string
   stations?: StationOption[]
   homeStationId?: string | null
   onRefresh?: () => void
   refreshing?: boolean
 }) {
-  const offDuty = useMemo(
-    () =>
-      [...items, ...onMissionItems].filter((e) => String(e.shiftStatus) === 'OFF_DUTY'),
-    [items, onMissionItems],
-  )
   const all = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>()
-    ;[...items, ...onMissionItems, ...offDuty].forEach((e) => map.set(String(e.id), e))
+    ;[...items, ...onMissionItems].forEach((e) => map.set(String(e.id), e))
     return [...map.values()]
-  }, [items, onMissionItems, offDuty])
+  }, [items, onMissionItems])
 
-  const lists = { available: items, busy: onMissionItems, offline: offDuty, all }
+  const absent = useMemo(
+    () => all.filter((e) => e.attendanceStatus === 'absent'),
+    [all],
+  )
+  const lists = { available: items, busy: onMissionItems, offline: absent, all }
 
   const filters = useResourceFilters(lists, (e) =>
     `${e.firstName ?? ''} ${e.lastName ?? ''} ${e.employeeCode ?? ''} ${(e.station as { name?: string })?.name ?? ''}`,
@@ -561,7 +579,7 @@ export function DriverAvailabilityView({
     <div className="space-y-5">
       <ResourceHero
         title="Driver Availability"
-        subtitle="Track on-shift drivers across stations — identify receiving stations with spare crew capacity"
+        subtitle="Available means marked present today and not on an open case. Unavailable means absent or on case."
         icon={Users}
         region={region}
         onRefresh={onRefresh}
@@ -571,8 +589,8 @@ export function DriverAvailabilityView({
       <StatTiles
         stats={[
           { label: 'Available', value: stats.available ?? items.length, tone: 'emerald' },
-          { label: 'On Mission', value: stats.onMission ?? onMissionItems.length, tone: 'blue' },
-          { label: 'Off Duty', value: stats.offDuty ?? offDuty.length, tone: 'slate' },
+          { label: 'On Case', value: stats.onMission ?? onMissionItems.length, tone: 'blue' },
+          { label: 'Absent', value: stats.absent ?? stats.offDuty ?? absent.length, tone: 'slate' },
           { label: 'Total Drivers', value: stats.total ?? all.length, tone: 'violet' },
         ]}
       />
@@ -594,6 +612,7 @@ export function DriverAvailabilityView({
         viewMode={filters.viewMode}
         onViewModeChange={filters.setViewMode}
         lastUpdated={new Date().toLocaleTimeString()}
+        statusTabs={CREW_RESOURCE_STATUS_TABS}
       />
       <Panel
         title="Drivers"
@@ -622,25 +641,24 @@ export function NurseAvailabilityView({
 }: {
   items: Record<string, unknown>[]
   onMissionItems: Record<string, unknown>[]
-  stats: { total?: number; available?: number; onMission?: number; offDuty?: number }
+  stats: { total?: number; available?: number; onMission?: number; offDuty?: number; absent?: number }
   region?: string
   stations?: StationOption[]
   homeStationId?: string | null
   onRefresh?: () => void
   refreshing?: boolean
 }) {
-  const offDuty = useMemo(
-    () =>
-      [...items, ...onMissionItems].filter((e) => String(e.shiftStatus) === 'OFF_DUTY'),
-    [items, onMissionItems],
-  )
   const all = useMemo(() => {
     const map = new Map<string, Record<string, unknown>>()
-    ;[...items, ...onMissionItems, ...offDuty].forEach((e) => map.set(String(e.id), e))
+    ;[...items, ...onMissionItems].forEach((e) => map.set(String(e.id), e))
     return [...map.values()]
-  }, [items, onMissionItems, offDuty])
+  }, [items, onMissionItems])
 
-  const lists = { available: items, busy: onMissionItems, offline: offDuty, all }
+  const absent = useMemo(
+    () => all.filter((e) => e.attendanceStatus === 'absent'),
+    [all],
+  )
+  const lists = { available: items, busy: onMissionItems, offline: absent, all }
 
   const filters = useResourceFilters(lists, (e) =>
     `${e.firstName ?? ''} ${e.lastName ?? ''} ${e.employeeCode ?? ''} ${(e.station as { name?: string })?.name ?? ''}`,
@@ -652,7 +670,7 @@ export function NurseAvailabilityView({
     <div className="space-y-5">
       <ResourceHero
         title="Nurse Availability"
-        subtitle="Clinical crew readiness by station — essential when balancing load and transferring cases"
+        subtitle="Available means marked present today and not on an open case. Unavailable means absent or on case."
         icon={Stethoscope}
         region={region}
         onRefresh={onRefresh}
@@ -662,8 +680,8 @@ export function NurseAvailabilityView({
       <StatTiles
         stats={[
           { label: 'Available', value: stats.available ?? items.length, tone: 'emerald' },
-          { label: 'On Mission', value: stats.onMission ?? onMissionItems.length, tone: 'blue' },
-          { label: 'Off Duty', value: stats.offDuty ?? offDuty.length, tone: 'slate' },
+          { label: 'On Case', value: stats.onMission ?? onMissionItems.length, tone: 'blue' },
+          { label: 'Absent', value: stats.absent ?? stats.offDuty ?? absent.length, tone: 'slate' },
           { label: 'Total Nurses', value: stats.total ?? all.length, tone: 'violet' },
         ]}
       />
@@ -685,6 +703,7 @@ export function NurseAvailabilityView({
         viewMode={filters.viewMode}
         onViewModeChange={filters.setViewMode}
         lastUpdated={new Date().toLocaleTimeString()}
+        statusTabs={CREW_RESOURCE_STATUS_TABS}
       />
       <Panel
         title="Nurses"
@@ -734,8 +753,8 @@ export function ResourceStatusView({
 
   const availableAmb = filteredAmbulances.filter((a) => a.status === 'AVAILABLE').length
   const busyAmb = filteredAmbulances.filter((a) => a.status === 'ON_DUTY').length
-  const availDrivers = filteredDrivers.filter((d) => ['AVAILABLE', 'ON_DUTY'].includes(String(d.shiftStatus))).length
-  const availNurses = filteredNurses.filter((n) => ['AVAILABLE', 'ON_DUTY'].includes(String(n.shiftStatus))).length
+  const availDrivers = filteredDrivers.filter((d) => d.operationalStatus === 'available').length
+  const availNurses = filteredNurses.filter((n) => n.operationalStatus === 'available').length
 
   return (
     <div className="space-y-5">

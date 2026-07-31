@@ -3,6 +3,13 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateNextEmployeeCode } from '../employees/employee-code.util';
 import { getAttendanceShiftBlockReason } from '../employee-attendance/shift-types';
+import {
+  buildCrewAvailabilityContext,
+  enrichDriverWithAvailability,
+  getCrewUnavailableReason,
+  resolveCrewOperationalStatus,
+} from '../common/crew-operational-status';
+import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 
 @Injectable()
 export class DriversService {
@@ -41,7 +48,7 @@ export class DriversService {
       ];
     }
 
-    return this.prisma.employee.findMany({
+    const rows = await this.prisma.employee.findMany({
       where,
       include: {
         user: true,
@@ -52,6 +59,9 @@ export class DriversService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const ctx = await buildCrewAvailabilityContext(this.prisma);
+    return rows.map((driver) => enrichDriverWithAvailability(driver, ctx));
   }
 
   async findOne(id: string) {
@@ -326,23 +336,18 @@ export class DriversService {
     });
   }
 
-  private readonly ACTIVE_CASE_STATUSES = [
-    'ASSIGNED',
-    'DISPATCHED',
-    'EN_ROUTE',
-    'ARRIVED_SCENE',
-    'PATIENT_STABILIZED',
-    'TRANSPORTING',
-    'ARRIVED_HOSPITAL',
-    'REVIEWING',
-  ] as const;
+  private readonly ACTIVE_CASE_STATUSES = OCCUPIED_CASE_STATUSES;
 
-  private resolveOperationalStatus(isPresentToday: boolean): 'available' | 'unavailable' {
-    return isPresentToday ? 'available' : 'unavailable';
+  private resolveOperationalStatus(isPresentToday: boolean, onActiveCase: boolean): 'available' | 'unavailable' {
+    return resolveCrewOperationalStatus(isPresentToday, onActiveCase);
   }
 
-  private getUnavailableReason(isPresentToday: boolean): string | null {
-    return isPresentToday ? null : 'Absent — not marked present in attendance';
+  private getUnavailableReason(
+    isPresentToday: boolean,
+    onActiveCase: boolean,
+    trackingCode?: string | null,
+  ): string | null {
+    return getCrewUnavailableReason(isPresentToday, onActiveCase, trackingCode);
   }
 
   async getAvailabilityOverview() {
@@ -426,9 +431,12 @@ export class DriversService {
       const activeCase =
         driver.drivenRequests?.[0] ?? activeCaseByDriver.get(driver.id) ?? null;
       const isPresentToday = presentEmployeeIds.has(driver.id);
-      const operationalStatus = this.resolveOperationalStatus(isPresentToday);
+      const onActiveCase = Boolean(activeCase);
+      const operationalStatus = this.resolveOperationalStatus(isPresentToday, onActiveCase);
       const unavailableReason =
-        operationalStatus === 'unavailable' ? this.getUnavailableReason(isPresentToday) : null;
+        operationalStatus === 'unavailable'
+          ? this.getUnavailableReason(isPresentToday, onActiveCase, activeCase?.trackingCode)
+          : null;
 
       return {
         id: driver.id,
@@ -617,6 +625,7 @@ export class DriversService {
     const activeCase = driver.drivenRequests.find((r) =>
       this.ACTIVE_CASE_STATUSES.includes(r.status as any),
     );
+    const onActiveCase = Boolean(activeCase);
 
     return {
       driver: {
@@ -629,8 +638,10 @@ export class DriversService {
         shiftStatus: driver.shiftStatus,
         employmentStatus: driver.status,
         attendanceStatus: isPresentToday ? 'present' : 'absent',
-        operationalStatus: this.resolveOperationalStatus(isPresentToday),
-        unavailableReason: isPresentToday ? null : this.getUnavailableReason(isPresentToday),
+        operationalStatus: this.resolveOperationalStatus(isPresentToday, onActiveCase),
+        unavailableReason: onActiveCase || !isPresentToday
+          ? this.getUnavailableReason(isPresentToday, onActiveCase, activeCase?.trackingCode)
+          : null,
         licenseNumber: driver.licenseNumber,
         licenseStatus: driver.licenseStatus,
         licenseExpiryDate: driver.licenseExpiryDate?.toISOString() ?? null,

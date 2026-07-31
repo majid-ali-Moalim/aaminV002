@@ -1,5 +1,6 @@
 import { PrismaClient, EmergencyRequestStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { normalizeUserEmail } from '../src/common/email-address';
 
 const prisma = new PrismaClient();
 
@@ -56,7 +57,7 @@ async function main() {
         user: {
           create: {
             username,
-            email: `${username}@aamin.so`,
+            email: normalizeUserEmail(undefined, username),
             passwordHash,
             role: 'EMPLOYEE',
           }

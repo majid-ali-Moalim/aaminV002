@@ -75,7 +75,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
             onMission: (onMission.items ?? []).filter((e: any) =>
               String(e.employeeRole?.name ?? '').toLowerCase().includes('driver'),
             ).length,
-            offDuty: (offDuty.items ?? []).filter((e: any) =>
+            absent: (offDuty.items ?? []).filter((e: any) =>
               String(e.employeeRole?.name ?? '').toLowerCase().includes('driver'),
             ).length,
           },
@@ -102,7 +102,7 @@ async function fetchModuleData(moduleId: DispatcherModuleId, view: string) {
             onMission: (onMission.items ?? []).filter((e: any) =>
               String(e.employeeRole?.name ?? '').toLowerCase().includes('nurse'),
             ).length,
-            offDuty: (offDuty.items ?? []).filter((e: any) =>
+            absent: (offDuty.items ?? []).filter((e: any) =>
               String(e.employeeRole?.name ?? '').toLowerCase().includes('nurse'),
             ).length,
           },

@@ -16,6 +16,8 @@ import { nursesService } from '@/lib/api'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 
+import { isOccupiedMissionStatus } from '@/components/features/emergency/missionStatusOptions'
+
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
 type Props = {
@@ -49,7 +51,7 @@ export default function NurseMissionCasesView({ mode }: Props) {
   const filtered = useMemo(() => {
     let list = requests.filter((r) => r.nurseId === nurseId)
     if (mode === 'active') {
-      list = list.filter((r) => !CLOSED.includes(r.status))
+      list = list.filter((r) => isOccupiedMissionStatus(r.status))
     } else {
       list = list.filter((r) => r.status === 'ASSIGNED' || (r.status === 'DISPATCHED' && !CLOSED.includes(r.status)))
     }

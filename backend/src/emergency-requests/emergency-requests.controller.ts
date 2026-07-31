@@ -43,8 +43,14 @@ export class EmergencyRequestsController {
     enum: ['pending', 'my-active', 'my-cases', 'regional'],
     description: 'Dispatcher queue filter: pending (regional unassigned), my-active (your missions), my-cases (all yours)',
   })
-  findAll(@Request() req, @Query('queue') queue?: string) {
-    return this.emergencyRequestsService.findAllForUser(req.user, queue);
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['active'],
+    description: 'When active, return only in-progress mission statuses',
+  })
+  findAll(@Request() req, @Query('queue') queue?: string, @Query('status') status?: string) {
+    return this.emergencyRequestsService.findAllForUser(req.user, queue, status);
   }
 
   @Public()
@@ -65,24 +71,48 @@ export class EmergencyRequestsController {
   @Get('available/ambulances')
   @ApiOperation({ summary: 'Get available ambulances' })
   @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
-  getAvailableAmbulances(@Query('excludeCaseId') excludeCaseId?: string) {
-    return this.emergencyRequestsService.getAvailableAmbulances(excludeCaseId);
+  @ApiQuery({ name: 'stationId', required: false, description: 'Filter to a specific station' })
+  getAvailableAmbulances(
+    @Query('excludeCaseId') excludeCaseId?: string,
+    @Query('stationId') stationId?: string,
+  ) {
+    return this.emergencyRequestsService.getAvailableAmbulances(excludeCaseId, stationId);
   }
 
   @Public()
   @Get('available/drivers')
   @ApiOperation({ summary: 'Get available drivers' })
   @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
-  getAvailableDrivers(@Query('excludeCaseId') excludeCaseId?: string) {
-    return this.emergencyRequestsService.getAvailableDrivers(excludeCaseId);
+  @ApiQuery({ name: 'stationId', required: false, description: 'Filter to a specific station' })
+  @ApiQuery({ name: 'includeIneligible', required: false, description: 'Include excluded crew with reasons (admin debug)' })
+  getAvailableDrivers(
+    @Query('excludeCaseId') excludeCaseId?: string,
+    @Query('stationId') stationId?: string,
+    @Query('includeIneligible') includeIneligible?: string,
+  ) {
+    return this.emergencyRequestsService.getAvailableDrivers(
+      excludeCaseId,
+      stationId,
+      includeIneligible === 'true',
+    );
   }
  
   @Public()
   @Get('available/nurses')
   @ApiOperation({ summary: 'Get available nurses' })
   @ApiQuery({ name: 'excludeCaseId', required: false, description: 'Exclude crew busy on this case (reassign)' })
-  getAvailableNurses(@Query('excludeCaseId') excludeCaseId?: string) {
-    return this.emergencyRequestsService.getAvailableNurses(excludeCaseId);
+  @ApiQuery({ name: 'stationId', required: false, description: 'Filter to a specific station' })
+  @ApiQuery({ name: 'includeIneligible', required: false, description: 'Include excluded crew with reasons (admin debug)' })
+  getAvailableNurses(
+    @Query('excludeCaseId') excludeCaseId?: string,
+    @Query('stationId') stationId?: string,
+    @Query('includeIneligible') includeIneligible?: string,
+  ) {
+    return this.emergencyRequestsService.getAvailableNurses(
+      excludeCaseId,
+      stationId,
+      includeIneligible === 'true',
+    );
   }
 
   @Get(':id')

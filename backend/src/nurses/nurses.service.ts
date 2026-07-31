@@ -3,6 +3,14 @@ import { Prisma, NotificationType, EmergencyRequestStatus } from '@prisma/client
 import { PrismaService } from '../prisma/prisma.service';
 import { generateNextEmployeeCode } from '../employees/employee-code.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  buildCrewAvailabilityContext,
+  enrichNurseWithAvailability,
+  getCrewUnavailableReason,
+  resolveCrewOperationalStatus,
+} from '../common/crew-operational-status';
+import { releaseCrewForCase } from '../common/occupied-crew';
+import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 
 @Injectable()
 export class NursesService {
@@ -45,7 +53,7 @@ export class NursesService {
       ];
     }
 
-    return this.prisma.employee.findMany({
+    const rows = await this.prisma.employee.findMany({
       where,
       include: {
         user: true,
@@ -56,6 +64,9 @@ export class NursesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const ctx = await buildCrewAvailabilityContext(this.prisma);
+    return rows.map((nurse) => enrichNurseWithAvailability(nurse, ctx));
   }
 
   async findOne(id: string) {
@@ -289,6 +300,12 @@ export class NursesService {
           },
         },
       },
+    });
+
+    await releaseCrewForCase(this.prisma, {
+      driverId: request.driverId,
+      nurseId,
+      ambulanceId: request.ambulanceId,
     });
 
     const notifyIds = [request.dispatcher?.userId, nurse?.userId].filter(Boolean) as string[];
@@ -547,23 +564,18 @@ export class NursesService {
     throw new BadRequestException('Nurses are assigned to emergency cases, not directly to ambulances.');
   }
 
-  private readonly ACTIVE_CASE_STATUSES = [
-    'ASSIGNED',
-    'DISPATCHED',
-    'EN_ROUTE',
-    'ARRIVED_SCENE',
-    'PATIENT_STABILIZED',
-    'TRANSPORTING',
-    'ARRIVED_HOSPITAL',
-    'REVIEWING',
-  ] as const;
+  private readonly ACTIVE_CASE_STATUSES = OCCUPIED_CASE_STATUSES;
 
-  private resolveOperationalStatus(isPresentToday: boolean): 'available' | 'unavailable' {
-    return isPresentToday ? 'available' : 'unavailable';
+  private resolveOperationalStatus(isPresentToday: boolean, onActiveCase: boolean): 'available' | 'unavailable' {
+    return resolveCrewOperationalStatus(isPresentToday, onActiveCase);
   }
 
-  private getUnavailableReason(isPresentToday: boolean): string | null {
-    return isPresentToday ? null : 'Absent — not marked present in attendance';
+  private getUnavailableReason(
+    isPresentToday: boolean,
+    onActiveCase: boolean,
+    trackingCode?: string | null,
+  ): string | null {
+    return getCrewUnavailableReason(isPresentToday, onActiveCase, trackingCode);
   }
 
   async getAvailabilityOverview() {
@@ -646,9 +658,12 @@ export class NursesService {
       const activeCase =
         nurse.nurseRequests?.[0] ?? activeCaseByNurse.get(nurse.id) ?? null;
       const isPresentToday = presentEmployeeIds.has(nurse.id);
-      const operationalStatus = this.resolveOperationalStatus(isPresentToday);
+      const onActiveCase = Boolean(activeCase);
+      const operationalStatus = this.resolveOperationalStatus(isPresentToday, onActiveCase);
       const unavailableReason =
-        operationalStatus === 'unavailable' ? this.getUnavailableReason(isPresentToday) : null;
+        operationalStatus === 'unavailable'
+          ? this.getUnavailableReason(isPresentToday, onActiveCase, activeCase?.trackingCode)
+          : null;
 
       return {
         id: nurse.id,
@@ -830,6 +845,7 @@ export class NursesService {
     const activeCase = nurse.nurseRequests.find((r) =>
       this.ACTIVE_CASE_STATUSES.includes(r.status as any),
     );
+    const onActiveCase = Boolean(activeCase);
 
     return {
       nurse: {
@@ -844,8 +860,10 @@ export class NursesService {
         employmentStatus: nurse.status,
         medicalClearanceStatus: nurse.medicalClearanceStatus,
         attendanceStatus: isPresentToday ? 'present' : 'absent',
-        operationalStatus: this.resolveOperationalStatus(isPresentToday),
-        unavailableReason: isPresentToday ? null : this.getUnavailableReason(isPresentToday),
+        operationalStatus: this.resolveOperationalStatus(isPresentToday, onActiveCase),
+        unavailableReason: onActiveCase || !isPresentToday
+          ? this.getUnavailableReason(isPresentToday, onActiveCase, activeCase?.trackingCode)
+          : null,
         licenseStatus: nurse.licenseStatus,
         licenseExpiryDate: nurse.licenseExpiryDate?.toISOString() ?? null,
         station: nurse.station,

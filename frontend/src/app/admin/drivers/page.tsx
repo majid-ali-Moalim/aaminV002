@@ -20,8 +20,10 @@ import { cn } from '@/lib/utils'
 import {
   ADMIN_STAFF_STATUS_OPTIONS,
   getAdminStaffStatusValue,
-  getStaffStatusLabel,
-  getStaffStatusStyles,
+  getCrewOperationalStatusLabel,
+  getCrewOperationalStatusStyles,
+  getEmploymentStatusLabel,
+  getEmploymentStatusStyles,
   mapStaffShiftStatus,
 } from '@/lib/staff/status'
 import { SOMALIA_DRIVER_LICENSE_CLASSES } from '@/lib/drivers/somaliaDriverLicense'
@@ -83,6 +85,10 @@ interface Driver {
   lastActiveDate?: string
   createdAt?: string
   updatedAt?: string
+  operationalStatus?: 'available' | 'unavailable'
+  attendanceStatus?: 'present' | 'absent'
+  unavailableReason?: string | null
+  employmentStatus?: string
 }
 
 interface Station {
@@ -227,8 +233,8 @@ export default function DriversPage() {
       const statusMatch =
         !statusFilter ||
         (statusFilter === 'AVAILABLE'
-          ? driver.shiftStatus === 'AVAILABLE'
-          : driver.shiftStatus !== 'AVAILABLE')
+          ? driver.operationalStatus === 'available'
+          : driver.operationalStatus === 'unavailable')
       const licenseMatch = !licenseFilter || driver.licenseStatus === licenseFilter
       const ratingMatch = !ratingFilter || (driver.rating && driver.rating >= parseFloat(ratingFilter))
 
@@ -236,7 +242,7 @@ export default function DriversPage() {
     })
   }, [drivers, searchTerm, stationFilter, statusFilter, licenseFilter, ratingFilter])
 
-  const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
+  const getAvailabilityColor = (status?: string) => getCrewOperationalStatusStyles(status).badge
 
   const getLicenseStatusColor = (status: string) => {
     switch (status) {
@@ -787,7 +793,7 @@ export default function DriversPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1 text-sm">
-                          <p className="font-semibold text-slate-800">{driver.status || driver.employmentType || '—'}</p>
+                          <p className="font-semibold text-slate-800">{getEmploymentStatusLabel(driver.status || driver.employmentStatus)}</p>
                           <p className="text-xs text-slate-500">
                             Joined{' '}
                             {driver.employmentDate || driver.joinDate
@@ -796,10 +802,13 @@ export default function DriversPage() {
                           </p>
                           <span className={cn(
                             'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
-                            getStatusColor(driver.shiftStatus || '')
+                            getAvailabilityColor(driver.operationalStatus)
                           )}>
-                            {getStaffStatusLabel(driver.shiftStatus || '')}
+                            {getCrewOperationalStatusLabel(driver.operationalStatus)}
                           </span>
+                          {driver.unavailableReason ? (
+                            <p className="text-[10px] text-slate-500">{driver.unavailableReason}</p>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -896,9 +905,9 @@ export default function DriversPage() {
                         <div className="flex items-center justify-between">
                           <span className={cn(
                             'inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border',
-                            getStatusColor(driver.shiftStatus || '')
+                            getAvailabilityColor(driver.operationalStatus)
                           )}>
-                            {getStaffStatusLabel(driver.shiftStatus || '')}
+                            {getCrewOperationalStatusLabel(driver.operationalStatus)}
                           </span>
                           <div className="flex items-center">
                             {getRatingStars(driver.rating || 0)}

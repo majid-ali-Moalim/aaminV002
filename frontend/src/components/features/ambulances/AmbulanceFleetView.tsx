@@ -92,6 +92,7 @@ export interface AmbulanceFleetViewConfig {
   showRegisterButton?: boolean
   emptyTitle?: string
   emptyDescription?: string
+  compact?: boolean
 }
 
 export default function AmbulanceFleetView({
@@ -103,6 +104,7 @@ export default function AmbulanceFleetView({
   showRegisterButton = true,
   emptyTitle = 'No ambulances found',
   emptyDescription = 'Try adjusting filters or register a new unit',
+  compact = false,
 }: AmbulanceFleetViewConfig) {
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [loading, setLoading] = useState(true)
@@ -249,7 +251,8 @@ export default function AmbulanceFleetView({
   }
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6 pb-12">
+    <div className={compact ? 'space-y-6' : 'p-6 max-w-[1600px] mx-auto space-y-6 pb-12'}>
+      {!compact && (
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-slate-900 p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <Truck className="w-32 h-32" />
@@ -282,6 +285,7 @@ export default function AmbulanceFleetView({
           </div>
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[

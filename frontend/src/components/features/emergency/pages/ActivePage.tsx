@@ -112,6 +112,7 @@ function ActiveMissionsContent() {
       const data = await fetchEmergencyRequests(
         portal,
         portal === 'dispatcher' ? 'my-active' : undefined,
+        { activeOnly: true },
       )
       setRequests(Array.isArray(data) ? data : [])
     } catch (err) {

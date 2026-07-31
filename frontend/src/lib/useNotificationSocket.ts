@@ -7,6 +7,8 @@ import { useNotificationStore } from '@/lib/stores/notificationStore'
 import type { AppNotification, NotificationStats } from '@/lib/notifications/types'
 import { resolveNurseNotificationUrl } from '@/lib/nurse/nurseNotificationRoutes'
 import { resolveDriverNotificationUrl } from '@/lib/driver/driverNotificationRoutes'
+import { dispatchMissionAssignedEvent } from '@/lib/mission/missionAssignedEvents'
+import { useDriverStore } from '@/lib/stores/driverStore'
 
 const SOCKET_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -93,6 +95,22 @@ function ensureSocketListeners() {
   })
 
   globalSocket.on('notification_stats', (stats: NotificationStats) => setStats(stats))
+
+  globalSocket.on('mission_assigned', (mission: { id?: string; trackingCode?: string; status?: string }) => {
+    if (!mission?.id) return
+    dispatchMissionAssignedEvent({
+      id: mission.id,
+      trackingCode: mission.trackingCode,
+      status: mission.status,
+    })
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/driver')) {
+      useDriverStore.getState().setActiveMission(mission as any)
+      toast.success(`Mission assigned: ${mission.trackingCode ?? mission.id}`, { duration: 8000 })
+    }
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/nurse')) {
+      toast.success(`Mission assigned: ${mission.trackingCode ?? mission.id}`, { duration: 8000 })
+    }
+  })
 
   if (globalSocket.connected) setConnected(true)
 }

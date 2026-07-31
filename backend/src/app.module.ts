@@ -30,6 +30,7 @@ import { PublicModule } from './public/public.module';
 import { HealthModule } from './health/health.module';
 import { ChatModule } from './chat/chat.module';
 import { StationCoverageModule } from './station-coverage/station-coverage.module';
+import { StationsModule } from './stations/stations.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { StationCoverageModule } from './station-coverage/station-coverage.modul
     PublicModule,
     ChatModule,
     StationCoverageModule,
+    StationsModule,
   ],
   controllers: [],
   providers: [],

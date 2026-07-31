@@ -115,7 +115,7 @@ export default function DispatcherCommandCenter() {
   const [shiftBusy, setShiftBusy] = useState(false)
   const [assignTarget, setAssignTarget] = useState<EmergencyRequest | null>(null)
 
-  const { data, isLoading, mutate, isValidating } = useSWR<Overview>(
+  const { data, error, isLoading, mutate, isValidating } = useSWR<Overview>(
     'dispatcher-dashboard-overview',
     () => dispatcherDashboardApi.getOverview(),
     { refreshInterval: 12000 },
@@ -155,7 +155,7 @@ export default function DispatcherCommandCenter() {
 
   const stats = useMemo(() => {
     if (!data) return null
-    const kpis = data.kpis
+    const kpis = data.kpis ?? {}
     const crew = (data as { crewStatus?: { driversAvailable: number; nursesAvailable: number } })
       .crewStatus
     const activeMissions = (data.activeMissions ?? []) as EmergencyRequest[]
@@ -248,7 +248,16 @@ export default function DispatcherCommandCenter() {
     ]
   }, [stats])
 
-  if ((authLoading && !profile) || (isLoading && !data)) {
+  if (authLoading && !profile) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-3">
+        <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+        <p className="text-sm font-medium text-slate-500">Loading your dispatch profile…</p>
+      </div>
+    )
+  }
+
+  if (isLoading && !data) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3">
         <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
@@ -257,7 +266,27 @@ export default function DispatcherCommandCenter() {
     )
   }
 
-  const o = data!
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-4 px-4 text-center">
+        <AlertTriangle className="w-10 h-10 text-amber-600" />
+        <div>
+          <p className="text-base font-bold text-slate-800">Could not load dispatch overview</p>
+          <p className="text-sm text-slate-500 mt-1 max-w-md">
+            {(error as { response?: { data?: { message?: string } } })?.response?.data?.message
+              || (error instanceof Error ? error.message : null)
+              || 'The dashboard API did not return data. Check that the backend is running and you are signed in as a dispatcher.'}
+          </p>
+        </div>
+        <Button onClick={() => void handleRefresh()} className="rounded-xl">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    )
+  }
+
+  const o = data
   const pendingQueue = (o.pendingQueue ?? []) as EmergencyRequest[]
   const activeMissions = (o.activeMissions ?? []) as EmergencyRequest[]
   const criticalCases = (o.criticalCases ?? []) as EmergencyRequest[]

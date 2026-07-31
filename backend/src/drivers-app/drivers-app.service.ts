@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
+import { releaseCrewForCase } from '../common/occupied-crew';
 
 @Injectable()
 export class DriversAppService {
@@ -387,6 +388,7 @@ export class DriversAppService {
       where: { id: missionId },
       data: {
         driverId: null,
+        nurseId: null,
         ambulanceId: null,
         status: 'REVIEWING',
         statusLogs: {
@@ -398,6 +400,12 @@ export class DriversAppService {
           },
         },
       },
+    });
+
+    await releaseCrewForCase(this.prisma, {
+      driverId: employee.id,
+      nurseId: request.nurseId,
+      ambulanceId: request.ambulanceId,
     });
 
     return { ok: true, trackingCode: request.trackingCode, request: updated };

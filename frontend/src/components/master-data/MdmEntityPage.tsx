@@ -29,9 +29,16 @@ type Row = Record<string, any>
 interface MdmEntityPageProps {
   entityKey: MdmEntityKey
   readOnly?: boolean
+  autoOpenCreate?: boolean
+  openCreateSignal?: number
 }
 
-export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntityPageProps) {
+export default function MdmEntityPage({
+  entityKey,
+  readOnly = false,
+  autoOpenCreate = false,
+  openCreateSignal = 0,
+}: MdmEntityPageProps) {
   const def = MDM_ENTITIES[entityKey]
   const [items, setItems] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
@@ -106,6 +113,22 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (autoOpenCreate) {
+      setEditRow(null)
+      setForm({})
+      setModalOpen(true)
+    }
+  }, [autoOpenCreate])
+
+  useEffect(() => {
+    if (openCreateSignal > 0) {
+      setEditRow(null)
+      setForm({})
+      setModalOpen(true)
+    }
+  }, [openCreateSignal])
 
   const openCreate = () => {
     setEditRow(null)
@@ -384,6 +407,7 @@ export default function MdmEntityPage({ entityKey, readOnly = false }: MdmEntity
                     <textarea
                       className="w-full rounded-xl border border-gray-200 dark:border-gray-700 p-3 text-sm bg-white dark:bg-gray-800"
                       rows={3}
+                      placeholder={f.placeholder}
                       value={form[f.key] ?? ''}
                       onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                     />

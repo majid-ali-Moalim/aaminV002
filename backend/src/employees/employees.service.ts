@@ -8,6 +8,7 @@ import {
   generateNextEmployeeCode,
   roleNameToCodePrefix,
 } from './employee-code.util';
+import { normalizeUserEmail } from '../common/email-address';
 
 @Injectable()
 export class EmployeesService {
@@ -292,7 +293,7 @@ export class EmployeesService {
           user: {
             create: {
               username: data.username,
-              email: data.email,
+              email: normalizeUserEmail(data.email, data.username),
               passwordHash,
               role: data.role || 'EMPLOYEE',
             },

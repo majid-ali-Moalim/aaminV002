@@ -3,8 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import toast from 'react-hot-toast'
+import { dispatchMissionAssignedEvent } from '@/lib/mission/missionAssignedEvents'
 
-const SOCKET_URL = 'http://localhost:3001'
+const SOCKET_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://127.0.0.1:3001'
+).replace(/\/$/, '')
 
 let globalSocket: Socket | null = null
 
@@ -52,6 +57,7 @@ export function useDriverSocket() {
 
     globalSocket.on('new_mission', (mission) => {
       setActiveMission(mission)
+      dispatchMissionAssignedEvent({ id: mission.id, trackingCode: mission.trackingCode, status: mission.status })
       toast.success(`🚨 New mission assigned: ${mission.trackingCode}`, { duration: 8000 })
     })
 

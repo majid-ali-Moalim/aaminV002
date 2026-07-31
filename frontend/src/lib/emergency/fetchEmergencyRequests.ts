@@ -8,12 +8,17 @@ export type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional'
 export async function fetchEmergencyRequests(
   portal: EmergencyPortal,
   queue?: EmergencyQueue,
+  options?: { activeOnly?: boolean },
 ): Promise<EmergencyRequest[]> {
+  const status = options?.activeOnly ? 'active' : undefined
   if (portal === 'dispatcher') {
-    const data = await emergencyRequestsService.getAll({ queue: queue ?? 'regional' })
+    const data = await emergencyRequestsService.getAll({
+      queue: queue ?? 'regional',
+      ...(status ? { status } : {}),
+    })
     return Array.isArray(data) ? data : []
   }
-  const data = await emergencyRequestsService.getAll()
+  const data = await emergencyRequestsService.getAll(status ? { status } : undefined)
   return Array.isArray(data) ? data : []
 }
 

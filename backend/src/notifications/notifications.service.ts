@@ -13,6 +13,7 @@ import { NotificationsGateway } from './notifications.gateway';
 import { NotificationDispatchService } from './notification-dispatch.service';
 import { DispatchPayload, NotificationEventKey } from './notification-events';
 import { enrichNotification, inferCategory, resolveRedirectUrl } from './notification-routing';
+import { resolveDeliverableEmail } from '../common/email-address';
 
 export type InboxFilters = {
   userId?: string;
@@ -129,6 +130,13 @@ export class NotificationsService {
     return created;
   }
 
+  /** Send notifications without blocking the HTTP response (emails can be slow). */
+  dispatchEventBackground(payload: DispatchPayload): void {
+    void this.dispatchEvent(payload).catch((err) => {
+      console.warn(`Background notification failed (${payload.eventKey}):`, err);
+    });
+  }
+
   /** Send notification only to active employees linked to a hospital. */
   async notifyHospitalStaff(hospitalId: string, payload: DispatchPayload) {
     const recipientUserIds = await this.dispatch.findHospitalStaffUserIds(hospitalId);
@@ -200,7 +208,7 @@ export class NotificationsService {
         notification = await this.createNotificationRecord(data);
       }
 
-      const email = data.recipientEmail?.trim();
+      const email = resolveDeliverableEmail(data.recipientEmail);
       if (!email) {
         await this.prisma.notificationDeliveryLog.create({
           data: {
@@ -710,7 +718,15 @@ export class NotificationsService {
       return { success: false, message: 'No email address on your admin account. Update your profile email first.' };
     }
 
-    const sent = await this.mailService.sendNotificationEmail(user.email, {
+    const deliverable = resolveDeliverableEmail(user.email);
+    if (!deliverable) {
+      return {
+        success: false,
+        message: `Account email "${user.email}" is not a valid delivery address. Update your profile with a real email (e.g. name@gmail.com).`,
+      };
+    }
+
+    const sent = await this.mailService.sendNotificationEmail(deliverable, {
       title: 'Notification test — Aamin EMS',
       message:
         'This is a test notification email. If you received this, your notification email settings are working correctly.',
@@ -723,7 +739,7 @@ export class NotificationsService {
       success: sent,
       email: user.email,
       message: sent
-        ? `Test email sent to ${user.email}`
+        ? `Test email sent to ${deliverable}`
         : 'SMTP is not configured on the server. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in backend environment.',
     };
   }

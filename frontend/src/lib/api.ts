@@ -54,8 +54,14 @@ class ApiService {
       (response) => response,
       (error) => {
         if (isApiNetworkError(error)) {
-          error.message =
-            'Cannot reach the API server. Make sure the backend is running (npm run start:dev in backend on port 3001).'
+          const base = API_BASE_URL.replace(/^https?:\/\//, '')
+          if (error.code === 'ECONNABORTED') {
+            error.message =
+              `Request timed out. The server may still be processing — refresh the page and check if the assignment succeeded. API: ${base}`
+          } else {
+            error.message =
+              `Cannot reach the API server at ${base}. Make sure the backend is running (npm run start:dev in backend).`
+          }
         }
         if (error.response?.status === 401) {
           localStorage.removeItem('token')
@@ -354,7 +360,11 @@ export const emergencyRequestsService = {
 
   assignAmbulance: async (id: string, ambulanceId: string, driverId: string, nurseId?: string) => {
     const api = new ApiService()
-    return await api.patch(`/api/emergency-requests/${id}/assign`, { ambulanceId, driverId, nurseId })
+    return await api.patch(
+      `/api/emergency-requests/${id}/assign`,
+      { ambulanceId, driverId, nurseId },
+      { timeout: 60000 },
+    )
   },
 
   updateStatus: async (id: string, status: string) => {
@@ -367,21 +377,29 @@ export const emergencyRequestsService = {
     return await api.get(`/api/emergency-requests/track/${code}`)
   },
 
-  getAvailableAmbulances: async (excludeCaseId?: string) => {
+  getAvailableAmbulances: async (excludeCaseId?: string, stationId?: string) => {
     const api = new ApiService()
-    const params = excludeCaseId ? { excludeCaseId } : undefined
+    const params: Record<string, string> = {}
+    if (excludeCaseId) params.excludeCaseId = excludeCaseId
+    if (stationId) params.stationId = stationId
     return await api.get('/api/emergency-requests/available/ambulances', { params })
   },
 
-  getAvailableDrivers: async (excludeCaseId?: string) => {
+  getAvailableDrivers: async (excludeCaseId?: string, stationId?: string, includeIneligible?: boolean) => {
     const api = new ApiService()
-    const params = excludeCaseId ? { excludeCaseId } : undefined
+    const params: Record<string, string> = {}
+    if (excludeCaseId) params.excludeCaseId = excludeCaseId
+    if (stationId) params.stationId = stationId
+    if (includeIneligible) params.includeIneligible = 'true'
     return await api.get('/api/emergency-requests/available/drivers', { params })
   },
  
-  getAvailableNurses: async (excludeCaseId?: string) => {
+  getAvailableNurses: async (excludeCaseId?: string, stationId?: string, includeIneligible?: boolean) => {
     const api = new ApiService()
-    const params = excludeCaseId ? { excludeCaseId } : undefined
+    const params: Record<string, string> = {}
+    if (excludeCaseId) params.excludeCaseId = excludeCaseId
+    if (stationId) params.stationId = stationId
+    if (includeIneligible) params.includeIneligible = 'true'
     return await api.get('/api/emergency-requests/available/nurses', { params })
   },
 

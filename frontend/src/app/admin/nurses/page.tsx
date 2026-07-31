@@ -12,7 +12,7 @@ import {
 import { nursesService, systemSetupService } from '@/lib/api'
 import { Employee, Station, Department, Region } from '@/types'
 import { format } from 'date-fns'
-import { getStaffStatusLabel, getStaffStatusStyles } from '@/lib/staff/status'
+import { getCrewOperationalStatusLabel, getCrewOperationalStatusStyles, getEmploymentStatusLabel } from '@/lib/staff/status'
 import { cn } from '@/lib/utils'
 import NurseEditModal from '@/components/nurses/NurseEditModal'
 
@@ -76,14 +76,18 @@ export default function NursesDashboard() {
                         (nurse as any).specialization?.toLowerCase().includes(searchTerm.toLowerCase())
       
       const stationMatch = !stationFilter || nurse.stationId === stationFilter
-      const statusMatch = !statusFilter || nurse.status === statusFilter
+      const statusMatch =
+        !statusFilter ||
+        (statusFilter === 'AVAILABLE'
+          ? (nurse as Employee & { operationalStatus?: string }).operationalStatus === 'available'
+          : (nurse as Employee & { operationalStatus?: string }).operationalStatus === 'unavailable')
       const specMatch = !specializationFilter || (nurse as any).specialization === specializationFilter
 
       return nameMatch && stationMatch && statusMatch && specMatch
     })
   }, [nurses, searchTerm, stationFilter, statusFilter, specializationFilter])
 
-  const getStatusColor = (status: string) => getStaffStatusStyles(status).badge
+  const getAvailabilityColor = (status?: string) => getCrewOperationalStatusStyles(status).badge
 
   const getLicenseStatusColor = (status: string) => {
     switch (status) {
@@ -268,7 +272,7 @@ export default function NursesDashboard() {
                     </td>
                     <td className="py-4 px-6">
                       <div className="space-y-1 text-sm">
-                        <p className="font-semibold text-gray-800">{nurse.status || '—'}</p>
+                        <p className="font-semibold text-gray-800">{getEmploymentStatusLabel(nurse.status)}</p>
                         <p className="text-xs text-gray-500">
                           Joined{' '}
                           {nurse.employmentDate
@@ -277,10 +281,13 @@ export default function NursesDashboard() {
                         </p>
                         <span className={cn(
                           'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
-                          getStatusColor(nurse.shiftStatus || '')
+                          getAvailabilityColor((nurse as Employee & { operationalStatus?: string }).operationalStatus)
                         )}>
-                          {getStaffStatusLabel(nurse.shiftStatus || nurse.status || '')}
+                          {getCrewOperationalStatusLabel((nurse as Employee & { operationalStatus?: string }).operationalStatus)}
                         </span>
+                        {(nurse as Employee & { unavailableReason?: string }).unavailableReason ? (
+                          <p className="text-[10px] text-gray-500">{(nurse as Employee & { unavailableReason?: string }).unavailableReason}</p>
+                        ) : null}
                       </div>
                     </td>
                     <td className="py-4 px-6">

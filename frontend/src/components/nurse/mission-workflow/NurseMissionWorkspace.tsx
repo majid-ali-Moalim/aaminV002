@@ -74,6 +74,8 @@ type Props = {
   selectedCaseId?: string | null
 }
 
+import { isOccupiedMissionStatus } from '@/components/features/emergency/missionStatusOptions'
+
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
 const EMPTY_MEDICAL_NOTES: MedicalNotesFormState = {
@@ -236,7 +238,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     () => myCases.filter((c) => c.status === 'ASSIGNED'),
     [myCases],
   )
-  const activeCases = useMemo(() => myCases.filter((c) => !CLOSED.includes(c.status)), [myCases])
+  const activeCases = useMemo(() => myCases.filter((c) => isOccupiedMissionStatus(c.status)), [myCases])
 
   const mission = useMemo(() => {
     if (missionId) return myCases.find((c) => c.id === missionId) || null
