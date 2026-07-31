@@ -49,6 +49,7 @@ import {
 } from '@/lib/mission/driverWorkflowButtons'
 import { getTimelineActiveIndex, getTimelineButtonStates } from '@/lib/mission/workflowTimeline'
 import { onMissionAssigned } from '@/lib/mission/missionAssignedEvents'
+import { onPatientLoaded } from '@/lib/mission/patientLoadedEvents'
 import { hasLoadPatientSaved } from '@/lib/mission/workflowMilestones'
 
 const CLOSED = ['COMPLETED', 'CANCELLED']
@@ -92,12 +93,16 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   useEffect(() => {
     load(true)
     const interval = setInterval(() => load(false), 5000)
-    const unsub = onMissionAssigned(() => {
+    const unsubAssigned = onMissionAssigned(() => {
+      void load(false)
+    })
+    const unsubPatientLoaded = onPatientLoaded(() => {
       void load(false)
     })
     return () => {
       clearInterval(interval)
-      unsub()
+      unsubAssigned()
+      unsubPatientLoaded()
     }
   }, [load])
 

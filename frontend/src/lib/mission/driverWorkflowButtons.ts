@@ -56,9 +56,19 @@ function milestoneDone(
   }
 }
 
-function waitReasonFor(id: DriverWorkflowButtonId, patientLoaded: boolean, arrivedAtPatient: boolean): string {
-  if (id === 'going_to_hospital' && arrivedAtPatient && !patientLoaded) {
-    return 'Waiting for nurse to load the patient'
+function waitReasonFor(
+  id: DriverWorkflowButtonId,
+  patientLoaded: boolean,
+  arrivedAtPatient: boolean,
+  caseStarted: boolean,
+): string {
+  if (id === 'going_to_hospital') {
+    if (!caseStarted) return 'Start the case first'
+    if (!patientLoaded) {
+      return arrivedAtPatient
+        ? 'Waiting for nurse to load the patient'
+        : 'Waiting for nurse to load the patient into the ambulance'
+    }
   }
   return 'Complete the previous step first'
 }
@@ -87,16 +97,18 @@ export function getDriverWorkflowButtons(
 
   const done = (id: DriverWorkflowButtonId) => milestoneDone(meta, id, mission)
 
+  const caseStarted = done('start_case')
+
   const canActivate: Record<DriverWorkflowButtonId, boolean> = {
-    start_case: mission.status === 'ASSIGNED' && !done('start_case'),
-    going_to_patient: done('start_case') && !done('going_to_patient'),
+    start_case: mission.status === 'ASSIGNED' && !caseStarted,
+    going_to_patient: caseStarted && !done('going_to_patient'),
     arrived_at_patient:
       done('going_to_patient') && !done('arrived_at_patient') && !arrivedAtPatient,
-    // Independent of nurse medical notes — only needs patient loaded.
+    // Unlocks as soon as nurse confirms patient load (real-time care record push).
     going_to_hospital:
-      done('arrived_at_patient') &&
-      !done('going_to_hospital') &&
+      caseStarted &&
       patientLoaded &&
+      !done('going_to_hospital') &&
       !driverTransporting(mission.status),
     arrived_at_hospital:
       done('going_to_hospital') && !done('arrived_at_hospital') && mission.status === 'TRANSPORTING',
@@ -110,7 +122,7 @@ export function getDriverWorkflowButtons(
     return {
       ...b,
       state: 'locked',
-      waitReason: waitReasonFor(b.id, patientLoaded, arrivedAtPatient),
+      waitReason: waitReasonFor(b.id, patientLoaded, arrivedAtPatient, caseStarted),
     }
   })
 }

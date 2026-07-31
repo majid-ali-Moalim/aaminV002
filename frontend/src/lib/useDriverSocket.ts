@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import toast from 'react-hot-toast'
 import { dispatchMissionAssignedEvent } from '@/lib/mission/missionAssignedEvents'
+import { dispatchPatientLoadedEvent } from '@/lib/mission/patientLoadedEvents'
 
 const SOCKET_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -38,11 +39,11 @@ export function useDriverSocket() {
 
       // Flush offline queue
       const queue = useDriverStore.getState().offlineQueue
-      queue.forEach(async (update) => {
-        try {
-          globalSocket!.emit(update.type, update.payload)
+      queue.forEach((update) => {
+        if (update.type === 'mission_status') {
+          globalSocket!.emit('update_mission_status', update.payload)
           removeOfflineUpdate(update.id)
-        } catch (_) {}
+        }
       })
     })
 
@@ -65,6 +66,15 @@ export function useDriverSocket() {
       setActiveMission(mission)
     })
 
+    globalSocket.on('patient_care_updated', ({ missionId, patientCareRecords }) => {
+      const current = useDriverStore.getState().activeMission
+      if (current?.id === missionId) {
+        setActiveMission({ ...current, patientCareRecords })
+        toast.success('Patient loaded — Transfer to Hospital is now available', { duration: 6000 })
+      }
+      dispatchPatientLoadedEvent({ missionId })
+    })
+
     globalSocket.on('mission_cancelled', ({ missionId }) => {
       const current = useDriverStore.getState().activeMission
       if (current?.id === missionId) {
@@ -79,6 +89,7 @@ export function useDriverSocket() {
       globalSocket?.off('active_mission')
       globalSocket?.off('new_mission')
       globalSocket?.off('mission_updated')
+      globalSocket?.off('patient_care_updated')
       globalSocket?.off('mission_cancelled')
     }
   }, [token])

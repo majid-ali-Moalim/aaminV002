@@ -8,6 +8,12 @@ import {
 export type CareRecord = { clinicalNotes?: string | null; requestId?: string; emergencyRequest?: { id?: string } }
 
 export function recordsForCase(records: CareRecord[], caseId: string): CareRecord[] {
+  if (!records.length) return []
+  // Mission-embedded records (driver/nurse active mission API) have no requestId — already scoped.
+  const hasCaseKeys = records.some(
+    (r) => r.requestId != null || r.emergencyRequest?.id != null,
+  )
+  if (!hasCaseKeys) return records
   return records.filter(
     (r) => r.requestId === caseId || r.emergencyRequest?.id === caseId,
   )

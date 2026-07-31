@@ -2,7 +2,10 @@ import { emergencyRequestsService } from '@/lib/api'
 import type { EmergencyRequest } from '@/types'
 import type { EmergencyPortal } from '@/lib/emergency/emergencyPortalPaths'
 
-export type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional'
+export type EmergencyQueue = 'pending' | 'my-active' | 'station-active' | 'my-cases' | 'regional'
+
+/** Dispatcher active missions scope on the active page. */
+export type DispatcherActiveScope = 'my-active' | 'station-active'
 
 /** Fetch emergency cases with dispatcher queue scoping when in dispatcher portal. */
 export async function fetchEmergencyRequests(
@@ -22,16 +25,17 @@ export async function fetchEmergencyRequests(
   return Array.isArray(data) ? data : []
 }
 
-/** Pending = regional unassigned queue; active/monitoring = this dispatcher's assigned cases. */
+/** Pending = regional unassigned; active page uses my-active or station-active. */
 export function dispatcherQueueForPage(
   page: 'pending' | 'active' | 'my-cases' | 'monitoring' | 'critical' | 'default',
+  activeScope: DispatcherActiveScope = 'my-active',
 ): EmergencyQueue {
   switch (page) {
     case 'pending':
       return 'pending'
     case 'active':
     case 'monitoring':
-      return 'my-active'
+      return activeScope
     case 'my-cases':
       return 'my-cases'
     case 'critical':

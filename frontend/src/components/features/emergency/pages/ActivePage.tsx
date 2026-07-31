@@ -41,7 +41,7 @@ import {
 } from '@/components/features/emergency/missionStatusOptions'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { useEmergencyPortal } from '@/lib/emergency/EmergencyPortalContext'
-import { fetchEmergencyRequests } from '@/lib/emergency/fetchEmergencyRequests'
+import { fetchEmergencyRequests, type DispatcherActiveScope } from '@/lib/emergency/fetchEmergencyRequests'
 
 const PROGRESS_STEPS = [
   { ids: ['ASSIGNED'], icon: Siren, label: 'Assigned' },
@@ -86,6 +86,7 @@ function ActiveMissionsContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [phaseFilter, setPhaseFilter] = useState<MissionPhaseFilter>('ALL')
+  const [dispatcherScope, setDispatcherScope] = useState<DispatcherActiveScope>('my-active')
   const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
   const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(null)
@@ -111,7 +112,7 @@ function ActiveMissionsContent() {
       if (showLoader) setIsLoading(true)
       const data = await fetchEmergencyRequests(
         portal,
-        portal === 'dispatcher' ? 'my-active' : undefined,
+        portal === 'dispatcher' ? dispatcherScope : undefined,
         { activeOnly: true },
       )
       setRequests(Array.isArray(data) ? data : [])
@@ -120,7 +121,7 @@ function ActiveMissionsContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [portal])
+  }, [portal, dispatcherScope])
 
   useEffect(() => {
     fetchRequests(true)
@@ -189,7 +190,9 @@ function ActiveMissionsContent() {
             <h1 className="text-3xl font-black tracking-tight">Active Missions</h1>
             <p className="text-red-100/80 mt-2 max-w-2xl">
               {portal === 'dispatcher'
-                ? 'Cases you assigned and are monitoring — driver and nurse update status in the field.'
+                ? dispatcherScope === 'station-active'
+                  ? 'All in-progress missions at your station — including cases handled by other dispatchers.'
+                  : 'Cases you assigned and are monitoring — driver and nurse update status in the field.'
                 : 'Live deployment grid — filter by mission phase. Status updates are handled by drivers.'}
             </p>
           </div>
@@ -205,6 +208,35 @@ function ActiveMissionsContent() {
       </div>
 
       <EmergencyStatsBar stats={stats} />
+
+      {portal === 'dispatcher' && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setDispatcherScope('my-active')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all active-missions-filter-pill ${
+              dispatcherScope === 'my-active'
+                ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
+            }`}
+          >
+            <User className="w-4 h-4 shrink-0" />
+            My active cases
+          </button>
+          <button
+            type="button"
+            onClick={() => setDispatcherScope('station-active')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all active-missions-filter-pill ${
+              dispatcherScope === 'station-active'
+                ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
+            }`}
+          >
+            <Building2 className="w-4 h-4 shrink-0" />
+            Station active cases
+          </button>
+        </div>
+      )}
 
       {/* Phase filter pills */}
       <div className="flex flex-wrap gap-2">
@@ -280,6 +312,11 @@ function ActiveMissionsContent() {
             <p className="font-semibold text-slate-700">No missions in this view</p>
             <p className="text-sm text-slate-500 mt-1">
               No cases match &quot;{activeFilterLabel}&quot;
+              {portal === 'dispatcher' && dispatcherScope === 'station-active'
+                ? ' at your station'
+                : portal === 'dispatcher'
+                  ? ' assigned to you'
+                  : ''}
               {searchTerm ? ` for "${searchTerm}"` : ''}
             </p>
           </div>

@@ -14,6 +14,7 @@ import {
   myActiveCasesWhere,
   regionalCasesWhere,
   regionalPendingCasesWhere,
+  stationActiveCasesWhere,
   isCaseInDispatcherPendingScope,
   isCaseAtDispatcherStation,
 } from '../dispatchers-app/dispatcher-scope.util';
@@ -56,7 +57,7 @@ function caseRequiresNurse(caseRow: {
   return blob.includes('REQUIRES NURSE: YES') || blob.includes('NURSE REQUIRED');
 }
 
-type EmergencyQueue = 'pending' | 'my-active' | 'my-cases' | 'regional';
+type EmergencyQueue = 'pending' | 'my-active' | 'station-active' | 'my-cases' | 'regional';
 
 /** In-progress mission statuses (matches frontend ACTIVE_MISSION_STATUSES). */
 const ACTIVE_MISSION_STATUSES = [
@@ -171,6 +172,8 @@ export class EmergencyRequestsService {
         return regionalPendingCasesWhere(scope, {}, scope.stationScoped);
       case 'my-active':
         return myActiveCasesWhere(scope);
+      case 'station-active':
+        return stationActiveCasesWhere(scope, {}, scope.stationScoped);
       case 'my-cases':
         return myCasesWhere(scope);
       case 'regional':

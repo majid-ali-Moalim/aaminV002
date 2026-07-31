@@ -24,6 +24,18 @@ export function myActiveCasesWhere(
   });
 }
 
+/** In-progress missions at the dispatcher's home station (any assignee). */
+export function stationActiveCasesWhere(
+  scope: DispatcherScope,
+  extra: Prisma.EmergencyRequestWhereInput = {},
+  stationScoped = false,
+): Prisma.EmergencyRequestWhereInput {
+  if (scope.stationId) {
+    return { stationId: scope.stationId, ...extra };
+  }
+  return regionalCasesWhere(scope, extra, stationScoped);
+}
+
 /** Emergency cases in the dispatcher's region or station (when multi-station). */
 export function regionalCasesWhere(
   scope: DispatcherScope,

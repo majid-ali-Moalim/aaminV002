@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import useSWR from 'swr'
 import SidebarMenuLink from '@/components/navigation/SidebarMenuLink'
 import {
   Siren,
@@ -25,8 +26,21 @@ import {
   DISPATCHER_SIDEBAR,
   DISPATCHER_SIDEBAR_WORKFLOW_DASH,
 } from '@/lib/dispatcher/dispatcherSidebarTheme'
+import { dispatcherDashboardApi } from '@/lib/dispatcherApi'
 
 const SIDEBAR = DISPATCHER_SIDEBAR
+
+type EmergencyBadgeCounts = {
+  pending: number
+  active: number
+  delayed: number
+}
+
+function resolveBadgeCount(item: EmergencyCommandItem, counts: EmergencyBadgeCounts): number | undefined {
+  if (!item.badgeKey) return undefined
+  const count = counts[item.badgeKey]
+  return count > 0 ? count : undefined
+}
 
 function SectionLabel({ label }: { label: string }) {
   return (
@@ -42,8 +56,14 @@ interface Props {
   onNavigate?: () => void
 }
 
-function renderMenuItem(item: EmergencyCommandItem, onNavigate?: () => void, opts?: { workflow?: boolean }) {
+function renderMenuItem(
+  item: EmergencyCommandItem,
+  badgeCounts: EmergencyBadgeCounts,
+  onNavigate?: () => void,
+  opts?: { workflow?: boolean },
+) {
   const accentColor = item.accent ? SIDEBAR[item.accent] : SIDEBAR.muted
+  const badge = resolveBadgeCount(item, badgeCounts)
   return (
     <SidebarMenuLink
       key={item.href + item.label}
@@ -53,6 +73,8 @@ function renderMenuItem(item: EmergencyCommandItem, onNavigate?: () => void, opt
       exact={item.exact}
       sidebar={SIDEBAR}
       accentColor={accentColor}
+      badge={badge}
+      badgeVariant={item.badgeVariant ?? 'green'}
       className={`flex items-center gap-2.5 py-2 rounded-lg text-[13px] font-medium ${
         opts?.workflow ? 'pl-2 pr-2' : 'px-2.5'
       }`}
@@ -135,9 +157,11 @@ function CollapsibleSection({
 
 function SectionGroups({
   sections,
+  badgeCounts,
   onNavigate,
 }: {
   sections: EmergencyCommandSection[]
+  badgeCounts: EmergencyBadgeCounts
   onNavigate?: () => void
 }) {
   return (
@@ -161,10 +185,10 @@ function SectionGroups({
               className="ml-1 pl-3 space-y-0.5"
               style={{ borderLeft: `1px dashed ${DISPATCHER_SIDEBAR_WORKFLOW_DASH}` }}
             >
-              {section.items.map((item) => renderMenuItem(item, onNavigate, { workflow: true }))}
+              {section.items.map((item) => renderMenuItem(item, badgeCounts, onNavigate, { workflow: true }))}
             </div>
           ) : (
-            <div className="space-y-0.5">{section.items.map((item) => renderMenuItem(item, onNavigate))}</div>
+            <div className="space-y-0.5">{section.items.map((item) => renderMenuItem(item, badgeCounts, onNavigate))}</div>
           )}
         </div>
       ))}
@@ -172,12 +196,29 @@ function SectionGroups({
   )
 }
 
-function FlatItems({ items, onNavigate }: { items: EmergencyCommandItem[]; onNavigate?: () => void }) {
-  return <div className="space-y-0.5">{items.map((item) => renderMenuItem(item, onNavigate))}</div>
+function FlatItems({
+  items,
+  badgeCounts,
+  onNavigate,
+}: {
+  items: EmergencyCommandItem[]
+  badgeCounts: EmergencyBadgeCounts
+  onNavigate?: () => void
+}) {
+  return <div className="space-y-0.5">{items.map((item) => renderMenuItem(item, badgeCounts, onNavigate))}</div>
 }
 
 export default function DispatcherEmergencyCommandSidebar({ onNavigate }: Props) {
   const pathname = usePathname()
+  const { data: overview } = useSWR('dispatcher-emergency-nav-badges', () => dispatcherDashboardApi.getOverview(), {
+    refreshInterval: 30000,
+  })
+
+  const badgeCounts: EmergencyBadgeCounts = {
+    pending: overview?.kpis?.pendingDispatches ?? 0,
+    active: overview?.kpis?.activeMissions ?? 0,
+    delayed: overview?.kpis?.delayedMissions ?? 0,
+  }
 
   const emergencyActive = isDispatcherEmergencyOperationsPath(pathname)
   const patientsActive = isDispatcherPatientsPath(pathname)
@@ -211,7 +252,7 @@ export default function DispatcherEmergencyCommandSidebar({ onNavigate }: Props)
           isOpen={emergencyOpen}
           setOpen={setEmergencyOpen}
         >
-          <SectionGroups sections={DISPATCHER_EMERGENCY_SECTIONS} onNavigate={onNavigate} />
+          <SectionGroups sections={DISPATCHER_EMERGENCY_SECTIONS} badgeCounts={badgeCounts} onNavigate={onNavigate} />
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -221,7 +262,7 @@ export default function DispatcherEmergencyCommandSidebar({ onNavigate }: Props)
           isOpen={patientsOpen}
           setOpen={setPatientsOpen}
         >
-          <FlatItems items={DISPATCHER_PATIENTS_ITEMS} onNavigate={onNavigate} />
+          <FlatItems items={DISPATCHER_PATIENTS_ITEMS} badgeCounts={badgeCounts} onNavigate={onNavigate} />
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -231,7 +272,7 @@ export default function DispatcherEmergencyCommandSidebar({ onNavigate }: Props)
           isOpen={resourcesOpen}
           setOpen={setResourcesOpen}
         >
-          <FlatItems items={DISPATCHER_RESOURCES_ITEMS} onNavigate={onNavigate} />
+          <FlatItems items={DISPATCHER_RESOURCES_ITEMS} badgeCounts={badgeCounts} onNavigate={onNavigate} />
         </CollapsibleSection>
       </div>
     </div>

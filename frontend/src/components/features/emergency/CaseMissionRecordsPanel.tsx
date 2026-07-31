@@ -50,6 +50,7 @@ function nurseRecordBody(record: NonNullable<EmergencyRequest['patientCareRecord
   const handover = parseHandover(record.clinicalNotes)
   if (handover) {
     return [
+      handover.patientOutcome && `Status: ${handover.patientOutcome}`,
       handover.patientCondition && `Condition: ${handover.patientCondition}`,
       handover.treatmentGiven && `Treatment: ${handover.treatmentGiven}`,
       handover.notes && `Notes: ${handover.notes}`,

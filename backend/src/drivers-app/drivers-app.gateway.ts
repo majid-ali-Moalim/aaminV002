@@ -137,4 +137,12 @@ export class DriversAppGateway implements OnGatewayConnection, OnGatewayDisconne
   emitMissionCancelled(driverUserId: string, missionId: string) {
     this.server.to(`driver:${driverUserId}`).emit('mission_cancelled', { missionId });
   }
+
+  /** Nurse loaded patient — refresh care records so Transfer to Hospital unlocks */
+  emitPatientCareUpdated(
+    driverUserId: string,
+    payload: { missionId: string; patientCareRecords: Array<{ id: string; clinicalNotes?: string | null; createdAt?: Date | string }> },
+  ) {
+    this.server.to(`driver:${driverUserId}`).emit('patient_care_updated', payload);
+  }
 }

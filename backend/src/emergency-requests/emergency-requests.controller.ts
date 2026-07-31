@@ -40,8 +40,9 @@ export class EmergencyRequestsController {
   @ApiQuery({
     name: 'queue',
     required: false,
-    enum: ['pending', 'my-active', 'my-cases', 'regional'],
-    description: 'Dispatcher queue filter: pending (regional unassigned), my-active (your missions), my-cases (all yours)',
+    enum: ['pending', 'my-active', 'station-active', 'my-cases', 'regional'],
+    description:
+      'Dispatcher queue: pending, my-active (your in-progress missions), station-active (all active at your station), my-cases, regional',
   })
   @ApiQuery({
     name: 'status',

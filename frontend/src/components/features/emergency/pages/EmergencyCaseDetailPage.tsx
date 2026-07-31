@@ -77,6 +77,7 @@ function clinicalRecordLines(record: NonNullable<EmergencyRequest['patientCareRe
   const handover = parseHandover(record.clinicalNotes)
   if (handover) {
     return [
+      ['Patient status', handover.patientOutcome || '—'],
       ['Patient condition', handover.patientCondition],
       ['Treatment given', handover.treatmentGiven],
       ['Receiving staff', handover.receivingStaff],

@@ -57,6 +57,8 @@ export type HandoverData = {
   receivingStaff: string
   notes: string
   signature: string
+  /** Live patient at handover, or deceased */
+  patientOutcome?: 'Live' | 'Deceased'
   acceptedHospital?: string
   rejectedHospitals?: Array<{
     id: string
@@ -176,7 +178,44 @@ export function isMedicalNoteRecord(record: {
 }
 
 export const CONSCIOUSNESS_LEVELS = ['Alert', 'Verbal', 'Pain', 'Unresponsive'] as const
-export const PAIN_LEVELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] as const
+
+export const PAIN_LEVEL_OPTIONS = [
+  { value: 'None', label: 'None — No pain' },
+  { value: 'Mild', label: 'Mild — Minimal discomfort' },
+  { value: 'Moderate', label: 'Moderate — Distressing pain' },
+  { value: 'Severe', label: 'Severe — Worst pain' },
+] as const
+
+export const PATIENT_HANDOVER_OUTCOMES = [
+  { value: 'Live', label: 'Live — Patient alive at handover' },
+  { value: 'Deceased', label: 'Deceased — Patient deceased at handover' },
+] as const
+
+export const PAIN_LEVELS = PAIN_LEVEL_OPTIONS.map((o) => o.value)
+
+const LEGACY_PAIN_LEVEL_MAP: Record<string, string> = {
+  '0': 'None',
+  '1': 'Mild',
+  '2': 'Mild',
+  '3': 'Mild',
+  '4': 'Moderate',
+  '5': 'Moderate',
+  '6': 'Moderate',
+  '7': 'Severe',
+  '8': 'Severe',
+  '9': 'Severe',
+  '10': 'Severe',
+}
+
+export function normalizePainLevel(value: string): string {
+  if (PAIN_LEVELS.includes(value as (typeof PAIN_LEVELS)[number])) return value
+  return LEGACY_PAIN_LEVEL_MAP[value] ?? 'None'
+}
+
+export function painLevelLabel(value: string): string {
+  const normalized = normalizePainLevel(value)
+  return PAIN_LEVEL_OPTIONS.find((o) => o.value === normalized)?.label ?? normalized
+}
 export const BREATHING_STATUS = ['Normal', 'Labored', 'Shallow', 'Absent', 'Assisted'] as const
 
 export const TREATMENT_TYPES = [

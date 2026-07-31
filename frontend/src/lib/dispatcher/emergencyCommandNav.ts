@@ -28,6 +28,9 @@ export type EmergencyCommandItem = {
   icon: LucideIcon
   exact?: boolean
   accent?: EmergencyCommandAccent
+  /** Count badge key from dispatcher dashboard overview KPIs */
+  badgeKey?: 'pending' | 'active' | 'delayed'
+  badgeVariant?: 'green' | 'red'
 }
 
 export type EmergencyCommandSection = {
@@ -40,18 +43,18 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
   {
     title: 'Case Management',
     items: [
-      { href: '/dispatcher/emergency-requests/pending', label: 'Pending Queue', icon: ClipboardList, exact: true },
+      { href: '/dispatcher/emergency-requests/pending', label: 'Pending Queue', icon: ClipboardList, exact: true, badgeKey: 'pending' },
       { href: '/dispatcher/emergency-requests/new', label: 'New Emergency Case', icon: PlusCircle },
       { href: '/dispatcher/emergency-requests/critical', label: 'Critical Cases', icon: AlertCircle, accent: 'critical' },
-      { href: '/dispatcher/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle, accent: 'warning' },
+      { href: '/dispatcher/emergency-requests/escalated', label: 'Delayed / Escalated', icon: AlertTriangle, accent: 'warning', badgeKey: 'delayed', badgeVariant: 'red' },
       { href: '/dispatcher/emergency-requests/triage', label: 'Triage Queue', icon: AlertTriangle, accent: 'warning' },
     ],
   },
   {
     title: 'Dispatch & Missions',
     items: [
-      { href: '/dispatcher/emergency-requests/pending', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info' },
-      { href: '/dispatcher/emergency-requests/active', label: 'My Active Missions', icon: Siren },
+      { href: '/dispatcher/emergency-requests/pending', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info', badgeKey: 'pending' },
+      { href: '/dispatcher/emergency-requests/active', label: 'My Active Missions', icon: Siren, badgeKey: 'active' },
     ],
   },
   {

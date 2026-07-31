@@ -10,9 +10,10 @@ import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
   BREATHING_STATUS,
   CONSCIOUSNESS_LEVELS,
-  PAIN_LEVELS,
+  PAIN_LEVEL_OPTIONS,
   encodeAssessment,
   isAssessmentRecord,
+  painLevelLabel,
   parseClinicalRecord,
 } from '@/lib/nurse/patientCareTypes'
 
@@ -22,7 +23,7 @@ const emptyForm = {
   chiefComplaint: '',
   symptoms: '',
   consciousnessLevel: 'Alert',
-  painLevel: '0',
+  painLevel: 'None',
   breathingStatus: 'Normal',
   injuryDescription: '',
   assessmentNotes: '',
@@ -152,8 +153,8 @@ export default function PatientCareAssessmentView({ caseId }: Props) {
           <label>
             Pain level (0–10)
             <select value={form.painLevel} onChange={(e) => setForm({ ...form, painLevel: e.target.value })}>
-              {PAIN_LEVELS.map((v) => (
-                <option key={v} value={v}>{v}</option>
+              {PAIN_LEVEL_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </label>
@@ -216,7 +217,7 @@ export default function PatientCareAssessmentView({ caseId }: Props) {
                   <p className="font-bold text-red-400">{r.emergencyRequest?.trackingCode}</p>
                   <p className="text-sm text-zinc-300">{a.chiefComplaint}</p>
                   <p className="text-xs text-zinc-500 mt-1">
-                    AVPU {a.consciousnessLevel} · Pain {a.painLevel}/10 · {a.breathingStatus}
+                    AVPU {a.consciousnessLevel} · Pain {painLevelLabel(a.painLevel)} · {a.breathingStatus}
                   </p>
                   <p className="text-xs text-zinc-600 mt-1">
                     {format(new Date(r.createdAt), 'MMM d, h:mm a')}

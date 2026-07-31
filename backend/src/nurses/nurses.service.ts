@@ -3,6 +3,7 @@ import { Prisma, NotificationType, EmergencyRequestStatus } from '@prisma/client
 import { PrismaService } from '../prisma/prisma.service';
 import { generateNextEmployeeCode } from '../employees/employee-code.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DriversAppGateway } from '../drivers-app/drivers-app.gateway';
 import {
   buildCrewAvailabilityContext,
   enrichNurseWithAvailability,
@@ -16,7 +17,8 @@ import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 export class NursesService {
   constructor(
     private prisma: PrismaService,
-    private notifications: NotificationsService
+    private notifications: NotificationsService,
+    private driverGateway: DriversAppGateway,
   ) {}
 
   async findAll(filters?: { 
@@ -248,7 +250,33 @@ export class NursesService {
       activityLabel,
     );
 
+    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith('[EADS_LOAD_PATIENT]')) {
+      await this.notifyDriverPatientLoaded(data.emergencyRequestId);
+    }
+
     return result;
+  }
+
+  private async notifyDriverPatientLoaded(emergencyRequestId: string) {
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: emergencyRequestId },
+      select: {
+        id: true,
+        driver: { select: { userId: true } },
+        patientCareRecords: {
+          select: { id: true, clinicalNotes: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    const driverUserId = request?.driver?.userId;
+    if (!driverUserId || !request) return;
+
+    this.driverGateway.emitPatientCareUpdated(driverUserId, {
+      missionId: emergencyRequestId,
+      patientCareRecords: request.patientCareRecords,
+    });
   }
 
   async acceptMission(requestId: string, nurseId: string) {
