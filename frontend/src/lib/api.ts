@@ -908,6 +908,11 @@ export const nursesService = {
     return await api.post('/api/nurses/records', data)
   },
 
+  updatePatientCareRecord: async (recordId: string, data: any) => {
+    const api = new ApiService()
+    return await api.patch(`/api/nurses/records/${recordId}`, data)
+  },
+
   acceptMission: async (requestId: string, nurseId: string) => {
     const api = new ApiService()
     return await api.post(`/api/nurses/missions/${requestId}/accept`, { nurseId })
@@ -1463,6 +1468,29 @@ export const hospitalCoordinationService = {
   ) => {
     const api = new ApiService()
     return await api.post(`/api/hospital-coordination/requests/${requestId}/assign`, data)
+  },
+  assignManualHospital: async (
+    requestId: string,
+    data: {
+      name: string
+      address: string
+      regionId: string
+      districtId: string
+      hospitalType?: string
+      branchName?: string
+      branchAddress?: string
+      primaryPhone?: string
+      emergencyHotline?: string
+      emergencyShortCode?: string
+      contactPersonName?: string
+      contactPersonRole?: string
+      email?: string
+      receivingStaffName?: string
+      notes?: string
+    },
+  ) => {
+    const api = new ApiService()
+    return await api.post(`/api/hospital-coordination/requests/${requestId}/assign-manual`, data)
   },
   acceptCase: async (id: string, receivingStaffName?: string) => {
     const api = new ApiService()

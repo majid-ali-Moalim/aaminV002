@@ -290,6 +290,100 @@ export class HospitalsService {
     });
   }
 
+  /** Quick-create a hospital/place record when assigning from dispatch (no portal account). */
+  async createManualAssignmentHospital(data: {
+    name: string;
+    address: string;
+    regionId: string;
+    districtId: string;
+    hospitalType?: string;
+    branchName?: string;
+    branchAddress?: string;
+    primaryPhone?: string;
+    emergencyHotline?: string;
+    emergencyShortCode?: string;
+    contactPersonName?: string;
+    contactPersonRole?: string;
+    email?: string;
+  }) {
+    const name = data.name.trim();
+    const address = data.address.trim();
+    if (!name) throw new BadRequestException('Place name is required');
+    if (!address) throw new BadRequestException('Location / address is required');
+
+    const nameExists = await this.prisma.hospital.findUnique({ where: { name } });
+    if (nameExists) {
+      throw new ConflictException(
+        'A hospital with this name already exists — search the registry or use a different name',
+      );
+    }
+
+    let primaryPhone = data.primaryPhone?.trim() || null;
+    if (primaryPhone) {
+      const phoneExists = await this.prisma.hospital.findUnique({ where: { primaryPhone } });
+      if (phoneExists) {
+        throw new ConflictException('Primary phone number is already registered to another hospital');
+      }
+    } else {
+      primaryPhone = `+2529${String(Date.now()).slice(-8)}`;
+    }
+
+    const emergencyShortCode = data.emergencyShortCode?.trim() || null;
+    const emergencyHotline = data.emergencyHotline?.trim() || null;
+    const emergencyContact = emergencyHotline || emergencyShortCode || primaryPhone;
+    const branchId = randomUUID();
+    const branchName = data.branchName?.trim();
+    const branchAddress = (data.branchAddress?.trim() || address).trim();
+    const email = data.email?.trim() || `manual-${randomUUID()}@aamin.local`;
+
+    const branches = branchName
+      ? [
+          {
+            id: branchId,
+            name: branchName,
+            regionId: data.regionId,
+            districtId: data.districtId,
+            address: branchAddress,
+            email,
+            primaryPhone,
+            emergencyShortCode,
+            emergencyHotline,
+          },
+        ]
+      : [];
+
+    const hospitalCode = await this.nextHospitalCode();
+
+    return this.prisma.hospital.create({
+      data: {
+        hospitalCode,
+        name,
+        hospitalType: data.hospitalType || 'Clinic',
+        ownershipType: 'Private',
+        regionId: data.regionId,
+        districtId: data.districtId,
+        address,
+        contactPersonName: data.contactPersonName?.trim() || 'Not specified',
+        contactPersonRole: data.contactPersonRole?.trim() || 'Coordinator',
+        primaryPhone,
+        emergencyShortCode,
+        emergencyHotline,
+        emergencyContact,
+        email,
+        acceptEmergencyCases: true,
+        medicalCapabilities: ['General Care'],
+        capacityStatus: 'Available',
+        availabilityStatus: 'Available',
+        operationalStatus: 'Active',
+        status: 'Available',
+        isActive: true,
+        erReady: true,
+        branches: branches as Prisma.InputJsonValue,
+      },
+      include: { region: true, district: true },
+    });
+  }
+
   async update(id: string, data: any) {
     const { regionId, districtId, ...rest } = data;
     const updateData: any = { ...rest };

@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { Activity, FileText, Stethoscope, Truck, User } from 'lucide-react'
 import { EmergencyRequest } from '@/types'
 import {
+  handoverOutcomeLabel,
   parseClinicalRecord,
   parseHandover,
   parseMonitoring,
@@ -50,7 +51,7 @@ function nurseRecordBody(record: NonNullable<EmergencyRequest['patientCareRecord
   const handover = parseHandover(record.clinicalNotes)
   if (handover) {
     return [
-      handover.patientOutcome && `Status: ${handover.patientOutcome}`,
+      handover.patientOutcome && `Status: ${handoverOutcomeLabel(handover.patientOutcome)}`,
       handover.patientCondition && `Condition: ${handover.patientCondition}`,
       handover.treatmentGiven && `Treatment: ${handover.treatmentGiven}`,
       handover.notes && `Notes: ${handover.notes}`,

@@ -28,9 +28,9 @@ export function validateHandoverForm(form: HandoverFormFields): HandoverFieldErr
   }
 
   if (!form.patientOutcome) {
-    errors.patientOutcome = 'Select whether the patient is live or deceased'
+    errors.patientOutcome = 'Select whether the patient is live or dead'
   } else if (!['Live', 'Deceased'].includes(form.patientOutcome)) {
-    errors.patientOutcome = 'Select Live or Deceased'
+    errors.patientOutcome = 'Select Live or Dead'
   }
 
   const conditionErr = optionalText(form.patientCondition, MAX_TEXT, 'Patient condition summary')
@@ -39,13 +39,8 @@ export function validateHandoverForm(form: HandoverFormFields): HandoverFieldErr
   const treatmentErr = optionalText(form.treatmentGiven, MAX_TEXT, 'Treatment given')
   if (treatmentErr) errors.treatmentGiven = treatmentErr
 
-  if (!form.receivingStaff.trim()) {
-    errors.receivingStaff = 'Receiving doctor name is required'
-  } else if (form.receivingStaff.trim().length < 2) {
-    errors.receivingStaff = 'Enter at least 2 characters'
-  } else if (form.receivingStaff.trim().length > MAX_NAME) {
-    errors.receivingStaff = `Name must be ${MAX_NAME} characters or less`
-  }
+  const receivingErr = optionalText(form.receivingStaff, MAX_NAME, 'Receiving doctor name')
+  if (receivingErr) errors.receivingStaff = receivingErr
 
   const notesErr = optionalText(form.notes, MAX_TEXT, 'Handover notes')
   if (notesErr) errors.notes = notesErr

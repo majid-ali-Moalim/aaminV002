@@ -26,7 +26,7 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
-import { parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
+import { handoverOutcomeLabel, parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
 import '@/components/features/emergency/case-detail.css'
 import { getCaseStationLabels } from '@/lib/emergency/caseStationLabels'
 import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
@@ -77,7 +77,7 @@ function clinicalRecordLines(record: NonNullable<EmergencyRequest['patientCareRe
   const handover = parseHandover(record.clinicalNotes)
   if (handover) {
     return [
-      ['Patient status', handover.patientOutcome || '—'],
+      ['Patient status', handoverOutcomeLabel(handover.patientOutcome)],
       ['Patient condition', handover.patientCondition],
       ['Treatment given', handover.treatmentGiven],
       ['Receiving staff', handover.receivingStaff],

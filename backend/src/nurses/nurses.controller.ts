@@ -51,6 +51,11 @@ export class NursesController {
     return this.nursesService.createPatientCareRecord(data);
   }
 
+  @Patch('records/:id')
+  async updatePatientCareRecord(@Param('id') id: string, @Body() data: any) {
+    return this.nursesService.updatePatientCareRecord(id, data);
+  }
+
   @Post('missions/:requestId/accept')
   async acceptMission(
     @Param('requestId') requestId: string,

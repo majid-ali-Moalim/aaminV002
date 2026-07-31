@@ -8,9 +8,11 @@ import {
   TREATMENT_TYPES,
   painLevelLabel,
   PATIENT_HANDOVER_OUTCOMES,
+  handoverOutcomeLabel,
 } from '@/lib/nurse/patientCareTypes'
 import type { MedicalNotesFieldErrors } from '@/lib/nurse/medicalNotesValidation'
 import type { HandoverFieldErrors } from '@/lib/nurse/handoverValidation'
+import { COUNTRY_NAMES } from '@/lib/countries'
 import { AGE_GROUPS } from '@/components/public/hire-ambulance/constants'
 
 type TaskShellProps = {
@@ -503,9 +505,12 @@ export function HandoverTaskFields({
   errors?: HandoverFieldErrors
 }) {
   const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
-  const outcomeLabel =
-    PATIENT_HANDOVER_OUTCOMES.find((o) => o.value === form.patientOutcome)?.label ?? form.patientOutcome
+  const outcomeLabel = handoverOutcomeLabel(form.patientOutcome)
   const acceptedHospital = caseContext?.acceptedHospital || form.acceptedHospital || '—'
+  const nationalityOptions =
+    form.nationalityType && !COUNTRY_NAMES.includes(form.nationalityType as (typeof COUNTRY_NAMES)[number])
+      ? [form.nationalityType, ...COUNTRY_NAMES]
+      : COUNTRY_NAMES
 
   return (
     <>
@@ -556,39 +561,33 @@ export function HandoverTaskFields({
       </label>
       <label>
         Gender
-        <input
-          value={form.gender}
-          onChange={(e) => setForm({ ...form, gender: e.target.value })}
-          maxLength={40}
-          {...ro}
-        />
+        <input value={form.gender || '—'} readOnly className="readonly" />
       </label>
       <label>
         Nationality
-        <input
-          value={form.nationalityType}
-          onChange={(e) => setForm({ ...form, nationalityType: e.target.value })}
-          maxLength={80}
-          {...ro}
-        />
+        {readOnly ? (
+          <input value={form.nationalityType || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.nationalityType}
+            onChange={(e) => setForm({ ...form, nationalityType: e.target.value })}
+          >
+            <option value="">Select country…</option>
+            {nationalityOptions.map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
       <label>
         Marital status
-        <input
-          value={form.maritalStatus}
-          onChange={(e) => setForm({ ...form, maritalStatus: e.target.value })}
-          maxLength={40}
-          {...ro}
-        />
+        <input value={form.maritalStatus || '—'} readOnly className="readonly" />
       </label>
       <label>
         Driver
-        <input
-          value={form.driverName}
-          onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-          maxLength={120}
-          {...ro}
-        />
+        <input value={form.driverName || '—'} readOnly className="readonly" />
       </label>
       <label>
         Handover nurse
@@ -616,43 +615,45 @@ export function HandoverTaskFields({
         <FieldError error={errors.patientOutcome} />
       </label>
       <label className="span-2">
-        Patient condition summary
+        Patient condition summary <span className="nmw-optional">(optional)</span>
         <textarea
           rows={2}
           value={form.patientCondition}
           onChange={(e) => setForm({ ...form, patientCondition: e.target.value })}
           maxLength={2000}
+          placeholder="Brief summary of patient condition at handover"
           aria-invalid={Boolean(errors.patientCondition)}
           {...ro}
         />
         <FieldError error={errors.patientCondition} />
       </label>
       <label className="span-2">
-        Treatment given en route
+        Treatment given en route <span className="nmw-optional">(optional)</span>
         <textarea
           rows={2}
           value={form.treatmentGiven}
           onChange={(e) => setForm({ ...form, treatmentGiven: e.target.value })}
           maxLength={2000}
+          placeholder="Treatments and interventions during transport"
           aria-invalid={Boolean(errors.treatmentGiven)}
           {...ro}
         />
         <FieldError error={errors.treatmentGiven} />
       </label>
       <label className="span-2">
-        Receiving doctor (DR name) *
+        Receiving doctor (DR name) <span className="nmw-optional">(optional)</span>
         <input
           value={form.receivingStaff}
           onChange={(e) => setForm({ ...form, receivingStaff: e.target.value })}
-          required={!readOnly}
           maxLength={120}
+          placeholder="Name of receiving doctor, if known"
           aria-invalid={Boolean(errors.receivingStaff)}
           {...ro}
         />
         <FieldError error={errors.receivingStaff} />
       </label>
       <label className="span-2">
-        Handover notes
+        Handover notes <span className="nmw-optional">(optional)</span>
         <textarea
           rows={2}
           value={form.notes}

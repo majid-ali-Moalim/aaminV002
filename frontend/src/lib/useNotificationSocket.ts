@@ -9,6 +9,7 @@ import { resolveNurseNotificationUrl } from '@/lib/nurse/nurseNotificationRoutes
 import { resolveDriverNotificationUrl } from '@/lib/driver/driverNotificationRoutes'
 import { dispatchMissionAssignedEvent } from '@/lib/mission/missionAssignedEvents'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { hasNotificationBeenShown, markNotificationShown } from '@/lib/notifications/shownAlerts'
 
 const SOCKET_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -71,10 +72,15 @@ function ensureSocketListeners() {
       payload.requiresAckModal === true || payload.eventKey === 'MISSION_REASSIGNED'
 
     if (needsAckModal) {
-      playAlertSound()
+      if (!hasNotificationBeenShown(payload.id)) {
+        markNotificationShown(payload.id)
+        playAlertSound()
+      }
       useNotificationStore.getState().showAckModal(payload)
       return
     }
+
+    if (hasNotificationBeenShown(payload.id)) return
 
     const href = resolveLiveNotificationUrl(payload)
     const toastOpts = {
@@ -83,6 +89,23 @@ function ensureSocketListeners() {
         window.location.href = href
       },
     }
+
+    const isAdmin =
+      typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
+    const isScreenAlert =
+      payload.priority === 'CRITICAL' ||
+      payload.category === 'BROADCAST' ||
+      payload.category === 'MISSION' ||
+      payload.eventKey === 'MISSION_COMPLETED'
+
+    if (isAdmin && isScreenAlert) {
+      if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
+        playAlertSound()
+      }
+      return
+    }
+
+    markNotificationShown(payload.id)
     if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
       playAlertSound()
       toast.error(`${payload.title}: ${payload.message}`, {

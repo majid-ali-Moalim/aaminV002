@@ -27,6 +27,8 @@ import {
   encodeLoadPatient,
   isAssessmentRecord,
   isHandoverRecord,
+  findLatestAssessmentRecord,
+  findLatestHandoverRecord,
   normalizePainLevel,
   parseClinicalRecord,
   parseHandover,
@@ -149,6 +151,19 @@ function conditionSummaryFromRecords(records: any[], mission: any): string {
     .join('\n\n')
 }
 
+function handoverCountryDefault(patient?: { country?: string | null; nationalityType?: string | null }) {
+  if (patient?.country?.trim()) return patient.country.trim()
+  if (patient?.nationalityType === 'INTERNATIONAL') return ''
+  return 'Somalia'
+}
+
+function normalizeHandoverCountry(value?: string | null) {
+  if (!value?.trim()) return ''
+  if (value === 'LOCAL') return 'Somalia'
+  if (value === 'INTERNATIONAL') return ''
+  return value.trim()
+}
+
 function buildHandoverDefaults(mission: any, nurseName: string, records: any[] = []): HandoverFormState {
   const patient = mission.patient
   const driverName = mission.driver
@@ -164,7 +179,7 @@ function buildHandoverDefaults(mission: any, nurseName: string, records: any[] =
     signature: '',
     ageGroup: ageGroupFromAge(patient?.age),
     gender: patient?.gender || '',
-    nationalityType: patient?.nationalityType || '',
+    nationalityType: handoverCountryDefault(patient),
     maritalStatus: patient?.maritalStatus || '',
     driverName,
     nurseName,
@@ -185,7 +200,7 @@ function parseMedicalNotesClinicalExtras(clinicalNotes?: string | null) {
 }
 
 function medicalNotesFromRecords(records: any[]): MedicalNotesFormState {
-  const assessmentRecord = records.find(isAssessmentRecord)
+  const assessmentRecord = findLatestAssessmentRecord(records)
   if (!assessmentRecord) return { ...EMPTY_MEDICAL_NOTES }
   const parsed = parseClinicalRecord(assessmentRecord.clinicalNotes)
   const treatment = parseTreatmentFields(assessmentRecord.treatmentGiven)
@@ -215,7 +230,7 @@ function medicalNotesFromRecords(records: any[]): MedicalNotesFormState {
 }
 
 function handoverFromRecords(records: any[], defaults: HandoverFormState): HandoverFormState {
-  const handoverRecord = records.find(isHandoverRecord)
+  const handoverRecord = findLatestHandoverRecord(records)
   if (!handoverRecord) return defaults
   const parsed = parseHandover(handoverRecord.clinicalNotes)
   if (!parsed) return defaults
@@ -230,7 +245,7 @@ function handoverFromRecords(records: any[], defaults: HandoverFormState): Hando
     signature: parsed.signature || '',
     ageGroup: parsed.ageGroup || defaults.ageGroup,
     gender: parsed.gender || defaults.gender,
-    nationalityType: parsed.nationalityType || defaults.nationalityType,
+    nationalityType: normalizeHandoverCountry(parsed.nationalityType) || defaults.nationalityType,
     maritalStatus: parsed.maritalStatus || defaults.maritalStatus,
     driverName: parsed.driverName || defaults.driverName,
     nurseName: parsed.nurseName || defaults.nurseName,
@@ -379,7 +394,9 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   )
 
   const patientLoaded = mission ? hasLoadPatientSaved(caseRecords, mission.id) : false
-  const medicalNotesSaved = mission ? hasMedicalNotesSaved(caseRecords, mission.id) : false
+  const medicalNotesSaved = mission
+    ? hasMedicalNotesSaved(caseRecords, mission.id) || Boolean(meta?.completedTasks?.MEDICAL_NOTES)
+    : false
 
   const handoverComplete =
     caseRecords.some(isHandoverRecord) || Boolean(meta?.completedTasks?.HOSPITAL_HANDOVER)
@@ -397,7 +414,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
   const requestMedicalNotesFromHandover = () => {
     if (!medicalNotesSaved) {
-      goToMedicalNotesFromHandover(true)
+      toast.error('Submit medical notes before handover.')
       return
     }
     setHandoverMedicalNotesPrompt(true)
@@ -477,7 +494,11 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           return
         }
         if (activeTask === 'handover') {
-          requestMedicalNotesFromHandover()
+          if (!medicalNotesSaved) {
+            toast.error('Submit medical notes before handover.')
+            return
+          }
+          setHandoverMedicalNotesPrompt(true)
           return
         }
         if (!medicalNotesSaved && !guardTask('medical_notes')) return
@@ -561,6 +582,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     payload: Record<string, unknown>,
     stepId?: NurseWorkflowStepId,
     activityLabel?: string,
+    existingRecordId?: string,
   ): Promise<boolean> => {
     if (!nurseId || !mission || readOnly) return false
     if (stepId) {
@@ -575,20 +597,28 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
     setSaving(true)
     try {
-      await nursesService.createPatientCareRecord({
+      const body = {
         emergencyRequestId: mission.id,
         nurseId,
         patientId: mission.patientId || mission.patient?.id,
         activityLabel,
         ...payload,
-      })
+      }
+      if (existingRecordId) {
+        await nursesService.updatePatientCareRecord(existingRecordId, body)
+      } else {
+        await nursesService.createPatientCareRecord(body)
+      }
       if (stepId) {
         markStepComplete(mission.id, stepId)
         logNurseActivity(mission.id, `${NURSE_WORKFLOW_STEPS.find((s) => s.id === stepId)?.label} saved`)
         syncWorkflow()
       }
       await loadRecords()
-      toast.success('Record saved')
+      toast.success(
+        activityLabel ||
+          (existingRecordId ? 'Record updated' : 'Record saved'),
+      )
       return true
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Could not save record')
@@ -626,6 +656,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       medicalNotesForm.notes ? `Treatment notes: ${medicalNotesForm.notes}` : '',
     ].filter(Boolean)
 
+    const existingNotesId = findLatestAssessmentRecord(caseRecords)?.id
+
     const saved = await saveRecord(
       {
         clinicalNotes: noteSections.join('\n\n'),
@@ -638,7 +670,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         medications: medicalNotesForm.medication || undefined,
       },
       'MEDICAL_NOTES',
-      medicalNotesSaved ? 'Medical notes updated' : 'Medical notes saved',
+      existingNotesId ? 'Medical notes updated' : 'Medical notes saved',
+      existingNotesId,
     )
     if (!saved) return
     setMedicalNotesErrors({})
@@ -649,9 +682,11 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       setHandoverErrors({})
       setHandoverEditing(true)
       setActiveTask('handover')
-    } else {
+    } else if (!existingNotesId) {
       setActiveTask(null)
       toast.success('Medical notes saved — handover unlocks when the driver arrives at hospital')
+    } else {
+      setActiveTask(null)
     }
   }
 
@@ -663,6 +698,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       toast.error(firstHandoverError(errors) || 'Please fix the highlighted fields')
       return
     }
+    const existingHandoverId = findLatestHandoverRecord(caseRecords)?.id
+
     const saved = await saveRecord(
       {
         clinicalNotes: encodeHandover({
@@ -683,14 +720,14 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         }),
       },
       'HOSPITAL_HANDOVER',
-      handoverComplete ? 'Handover updated' : 'Hospital handover completed',
+      existingHandoverId ? 'Handover updated' : 'Hospital handover completed',
+      existingHandoverId,
     )
     if (!saved) return
     setHandoverErrors({})
     setHandoverEditing(false)
     advanceTo('HOSPITAL_HANDOVER')
     setActiveTask(null)
-    toast.success(handoverComplete ? 'Handover updated' : 'Hospital handover saved')
   }
 
   const closeMission = async () => {
@@ -999,7 +1036,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
             >
               {handoverMedicalNotesPrompt && (
                 <div className="nmw-confirm-prompt span-2">
-                  <p>Medical notes are already saved. Do you want to edit them?</p>
+                  <p>Medical notes are already saved. Do you want to edit them, or stay on handover?</p>
                   <div className="nmw-confirm-actions">
                     <button
                       type="button"

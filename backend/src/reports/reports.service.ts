@@ -25,6 +25,8 @@ type AdminReportFilters = {
   ambulanceStatus?: string;
   staffRole?: string;
   hospital?: string;
+  patientOutcome?: string;
+  transportType?: string;
 };
 
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
@@ -908,7 +910,7 @@ export class ReportsService {
   }
 
   async getAdminReportFilterOptions() {
-    const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles] =
+    const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles, transportTypes] =
       await Promise.all([
         this.prisma.region.findMany({
           where: { isActive: true, deletedAt: null },
@@ -939,6 +941,11 @@ export class ReportsService {
           orderBy: { name: 'asc' },
           select: { id: true, name: true },
         }),
+        this.prisma.transportType.findMany({
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, code: true, name: true },
+        }),
       ]);
 
     return {
@@ -954,6 +961,16 @@ export class ReportsService {
       vehicleTypes: [...new Set(ambulances.map((a) => a.vehicleType).filter(Boolean))].map((value) => ({
         value: value as string,
         label: value as string,
+      })),
+      patientOutcomes: [
+        { value: 'Live', label: 'Live at handover' },
+        { value: 'Deceased', label: 'Dead during transfer' },
+        { value: 'Unknown', label: 'Outcome not recorded' },
+      ],
+      transportTypes: transportTypes.map((t) => ({
+        value: t.name,
+        label: t.name,
+        code: t.code,
       })),
     };
   }
@@ -982,6 +999,8 @@ export class ReportsService {
         return this.getResponseTimeReport(period, filters);
       case 'outcomes':
         return this.getCaseOutcomeReport(period, filters);
+      case 'handover-outcomes':
+        return this.getHandoverOutcomeReport(period, filters);
       case 'operations':
         return this.getOperationsIntelligenceReport(period, filters);
       case 'export':
@@ -1385,8 +1404,305 @@ export class ReportsService {
     };
   }
 
+  private async countDeceasedHandovers(period: ReportPeriod, filters: AdminReportFilters) {
+    const requestWhere = this.emergencyDimensionWhere(filters);
+    const records = await this.prisma.patientCareRecord.findMany({
+      where: {
+        createdAt: { gte: period.start, lte: period.end },
+        clinicalNotes: { startsWith: '[EADS_HANDOVER]' },
+        emergencyRequest: requestWhere,
+      },
+      select: { requestId: true, clinicalNotes: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const latestByCase = new Map<string, string | null>();
+    for (const record of records) {
+      if (!record.requestId || latestByCase.has(record.requestId)) continue;
+      latestByCase.set(record.requestId, record.clinicalNotes);
+    }
+    let deceased = 0;
+    for (const notes of latestByCase.values()) {
+      if (this.parseHandoverOutcome(notes)?.patientOutcome === 'Deceased') deceased += 1;
+    }
+    return { total: latestByCase.size, deceased };
+  }
+
+  private isFuneralTransportLabel(label: string | null | undefined) {
+    if (!label) return false;
+    const normalized = label.toLowerCase();
+    return normalized.includes('funeral') || normalized.includes('deceased person');
+  }
+
+  private formatHandoverOutcomeLabel(outcome: 'Live' | 'Deceased' | 'Unknown') {
+    if (outcome === 'Deceased') return 'Dead';
+    if (outcome === 'Live') return 'Live';
+    return 'Unknown';
+  }
+
+  private parseHandoverOutcome(clinicalNotes?: string | null) {
+    const prefix = '[EADS_HANDOVER]';
+    if (!clinicalNotes?.startsWith(prefix)) return null;
+    try {
+      const data = JSON.parse(clinicalNotes.slice(prefix.length)) as {
+        patientOutcome?: string;
+        patientCondition?: string;
+        treatmentGiven?: string;
+        receivingStaff?: string;
+        acceptedHospital?: string;
+        signature?: string;
+      };
+      const outcome =
+        data.patientOutcome === 'Deceased'
+          ? 'Deceased'
+          : data.patientOutcome === 'Live'
+            ? 'Live'
+            : 'Unknown';
+      return { ...data, patientOutcome: outcome as 'Live' | 'Deceased' | 'Unknown' };
+    } catch {
+      return null;
+    }
+  }
+
+  private async getHandoverOutcomeReport(period: ReportPeriod, filters: AdminReportFilters) {
+    const requestWhere = this.emergencyDimensionWhere(filters);
+    const caseWhere = this.reportWhere(period, filters);
+
+    const [handoverRecords, periodCases] = await Promise.all([
+      this.prisma.patientCareRecord.findMany({
+        where: {
+          createdAt: { gte: period.start, lte: period.end },
+          clinicalNotes: { startsWith: '[EADS_HANDOVER]' },
+          emergencyRequest: requestWhere,
+        },
+        include: {
+          emergencyRequest: {
+            include: {
+              patient: true,
+              region: true,
+              district: true,
+              driver: true,
+              nurse: true,
+              destinationHospital: true,
+              incidentCategory: true,
+            },
+          },
+          nurse: { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: caseWhere,
+        select: { id: true, notes: true, trackingCode: true },
+      }),
+    ]);
+
+    const caseTransport = new Map<string, string>();
+    const transportCaseCounts: Record<string, number> = {};
+    let funeralCaseCount = 0;
+    let otherTransportCaseCount = 0;
+
+    for (const c of periodCases) {
+      const transport = this.parseNoteField(c.notes, 'Transport Type') || 'Not specified';
+      caseTransport.set(c.id, transport);
+      transportCaseCounts[transport] = (transportCaseCounts[transport] ?? 0) + 1;
+      if (this.isFuneralTransportLabel(transport)) funeralCaseCount += 1;
+      else otherTransportCaseCount += 1;
+    }
+
+    const latestByCase = new Map<string, (typeof handoverRecords)[number]>();
+    for (const record of handoverRecords) {
+      const caseId = record.requestId;
+      if (!caseId || latestByCase.has(caseId)) continue;
+      latestByCase.set(caseId, record);
+    }
+
+    let live = 0;
+    let deceased = 0;
+    let unknown = 0;
+    let funeralDead = 0;
+    let nonFuneralDead = 0;
+    const rows: Array<Array<string | number>> = [];
+    const transportHandoverStats: Record<
+      string,
+      { handovers: number; live: number; dead: number; unknown: number }
+    > = {};
+
+    for (const record of latestByCase.values()) {
+      const parsed = this.parseHandoverOutcome(record.clinicalNotes);
+      const outcome = parsed?.patientOutcome ?? 'Unknown';
+      const req = record.emergencyRequest;
+      const transport =
+        (req?.id ? caseTransport.get(req.id) : null) ||
+        this.parseNoteField(req?.notes, 'Transport Type') ||
+        'Not specified';
+
+      if (!transportHandoverStats[transport]) {
+        transportHandoverStats[transport] = { handovers: 0, live: 0, dead: 0, unknown: 0 };
+      }
+      transportHandoverStats[transport].handovers += 1;
+      if (outcome === 'Live') transportHandoverStats[transport].live += 1;
+      else if (outcome === 'Deceased') transportHandoverStats[transport].dead += 1;
+      else transportHandoverStats[transport].unknown += 1;
+    }
+
+    for (const record of latestByCase.values()) {
+      const parsed = this.parseHandoverOutcome(record.clinicalNotes);
+      const outcome = parsed?.patientOutcome ?? 'Unknown';
+      const req = record.emergencyRequest;
+      const transport =
+        (req?.id ? caseTransport.get(req.id) : null) ||
+        this.parseNoteField(req?.notes, 'Transport Type') ||
+        'Not specified';
+
+      if (filters.transportType) {
+        const needle = filters.transportType.toLowerCase();
+        if (!transport.toLowerCase().includes(needle)) continue;
+      }
+      if (filters.patientOutcome && filters.patientOutcome !== outcome) continue;
+
+      if (outcome === 'Live') live += 1;
+      else if (outcome === 'Deceased') {
+        deceased += 1;
+        if (this.isFuneralTransportLabel(transport)) funeralDead += 1;
+        else nonFuneralDead += 1;
+      } else unknown += 1;
+
+      const driverName = req?.driver
+        ? `${req.driver.firstName ?? ''} ${req.driver.lastName ?? ''}`.trim()
+        : '—';
+      const nurseName = record.nurse
+        ? `${record.nurse.firstName ?? ''} ${record.nurse.lastName ?? ''}`.trim()
+        : req?.nurse
+          ? `${req.nurse.firstName ?? ''} ${req.nurse.lastName ?? ''}`.trim()
+          : '—';
+      const destination =
+        parsed?.acceptedHospital ||
+        req?.destinationHospital?.name ||
+        req?.destination ||
+        '—';
+
+      rows.push([
+        req?.trackingCode ?? '—',
+        req?.patient?.fullName ?? req?.callerName ?? '—',
+        transport,
+        req?.priority ?? '—',
+        this.formatHandoverOutcomeLabel(outcome),
+        destination,
+        parsed?.receivingStaff || '—',
+        nurseName,
+        driverName,
+        req?.region?.name ?? '—',
+        req?.district?.name ?? '—',
+        parsed?.patientCondition?.slice(0, 80) || '—',
+        record.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+      ]);
+    }
+
+    const total = live + deceased + unknown;
+
+    const byRegion: Record<string, { live: number; dead: number; unknown: number }> = {};
+    for (const record of latestByCase.values()) {
+      const parsed = this.parseHandoverOutcome(record.clinicalNotes);
+      const outcome = parsed?.patientOutcome ?? 'Unknown';
+      const region = record.emergencyRequest?.region?.name ?? 'Unknown';
+      if (!byRegion[region]) byRegion[region] = { live: 0, dead: 0, unknown: 0 };
+      if (outcome === 'Live') byRegion[region].live += 1;
+      else if (outcome === 'Deceased') byRegion[region].dead += 1;
+      else byRegion[region].unknown += 1;
+    }
+
+    const transportNames = new Set([
+      ...Object.keys(transportCaseCounts),
+      ...Object.keys(transportHandoverStats),
+    ]);
+
+    return {
+      title: 'Handover & Transfer Outcomes',
+      subtitle:
+        'Transport types (funeral vs other), patient status at handover — dead during transfer vs live.',
+      period,
+      summary: [
+        { label: 'Total Cases (period)', value: periodCases.length },
+        { label: 'Funeral Transports', value: funeralCaseCount },
+        { label: 'Other Transport Types', value: otherTransportCaseCount },
+        { label: 'Total Handovers', value: total },
+        { label: 'Live at Handover', value: live },
+        { label: 'Dead During Transfer', value: deceased },
+        { label: 'Dead — Funeral Transport', value: funeralDead },
+        { label: 'Dead — Other Transport', value: nonFuneralDead },
+        { label: 'Dead Rate', value: this.percent(deceased, total), suffix: '%' },
+        { label: 'Outcome Not Recorded', value: unknown },
+      ],
+      table: {
+        title: 'Handover Records',
+        columns: [
+          'Case ID',
+          'Patient',
+          'Transport Type',
+          'Priority',
+          'Handover Status',
+          'Destination',
+          'Receiving Doctor',
+          'Nurse',
+          'Driver',
+          'Region',
+          'District',
+          'Condition Summary',
+          'Handover Time',
+        ],
+        rows,
+      },
+      secondaryTable: {
+        title: 'Transport Types — Cases & Handover Outcomes',
+        columns: ['Transport Type', 'Total Cases', 'Handovers', 'Live', 'Dead', 'Unknown', 'Dead Rate'],
+        rows: [...transportNames]
+          .sort(
+            (a, b) =>
+              (transportCaseCounts[b] ?? 0) - (transportCaseCounts[a] ?? 0),
+          )
+          .map((transport) => {
+            const stats = transportHandoverStats[transport] ?? {
+              handovers: 0,
+              live: 0,
+              dead: 0,
+              unknown: 0,
+            };
+            const cases = transportCaseCounts[transport] ?? 0;
+            const handoverTotal = stats.live + stats.dead + stats.unknown;
+            return [
+              transport,
+              cases,
+              stats.handovers,
+              stats.live,
+              stats.dead,
+              stats.unknown,
+              handoverTotal ? `${this.percent(stats.dead, handoverTotal)}%` : '—',
+            ];
+          }),
+      },
+      tertiaryTable: {
+        title: 'Handover Outcomes by Region',
+        columns: ['Region', 'Live', 'Dead', 'Unknown', 'Total', 'Dead Rate'],
+        rows: Object.entries(byRegion)
+          .sort((a, b) => b[1].dead - a[1].dead)
+          .map(([region, counts]) => {
+            const regionTotal = counts.live + counts.dead + counts.unknown;
+            return [
+              region,
+              counts.live,
+              counts.dead,
+              counts.unknown,
+              regionTotal,
+              `${this.percent(counts.dead, regionTotal)}%`,
+            ];
+          }),
+      },
+    };
+  }
+
   private async getCaseOutcomeReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
+    const handoverDeceased = await this.countDeceasedHandovers(period, filters);
     const [total, completed, cancelled, careRecords, incidents, rows] = await Promise.all([
       this.prisma.emergencyRequest.count({ where }),
       this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
@@ -1407,6 +1723,8 @@ export class ReportsService {
         { label: 'Completion Rate', value: this.percent(completed, total), suffix: '%' },
         { label: 'Care Records', value: careRecords },
         { label: 'Incident Reports', value: incidents },
+        { label: 'Dead at Handover', value: handoverDeceased.deceased },
+        { label: 'Handovers Recorded', value: handoverDeceased.total },
       ],
       table: {
         title: 'All Case Outcomes',

@@ -18,6 +18,8 @@ export type AdminReportFilterOptions = {
   emergencyStatuses: Array<{ value: string; label: string }>
   ambulanceStatuses: Array<{ value: string; label: string }>
   vehicleTypes: Array<{ value: string; label: string }>
+  patientOutcomes?: Array<{ value: string; label: string }>
+  transportTypes?: Array<{ value: string; label: string; code?: string }>
 }
 
 function authHeaders() {

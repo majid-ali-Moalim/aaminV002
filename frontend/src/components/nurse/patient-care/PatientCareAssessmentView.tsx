@@ -12,6 +12,7 @@ import {
   CONSCIOUSNESS_LEVELS,
   PAIN_LEVEL_OPTIONS,
   encodeAssessment,
+  findLatestAssessmentRecord,
   isAssessmentRecord,
   painLevelLabel,
   parseClinicalRecord,
@@ -91,13 +92,19 @@ export default function PatientCareAssessmentView({ caseId }: Props) {
     }
     setSaving(true)
     try {
-      await nursesService.createPatientCareRecord({
+      const body = {
         emergencyRequestId: mission.id,
         nurseId,
         patientId: mission.patientId || mission.patient?.id,
         clinicalNotes: encodeAssessment(form),
-      })
-      toast.success(editId ? 'Assessment updated (new entry saved)' : 'Assessment saved')
+        activityLabel: editId ? 'Medical notes updated' : 'Medical notes saved',
+      }
+      if (editId) {
+        await nursesService.updatePatientCareRecord(editId, body)
+      } else {
+        await nursesService.createPatientCareRecord(body)
+      }
+      toast.success(editId ? 'Assessment updated' : 'Assessment saved')
       resetForm()
       await loadRecords()
     } catch (err: any) {

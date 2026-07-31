@@ -40,6 +40,7 @@ type ReportData = {
   summary?: SummaryItem[]
   table?: ReportTable
   secondaryTable?: ReportTable
+  tertiaryTable?: ReportTable
   exportBundles?: { key: string; label: string; rows: number }[]
   reports?: Record<string, ReportData>
   permissions?: string[]
@@ -61,6 +62,8 @@ type FilterDef = {
     | 'vehicleTypes'
     | 'employeeRoles'
     | 'hospitals'
+    | 'patientOutcomes'
+    | 'transportTypes'
   dependsOnRegion?: boolean
 }
 
@@ -71,6 +74,7 @@ const REPORT_LABELS: Record<string, string> = {
   hospitals: 'Hospital Acceptance Reports',
   'response-time': 'Response Time Analysis',
   outcomes: 'Case Outcome Reports',
+  'handover-outcomes': 'Handover & Transfer Outcomes',
   export: 'Export PDF / Excel',
 }
 
@@ -110,6 +114,14 @@ const FILTERS_BY_TYPE: Record<string, FilterDef[]> = {
     { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
     { key: 'status', label: 'Status', source: 'emergencyStatuses' },
   ],
+  'handover-outcomes': [
+    { key: 'region', label: 'Region', source: 'regions' },
+    { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
+    { key: 'priority', label: 'Priority', source: 'priorities' },
+    { key: 'transportType', label: 'Transport Type', source: 'transportTypes' },
+    { key: 'patientOutcome', label: 'Handover Status', source: 'patientOutcomes' },
+    { key: 'status', label: 'Case Status', source: 'emergencyStatuses' },
+  ],
   export: [
     { key: 'region', label: 'Region', source: 'regions' },
     { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
@@ -144,6 +156,10 @@ function getSelectOptions(filter: FilterDef, options: FilterOptions | null, regi
       return options.employeeRoles.map((r) => ({ value: r.id, label: r.name }))
     case 'hospitals':
       return options.hospitals.map((h) => ({ value: h.id, label: h.name }))
+    case 'patientOutcomes':
+      return options.patientOutcomes ?? []
+    case 'transportTypes':
+      return options.transportTypes ?? []
     default:
       return []
   }
@@ -556,6 +572,17 @@ export default function AdminReportPage({ type }: { type: string }) {
               search=""
               setSearch={() => {}}
               visibleRows={report.secondaryTable.rows}
+              onRefresh={() => setReloadKey((c) => c + 1)}
+              hideSearch
+            />
+          )}
+
+          {report.tertiaryTable && (
+            <ReportTableSection
+              table={report.tertiaryTable}
+              search=""
+              setSearch={() => {}}
+              visibleRows={report.tertiaryTable.rows}
               onRefresh={() => setReloadKey((c) => c + 1)}
               hideSearch
             />

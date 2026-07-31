@@ -106,6 +106,7 @@ const analyticsSubMenu = [
   { href: '/admin/reports/hospitals', label: 'Hospital Acceptance Reports', icon: Building2 },
   { href: '/admin/reports/response-time', label: 'Response Time Analysis', icon: Clock },
   { href: '/admin/reports/outcomes', label: 'Case Outcome Reports', icon: Activity },
+  { href: '/admin/reports/handover-outcomes', label: 'Handover & Transfer Outcomes', icon: AlertTriangle },
   { href: '/admin/reports/export', label: 'Export PDF / Excel', icon: FileText },
 ]
 

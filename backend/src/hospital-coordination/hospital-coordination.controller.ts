@@ -17,6 +17,7 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { HospitalCaseStage, HospitalRefusalReason, HospitalCaseStatus } from '@prisma/client';
 import { AssignHospitalDto } from './dto/assign-hospital.dto';
+import { ManualAssignHospitalDto } from './dto/manual-assign-hospital.dto';
 
 @ApiTags('hospital-coordination')
 @Controller('hospital-coordination')
@@ -116,6 +117,16 @@ export class HospitalCoordinationController {
     @CurrentUser() user: any,
   ) {
     return this.coordination.assignHospitalToRequest(requestId, body, user?.id);
+  }
+
+  @Post('requests/:requestId/assign-manual')
+  @RequirePermissions('hospital.handover')
+  assignManualHospital(
+    @Param('requestId') requestId: string,
+    @Body() body: ManualAssignHospitalDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.coordination.assignManualHospitalToRequest(requestId, body, user?.id);
   }
 
   @Patch('cases/:id/accept')

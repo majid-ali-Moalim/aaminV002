@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TrackingService } from '../tracking/tracking.service';
+import { HospitalsService } from '../hospitals/hospitals.service';
+import { ManualAssignHospitalDto } from './dto/manual-assign-hospital.dto';
 
 const CASE_INCLUDE = {
   hospital: { include: { region: true, district: true } },
@@ -38,6 +40,7 @@ export class HospitalCoordinationService {
     private notifications: NotificationsService,
     private trackingGateway: TrackingGateway,
     private trackingService: TrackingService,
+    private hospitalsService: HospitalsService,
   ) {}
 
   private async teamUserIds(requestId: string): Promise<string[]> {
@@ -804,6 +807,7 @@ export class HospitalCoordinationService {
           status: 'ACCEPTED',
           priority: request.priority,
           receivingStaffName: data.receivingStaffName,
+          notes: data.notes ?? null,
           recordedById: userId,
         },
         include: CASE_INCLUDE,
@@ -815,6 +819,7 @@ export class HospitalCoordinationService {
           stage: 'ACCEPTED',
           status: 'ACCEPTED',
           receivingStaffName: data.receivingStaffName,
+          notes: data.notes ?? null,
           refusalReason: null,
           refusalNotes: null,
           recordedById: userId,
@@ -861,6 +866,30 @@ export class HospitalCoordinationService {
       coordinationCase: coordCase,
       destination: destinationLabel,
     };
+  }
+
+  async assignManualHospitalToRequest(
+    requestId: string,
+    data: ManualAssignHospitalDto,
+    userId?: string,
+  ) {
+    const hospital = await this.hospitalsService.createManualAssignmentHospital(data);
+    const branches = this.hospitalsService.parseBranches(hospital) as Array<{ id: string; name: string }>;
+    const branchName = data.branchName?.trim() || undefined;
+    const branch = branchName ? branches.find((b) => b.name === branchName) : branches[0];
+
+    return this.assignHospitalToRequest(
+      requestId,
+      {
+        hospitalId: hospital.id,
+        outcome: 'ACCEPTED',
+        branchId: branch?.id,
+        branchName,
+        receivingStaffName: data.receivingStaffName,
+        notes: data.notes,
+      },
+      userId,
+    );
   }
 
   async getAnalytics(filters?: {

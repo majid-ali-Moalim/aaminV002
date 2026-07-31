@@ -7,6 +7,7 @@ import {
   GitBranch,
   Loader2,
   MapPin,
+  PenLine,
   Phone,
   Search,
   Stethoscope,
@@ -21,6 +22,15 @@ import {
   refusalReasonLabel,
   type HospitalBranchRecord,
 } from '@/lib/hospital-coordination/constants'
+import {
+  EMPTY_MANUAL_ASSIGN_HOSPITAL,
+  firstManualAssignHospitalError,
+  hasManualAssignHospitalErrors,
+  MANUAL_HOSPITAL_TYPES,
+  validateManualAssignHospitalForm,
+  type ManualAssignHospitalForm,
+  type ManualAssignHospitalFieldErrors,
+} from '@/lib/hospital-coordination/manualAssignHospitalValidation'
 import { EmergencyRequest } from '@/types'
 
 interface AssignHospitalModalProps {
@@ -28,6 +38,8 @@ interface AssignHospitalModalProps {
   onClose: () => void
   onSuccess: () => void
 }
+
+type AssignMode = 'registry' | 'manual'
 
 type CoordinationHistoryItem = {
   id: string
@@ -65,6 +77,7 @@ function parseCapabilities(raw: unknown): string[] {
 }
 
 export default function AssignHospitalModal({ request, onClose, onSuccess }: AssignHospitalModalProps) {
+  const [mode, setMode] = useState<AssignMode>('registry')
   const [hospitals, setHospitals] = useState<HospitalRow[]>([])
   const [history, setHistory] = useState<CoordinationHistoryItem[]>([])
   const [regions, setRegions] = useState<any[]>(() => getCachedRegions() ?? [])
@@ -74,6 +87,8 @@ export default function AssignHospitalModal({ request, onClose, onSuccess }: Ass
   const [districtId, setDistrictId] = useState('')
   const [selectedHospitalId, setSelectedHospitalId] = useState<string | null>(null)
   const [selectedBranchId, setSelectedBranchId] = useState('')
+  const [manualForm, setManualForm] = useState<ManualAssignHospitalForm>({ ...EMPTY_MANUAL_ASSIGN_HOSPITAL })
+  const [manualErrors, setManualErrors] = useState<ManualAssignHospitalFieldErrors>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
@@ -144,6 +159,43 @@ export default function AssignHospitalModal({ request, onClose, onSuccess }: Ass
     setRejectReason('')
     setRejectNotes('')
   }, [selectedHospitalId])
+
+  const handleManualAssign = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const errors = validateManualAssignHospitalForm(manualForm)
+    setManualErrors(errors)
+    if (hasManualAssignHospitalErrors(errors)) {
+      toast.error(firstManualAssignHospitalError(errors) || 'Please fix the highlighted fields')
+      return
+    }
+    try {
+      setIsSubmitting(true)
+      await hospitalCoordinationService.assignManualHospital(request.id, {
+        name: manualForm.name.trim(),
+        address: manualForm.address.trim(),
+        regionId: manualForm.regionId,
+        districtId: manualForm.districtId,
+        hospitalType: manualForm.hospitalType || undefined,
+        branchName: manualForm.branchName.trim() || undefined,
+        branchAddress: manualForm.branchAddress.trim() || undefined,
+        primaryPhone: manualForm.primaryPhone.trim() || undefined,
+        emergencyHotline: manualForm.emergencyHotline.trim() || undefined,
+        emergencyShortCode: manualForm.emergencyShortCode.trim() || undefined,
+        contactPersonName: manualForm.contactPersonName.trim() || undefined,
+        contactPersonRole: manualForm.contactPersonRole.trim() || undefined,
+        email: manualForm.email.trim() || undefined,
+        receivingStaffName: manualForm.receivingStaffName.trim() || undefined,
+        notes: manualForm.notes.trim() || undefined,
+      })
+      toast.success(`${manualForm.name.trim()} saved and assigned as destination`)
+      onSuccess()
+      onClose()
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, 'Failed to assign manual destination'))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const handleAccept = async () => {
     if (!selectedHospital) return
@@ -228,7 +280,7 @@ export default function AssignHospitalModal({ request, onClose, onSuccess }: Ass
               Assign Hospital
             </h3>
             <p className="text-teal-100 text-xs mt-1">
-              Case {request.trackingCode} — search, filter by district, then accept or reject
+              Case {request.trackingCode} — search the registry or enter destination details manually
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-white/70 hover:text-white transition-colors">
@@ -236,6 +288,195 @@ export default function AssignHospitalModal({ request, onClose, onSuccess }: Ass
           </button>
         </div>
 
+        <div className="px-4 pt-3 border-b border-slate-100 flex gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setMode('registry')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+              mode === 'registry'
+                ? 'bg-teal-600 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            Search registry
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('manual')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+              mode === 'manual'
+                ? 'bg-teal-600 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <PenLine className="w-3.5 h-3.5" />
+            Manual entry
+          </button>
+        </div>
+
+        {mode === 'manual' ? (
+          <form onSubmit={handleManualAssign} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+            <p className="text-sm text-slate-600">
+              Enter the hospital or place details below. The destination will be saved to the registry and assigned to this case.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ManualField label="Place / hospital name *" error={manualErrors.name} className="sm:col-span-2">
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.name}
+                  onChange={(e) => setManualForm({ ...manualForm, name: e.target.value })}
+                  placeholder="e.g. Medina Hospital"
+                />
+              </ManualField>
+              <ManualField label="Hospital type" error={manualErrors.hospitalType}>
+                <select
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.hospitalType}
+                  onChange={(e) => setManualForm({ ...manualForm, hospitalType: e.target.value })}
+                >
+                  {MANUAL_HOSPITAL_TYPES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </ManualField>
+              <ManualField label="Region *" error={manualErrors.regionId}>
+                <select
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.regionId}
+                  onChange={(e) => setManualForm({ ...manualForm, regionId: e.target.value, districtId: '' })}
+                >
+                  <option value="">Select region…</option>
+                  {regions.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </ManualField>
+              <ManualField label="District *" error={manualErrors.districtId}>
+                <select
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.districtId}
+                  onChange={(e) => setManualForm({ ...manualForm, districtId: e.target.value })}
+                  disabled={!manualForm.regionId}
+                >
+                  <option value="">Select district…</option>
+                  {districts
+                    .filter((d) => !manualForm.regionId || d.regionId === manualForm.regionId)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                </select>
+              </ManualField>
+              <ManualField label="Location / address *" error={manualErrors.address} className="sm:col-span-2">
+                <textarea
+                  className="active-missions-field w-full min-h-[72px] p-3 rounded-xl border border-slate-200 text-sm resize-none"
+                  value={manualForm.address}
+                  onChange={(e) => setManualForm({ ...manualForm, address: e.target.value })}
+                  placeholder="Street, area, landmarks…"
+                />
+              </ManualField>
+              <ManualField label="Branch name (optional)" error={manualErrors.branchName}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.branchName}
+                  onChange={(e) => setManualForm({ ...manualForm, branchName: e.target.value })}
+                  placeholder="e.g. ER wing"
+                />
+              </ManualField>
+              <ManualField label="Branch address (optional)" error={manualErrors.branchAddress}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.branchAddress}
+                  onChange={(e) => setManualForm({ ...manualForm, branchAddress: e.target.value })}
+                  placeholder="If different from main address"
+                />
+              </ManualField>
+              <ManualField label="Primary phone (optional)" error={manualErrors.primaryPhone}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.primaryPhone}
+                  onChange={(e) => setManualForm({ ...manualForm, primaryPhone: e.target.value })}
+                  placeholder="+252…"
+                />
+              </ManualField>
+              <ManualField label="Emergency hotline (optional)" error={manualErrors.emergencyHotline}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.emergencyHotline}
+                  onChange={(e) => setManualForm({ ...manualForm, emergencyHotline: e.target.value })}
+                  placeholder="+252…"
+                />
+              </ManualField>
+              <ManualField label="Emergency short code (optional)" error={manualErrors.emergencyShortCode}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.emergencyShortCode}
+                  onChange={(e) => setManualForm({ ...manualForm, emergencyShortCode: e.target.value })}
+                  placeholder="e.g. 999"
+                />
+              </ManualField>
+              <ManualField label="Contact person (optional)" error={manualErrors.contactPersonName}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.contactPersonName}
+                  onChange={(e) => setManualForm({ ...manualForm, contactPersonName: e.target.value })}
+                  placeholder="Receiving coordinator name"
+                />
+              </ManualField>
+              <ManualField label="Contact role (optional)" error={manualErrors.contactPersonRole}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.contactPersonRole}
+                  onChange={(e) => setManualForm({ ...manualForm, contactPersonRole: e.target.value })}
+                  placeholder="e.g. Emergency coordinator"
+                />
+              </ManualField>
+              <ManualField label="Email (optional)" error={manualErrors.email}>
+                <input
+                  type="email"
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.email}
+                  onChange={(e) => setManualForm({ ...manualForm, email: e.target.value })}
+                  placeholder="hospital@example.com"
+                />
+              </ManualField>
+              <ManualField label="Receiving staff (optional)" error={manualErrors.receivingStaffName}>
+                <input
+                  className="active-missions-field w-full h-10 rounded-xl border border-slate-200 text-sm px-3"
+                  value={manualForm.receivingStaffName}
+                  onChange={(e) => setManualForm({ ...manualForm, receivingStaffName: e.target.value })}
+                  placeholder="Doctor or nurse receiving the patient"
+                />
+              </ManualField>
+              <ManualField label="Assignment notes (optional)" error={manualErrors.notes} className="sm:col-span-2">
+                <textarea
+                  className="active-missions-field w-full min-h-[72px] p-3 rounded-xl border border-slate-200 text-sm resize-none"
+                  value={manualForm.notes}
+                  onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
+                  placeholder="Any extra details for the field team or hospital"
+                />
+              </ManualField>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={onClose}
+                className="active-missions-btn-secondary flex-1 rounded-xl font-bold h-11"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="active-missions-btn-primary flex-1 rounded-xl font-bold h-11 flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Save & assign destination
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
         <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3 shrink-0">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -509,8 +750,30 @@ export default function AssignHospitalModal({ request, onClose, onSuccess }: Ass
             </div>
           </div>
         )}
+          </>
+        )}
       </div>
     </div>
+  )
+}
+
+function ManualField({
+  label,
+  error,
+  className,
+  children,
+}: {
+  label: string
+  error?: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className={className}>
+      <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</span>
+      {children}
+      {error && <span className="block text-xs text-rose-600 mt-1">{error}</span>}
+    </label>
   )
 }
 

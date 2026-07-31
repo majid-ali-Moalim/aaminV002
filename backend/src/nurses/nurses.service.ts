@@ -257,6 +257,61 @@ export class NursesService {
     return result;
   }
 
+  async updatePatientCareRecord(recordId: string, data: any) {
+    const existing = await this.prisma.patientCareRecord.findUnique({
+      where: { id: recordId },
+      include: {
+        emergencyRequest: { select: { id: true, nurseId: true } },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException('Patient care record not found');
+    }
+    if (existing.emergencyRequest.nurseId !== data.nurseId) {
+      throw new ForbiddenException('This record belongs to another nurse on the case');
+    }
+
+    const activityLabel = data.activityLabel || 'Clinical record updated';
+
+    const result = await this.prisma.patientCareRecord.update({
+      where: { id: recordId },
+      data: {
+        bloodPressure: data.bloodPressure ?? existing.bloodPressure,
+        heartRate: data.heartRate != null && data.heartRate !== '' ? parseInt(data.heartRate) : null,
+        oxygenSaturation:
+          data.oxygenSaturation != null && data.oxygenSaturation !== ''
+            ? parseInt(data.oxygenSaturation)
+            : null,
+        temperature:
+          data.temperature != null && data.temperature !== '' ? parseFloat(data.temperature) : null,
+        respiratoryRate:
+          data.respiratoryRate != null && data.respiratoryRate !== ''
+            ? parseInt(data.respiratoryRate)
+            : null,
+        bloodSugar:
+          data.bloodSugar != null && data.bloodSugar !== '' ? parseFloat(data.bloodSugar) : null,
+        clinicalNotes: data.clinicalNotes ?? existing.clinicalNotes,
+        medications: data.medications ?? existing.medications,
+        treatmentGiven: data.treatmentGiven ?? existing.treatmentGiven,
+      },
+      include: {
+        emergencyRequest: true,
+        nurse: true,
+      },
+    });
+
+    await this.logNurseCaseActivity(data.emergencyRequestId || existing.emergencyRequest.id, data.nurseId, activityLabel);
+
+    if (
+      typeof data.clinicalNotes === 'string' &&
+      data.clinicalNotes.startsWith('[EADS_LOAD_PATIENT]')
+    ) {
+      await this.notifyDriverPatientLoaded(existing.emergencyRequest.id);
+    }
+
+    return result;
+  }
+
   private async notifyDriverPatientLoaded(emergencyRequestId: string) {
     const request = await this.prisma.emergencyRequest.findUnique({
       where: { id: emergencyRequestId },

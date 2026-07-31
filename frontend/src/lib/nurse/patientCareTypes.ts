@@ -36,6 +36,20 @@ export function isAssessmentRecord(record: { clinicalNotes?: string | null }): b
   return Boolean(parseClinicalRecord(record.clinicalNotes))
 }
 
+/** Most recent assessment / medical-notes record for a case (newest wins on edit). */
+export function findLatestAssessmentRecord<T extends { clinicalNotes?: string | null; createdAt?: string | Date }>(
+  records: T[],
+): T | null {
+  return (
+    records
+      .filter(isAssessmentRecord)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+      )[0] ?? null
+  )
+}
+
 const MONITORING_PREFIX = '[EADS_MONITORING]'
 const HANDOVER_PREFIX = '[EADS_HANDOVER]'
 
@@ -106,6 +120,20 @@ export function parseHandover(notes?: string | null): HandoverData | null {
 
 export function isHandoverRecord(record: { clinicalNotes?: string | null }): boolean {
   return Boolean(parseHandover(record.clinicalNotes))
+}
+
+/** Most recent handover record for a case. */
+export function findLatestHandoverRecord<T extends { clinicalNotes?: string | null; createdAt?: string | Date }>(
+  records: T[],
+): T | null {
+  return (
+    records
+      .filter(isHandoverRecord)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+      )[0] ?? null
+  )
 }
 
 const LOAD_PATIENT_PREFIX = '[EADS_LOAD_PATIENT]'
@@ -188,8 +216,22 @@ export const PAIN_LEVEL_OPTIONS = [
 
 export const PATIENT_HANDOVER_OUTCOMES = [
   { value: 'Live', label: 'Live — Patient alive at handover' },
-  { value: 'Deceased', label: 'Deceased — Patient deceased at handover' },
+  { value: 'Deceased', label: 'Dead — Patient deceased during transfer' },
 ] as const
+
+/** Display label for handover outcome (Deceased stored in DB → shown as Dead). */
+export function handoverOutcomeLabel(value?: string | null): string {
+  if (!value) return '—'
+  if (value === 'Deceased' || value === 'Dead') return 'Dead'
+  if (value === 'Live') return 'Live'
+  return value
+}
+
+export function normalizeHandoverOutcome(value?: string | null): 'Live' | 'Deceased' | '' {
+  if (value === 'Live') return 'Live'
+  if (value === 'Deceased' || value === 'Dead') return 'Deceased'
+  return ''
+}
 
 export const PAIN_LEVELS = PAIN_LEVEL_OPTIONS.map((o) => o.value)
 
