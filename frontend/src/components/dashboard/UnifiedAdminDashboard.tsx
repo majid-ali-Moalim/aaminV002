@@ -15,7 +15,7 @@ import {
   CheckCircle,
   ClipboardList,
   Clock,
-  Headset,
+  Headphones,
   HeartPulse,
   Layers,
   Monitor,
@@ -61,7 +61,7 @@ const KPI_ICONS: Record<string, typeof Activity> = {
   totalAmbulances: Truck,
   totalDrivers: Car,
   totalNurses: HeartPulse,
-  totalDispatchers: Headset,
+  totalDispatchers: Headphones,
   totalHospitals: Building2,
   // legacy keys still supported for other views
   availableAmbulances: Truck,

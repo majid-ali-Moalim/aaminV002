@@ -1,11 +1,8 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/context/AuthContext'
 import Navbar from '@/components/layout/Navbar'
 import { PublicThemeProvider } from '@/components/public/PublicThemeProvider'
 import { Toaster } from 'react-hot-toast'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'Aamin Ambulance - Emergency Dispatch System',
@@ -19,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100`}>
+      <body className="bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
         <AuthProvider>
           <PublicThemeProvider>
             <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors">
