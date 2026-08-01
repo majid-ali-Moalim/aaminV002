@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation'
+'use client'
 
-export default function Page() {
-  redirect('/dispatcher/resources/ambulance-availability')
+import StationCrewAvailabilityView from '@/components/features/stations/StationCrewAvailabilityView'
+
+export default function DispatcherStationResourcesPage() {
+  return <StationCrewAvailabilityView variant="dispatcher" />
 }

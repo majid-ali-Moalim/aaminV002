@@ -22,16 +22,15 @@ export type FieldOpsItem = {
 }
 
 export const DISPATCHER_DRIVER_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/driver-availability', label: 'Driver Availability', icon: Users, exact: true },
+  { href: '/dispatcher/resources', label: 'Station Resources', icon: Users, exact: true },
 ]
 
 export const DISPATCHER_NURSE_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/nurse-availability', label: 'Nurse Availability', icon: Stethoscope, exact: true },
+  { href: '/dispatcher/resources', label: 'Station Resources', icon: Stethoscope, exact: true },
 ]
 
 export const DISPATCHER_AMBULANCE_ITEMS: FieldOpsItem[] = [
-  { href: '/dispatcher/resources/ambulance-availability', label: 'Ambulance Availability', icon: Truck, exact: true },
-  { href: '/dispatcher/resources/resource-status', label: 'Resource Status', icon: Activity, accent: 'info' },
+  { href: '/dispatcher/resources', label: 'Station Resources', icon: Truck, exact: true },
 ]
 
 export const DISPATCHER_MANAGEMENT_ITEMS: FieldOpsItem[] = [
@@ -41,18 +40,15 @@ export const DISPATCHER_MANAGEMENT_ITEMS: FieldOpsItem[] = [
 ]
 
 export function isDispatcherDriverPath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources/driver') || pathname.startsWith('/dispatcher/add-driver')
+  return pathname.startsWith('/dispatcher/resources') || pathname.startsWith('/dispatcher/add-driver')
 }
 
 export function isDispatcherNursePath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources/nurse') || pathname.startsWith('/dispatcher/add-nurse')
+  return pathname.startsWith('/dispatcher/resources') || pathname.startsWith('/dispatcher/add-nurse')
 }
 
 export function isDispatcherAmbulancePath(pathname: string) {
-  return (
-    pathname.startsWith('/dispatcher/resources/ambulance') ||
-    pathname.startsWith('/dispatcher/resources/resource-status')
-  )
+  return pathname.startsWith('/dispatcher/resources')
 }
 
 export function isDispatcherManagementPath(pathname: string) {

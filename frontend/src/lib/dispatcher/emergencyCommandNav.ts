@@ -91,10 +91,7 @@ export const DISPATCHER_DASHBOARD_ITEM: EmergencyCommandItem = {
 }
 
 export const DISPATCHER_RESOURCES_ITEMS: EmergencyCommandItem[] = [
-  { href: '/dispatcher/resources/ambulance-availability', label: 'Ambulance Availability', icon: Truck },
-  { href: '/dispatcher/resources/driver-availability', label: 'Driver Availability', icon: Users },
-  { href: '/dispatcher/resources/nurse-availability', label: 'Nurse Availability', icon: Stethoscope },
-  { href: '/dispatcher/resources/resource-status', label: 'Resource Status', icon: Activity },
+  { href: '/dispatcher/resources', label: 'Station Resources', icon: Truck, exact: true },
 ]
 
 export function isDispatcherEmergencyOperationsPath(pathname: string) {
@@ -110,7 +107,7 @@ export function isDispatcherDashboardCommandPath(pathname: string) {
 }
 
 export function isDispatcherResourcesPath(pathname: string) {
-  return pathname.startsWith('/dispatcher/resources')
+  return pathname === '/dispatcher/resources' || pathname.startsWith('/dispatcher/resources/')
 }
 
 export function isDispatcherEmergencyCommandPath(pathname: string) {

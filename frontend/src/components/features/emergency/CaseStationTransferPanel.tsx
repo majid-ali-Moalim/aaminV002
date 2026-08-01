@@ -97,7 +97,7 @@ export default function CaseStationTransferPanel({ request, onTransferred }: Pro
             {isDispatcherPortal ? (
               <>
                 . Check{' '}
-                <Link href="/dispatcher/resources/resource-status" className="font-semibold text-indigo-700 hover:underline">
+                <Link href="/dispatcher/resources" className="font-semibold text-indigo-700 hover:underline">
                   resource availability by station
                 </Link>{' '}
                 before transferring.

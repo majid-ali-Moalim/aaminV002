@@ -43,6 +43,7 @@ import {
   firstHandoverError,
   hasHandoverErrors,
   validateHandoverForm,
+  sanitizeHandoverRejectedHospitals,
   type HandoverFieldErrors,
 } from '@/lib/nurse/handoverValidation'
 import { dispatchPatientLoadedEvent } from '@/lib/mission/patientLoadedEvents'
@@ -171,6 +172,7 @@ function buildHandoverDefaults(mission: any, nurseName: string, records: any[] =
     : ''
   return {
     acceptedHospital: mission.destinationHospital?.name || mission.destination || '',
+    rejectedHospitals: [],
     patientOutcome: '',
     patientCondition: conditionSummaryFromRecords(records, mission),
     treatmentGiven: treatmentSummaryFromRecords(records),
@@ -237,6 +239,7 @@ function handoverFromRecords(records: any[], defaults: HandoverFormState): Hando
   return {
     ...defaults,
     acceptedHospital: parsed.acceptedHospital || defaults.acceptedHospital,
+    rejectedHospitals: parsed.rejectedHospitals?.length ? parsed.rejectedHospitals : defaults.rejectedHospitals,
     patientOutcome: parsed.patientOutcome || '',
     patientCondition: parsed.patientCondition || defaults.patientCondition,
     treatmentGiven: parsed.treatmentGiven || defaults.treatmentGiven,
@@ -287,6 +290,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   })
   const [handoverForm, setHandoverForm] = useState<HandoverFormState>({
     acceptedHospital: '',
+    rejectedHospitals: [],
     patientOutcome: '',
     patientCondition: '',
     treatmentGiven: '',
@@ -692,7 +696,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
   const submitHandover = async (e: React.FormEvent) => {
     e.preventDefault()
-    const errors = validateHandoverForm(handoverForm)
+    const errors = validateHandoverForm(handoverForm, { assignedDestination })
     setHandoverErrors(errors)
     if (hasHandoverErrors(errors)) {
       toast.error(firstHandoverError(errors) || 'Please fix the highlighted fields')
@@ -711,6 +715,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           patientOutcome: handoverForm.patientOutcome as 'Live' | 'Deceased',
           acceptedHospital:
             mission.destinationHospital?.name || mission.destination || handoverForm.acceptedHospital,
+          rejectedHospitals: sanitizeHandoverRejectedHospitals(handoverForm.rejectedHospitals),
           ageGroup: handoverForm.ageGroup,
           gender: handoverForm.gender,
           nationalityType: handoverForm.nationalityType,
@@ -811,14 +816,15 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     ? `${mission.driver.firstName || ''} ${mission.driver.lastName || ''}`.trim()
     : '—'
   const patientPhone = resolvePatientPhone(mission)
-  const destinationLabel =
-    mission.destination || mission.destinationHospital?.name || '—'
+  const assignedDestination = (mission.destinationHospital?.name || mission.destination || '').trim()
+  const destinationAssigned = Boolean(assignedDestination)
+  const destinationLabel = assignedDestination || 'Not assigned'
   const regionLabel = [mission.region?.name, mission.district?.name].filter(Boolean).join(' · ')
   const handoverCaseContext: HandoverCaseContext = {
     trackingCode: mission.trackingCode || '',
     patientName: mission.patient?.fullName || mission.callerName || '',
     pickupLocation: mission.pickupLocation || '',
-    acceptedHospital: destinationLabel,
+    acceptedHospital: assignedDestination,
     priority: mission.priority || '',
     dispatcherName:
       mission.dispatcher?.user?.username ||
@@ -1061,11 +1067,13 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                   if (handoverViewMode) return
                   setHandoverForm(f)
                   if (Object.keys(handoverErrors).length > 0) {
-                    setHandoverErrors(validateHandoverForm(f))
+                    setHandoverErrors(validateHandoverForm(f, { assignedDestination }))
                   }
                 }}
                 nurseName={fullName}
                 caseContext={handoverCaseContext}
+                destinationAssigned={destinationAssigned}
+                assignedDestination={assignedDestination}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}
               />

@@ -21,6 +21,9 @@ export default function Page({
   if (REMOVED_MODULES.has(params.module)) {
     redirect('/dispatcher/dashboard')
   }
+  if (params.module === 'resources') {
+    redirect('/dispatcher/resources')
+  }
   if (!VALID.includes(params.module as DispatcherModuleId)) {
     redirect('/dispatcher/dashboard')
   }

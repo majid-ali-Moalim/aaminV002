@@ -38,9 +38,9 @@ const LINKS = {
   delayed: '/dispatcher/emergency-requests/escalated',
   critical: '/dispatcher/emergency-requests/critical',
   active: '/dispatcher/emergency-requests/active',
-  ambulances: '/dispatcher/resources/ambulance-availability',
-  drivers: '/dispatcher/resources/driver-availability',
-  nurses: '/dispatcher/resources/nurse-availability',
+  ambulances: '/dispatcher/resources',
+  drivers: '/dispatcher/resources',
+  nurses: '/dispatcher/resources',
   newCase: '/dispatcher/emergency-requests/new',
 } as const
 

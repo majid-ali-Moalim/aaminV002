@@ -6,10 +6,10 @@ import {
   BREATHING_STATUS_OPTIONS,
   CONSCIOUS_STATUS_OPTIONS,
 } from '@/lib/emergency/triageOptions'
-import { SectionCard } from './ui'
+import { FieldLabel, fieldInputClass, SectionCard } from './ui'
 import type { EmergencyDispatchForm } from './types'
 
-function StatusOptionGroup({
+function TriageSelectField({
   label,
   value,
   options,
@@ -21,27 +21,15 @@ function StatusOptionGroup({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((option) => {
-          const selected = value === option.value
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-                selected
-                  ? 'border-red-500 bg-red-50 text-red-900'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-red-200'
-              }`}
-            >
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldInputClass()}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -60,20 +48,20 @@ export default function QuickTriageSection({ form, onChange }: Props) {
       <p className="text-sm text-slate-600 mb-4">
         Capture vital signs at intake — helps dispatch assign the right crew and equipment.
       </p>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <StatusOptionGroup
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <TriageSelectField
           label="Consciousness"
           value={form.consciousStatus}
           options={CONSCIOUS_STATUS_OPTIONS}
           onChange={(consciousStatus) => onChange({ consciousStatus })}
         />
-        <StatusOptionGroup
+        <TriageSelectField
           label="Breathing"
           value={form.breathingStatus}
           options={BREATHING_STATUS_OPTIONS}
           onChange={(breathingStatus) => onChange({ breathingStatus })}
         />
-        <StatusOptionGroup
+        <TriageSelectField
           label="Bleeding"
           value={form.bleedingStatus}
           options={BLEEDING_STATUS_OPTIONS}

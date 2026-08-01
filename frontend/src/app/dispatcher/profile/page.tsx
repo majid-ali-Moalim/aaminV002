@@ -248,11 +248,11 @@ export default function DispatcherProfilePage() {
         </div>
         {station?.name && (
           <Link
-            href="/dispatcher/resources/resource-status"
+            href="/dispatcher/resources"
             className="inline-flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700"
           >
             <Activity className="w-4 h-4" />
-            View regional resource availability
+            View station resources
           </Link>
         )}
       </section>
@@ -299,10 +299,10 @@ export default function DispatcherProfilePage() {
               Open pending queue →
             </Link>
             <Link
-              href="/dispatcher/resources/ambulance-availability"
+              href="/dispatcher/resources"
               className="text-xs font-bold text-red-600 hover:underline"
             >
-              Fleet availability →
+              Station resources →
             </Link>
           </div>
         </section>

@@ -1911,6 +1911,13 @@
   color: var(--n-muted, #71717a);
 }
 
+.nmw-field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--n-muted, #71717a);
+}
+
 .nmw-rejected-hospitals {
   display: flex;
   flex-direction: column;
@@ -1940,6 +1947,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.nmw-rejected-card label.span-2 {
+  grid-column: 1 / -1;
 }
 
 .nmw-rejected-card-head {

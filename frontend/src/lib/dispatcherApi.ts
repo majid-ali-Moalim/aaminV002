@@ -103,12 +103,16 @@ export const dispatcherDashboardApi = {
     const res = await createDispatcherApi().get('/dispatcher-app/emergencies', { params: { view } })
     return res.data
   },
-  getAmbulances: async (view: string) => {
-    const res = await createDispatcherApi().get('/dispatcher-app/ambulances', { params: { view } })
+  getAmbulances: async (view: string, stationId?: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/ambulances', {
+      params: { view, ...(stationId ? { stationId } : {}) },
+    })
     return res.data
   },
-  getCrew: async (view: string) => {
-    const res = await createDispatcherApi().get('/dispatcher-app/crew', { params: { view } })
+  getCrew: async (view: string, stationId?: string) => {
+    const res = await createDispatcherApi().get('/dispatcher-app/crew', {
+      params: { view, ...(stationId ? { stationId } : {}) },
+    })
     return res.data
   },
   getHospitals: async (view: string) => {
