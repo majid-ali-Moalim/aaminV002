@@ -9,6 +9,7 @@ import AdminTopBar from '@/components/layout/AdminTopBar'
 import { AdminThemeProvider } from '@/components/admin/AdminThemeProvider'
 import { AdminThemeInit } from '@/components/admin/AdminThemeInit'
 import LiveToastContainer from '@/components/notifications/LiveToastContainer'
+import { AdminNotificationProvider } from '@/components/admin/AdminNotificationProvider'
 import ChatAlerts from '@/components/chat/ChatAlerts'
 import { OptimisticNavProvider, NavigationProgressBar } from '@/lib/navigation/optimisticNav'
 import { EmergencyPortalProvider } from '@/lib/emergency/EmergencyPortalContext'
@@ -58,10 +59,12 @@ export default function AdminLayout({
       <EmergencyPortalProvider portal="admin">
         <AdminThemeInit />
         <AdminThemeProvider>
+          <AdminNotificationProvider>
           <div className="admin-shell min-h-screen bg-admin-bg text-admin-text">
             <LiveToastContainer />
             {children}
           </div>
+          </AdminNotificationProvider>
         </AdminThemeProvider>
       </EmergencyPortalProvider>
     )
@@ -72,6 +75,7 @@ export default function AdminLayout({
       <AdminThemeInit />
       <AdminThemeProvider>
       <OptimisticNavProvider>
+        <AdminNotificationProvider>
         <div className="admin-shell min-h-screen bg-admin-bg text-admin-text">
           <LiveToastContainer />
           <ChatAlerts />
@@ -82,6 +86,7 @@ export default function AdminLayout({
             <main className="p-6">{children}</main>
           </div>
         </div>
+        </AdminNotificationProvider>
       </OptimisticNavProvider>
       </AdminThemeProvider>
     </EmergencyPortalProvider>

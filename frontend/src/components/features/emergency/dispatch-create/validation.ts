@@ -2,9 +2,7 @@ import { isFuneralTransport, isBookingWithin24Hours } from '@/lib/emergency/disp
 import { isOtherTransportType, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import { isValidSomaliaPhone } from '@/lib/driverFormValidation'
 import { isValidDispatchPatientName, isUnknownPatientName } from '@/lib/emergency/patientName'
-import { isOtherEmergencyType } from '@/lib/emergency/emergencyTypes'
 import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
-import { Priority } from '@/types'
 import type {
   DispatchFormErrors,
   DispatchRequestType,
@@ -43,22 +41,13 @@ function needsNurseCheck(errors: DispatchFormErrors, needsNurse: boolean | null)
 
 export function validateEmergencyDispatchForm(
   data: EmergencyDispatchForm,
-  emergencyTypes: EmergencyTypeOption[] = [],
+  _emergencyTypes: EmergencyTypeOption[] = [],
 ): DispatchFormErrors {
   const errors: DispatchFormErrors = {}
   patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
-  if (!data.emergencyTypeId) errors.emergencyTypeId = 'Emergency type is required'
-  const selectedType = emergencyTypes.find((t) => t.id === data.emergencyTypeId)
-  if (selectedType && isOtherEmergencyType(selectedType) && !data.emergencyTypeOther.trim()) {
-    errors.emergencyTypeOther = 'Describe the other emergency type'
-  }
   if (!data.regionId) errors.regionId = 'Region is required'
   if (!data.districtId) errors.districtId = 'District is required'
-  if (!data.priority) errors.priority = 'Priority is required'
-  if (data.priority === Priority.MEDIUM || data.priority === Priority.LOW) {
-    errors.priority = 'Only Critical or High priority is available for emergencies'
-  }
   req(errors, 'briefDescription', data.briefDescription, 'Brief description')
   return errors
 }

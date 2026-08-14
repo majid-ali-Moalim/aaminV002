@@ -10,6 +10,7 @@ import {
   getCrewUnavailableReason,
   resolveCrewOperationalStatus,
 } from '../common/crew-operational-status';
+import { CaseWorkflowNotificationService } from '../notifications/case-workflow-notification.service';
 import { releaseCrewForCase } from '../common/occupied-crew';
 import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 
@@ -18,6 +19,7 @@ export class NursesService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private caseWorkflowNotifications: CaseWorkflowNotificationService,
     private driverGateway: DriversAppGateway,
   ) {}
 
@@ -252,6 +254,27 @@ export class NursesService {
 
     if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith('[EADS_LOAD_PATIENT]')) {
       await this.notifyDriverPatientLoaded(data.emergencyRequestId);
+      await this.caseWorkflowNotifications.notifyCaseEvent({
+        caseId: data.emergencyRequestId,
+        event: 'PATIENT_LOADED',
+        actorUserId: result.nurse?.userId,
+      });
+    }
+
+    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith('[EADS_ASSESSMENT]')) {
+      await this.caseWorkflowNotifications.notifyCaseEvent({
+        caseId: data.emergencyRequestId,
+        event: 'MEDICAL_NOTES_COMPLETED',
+        actorUserId: result.nurse?.userId,
+      });
+    }
+
+    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith('[EADS_HANDOVER]')) {
+      await this.caseWorkflowNotifications.notifyCaseEvent({
+        caseId: data.emergencyRequestId,
+        event: 'HANDOVER_COMPLETED',
+        actorUserId: result.nurse?.userId,
+      });
     }
 
     return result;

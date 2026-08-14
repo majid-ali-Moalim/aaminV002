@@ -7,6 +7,17 @@ import { notificationsService } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import type { NotificationCategory } from '@/lib/notifications/types'
+import {
+  DEFAULT_DESKTOP_PREFS,
+  loadDesktopNotificationPrefs,
+  saveDesktopNotificationPrefs,
+  type DesktopNotificationPrefs,
+} from '@/lib/notifications/desktopPreferences'
+import {
+  getBrowserNotificationPermission,
+  isBrowserNotificationSupported,
+  requestBrowserNotificationPermission,
+} from '@/lib/notifications/browserNotifications'
 
 const SETTING_ROWS = [
   { key: 'MISSION' as NotificationCategory, label: 'Mission Notifications', icon: Truck },
@@ -19,12 +30,14 @@ const SETTING_ROWS = [
 export default function NotificationSettingsPanel() {
   const { user } = useAuth()
   const [prefs, setPrefs] = useState<{ category: NotificationCategory; channel: string; enabled: boolean }[]>([])
+  const [desktopPrefs, setDesktopPrefs] = useState<DesktopNotificationPrefs>(DEFAULT_DESKTOP_PREFS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    setDesktopPrefs(loadDesktopNotificationPrefs())
     notificationsService
       .getPreferences()
       .then((data) => {
@@ -109,6 +122,32 @@ export default function NotificationSettingsPanel() {
     }
   }
 
+  const toggleDesktopPref = (key: keyof DesktopNotificationPrefs) => {
+    setDesktopPrefs((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      saveDesktopNotificationPrefs(next)
+      return next
+    })
+  }
+
+  const enableDesktopNotifications = async () => {
+    if (!isBrowserNotificationSupported()) {
+      toast.error('Desktop notifications are not supported in this browser')
+      return
+    }
+    const permission = await requestBrowserNotificationPermission()
+    if (permission === 'granted') {
+      setDesktopPrefs((prev) => {
+        const next = { ...prev, desktopEnabled: true }
+        saveDesktopNotificationPrefs(next)
+        return next
+      })
+      toast.success('Desktop notifications enabled')
+    } else if (permission === 'denied') {
+      toast.error('Permission denied. In-app notifications still work.')
+    }
+  }
+
   const adminEmail = user?.email?.trim()
 
   if (loading) {
@@ -129,6 +168,54 @@ export default function NotificationSettingsPanel() {
             Add an email address to your admin profile to receive email notifications.
           </p>
         )}
+      </div>
+      <div className="p-5 border-b border-gray-50 dark:border-gray-800">
+        <h3 className="font-black text-sm text-gray-900 dark:text-white mb-3">Desktop &amp; Sound</h3>
+        <ul className="space-y-4">
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Desktop notifications</span>
+            <div className="flex items-center gap-2">
+              {isBrowserNotificationSupported() &&
+                getBrowserNotificationPermission() !== 'granted' &&
+                !desktopPrefs.desktopEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => void enableDesktopNotifications()}
+                    className="text-[10px] font-black uppercase text-blue-600"
+                  >
+                    Allow
+                  </button>
+                )}
+              <Toggle
+                checked={desktopPrefs.desktopEnabled}
+                onChange={() => toggleDesktopPref('desktopEnabled')}
+              />
+            </div>
+          </li>
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Notification sound</span>
+            <Toggle checked={desktopPrefs.soundEnabled} onChange={() => toggleDesktopPref('soundEnabled')} />
+          </li>
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">New emergency</span>
+            <Toggle checked={desktopPrefs.newEmergency} onChange={() => toggleDesktopPref('newEmergency')} />
+          </li>
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Crew assignment</span>
+            <Toggle checked={desktopPrefs.crewAssignment} onChange={() => toggleDesktopPref('crewAssignment')} />
+          </li>
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Case updates</span>
+            <Toggle checked={desktopPrefs.caseUpdates} onChange={() => toggleDesktopPref('caseUpdates')} />
+          </li>
+          <li className="flex items-center justify-between gap-4">
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Administrative alerts</span>
+            <Toggle
+              checked={desktopPrefs.adminNotifications}
+              onChange={() => toggleDesktopPref('adminNotifications')}
+            />
+          </li>
+        </ul>
       </div>
       <ul className="divide-y divide-gray-50 dark:divide-gray-800">
         {SETTING_ROWS.map((row) => (

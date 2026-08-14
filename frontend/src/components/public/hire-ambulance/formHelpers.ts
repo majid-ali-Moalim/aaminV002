@@ -467,27 +467,18 @@ export function validateEmergencyFormFields(
   } else if (!isValidSomaliaPhone(data.callerPhone)) {
     errors.callerPhone = t.validation.phoneInvalid
   }
-  if (!data.emergencyType) {
-    errors.emergencyType = t.validation.emergencyType
-  } else if (isOtherEmergencyTypeValue(data.emergencyType)) {
-    validateRequiredTextField(
-      data.emergencyTypeOther,
-      'emergencyTypeOther',
-      errors,
-      t.validation.emergencyTypeOther,
-      t.validation.invalidText,
-    )
-  }
   if (!data.regionId) errors.regionId = t.validation.region
   if (!data.districtId) errors.districtId = t.validation.district
-  if (!data.consciousStatus) errors.consciousStatus = t.validation.conscious
-  if (!data.breathingStatus) errors.breathingStatus = t.validation.breathing
-  if (!data.bleedingStatus) errors.bleedingStatus = t.validation.bleeding
-  validateOptionalTextField(data.areaName, 'areaName', errors, t.validation.invalidText)
+  validateRequiredTextField(data.areaName, 'areaName', errors, t.validation.area, t.validation.invalidText)
+  validateRequiredTextField(
+    data.conditionDescription,
+    'conditionDescription',
+    errors,
+    t.validation.briefDescription,
+    t.validation.invalidText,
+  )
   if (data.conditionDescription.length > 100) {
     errors.conditionDescription = t.validation.conditionMax
-  } else {
-    validateOptionalTextField(data.conditionDescription, 'conditionDescription', errors, t.validation.invalidText)
   }
 
   return errors
@@ -592,12 +583,8 @@ export function transportTypeLabel(data: HireFormValues, t: HireTranslations): s
   return t.transportTypes[key] ?? data.transportType
 }
 
-export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergencyTypeOption[]) {
+export function buildPayload(data: HireFormValues) {
   const emergency = isEmergencyRequest(data)
-  const typeLabel = emergencyTypeLabel(data.emergencyType, data.emergencyTypeOther)
-  const incidentCategoryId = emergency
-    ? resolveIncidentCategoryId(data.emergencyType, emergencyTypes)
-    : undefined
 
   const pickupParts = [data.areaName.trim(), data.landmarkDescription.trim()].filter(Boolean)
   const pickupLocation =
@@ -611,7 +598,7 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
 
   const wantsBooking = !emergency && data.scheduleMode === 'booking'
   const bookingTime = wantsBooking ? resolvedBookingTime(data) : ''
-  const priority = emergency ? computePriority(data) : 'LOW'
+  const priority = emergency ? 'HIGH' : 'LOW'
 
   return {
     callerName: data.patientName.trim() || 'Unknown Caller',
@@ -626,28 +613,17 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
       ...(data.gender === 'MALE' || data.gender === 'FEMALE' ? { gender: data.gender } : {}),
     },
     patientCondition: emergency
-      ? data.conditionDescription.trim() || `Emergency: ${typeLabel}`
+      ? data.conditionDescription.trim()
       : `Non-emergency transport: ${transportLabel}`,
     destination: !emergency ? data.destinationHospital.trim() || undefined : undefined,
     priority,
-    ...(emergency
-      ? {
-          consciousStatus: data.consciousStatus,
-          breathingStatus: data.breathingStatus,
-          bleedingStatus: data.bleedingStatus,
-          needsOxygen: data.needsOxygen,
-          needsStretcher: data.needsStretcher,
-        }
-      : {}),
-    incidentCategoryId,
     regionId: data.regionId || undefined,
     districtId: data.districtId || undefined,
     pickupLocation,
     pickupLandmark,
     notes: [
       `Request Type: ${emergency ? 'Emergency' : 'Non-Emergency'}`,
-      emergency ? `Emergency Type: ${typeLabel}` : '',
-      emergency ? `Assessed Priority: ${priority}` : '',
+      emergency ? 'Triage details pending — to be completed by dispatch' : '',
       !emergency && transportLabel ? `Transport Type: ${transportLabel}` : '',
       !emergency && isOtherTransportType(data.transportType)
         ? `Transport Detail: ${data.transportTypeOther.trim()}`
@@ -657,7 +633,7 @@ export function buildPayload(data: HireFormValues, emergencyTypes?: HireEmergenc
       wantsBooking && bookingTime ? `Booking Time: ${bookingTime}` : '',
       !emergency ? `Special Instructions: ${data.specialInstructions.trim() || 'None'}` : '',
       emergency && data.conditionDescription.trim()
-        ? `What happened: ${data.conditionDescription.trim()}`
+        ? `Brief description: ${data.conditionDescription.trim()}`
         : '',
     ]
       .filter(Boolean)

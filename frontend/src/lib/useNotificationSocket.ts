@@ -10,6 +10,12 @@ import { resolveDriverNotificationUrl } from '@/lib/driver/driverNotificationRou
 import { dispatchMissionAssignedEvent } from '@/lib/mission/missionAssignedEvents'
 import { useDriverStore } from '@/lib/stores/driverStore'
 import { hasNotificationBeenShown, markNotificationShown } from '@/lib/notifications/shownAlerts'
+import {
+  playNotificationSoundIfEnabled,
+  showBrowserNotification,
+  showMissionAssignedDesktopNotification,
+  usesWindowsStyleToast,
+} from '@/lib/notifications/browserNotifications'
 
 const SOCKET_URL = (
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -21,19 +27,7 @@ let globalSocket: Socket | null = null
 let socketHandlersBound = false
 
 function playAlertSound() {
-  try {
-    const ctx = new AudioContext()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.frequency.value = 880
-    gain.gain.value = 0.08
-    osc.start()
-    osc.stop(ctx.currentTime + 0.15)
-  } catch {
-    /* optional */
-  }
+  playNotificationSoundIfEnabled()
 }
 
 function resolveLiveNotificationUrl(payload: AppNotification): string {
@@ -83,6 +77,23 @@ function ensureSocketListeners() {
     if (hasNotificationBeenShown(payload.id)) return
 
     const href = resolveLiveNotificationUrl(payload)
+    showBrowserNotification(payload, href)
+
+    const isWindowsToast = usesWindowsStyleToast(payload.eventKey) || payload.category === 'MISSION'
+
+    if (isWindowsToast) {
+      markNotificationShown(payload.id)
+      if (
+        payload.priority === 'CRITICAL' ||
+        payload.eventKey === 'NEW_EMERGENCY_REQUEST' ||
+        payload.eventKey === 'CREW_ASSIGNED' ||
+        payload.eventKey === 'CASE_COMPLETED'
+      ) {
+        playAlertSound()
+      }
+      return
+    }
+
     const toastOpts = {
       duration: payload.priority === 'CRITICAL' ? 8000 : 5000,
       onClick: () => {
@@ -96,16 +107,25 @@ function ensureSocketListeners() {
       payload.priority === 'CRITICAL' ||
       payload.category === 'BROADCAST' ||
       payload.category === 'MISSION' ||
-      payload.eventKey === 'MISSION_COMPLETED'
+      payload.eventKey === 'MISSION_COMPLETED' ||
+      payload.eventKey === 'CASE_COMPLETED'
 
     if (isAdmin && isScreenAlert) {
+      markNotificationShown(payload.id)
       if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
+        playAlertSound()
+      } else if (
+        payload.eventKey === 'NEW_EMERGENCY_REQUEST' ||
+        payload.eventKey === 'CREW_ASSIGNED' ||
+        payload.eventKey === 'CASE_COMPLETED'
+      ) {
         playAlertSound()
       }
       return
     }
 
     markNotificationShown(payload.id)
+
     if (payload.priority === 'CRITICAL' || payload.category === 'BROADCAST') {
       playAlertSound()
       toast.error(`${payload.title}: ${payload.message}`, {
@@ -126,12 +146,19 @@ function ensureSocketListeners() {
       trackingCode: mission.trackingCode,
       status: mission.status,
     })
+
+    const path = typeof window !== 'undefined' ? window.location.pathname : ''
+    const missionUrl = path.startsWith('/driver')
+      ? `/driver/mission?caseId=${mission.id}`
+      : path.startsWith('/nurse')
+        ? `/nurse/mission?caseId=${mission.id}`
+        : `/dispatcher/emergency/active?id=${mission.id}`
+
+    showMissionAssignedDesktopNotification(mission.trackingCode, mission.id, missionUrl)
+    playNotificationSoundIfEnabled()
+
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/driver')) {
       useDriverStore.getState().setActiveMission(mission as any)
-      toast.success(`Mission assigned: ${mission.trackingCode ?? mission.id}`, { duration: 8000 })
-    }
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/nurse')) {
-      toast.success(`Mission assigned: ${mission.trackingCode ?? mission.id}`, { duration: 8000 })
     }
   })
 

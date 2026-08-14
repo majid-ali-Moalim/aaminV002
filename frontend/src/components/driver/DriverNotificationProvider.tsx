@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
+import DesktopNotificationInit from '@/components/notifications/DesktopNotificationInit'
+import WindowsToastStack from '@/components/notifications/WindowsToastStack'
 import { driverNotificationsApi } from '@/lib/driverApi'
 import { notificationsService } from '@/lib/api'
 import { useDriverStore } from '@/lib/stores/driverStore'
@@ -41,7 +43,9 @@ export function DriverNotificationProvider({ children }: { children: React.React
 
   return (
     <>
+      <DesktopNotificationInit />
       {children}
+      <WindowsToastStack />
       <LiveNotificationAlert />
       <AckNotificationModal />
     </>

@@ -495,7 +495,6 @@ export default function DispatchRequestCreator({
                   errors={errors}
                   banadirRegionName={banadirRegionName}
                   districts={districts}
-                  emergencyTypes={emergencyTypes}
                   loadingDistricts={loadingDistricts}
                   onChange={patchEmergency}
                   onCancel={handleCancel}

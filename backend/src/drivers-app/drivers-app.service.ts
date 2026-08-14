@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CaseWorkflowNotificationService } from '../notifications/case-workflow-notification.service';
 import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
 import { releaseCrewForCase } from '../common/occupied-crew';
 
 @Injectable()
 export class DriversAppService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private caseWorkflowNotifications: CaseWorkflowNotificationService,
+  ) {}
 
   // ─────────────────────────────────────────
   // PROFILE
@@ -318,6 +322,12 @@ export class DriversAppService {
         incidentCategory: true,
         statusLogs: { orderBy: { createdAt: 'asc' } },
       },
+    });
+
+    await this.caseWorkflowNotifications.notifyCaseStatusChange({
+      caseId: missionId,
+      status: status as any,
+      actorUserId: userId,
     });
 
     return updated;

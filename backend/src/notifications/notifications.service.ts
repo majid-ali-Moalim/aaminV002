@@ -14,6 +14,7 @@ import { NotificationDispatchService } from './notification-dispatch.service';
 import { DispatchPayload, NotificationEventKey } from './notification-events';
 import { enrichNotification, inferCategory, resolveRedirectUrl } from './notification-routing';
 import { resolveDeliverableEmail } from '../common/email-address';
+import { PushNotificationService } from './push-notification.service';
 
 export type InboxFilters = {
   userId?: string;
@@ -37,6 +38,7 @@ export class NotificationsService {
     private dispatch: NotificationDispatchService,
     private mailService: MailService,
     @Optional() private gateway?: NotificationsGateway,
+    @Optional() private pushNotification?: PushNotificationService,
   ) {}
 
   /**
@@ -85,7 +87,10 @@ export class NotificationsService {
         } else if (roleName.includes('nurse')) {
           recipientRedirect = `/nurse/mission?caseId=${caseId}`;
         }
-      } else if (payload.eventKey === 'MISSION_ASSIGNED') {
+      } else if (
+        payload.eventKey === 'MISSION_ASSIGNED' ||
+        payload.eventKey === 'CREW_ASSIGNED'
+      ) {
         if (recipient?.role === 'EMPLOYEE' && roleName.includes('driver')) {
           recipientRedirect = caseId
             ? `/driver/mission?caseId=${caseId}`
@@ -135,6 +140,29 @@ export class NotificationsService {
     void this.dispatchEvent(payload).catch((err) => {
       console.warn(`Background notification failed (${payload.eventKey}):`, err);
     });
+  }
+
+  private buildPushBody(title: string, message: string, eventKey?: string): string {
+    const codeMatch = message.match(/CASE[-\s]?\d{4}-\d+/i);
+    const code = codeMatch ? codeMatch[0].toUpperCase() : null;
+    switch (eventKey) {
+      case 'NEW_EMERGENCY_REQUEST':
+        return code ? `New Emergency Request — ${code}` : title;
+      case 'CREW_ASSIGNED':
+        return code ? `New Mission Assigned — ${code}` : title;
+      case 'CASE_COMPLETED':
+        return code ? `Case Completed — ${code}` : title;
+      default:
+        return code ? `${title} — ${code}` : message.length > 140 ? `${message.slice(0, 137)}…` : message;
+    }
+  }
+
+  private sendWebPush(
+    userId: string,
+    payload: { title: string; body: string; url?: string; tag?: string },
+  ): void {
+    if (!this.pushNotification?.isConfigured()) return;
+    void this.pushNotification.sendToUser(userId, payload).catch(() => {});
   }
 
   /** Send notification only to active employees linked to a hospital. */
@@ -201,6 +229,13 @@ export class NotificationsService {
       this.gateway?.emitNotification(data.userId, enriched);
       const stats = await this.getInboxStats(data.userId);
       this.gateway?.emitStats(data.userId, stats);
+
+      void this.sendWebPush(data.userId, {
+        title: 'Aamin Ambulance',
+        body: this.buildPushBody(data.title, data.message, data.eventKey),
+        url: data.redirectUrl,
+        tag: notification.id,
+      });
     }
 
     if (data.emailEnabled) {
@@ -273,8 +308,7 @@ export class NotificationsService {
     const existing = await this.prisma.notification.findFirst({
       where: {
         userId: data.userId,
-        title: data.title,
-        message: data.message,
+        eventKey: data.eventKey ?? undefined,
         entityId: data.entityId ?? null,
         deletedAt: null,
         createdAt: { gte: new Date(Date.now() - 15_000) },
@@ -634,7 +668,12 @@ export class NotificationsService {
     return result;
   }
 
-  async archive(id: string) {
+  async archive(id: string, userId?: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, deletedAt: null, ...(userId ? { userId } : {}) },
+    });
+    if (!existing) throw new NotFoundException('Notification not found');
+
     const updated = await this.prisma.notification.update({
       where: { id },
       data: { status: 'ARCHIVED' },
@@ -642,7 +681,12 @@ export class NotificationsService {
     return enrichNotification(updated);
   }
 
-  async resolve(id: string) {
+  async resolve(id: string, userId?: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, deletedAt: null, ...(userId ? { userId } : {}) },
+    });
+    if (!existing) throw new NotFoundException('Notification not found');
+
     const updated = await this.prisma.notification.update({
       where: { id },
       data: { status: 'RESOLVED' },
@@ -650,7 +694,12 @@ export class NotificationsService {
     return enrichNotification(updated);
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId?: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, deletedAt: null, ...(userId ? { userId } : {}) },
+    });
+    if (!existing) throw new NotFoundException('Notification not found');
+
     return this.prisma.notification.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -847,5 +896,23 @@ export class NotificationsService {
         });
       }
     }
+  }
+
+  getPushPublicKey() {
+    return { publicKey: this.pushNotification?.getPublicKey() ?? null };
+  }
+
+  savePushSubscription(
+    userId: string,
+    body: { endpoint: string; keys: { p256dh: string; auth: string } },
+  ) {
+    if (!this.pushNotification) return { ok: false };
+    return this.pushNotification.saveSubscription(userId, body);
+  }
+
+  async removePushSubscription(userId: string, endpoint: string) {
+    if (!this.pushNotification) return { ok: true };
+    await this.pushNotification.removeSubscription(userId, endpoint);
+    return { ok: true };
   }
 }

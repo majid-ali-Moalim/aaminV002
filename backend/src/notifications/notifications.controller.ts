@@ -108,6 +108,31 @@ export class NotificationsController {
     return this.notificationsService.updatePreferences(user.id, body.preferences ?? []);
   }
 
+  @Get('push/vapid-public-key')
+  getPushPublicKey() {
+    return this.notificationsService.getPushPublicKey();
+  }
+
+  @Post('push/subscription')
+  savePushSubscription(
+    @CurrentUser() user: any,
+    @Body()
+    body: {
+      endpoint: string;
+      keys: { p256dh: string; auth: string };
+    },
+  ) {
+    return this.notificationsService.savePushSubscription(user.id, body);
+  }
+
+  @Delete('push/subscription')
+  removePushSubscription(
+    @CurrentUser() user: any,
+    @Body() body: { endpoint: string },
+  ) {
+    return this.notificationsService.removePushSubscription(user.id, body.endpoint);
+  }
+
   @Post('preferences/test-email')
   sendTestEmail(@CurrentUser() user: any) {
     return this.notificationsService.sendTestNotificationEmail(user.id);
@@ -186,23 +211,23 @@ export class NotificationsController {
   }
 
   @Patch(':id/unread')
-  markUnread(@Param('id') id: string) {
-    return this.notificationsService.markAsUnread(id);
+  markUnread(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.notificationsService.markAsUnread(id, user.id);
   }
 
   @Patch(':id/archive')
-  archive(@Param('id') id: string) {
-    return this.notificationsService.archive(id);
+  archive(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.notificationsService.archive(id, user.id);
   }
 
   @Patch(':id/resolve')
-  resolve(@Param('id') id: string) {
-    return this.notificationsService.resolve(id);
+  resolve(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.notificationsService.resolve(id, user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.notificationsService.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.notificationsService.remove(id, user.id);
   }
 
   @Post('check-maintenance')

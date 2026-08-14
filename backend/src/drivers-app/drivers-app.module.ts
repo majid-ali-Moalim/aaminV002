@@ -5,10 +5,12 @@ import { DriversAppController } from './drivers-app.controller';
 import { DriversAppGateway } from './drivers-app.gateway';
 import { DriverAuthGuard } from './drivers-app.guard';
 import { PrismaModule } from '../prisma/prisma.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     PrismaModule,
+    NotificationsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },

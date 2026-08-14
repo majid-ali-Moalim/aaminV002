@@ -2,17 +2,8 @@ import { ageFromGroup } from '@/lib/patients/updatePatientCaseValidation'
 import { UNKNOWN_PATIENT_NAME, isUnknownPatientName } from '@/lib/emergency/patientName'
 import { Gender, Priority, RequestSource } from '@/types'
 import { normalizePhoneDigits } from '@/lib/driverFormValidation'
-import {
-  resolveIncidentCategoryId,
-  isOtherEmergencyType,
-  type EmergencyTypeOption,
-} from '@/lib/emergency/emergencyTypes'
+import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
 import { isFuneralTransportCode, resolveTransportTypeLabel, type TransportTypeOption } from '@/lib/emergency/transportTypes'
-import {
-  CONSCIOUS_STATUS_OPTIONS,
-  BREATHING_STATUS_OPTIONS,
-  BLEEDING_STATUS_OPTIONS,
-} from '@/lib/emergency/triageOptions'
 import type {
   DispatchRequestType,
   EmergencyDispatchForm,
@@ -41,13 +32,6 @@ function pickupFromEmergency(data: EmergencyDispatchForm): string {
   return data.areaStreet.trim() || 'Banaadir'
 }
 
-function triageLabel(
-  value: string,
-  options: readonly { value: string; label: string }[],
-): string {
-  return options.find((o) => o.value === value)?.label ?? value.replace(/_/g, ' ')
-}
-
 function transportLabel(data: NonEmergencyDispatchForm, transportTypes: TransportTypeOption[]): string {
   return resolveTransportTypeLabel(data.transportType, data.transportTypeOther, transportTypes)
 }
@@ -69,24 +53,13 @@ function nurseManualNotes(needsNurse: boolean | null): string | undefined {
 
 export function buildEmergencyPayload(
   data: EmergencyDispatchForm,
-  emergencyTypes: EmergencyTypeOption[],
+  _emergencyTypes: EmergencyTypeOption[] = [],
 ) {
-  const selectedType = emergencyTypes.find((t) => t.id === data.emergencyTypeId)
-  const incidentCategoryId = resolveIncidentCategoryId(selectedType)
   const pickupLocation = pickupFromEmergency(data)
-  const typeLabel =
-    selectedType && isOtherEmergencyType(selectedType)
-      ? `Other: ${data.emergencyTypeOther.trim()}`
-      : selectedType?.name
 
   const notes = [
     'Request Type: Emergency',
-    typeLabel ? `Emergency Type: ${typeLabel}` : '',
-    `Conscious: ${triageLabel(data.consciousStatus, CONSCIOUS_STATUS_OPTIONS)}`,
-    `Breathing: ${triageLabel(data.breathingStatus, BREATHING_STATUS_OPTIONS)}`,
-    `Bleeding: ${triageLabel(data.bleedingStatus, BLEEDING_STATUS_OPTIONS)}`,
-    data.needsOxygen ? 'Needs oxygen: Yes' : '',
-    data.needsStretcher ? 'Needs stretcher: Yes' : '',
+    'Intake: Quick form — triage and details to be completed on case closure',
     nurseLine(true),
   ]
     .filter(Boolean)
@@ -98,12 +71,6 @@ export function buildEmergencyPayload(
     pickupLocation,
     pickupLandmark: data.areaStreet.trim() || undefined,
     patientCondition: data.briefDescription.trim(),
-    consciousStatus: data.consciousStatus,
-    breathingStatus: data.breathingStatus,
-    bleedingStatus: data.bleedingStatus,
-    needsOxygen: data.needsOxygen,
-    needsStretcher: data.needsStretcher,
-    incidentCategoryId,
     regionId: data.regionId,
     districtId: data.districtId,
     stationId: data.stationId || undefined,

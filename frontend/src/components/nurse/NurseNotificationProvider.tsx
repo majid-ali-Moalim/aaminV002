@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
+import DesktopNotificationInit from '@/components/notifications/DesktopNotificationInit'
+import WindowsToastStack from '@/components/notifications/WindowsToastStack'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { notificationsService } from '@/lib/api'
 import type { AppNotification } from '@/lib/notifications/types'
@@ -34,7 +36,9 @@ export function NurseNotificationProvider({ children }: { children: React.ReactN
 
   return (
     <>
+      <DesktopNotificationInit />
       {children}
+      <WindowsToastStack />
       <LiveNotificationAlert />
       <AckNotificationModal />
     </>

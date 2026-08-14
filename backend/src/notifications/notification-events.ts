@@ -20,7 +20,17 @@ export type NotificationEventKey =
   | 'EMERGENCY_BROADCAST'
   | 'COMMUNICATION_MESSAGE'
   | 'SHIFT_REMINDER'
-  | 'CASE_STATION_TRANSFER';
+  | 'CASE_STATION_TRANSFER'
+  | 'NEW_EMERGENCY_REQUEST'
+  | 'CREW_ASSIGNED'
+  | 'CASE_STARTED'
+  | 'ARRIVED_SCENE'
+  | 'PATIENT_LOADED'
+  | 'MEDICAL_NOTES_COMPLETED'
+  | 'EN_ROUTE_HOSPITAL'
+  | 'ARRIVED_HOSPITAL'
+  | 'HANDOVER_COMPLETED'
+  | 'CASE_COMPLETED';
 
 export type DispatchContext = {
   createdById?: string | null;
@@ -153,5 +163,55 @@ export const EVENT_ROLE_ACCESS: Record<
     includeUserRoles: ['ADMIN'],
     employeeRoleNames: ['Dispatcher'],
     excludeEmployeeRoleNames: ['Driver', 'Nurse'],
+  },
+  NEW_EMERGENCY_REQUEST: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  CREW_ASSIGNED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  CASE_STARTED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  ARRIVED_SCENE: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  PATIENT_LOADED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  MEDICAL_NOTES_COMPLETED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  EN_ROUTE_HOSPITAL: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  ARRIVED_HOSPITAL: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  HANDOVER_COMPLETED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
+  },
+  CASE_COMPLETED: {
+    includeUserRoles: [],
+    employeeRoleNames: [],
+    excludeEmployeeRoleNames: [],
   },
 };

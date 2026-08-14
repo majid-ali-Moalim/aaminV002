@@ -11,40 +11,26 @@ import {
   Loader2,
   MapPin,
   Phone,
-  Shield,
   Siren,
-  Stethoscope,
-  Truck,
-  User,
 } from 'lucide-react'
-import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import { fetchFleetAvailability } from '@/lib/emergency/emergencyTypes'
-import { fetchHireEmergencyTypes } from '@/lib/hire-ambulance/emergencyTypes'
 import { PUBLIC_HEADER_OFFSET } from '@/lib/layout/publicHeader'
 import {
   API_BASE,
   BOOKING_TIME_SLOTS,
   DRAFT_KEY,
   EMERGENCY_HOTLINE,
-  EMERGENCY_TYPE_OPTIONS,
-  HIRE_BLEEDING_OPTIONS,
-  HIRE_BREATHING_OPTIONS,
-  HIRE_CONSCIOUS_OPTIONS,
   LANG_KEY,
   REQUEST_TYPES,
   TRANSPORT_TYPES,
-  TRIAGE_PRIORITY_OPTIONS,
 } from './constants'
 import {
   buildPayload,
-  computePriority,
   defaultFormValues,
   formatSomaliaPhone,
-  isOtherEmergencyTypeValue,
   isOtherTransportType,
   validateEmergencyFormFields,
   validateNonEmergencyFormFields,
-  type HireEmergencyTypeOption,
   type HireFormErrors,
   type HireFormValues,
 } from './formHelpers'
@@ -55,10 +41,10 @@ type District = { id: string; name: string }
 type Hospital = { id: string; name: string }
 
 const inputClass =
-  'w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
+  'w-full h-11 sm:h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 text-base outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
 const selectClass =
-  'w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
-const labelClass = 'block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2'
+  'w-full h-11 sm:h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-base outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40'
+const labelClass = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5'
 
 function FieldLabel({ children, required }: { children: ReactNode; required?: boolean }) {
   return (
@@ -73,15 +59,17 @@ function SectionCard({
   title,
   subtitle,
   children,
+  compact,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
+  compact?: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-      <div className="mb-6">
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
+    <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm">
+      <div className={compact ? 'mb-4' : 'mb-5'}>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-white sm:text-lg">{title}</h3>
         {subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
       </div>
       {children}
@@ -109,32 +97,20 @@ export default function HireAmbulanceWizard() {
   const [hospitals, setHospitals] = useState<Hospital[]>([])
   const [fleet, setFleet] = useState({ available: 0, total: 0 })
   const [fleetStatus, setFleetStatus] = useState<'loading' | 'available' | 'unavailable'>('loading')
-  const [emergencyTypes, setEmergencyTypes] = useState<HireEmergencyTypeOption[]>([])
   const [formErrors, setFormErrors] = useState<HireFormErrors>({})
 
   const { register, handleSubmit, watch, setValue, reset, getValues, control } = useForm<HireFormValues>({
     defaultValues: defaultFormValues,
   })
 
-  const [requestType, regionId, districtId, emergencyType, transportType, bookingTime, conditionDescription, scheduleMode, consciousStatus, breathingStatus, bleedingStatus] =
+  const [requestType, regionId, districtId, transportType, bookingTime, conditionDescription, scheduleMode] =
     useWatch({
       control,
-      name: ['requestType', 'regionId', 'districtId', 'emergencyType', 'transportType', 'bookingTime', 'conditionDescription', 'scheduleMode', 'consciousStatus', 'breathingStatus', 'bleedingStatus'],
+      name: ['requestType', 'regionId', 'districtId', 'transportType', 'bookingTime', 'conditionDescription', 'scheduleMode'],
     })
 
   const t = useMemo(() => getHireT(lang), [lang])
   const isEmergency = requestType === 'EMERGENCY'
-  const assessedPriority = useMemo(
-    () =>
-      computePriority({
-        requestType: 'EMERGENCY',
-        consciousStatus: consciousStatus ?? '',
-        breathingStatus: breathingStatus ?? '',
-        bleedingStatus: bleedingStatus ?? '',
-      } as HireFormValues),
-    [consciousStatus, breathingStatus, bleedingStatus],
-  )
-  const showEmergencyTypeOther = isOtherEmergencyTypeValue(emergencyType ?? '')
   const showOtherTransport = isOtherTransportType(transportType ?? '')
   const today = new Date().toISOString().slice(0, 10)
 
@@ -148,7 +124,7 @@ export default function HireAmbulanceWizard() {
   }
 
   const runValidation = (data: HireFormValues): HireFormErrors => {
-    const ctx = { emergencyTypes, t }
+    const ctx = { t }
     return data.requestType === 'EMERGENCY'
       ? validateEmergencyFormFields(data, ctx)
       : validateNonEmergencyFormFields(data, ctx)
@@ -166,15 +142,13 @@ export default function HireAmbulanceWizard() {
   const loadPublicData = useCallback(async () => {
     setFleetStatus((prev) => (prev === 'available' ? prev : 'loading'))
     try {
-      const [regionsRes, hospitalsRes, fleetInfo, emergency] = await Promise.all([
+      const [regionsRes, hospitalsRes, fleetInfo] = await Promise.all([
         fetch(`${API_BASE}/api/setup/regions`, { cache: 'no-store' }),
         fetch(`${API_BASE}/api/hospitals`, { cache: 'no-store' }),
         fetchFleetAvailability(),
-        fetchHireEmergencyTypes(),
       ])
       if (regionsRes.ok) setRegions((await regionsRes.json()) as Region[])
       if (hospitalsRes.ok) setHospitals((await hospitalsRes.json()) as Hospital[])
-      setEmergencyTypes(emergency)
       if (fleetInfo) {
         setFleet({ available: fleetInfo.available, total: fleetInfo.total })
         setFleetStatus(fleetInfo.canAcceptRequests ? 'available' : 'unavailable')
@@ -262,14 +236,7 @@ export default function HireAmbulanceWizard() {
       setValue('scheduleMode', 'now')
       setValue('destinationHospital', '')
       setValue('consent', false)
-      setValue('consciousStatus', 'CONSCIOUS')
-      setValue('breathingStatus', 'NORMAL')
-      setValue('bleedingStatus', 'NONE')
-      setValue('needsOxygen', false)
-      setValue('needsStretcher', false)
     } else {
-      setValue('emergencyType', '')
-      setValue('emergencyTypeOther', '')
       setValue('scheduleMode', 'now')
     }
   }
@@ -295,7 +262,7 @@ export default function HireAmbulanceWizard() {
       const response = await fetch(`${API_BASE}/api/emergency-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(data, emergencyTypes)),
+        body: JSON.stringify(buildPayload(data)),
       })
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}))
@@ -360,20 +327,27 @@ export default function HireAmbulanceWizard() {
   )
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-32 ${PUBLIC_HEADER_OFFSET}`}>
-      <section className="border-b border-slate-100 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3">
-          <a href={`tel:${EMERGENCY_HOTLINE}`} className="inline-flex items-center gap-2 text-sm font-bold text-red-600 hover:text-red-700">
-            <Phone className="h-4 w-4" />
-            {t.emergencyHotline}: {EMERGENCY_HOTLINE}
+    <div className={`min-h-screen bg-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-16 ${PUBLIC_HEADER_OFFSET}`}>
+      <section className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 px-4 py-3">
+          <a
+            href={`tel:${EMERGENCY_HOTLINE}`}
+            className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 sm:flex-none sm:justify-start"
+          >
+            <Phone className="h-4 w-4 shrink-0" />
+            <span>{t.callEmergency} {EMERGENCY_HOTLINE}</span>
           </a>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-1">
+          <div className="inline-flex shrink-0 items-center rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-1">
             {(['en', 'so'] as const).map((code) => (
               <button
                 key={code}
                 type="button"
                 onClick={() => setLanguage(code)}
-                className={`h-8 rounded-lg px-3 text-xs font-bold uppercase ${lang === code ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                className={`h-9 min-w-[2.5rem] rounded-lg px-3 text-xs font-semibold uppercase transition ${
+                  lang === code
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
               >
                 {code}
               </button>
@@ -382,24 +356,10 @@ export default function HireAmbulanceWizard() {
         </div>
       </section>
 
-      <section className="px-4 pb-6 pt-8">
-        <div className="mx-auto w-full max-w-4xl">
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-            {t.heroTitle} <span className="text-red-600">{t.heroTitleAccent}</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-slate-600 dark:text-slate-400">{t.heroSubtitle}</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
-            <Truck className="h-4 w-4 text-red-600" />
-            <span className="font-bold text-slate-900">{fleet.available}</span>
-            <span className="text-slate-500">{t.fleetAvailable}</span>
-          </div>
-        </div>
-      </section>
-
       <form
         id="hire-ambulance-form"
         onSubmit={handleSubmit(onSubmit)}
-        className="mx-auto w-full max-w-4xl space-y-6 px-4 py-4"
+        className="mx-auto w-full max-w-xl space-y-4 px-4 py-5 sm:py-6"
       >
         {fleetStatus !== 'available' && (
           <div className={`rounded-2xl border p-4 text-sm ${fleetStatus === 'loading' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
@@ -410,57 +370,40 @@ export default function HireAmbulanceWizard() {
           </div>
         )}
 
-        {/* Step 1 — Request Type */}
-        <SectionCard title={t.requestType.title} subtitle={t.requestType.subtitle}>
-          <div className="grid gap-4 sm:grid-cols-2" data-field="requestType">
+        {/* Request Type — compact toggle */}
+        <div data-field="requestType">
+          <p className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">{t.requestType.title}</p>
+          <div className="grid grid-cols-2 gap-2">
             {REQUEST_TYPES.map((typeOption) => {
               const selected = requestType === typeOption.value
               const isEmergencyOption = typeOption.value === 'EMERGENCY'
               return (
-                <label
+                <button
                   key={typeOption.value}
-                  className={`relative flex cursor-pointer flex-col gap-3 rounded-2xl border-2 p-5 transition ${
-                    selected ? `${typeOption.accent} ring-2` : 'border-slate-200 hover:border-slate-300'
+                  type="button"
+                  onClick={() => handleRequestTypeChange(typeOption.value)}
+                  className={`flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-xl border-2 px-3 py-3 text-center transition ${
+                    selected
+                      ? isEmergencyOption
+                        ? 'border-red-500 bg-red-50 text-red-900 ring-2 ring-red-100'
+                        : 'border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-100'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300'
                   } ${formErrors.requestType && !selected ? 'border-red-300' : ''}`}
                 >
-                  <input
-                    type="radio"
-                    name="requestType"
-                    value={typeOption.value}
-                    checked={selected}
-                    onChange={() => handleRequestTypeChange(typeOption.value)}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl text-xl ${
-                        isEmergencyOption ? 'bg-red-100' : 'bg-blue-100'
-                      }`}
-                    >
-                      {isEmergencyOption ? '🚨' : '🚑'}
-                    </span>
-                    {selected && (
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white text-xs">✓</span>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">
-                      {isEmergencyOption ? t.requestType.emergency : t.requestType.nonEmergency}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {isEmergencyOption ? t.requestType.emergencyDesc : t.requestType.nonEmergencyDesc}
-                    </p>
-                  </div>
-                </label>
+                  <span className="text-xl leading-none">{isEmergencyOption ? '🚨' : '🚑'}</span>
+                  <span className="text-sm font-semibold">
+                    {isEmergencyOption ? t.requestType.emergency : t.requestType.nonEmergency}
+                  </span>
+                </button>
               )
             })}
           </div>
           <FieldError message={formErrors.requestType} />
-        </SectionCard>
+        </div>
 
         {/* Emergency — short form only */}
         {isEmergency && (
-          <SectionCard title={t.emergencyQuick.title} subtitle={t.emergencyQuick.subtitle}>
+          <SectionCard title={t.emergencyQuick.title} subtitle={t.emergencyQuick.subtitle} compact>
             <div className="space-y-5">
               <div data-field="patientName">
                 <FieldLabel required>{t.emergencyQuick.patientName}</FieldLabel>
@@ -476,7 +419,7 @@ export default function HireAmbulanceWizard() {
                       setValue('patientName', 'Unknown Patient')
                       clearError('patientName')
                     }}
-                    className="shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    className="shrink-0 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
                     {t.unknownPatient}
                   </button>
@@ -501,128 +444,11 @@ export default function HireAmbulanceWizard() {
                 <FieldError message={formErrors.callerPhone} />
               </div>
 
-              <div data-field="emergencyType">
-                <FieldLabel required>{t.emergencyType.label}</FieldLabel>
-                <select
-                  {...register('emergencyType', {
-                    onChange: (e) => {
-                      if (!isOtherEmergencyTypeValue(e.target.value)) setValue('emergencyTypeOther', '')
-                      clearError('emergencyType')
-                      clearError('emergencyTypeOther')
-                    },
-                  })}
-                  className={fieldClass(selectClass, !!formErrors.emergencyType)}
-                >
-                  <option value="">{t.triage.select}</option>
-                  {EMERGENCY_TYPE_OPTIONS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={formErrors.emergencyType} />
-                {showEmergencyTypeOther && (
-                  <div className="mt-4" data-field="emergencyTypeOther">
-                    <FieldLabel required>{t.emergencyType.otherLabel}</FieldLabel>
-                    <input
-                      {...register('emergencyTypeOther', { onChange: () => clearError('emergencyTypeOther') })}
-                      className={fieldClass(inputClass, !!formErrors.emergencyTypeOther)}
-                      placeholder={t.emergencyType.otherPlaceholder}
-                    />
-                    <FieldError message={formErrors.emergencyTypeOther} />
-                  </div>
-                )}
-              </div>
-
-              <LocationFields />
-
-              <SectionCard title={t.triage.title} subtitle={t.triage.subtitle}>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div data-field="consciousStatus">
-                    <FieldLabel required>{t.triage.conscious}</FieldLabel>
-                    <select
-                      {...register('consciousStatus', { onChange: () => clearError('consciousStatus') })}
-                      className={fieldClass(selectClass, !!formErrors.consciousStatus)}
-                    >
-                      {HIRE_CONSCIOUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {t.triage[option.labelKey]}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={formErrors.consciousStatus} />
-                  </div>
-                  <div data-field="breathingStatus">
-                    <FieldLabel required>{t.triage.breathing}</FieldLabel>
-                    <select
-                      {...register('breathingStatus', { onChange: () => clearError('breathingStatus') })}
-                      className={fieldClass(selectClass, !!formErrors.breathingStatus)}
-                    >
-                      {HIRE_BREATHING_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {t.triage[option.labelKey]}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={formErrors.breathingStatus} />
-                  </div>
-                  <div data-field="bleedingStatus">
-                    <FieldLabel required>{t.triage.bleeding}</FieldLabel>
-                    <select
-                      {...register('bleedingStatus', { onChange: () => clearError('bleedingStatus') })}
-                      className={fieldClass(selectClass, !!formErrors.bleedingStatus)}
-                    >
-                      {HIRE_BLEEDING_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {t.triage[option.labelKey]}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={formErrors.bleedingStatus} />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-4">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" {...register('needsOxygen')} className="h-4 w-4 accent-red-600" />
-                    {t.triage.needsOxygen}
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" {...register('needsStretcher')} className="h-4 w-4 accent-red-600" />
-                    {t.triage.needsStretcher}
-                  </label>
-                </div>
-              </SectionCard>
-
-              <SectionCard title={t.triage.assessedTitle} subtitle={t.triage.assessedSubtitle}>
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <Stethoscope className="h-4 w-4 text-red-500" />
-                  <span className="text-xs text-slate-500">Current assessment:</span>
-                  <PriorityBadge priority={assessedPriority} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {TRIAGE_PRIORITY_OPTIONS.map((opt) => {
-                    const selected = assessedPriority === opt.value
-                    return (
-                      <div
-                        key={opt.value}
-                        className={`rounded-xl border p-3 text-left transition ${
-                          selected
-                            ? 'border-red-500 bg-red-50 ring-2 ring-red-500/20'
-                            : 'border-slate-200 bg-slate-50 opacity-60'
-                        }`}
-                      >
-                        <p className="text-sm font-black text-slate-900">{opt.label}</p>
-                        <p className="mt-0.5 text-[10px] text-slate-500">{opt.hint}</p>
-                      </div>
-                    )
-                  })}
-                </div>
-              </SectionCard>
+              <LocationFields areaRequired />
 
               <div data-field="conditionDescription">
-                <FieldLabel>{t.emergencyQuick.whatHappened}</FieldLabel>
-                <p className="mb-2 text-xs text-slate-400">{t.emergencyQuick.whatHappenedHint}</p>
+                <FieldLabel required>{t.emergencyQuick.briefDescription}</FieldLabel>
+                <p className="mb-2 text-xs text-slate-400">{t.emergencyQuick.briefDescriptionHint}</p>
                 <textarea
                   {...register('conditionDescription', {
                     maxLength: 100,
@@ -631,7 +457,7 @@ export default function HireAmbulanceWizard() {
                   rows={3}
                   maxLength={100}
                   className={fieldClass(`${inputClass} h-auto resize-none py-3`, !!formErrors.conditionDescription)}
-                  placeholder={t.emergencyQuick.whatHappenedPlaceholder}
+                  placeholder={t.emergencyQuick.briefDescriptionPlaceholder}
                 />
                 <div className="mt-1 flex items-center justify-between">
                   <FieldError message={formErrors.conditionDescription} />
@@ -642,7 +468,7 @@ export default function HireAmbulanceWizard() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-base font-bold uppercase tracking-wide text-white shadow-lg shadow-red-200 transition hover:bg-red-700 disabled:opacity-60"
+                className="flex w-full min-h-[3.25rem] items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-red-700 active:scale-[0.99] disabled:opacity-60"
               >
                 {submitting ? (
                   <>
@@ -899,7 +725,7 @@ export default function HireAmbulanceWizard() {
             <button
               type="submit"
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 text-base font-bold uppercase tracking-wide text-white shadow-lg shadow-red-200 transition hover:bg-red-700 disabled:opacity-60"
+              className="flex w-full min-h-[3.25rem] items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-base font-semibold text-white shadow-md transition hover:bg-red-700 active:scale-[0.99] disabled:opacity-60"
             >
               {submitting ? (
                 <>
@@ -915,27 +741,14 @@ export default function HireAmbulanceWizard() {
             </button>
           </>
         )}
-      </form>
 
-      <aside className="mx-auto mt-8 hidden max-w-4xl px-4 lg:block">
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">{t.needHelp}</p>
-          <ul className="mt-3 space-y-3 text-sm text-slate-600">
-            <li className="flex gap-2">
-              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-              {t.helpSecure}
-            </li>
-            <li className="flex gap-2">
-              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-              {t.helpCall}
-            </li>
-            <li className="flex gap-2">
-              <User className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-              {t.helpHotline} <a href={`tel:${EMERGENCY_HOTLINE}`} className="font-bold text-red-600">{EMERGENCY_HOTLINE}</a>
-            </li>
-          </ul>
-        </div>
-      </aside>
+        <p className="pt-2 text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          {t.helpCall}{' '}
+          <a href={`tel:${EMERGENCY_HOTLINE}`} className="font-semibold text-red-600 hover:underline">
+            {EMERGENCY_HOTLINE}
+          </a>
+        </p>
+      </form>
     </div>
   )
 }

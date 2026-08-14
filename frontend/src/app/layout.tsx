@@ -5,8 +5,9 @@ import { PublicThemeProvider } from '@/components/public/PublicThemeProvider'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata = {
-  title: 'Aamin Ambulance - Emergency Dispatch System',
-  description: 'Professional ambulance services and emergency medical response',
+  title: 'Aamin Ambulance — Free 24-Hour Emergency Medical Service in Mogadishu',
+  description:
+    'Aamin Ambulance provides free 24-hour ambulance and pre-hospital emergency medical services in Mogadishu, Somalia. Request an ambulance or call 999 in an emergency.',
 }
 
 export default function RootLayout({

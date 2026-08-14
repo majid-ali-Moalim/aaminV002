@@ -8,6 +8,7 @@ import { notificationsService } from '@/lib/api'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { useNotificationSocket } from '@/lib/useNotificationSocket'
 import NotificationCard from './NotificationCard'
+import DesktopNotificationPrompt from './DesktopNotificationPrompt'
 import type { AppNotification, DrawerTabId } from '@/lib/notifications/types'
 import { DRAWER_TABS } from '@/lib/notifications/types'
 
@@ -172,6 +173,8 @@ export default function NotificationDrawer() {
               Mark all read
             </button>
           </div>
+
+          <DesktopNotificationPrompt />
 
           <div className="p-3 border-b border-gray-100 dark:border-slate-800">
             <div className="relative">

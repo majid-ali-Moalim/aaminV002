@@ -5,6 +5,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CaseWorkflowNotificationService } from '../notifications/case-workflow-notification.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TrackingService } from '../tracking/tracking.service';
 import { AuditLogService } from '../tracking/audit-log.service';
@@ -75,6 +76,7 @@ export class EmergencyRequestsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private caseWorkflowNotifications: CaseWorkflowNotificationService,
     private trackingGateway: TrackingGateway,
     private trackingService: TrackingService,
     private auditLog: AuditLogService,
@@ -523,27 +525,11 @@ export class EmergencyRequestsService {
         }
       }
 
-      const assignedAtCreate = [request.driver?.userId, request.nurse?.userId].filter(Boolean) as string[];
-
-      const stationLabel = autoRouteMeta.stationName || 'the responsible station';
-      await this.notifications.dispatchEvent({
-        eventKey: 'EMERGENCY_CREATED',
-        title: 'New emergency request assigned to your station',
-        message: `Case ${request.trackingCode} for ${request.patient.fullName} at ${request.pickupLocation} is waiting in the ${stationLabel} pending queue.`,
-        type: 'EMERGENCY',
-        category: 'MISSION',
-        priority: request.priority as any,
-        entityType: 'EmergencyRequest',
-        entityId: request.id,
-        redirectUrl: `/dispatcher/emergency-requests/pending`,
-        context: {
-          createdById: data.createdByUserId ?? data.dispatcherUserId,
-          regionId: request.regionId ?? data.regionId ?? null,
-          stationId: request.stationId ?? resolvedStationId ?? null,
-          assignedUserIds: assignedAtCreate.length ? assignedAtCreate : undefined,
-          includeEmployeeRoles: assignedAtCreate.length ? ['Driver', 'Nurse'] : undefined,
-          directOnly: false,
-        },
+      await this.caseWorkflowNotifications.notifyCaseEvent({
+        caseId: request.id,
+        event: 'NEW_EMERGENCY_REQUEST',
+        actorUserId: data.createdByUserId ?? data.dispatcherUserId ?? undefined,
+        background: false,
       });
 
       return {
@@ -946,24 +932,10 @@ export class EmergencyRequestsService {
       }
     }
 
-    this.notifications.dispatchEventBackground({
-      eventKey: 'MISSION_ASSIGNED',
-      title: isReassign ? 'New mission assignment' : 'Mission Assigned',
-      message: isReassign
-        ? `You are now assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`
-        : `Team assigned to ${result.trackingCode} — Ambulance ${result.ambulance?.ambulanceNumber ?? 'N/A'}.${gpsNote}`,
-      type: 'EMERGENCY',
-      category: 'MISSION',
-      priority: result.priority as any,
-      entityType: 'EmergencyRequest',
-      entityId: result.id,
-      redirectUrl: `/dispatcher/emergency/active?id=${result.id}`,
-      context: {
-        createdById: createdByUserId,
-        regionId: result.regionId ?? existing.regionId ?? null,
-        assignedUserIds: [...assignedIds, dispatcherUserId].filter(Boolean) as string[],
-        includeEmployeeRoles: ['Driver', 'Nurse'],
-      },
+    void this.caseWorkflowNotifications.notifyCaseEvent({
+      caseId: result.id,
+      event: 'CREW_ASSIGNED',
+      actorUserId: createdByUserId,
     });
 
     this.pushMissionToAssignedCrew(result);
@@ -1071,47 +1043,16 @@ export class EmergencyRequestsService {
       }
     });
 
-    const assignedIds = await this.teamUserIds(existing.id);
-    const dispatcherUserId = existing.dispatcherId
-      ? (
-          await this.prisma.employee.findUnique({
-            where: { id: existing.dispatcherId },
-            select: { userId: true },
-          })
-        )?.userId
-      : undefined;
-    const notifyTeamIds = [...assignedIds, dispatcherUserId].filter(Boolean) as string[];
     const actorUserId = employeeId
       ? (await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } }))?.userId
       : undefined;
 
-    if (status === 'COMPLETED') {
-      await this.notifications.dispatchEvent({
-        eventKey: 'MISSION_COMPLETED',
-        title: 'Mission Completed',
-        message: `Case ${existing.trackingCode} has been completed successfully.`,
-        type: 'EMERGENCY',
-        category: 'MISSION',
-        priority: existing.priority as any,
-        entityType: 'EmergencyRequest',
-        entityId: existing.id,
-        redirectUrl: `/dispatcher/emergency-requests/${existing.id}`,
-        context: { createdById: actorUserId, assignedUserIds: notifyTeamIds },
-      });
-    } else {
-      await this.notifications.dispatchEvent({
-        eventKey: 'MISSION_UPDATED',
-        title: 'Mission Updated',
-        message: `Case ${existing.trackingCode} status changed to ${status}`,
-        type: 'EMERGENCY',
-        category: 'MISSION',
-        priority: existing.priority as any,
-        entityType: 'EmergencyRequest',
-        entityId: existing.id,
-        redirectUrl: `/dispatcher/emergency-requests/${existing.id}`,
-        context: { createdById: actorUserId, assignedUserIds: notifyTeamIds },
-      });
-    }
+    await this.caseWorkflowNotifications.notifyCaseStatusChange({
+      caseId: existing.id,
+      status,
+      actorUserId,
+      background: false,
+    });
 
     // Emit real-time tracking update
     const trackingData = await this.trackingService.findByCodeOrPhone(existing.trackingCode);

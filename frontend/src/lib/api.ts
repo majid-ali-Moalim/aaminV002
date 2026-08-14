@@ -1007,6 +1007,21 @@ export const notificationsService = {
       '/api/notifications/preferences/test-email',
     )
   },
+  getPushPublicKey: async () => {
+    const api = new ApiService()
+    return await api.get<{ publicKey: string | null }>('/api/notifications/push/vapid-public-key')
+  },
+  savePushSubscription: async (subscription: {
+    endpoint: string
+    keys: { p256dh: string; auth: string }
+  }) => {
+    const api = new ApiService()
+    return await api.post('/api/notifications/push/subscription', subscription)
+  },
+  removePushSubscription: async (endpoint: string) => {
+    const api = new ApiService()
+    return await api.delete('/api/notifications/push/subscription', { data: { endpoint } })
+  },
   getAlerts: async (filters?: { status?: string; priority?: string }) => {
     const api = new ApiService()
     return await api.get('/api/notifications/alerts', { params: filters })
