@@ -34,6 +34,31 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
           icon: UserCheck, 
           label: 'Assigned' 
         };
+      case 'DISPATCHED':
+      case 'EN_ROUTE':
+      case 'ARRIVED_SCENE':
+      case 'PATIENT_STABILIZED':
+      case 'TRANSPORTING':
+        return {
+          bg: 'bg-red-50 border-red-200',
+          text: 'text-red-800',
+          icon: Truck,
+          label: 'In progress',
+        };
+      case 'ARRIVED_HOSPITAL':
+        return {
+          bg: 'bg-emerald-100 border-emerald-200',
+          text: 'text-emerald-800',
+          icon: Building2,
+          label: 'At hospital',
+        };
+      case 'REVIEWING':
+        return {
+          bg: 'bg-amber-100 border-amber-200',
+          text: 'text-amber-800',
+          icon: Clock,
+          label: 'Reviewing',
+        };
       case 'ON_THE_WAY':
         return { 
           bg: 'bg-indigo-100 border-indigo-200', 
@@ -95,7 +120,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
           bg: 'bg-gray-100 border-gray-200', 
           text: 'text-gray-800', 
           icon: Clock, 
-          label: status 
+          label: status.replace(/_/g, ' ') 
         };
     }
   };

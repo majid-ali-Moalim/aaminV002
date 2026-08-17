@@ -26,77 +26,11 @@ import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
-import { handoverOutcomeLabel, parseClinicalRecord, parseHandover, parseMonitoring } from '@/lib/nurse/patientCareTypes'
+import { simpleActiveCaseStatus } from '@/components/features/emergency/missionStatusOptions'
+import { buildCaseFileClinicalBlocks } from '@/lib/nurse/clinicalRecordDisplay'
 import '@/components/features/emergency/case-detail.css'
 import { getCaseStationLabels } from '@/lib/emergency/caseStationLabels'
 import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
-
-function nurseName(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  return [record.nurse?.firstName, record.nurse?.lastName].filter(Boolean).join(' ') || 'Nurse'
-}
-
-function clinicalRecordTitle(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  if (parseClinicalRecord(record.clinicalNotes)) return 'Patient Assessment'
-  if (parseMonitoring(record.clinicalNotes)) return 'Treatment & Monitoring'
-  if (parseHandover(record.clinicalNotes)) return 'Hospital Handover'
-  if (record.treatmentGiven) return `Treatment · ${record.treatmentGiven}`
-  if (record.bloodPressure || record.heartRate || record.temperature || record.oxygenSaturation || record.respiratoryRate) {
-    return 'Vital Signs'
-  }
-  if (record.clinicalNotes?.toLowerCase().includes('patient loaded')) return 'Patient Loaded'
-  return 'Medical Note'
-}
-
-function clinicalRecordLines(record: NonNullable<EmergencyRequest['patientCareRecords']>[number]) {
-  const assessment = parseClinicalRecord(record.clinicalNotes)
-  if (assessment) {
-    return [
-      ['Chief complaint', assessment.chiefComplaint],
-      ['Symptoms', assessment.symptoms],
-      ['Consciousness', assessment.consciousnessLevel],
-      ['Pain level', assessment.painLevel],
-      ['Breathing', assessment.breathingStatus],
-      ['Injury', assessment.injuryDescription],
-      ['Assessment notes', assessment.assessmentNotes],
-    ]
-  }
-
-  const monitoring = parseMonitoring(record.clinicalNotes)
-  if (monitoring) {
-    return [
-      ['Blood pressure', monitoring.bloodPressure],
-      ['Heart rate', monitoring.heartRate],
-      ['Temperature', monitoring.temperature],
-      ['Oxygen saturation', monitoring.oxygenSaturation],
-      ['Respiratory rate', monitoring.respiratoryRate],
-      ['Condition', monitoring.condition],
-      ['Monitoring notes', monitoring.notes],
-    ]
-  }
-
-  const handover = parseHandover(record.clinicalNotes)
-  if (handover) {
-    return [
-      ['Patient status', handoverOutcomeLabel(handover.patientOutcome)],
-      ['Patient condition', handover.patientCondition],
-      ['Treatment given', handover.treatmentGiven],
-      ['Receiving staff', handover.receivingStaff],
-      ['Handover notes', handover.notes],
-      ['Signature', handover.signature],
-    ]
-  }
-
-  return [
-    ['Blood pressure', record.bloodPressure],
-    ['Heart rate', record.heartRate?.toString()],
-    ['Temperature', record.temperature?.toString()],
-    ['Oxygen saturation', record.oxygenSaturation?.toString()],
-    ['Respiratory rate', record.respiratoryRate?.toString()],
-    ['Medication', record.medications],
-    ['Treatment', record.treatmentGiven],
-    ['Medical notes', record.clinicalNotes],
-  ]
-}
 
 function CaseField({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -170,8 +104,10 @@ export default function EmergencyCaseDetailPage() {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
   const nurseRecords = request.patientCareRecords ?? []
+  const clinicalBlocks = buildCaseFileClinicalBlocks(nurseRecords)
   const driverReports = logs.filter((log) => log.notes?.includes('[Driver Report]'))
   const { assignedStation, transferredFromStation } = getCaseStationLabels(request)
+  const simpleStatus = simpleActiveCaseStatus(request.status)
 
   return (
     <div className="case-detail-page">
@@ -216,6 +152,9 @@ export default function EmergencyCaseDetailPage() {
             <div className="case-detail-hero-badges">
               <PriorityBadge priority={request.priority} size="sm" />
               <StatusBadge status={request.status} size="sm" />
+              <span className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg bg-white/15 border border-white/25">
+                {simpleStatus}
+              </span>
             </div>
           </div>
         </div>
@@ -242,30 +181,28 @@ export default function EmergencyCaseDetailPage() {
 
           <CaseTimingPanel request={request} />
 
-          {nurseRecords.length > 0 && (
+          {clinicalBlocks.length > 0 && (
             <section className="case-detail-card case-detail-card--accent">
               <h2 className="case-detail-section-title case-detail-section-title--rose">
                 <Stethoscope className="w-4 h-4" />
-                Nurse clinical documents & notes
+                Clinical records
               </h2>
-              <div>
-                {nurseRecords.map((record) => (
-                  <article key={record.id} className="case-detail-clinical-item">
+              <div className="space-y-4">
+                {clinicalBlocks.map((block) => (
+                  <article key={block.id} className="case-detail-clinical-item">
                     <div className="mb-3">
-                      <p className="case-detail-value">{clinicalRecordTitle(record)}</p>
+                      <p className="case-detail-value">{block.title}</p>
                       <p className="case-detail-subvalue">
-                        {nurseName(record)} · {format(new Date(record.createdAt), 'PPp')}
+                        {block.nurseName} · {format(new Date(block.createdAt), 'PPp')}
                       </p>
                     </div>
                     <div className="case-detail-grid">
-                      {clinicalRecordLines(record)
-                        .filter(([, value]) => value)
-                        .map(([label, value]) => (
-                          <div key={label} className="case-detail-clinical-cell">
-                            <p className="case-detail-label">{label}</p>
-                            <p className="case-detail-value case-detail-value--muted">{value}</p>
-                          </div>
-                        ))}
+                      {block.fields.map((field) => (
+                        <div key={field.label} className="case-detail-clinical-cell">
+                          <p className="case-detail-label">{field.label}</p>
+                          <p className="case-detail-value case-detail-value--muted">{field.value}</p>
+                        </div>
+                      ))}
                     </div>
                   </article>
                 ))}
@@ -372,7 +309,7 @@ export default function EmergencyCaseDetailPage() {
               </div>
             </div>
             <p className="case-detail-hint">
-              Mission status is updated by the assigned driver in the field.
+              Driver starts the case; nurse records medical notes and handover. Status updates sync from the field.
             </p>
           </section>
 
@@ -415,7 +352,9 @@ export default function EmergencyCaseDetailPage() {
                       {idx < logs.length - 1 && <div className="case-detail-timeline-line" />}
                     </div>
                     <div className="case-detail-timeline-body">
-                      <p className="case-detail-timeline-status">{log.toStatus}</p>
+                      <p className="case-detail-timeline-status">
+                        {simpleActiveCaseStatus(log.toStatus)}
+                      </p>
                       <p className="case-detail-timeline-time">
                         {format(new Date(log.createdAt), 'PPp')}
                       </p>

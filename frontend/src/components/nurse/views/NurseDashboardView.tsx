@@ -4,11 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import {
-  Activity,
   ClipboardList,
   HeartPulse,
-  Building2,
-  MessageCircle,
   Stethoscope,
   Truck,
   User,
@@ -97,12 +94,9 @@ export default function NurseDashboardView() {
     .slice(0, 6)
 
   const quickActions = [
-    { label: 'Open Active Case', href: '/nurse/mission', icon: HeartPulse },
-    { label: 'Find Hospitals', href: '/nurse/hospitals', icon: Building2 },
-    { label: 'Chat Dispatcher', href: '/nurse/chat', icon: MessageCircle },
-    { label: 'Start Assessment', href: '/nurse/mission', icon: Stethoscope },
-    { label: 'Record Vital Signs', href: '/nurse/mission', icon: Activity },
-    { label: 'Complete Handover', href: '/nurse/mission', icon: ClipboardList },
+    { label: 'Active Case', href: '/nurse/mission', icon: HeartPulse },
+    { label: 'Medical Notes', href: '/nurse/mission', icon: Stethoscope },
+    { label: 'Handover', href: '/nurse/mission', icon: ClipboardList },
   ]
 
   const presenceLabel = kpis.onCase ? 'On Case' : kpis.onDuty ? 'Available' : 'Unavailable'

@@ -17,18 +17,17 @@ export default function CaseTimingPanel({ request }: { request: EmergencyRequest
     <section className="case-detail-card case-detail-card--accent">
       <h2 className="case-detail-section-title">
         <Timer className="w-4 h-4" />
-        Response & mission timing
+        Case timing
       </h2>
       <p className="text-xs text-slate-500 mb-4">
-        Request, assignment, travel, and completion timestamps for this case.
+        Request, crew assignment, start, and completion — aligned with the simplified field workflow.
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
         {[
-          { label: 'Waiting', value: summary.waitingMinutes },
-          { label: 'Reach patient', value: summary.responseMinutes },
-          { label: 'Reach hospital', value: summary.transportMinutes },
-          { label: 'Total time', value: summary.totalMinutes },
+          { label: 'Time to assign', value: summary.assignMinutes },
+          { label: 'Mission time', value: summary.missionMinutes },
+          { label: 'Total elapsed', value: summary.totalMinutes },
         ].map((item) => (
           <div key={item.label} className="case-detail-stat-tile">
             <p className="case-detail-label">{item.label}</p>
@@ -49,7 +48,7 @@ export default function CaseTimingPanel({ request }: { request: EmergencyRequest
               <p className="text-sm font-bold text-slate-900">{row.label}</p>
               <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                 <Clock className="w-3 h-3 shrink-0" />
-                {row.timestamp ? format(new Date(row.timestamp), 'PPp') : 'Not recorded yet'}
+                {row.timestamp ? format(new Date(row.timestamp), 'PPp') : 'Not yet'}
               </p>
             </div>
             {row.durationLabel && (

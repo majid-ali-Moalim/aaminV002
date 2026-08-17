@@ -74,10 +74,10 @@ import {
   type NurseWorkflowButtonId,
 } from '@/lib/mission/nurseWorkflowButtons'
 import { getTimelineActiveIndex, getTimelineButtonStates } from '@/lib/mission/workflowTimeline'
-import { hasLoadPatientSaved, hasMedicalNotesSaved, driverArrivedAtHospital } from '@/lib/mission/workflowMilestones'
+import { hasLoadPatientSaved, hasMedicalNotesSaved } from '@/lib/mission/workflowMilestones'
 import {
-  HandoverTaskFields,
-  MedicalNotesCombinedFields,
+  HandoverQuickFields,
+  MedicalNotesQuickFields,
   TaskShell,
   type HandoverCaseContext,
   type HandoverFormState,
@@ -426,7 +426,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
 
   const guardTask = (taskId: NurseTaskId): boolean => {
     if (!mission) return false
-    const reason = getNurseTaskBlockReason(taskId, mission.status)
+    const reason = getNurseTaskBlockReason(taskId, mission.status, mission.id, caseRecords)
     if (reason) {
       toast.error(reason)
       return false
@@ -493,10 +493,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         await submitLoadPatient()
         break
       case 'medical_notes':
-        if (!patientLoaded && !medicalNotesSaved) {
-          toast.error('Load the patient before medical notes.')
-          return
-        }
         if (activeTask === 'handover') {
           if (!medicalNotesSaved) {
             toast.error('Submit medical notes before handover.')
@@ -514,10 +510,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       case 'handover':
         if (!medicalNotesSaved) {
           toast.error('Submit medical notes before handover.')
-          return
-        }
-        if (!driverArrivedAtHospital(mission.status)) {
-          toast.error('Handover unlocks when the driver arrives at the hospital.')
           return
         }
         if (!handoverComplete && !guardTask('handover')) return
@@ -632,18 +624,37 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
   }
 
+  const ensurePatientLoaded = async (): Promise<boolean> => {
+    if (!nurseId || !mission) return false
+    if (patientLoaded || hasLoadPatientSaved(caseRecords, mission.id)) return true
+    try {
+      await nursesService.createPatientCareRecord({
+        emergencyRequestId: mission.id,
+        nurseId,
+        patientId: mission.patientId || mission.patient?.id,
+        clinicalNotes: encodeLoadPatient(),
+        activityLabel: 'Patient loaded',
+      })
+      markStepComplete(mission.id, 'PATIENT_LOADED')
+      dispatchPatientLoadedEvent({ missionId: mission.id })
+      await loadRecords()
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const submitMedicalNotes = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!guardTask('medical_notes')) return
     const errors = validateMedicalNotesForm(medicalNotesForm)
     setMedicalNotesErrors(errors)
     if (hasMedicalNotesErrors(errors)) {
       toast.error(firstMedicalNotesError(errors) || 'Please fix the highlighted fields')
       return
     }
-    const treatmentGiven =
-      medicalNotesForm.treatmentType === 'Other'
-        ? `Other: ${medicalNotesForm.treatmentOtherDetails.trim()}`
-        : medicalNotesForm.treatmentType || undefined
+    await ensurePatientLoaded()
+    const treatmentGiven = medicalNotesForm.treatmentType.trim() || undefined
     const noteSections = [
       encodeAssessment({
         chiefComplaint: medicalNotesForm.chiefComplaint,
@@ -681,21 +692,20 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     setMedicalNotesErrors({})
     setMedicalNotesEditing(false)
     advanceTo('MEDICAL_NOTES')
-    if (driverArrivedAtHospital(mission.status)) {
+    if (!existingNotesId) {
       setHandoverForm(buildHandoverDefaults(mission, fullName || '', caseRecords))
       setHandoverErrors({})
       setHandoverEditing(true)
       setActiveTask('handover')
-    } else if (!existingNotesId) {
-      setActiveTask(null)
-      toast.success('Medical notes saved — handover unlocks when the driver arrives at hospital')
     } else {
       setActiveTask(null)
+      toast.success('Medical notes updated')
     }
   }
 
   const submitHandover = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!guardTask('handover')) return
     const errors = validateHandoverForm(handoverForm, { assignedDestination })
     setHandoverErrors(errors)
     if (hasHandoverErrors(errors)) {
@@ -733,6 +743,16 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     setHandoverEditing(false)
     advanceTo('HOSPITAL_HANDOVER')
     setActiveTask(null)
+    if (mission.status !== 'COMPLETED') {
+      try {
+        await emergencyRequestsService.updateStatus(mission.id, 'COMPLETED')
+        advanceTo('MISSION_CLOSED', 'Case completed')
+        toast.success('Handover saved — case closed')
+        refresh()
+      } catch {
+        toast.success('Handover saved')
+      }
+    }
   }
 
   const closeMission = async () => {
@@ -892,13 +912,9 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
             icon:
               s.id === 'START'
                 ? HeartPulse
-                : s.id === 'LOAD'
-                  ? Stethoscope
-                  : s.id === 'NOTES'
-                    ? ClipboardList
-                    : s.id === 'HANDOVER'
-                      ? Building2
-                      : CheckCircle2,
+                : s.id === 'NOTES'
+                  ? ClipboardList
+                  : Building2,
           }))}
           activeIndex={timelineIndex}
           completed={missionClosed}
@@ -953,8 +969,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               title={medicalNotesSaved && !medicalNotesEditing ? 'Medical Notes' : medicalNotesSaved ? 'Edit Medical Notes' : 'Medical Notes'}
               subtitle={
                 medicalNotesSaved && !medicalNotesEditing
-                  ? 'Saved record — tap Edit to change any field'
-                  : 'Assessment, vitals, observations, and treatment in one record'
+                  ? 'Saved — tap Edit to update'
+                  : 'Chief complaint, vitals, treatment — keep it brief'
               }
               saving={saving}
               onSubmit={
@@ -969,8 +985,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 medicalNotesSaved && !medicalNotesEditing
                   ? 'Edit'
                   : medicalNotesSaved
-                    ? 'Update & Save'
-                    : 'Save & Continue to Handover'
+                    ? 'Save'
+                    : 'Save notes'
               }
               submitButtonType={medicalNotesSaved && !medicalNotesEditing ? 'button' : 'submit'}
               onPrevious={() => {
@@ -979,7 +995,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               }}
               previousLabel="Back to Actions"
               onNext={
-                medicalNotesSaved && !medicalNotesEditing && driverArrivedAtHospital(mission.status)
+                medicalNotesSaved && !medicalNotesEditing
                   ? () => {
                       setHandoverForm(
                         handoverFromRecords(
@@ -995,7 +1011,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               }
               nextLabel="Next: Handover"
             >
-              <MedicalNotesCombinedFields
+              <MedicalNotesQuickFields
                 form={medicalNotesForm}
                 setForm={(f) => {
                   if (!medicalNotesEditing && medicalNotesSaved) return
@@ -1021,8 +1037,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
               }
               subtitle={
                 handoverViewMode
-                  ? 'Saved handover — tap Edit to update any field below'
-                  : 'Review dispatch details, then complete patient handover'
+                  ? 'Saved — tap Edit to update'
+                  : 'Quick handover — case closes when you save'
               }
               saving={saving}
               onSubmit={
@@ -1034,7 +1050,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                   : submitHandover
               }
               submitLabel={
-                handoverViewMode ? 'Edit' : handoverComplete ? 'Update Handover' : 'Save Handover'
+                handoverViewMode ? 'Edit' : handoverComplete ? 'Save' : 'Save & close case'
               }
               submitButtonType={handoverViewMode ? 'button' : 'submit'}
               onPrevious={requestMedicalNotesFromHandover}
@@ -1061,7 +1077,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                   </div>
                 </div>
               )}
-              <HandoverTaskFields
+              <HandoverQuickFields
                 form={handoverForm}
                 setForm={(f) => {
                   if (handoverViewMode) return
@@ -1071,8 +1087,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                   }
                 }}
                 nurseName={fullName}
-                caseContext={handoverCaseContext}
-                destinationAssigned={destinationAssigned}
                 assignedDestination={assignedDestination}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}

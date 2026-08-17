@@ -15,12 +15,35 @@ type Props = {
   onAction: (id: string) => void
   classPrefix: 'dcw' | 'nmw'
   readOnly?: boolean
+  /** Show only the next action — for fast critical-case workflows */
+  activeOnly?: boolean
 }
 
-export default function MissionWorkflowButtons({ buttons, onAction, classPrefix, readOnly }: Props) {
+export default function MissionWorkflowButtons({
+  buttons,
+  onAction,
+  classPrefix,
+  readOnly,
+  activeOnly = false,
+}: Props) {
+  const visible = activeOnly
+    ? buttons.filter((b) => b.state === 'active')
+    : buttons
+
+  if (activeOnly && visible.length === 0) {
+    const waiting = buttons.find((b) => b.state === 'locked')
+    if (waiting?.waitReason) {
+      return (
+        <p className={`${classPrefix}-workflow-waiting text-sm opacity-80`}>
+          {waiting.waitReason}
+        </p>
+      )
+    }
+  }
+
   return (
-    <div className={`${classPrefix}-workflow-buttons`}>
-      {buttons.map((btn) => {
+    <div className={`${classPrefix}-workflow-buttons${activeOnly ? ` ${classPrefix}-workflow-buttons--single` : ''}`}>
+      {visible.map((btn) => {
         const isLocked = btn.state === 'locked'
         const isDone = btn.state === 'completed'
         const isActive = btn.state === 'active'

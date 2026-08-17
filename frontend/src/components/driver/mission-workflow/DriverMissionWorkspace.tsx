@@ -29,13 +29,10 @@ import {
   DRIVER_TIMELINE_STEPS,
   getStepTimestamp,
   getWorkflowMeta,
-  MISSION_EXECUTION_STEPS,
   markCaseReviewed,
-  markDriverMilestoneComplete,
   patchWorkflowMeta,
   setStoredPhase,
   stampWorkflowStage,
-  type WorkflowStepId,
 } from '@/lib/driver/missionWorkflow'
 import { useDriverWorkflowState } from '@/lib/driver/useDriverWorkflowState'
 import { CaseReviewPanel } from '@/components/shared/CaseReviewPanel'
@@ -45,12 +42,11 @@ import MissionWorkflowButtons from '@/components/mission-workflow/MissionWorkflo
 import {
   getDriverWorkflowButtons,
   DRIVER_STAGE_DESCRIPTIONS,
+  markDriverRunStarted,
   type DriverWorkflowButtonId,
 } from '@/lib/mission/driverWorkflowButtons'
 import { getTimelineActiveIndex, getTimelineButtonStates } from '@/lib/mission/workflowTimeline'
 import { onMissionAssigned } from '@/lib/mission/missionAssignedEvents'
-import { onPatientLoaded } from '@/lib/mission/patientLoadedEvents'
-import { hasLoadPatientSaved } from '@/lib/mission/workflowMilestones'
 
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
@@ -96,13 +92,9 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     const unsubAssigned = onMissionAssigned(() => {
       void load(false)
     })
-    const unsubPatientLoaded = onPatientLoaded(() => {
-      void load(false)
-    })
     return () => {
       clearInterval(interval)
       unsubAssigned()
-      unsubPatientLoaded()
     }
   }, [load])
 
@@ -174,9 +166,10 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const stageDescription = activeWorkflowButton
     ? DRIVER_STAGE_DESCRIPTIONS[activeWorkflowButton.id]
     : nextLockedButton?.waitReason
-      ?? 'Review the case and complete each transport step in order.'
+      ?? (missionClosed ? 'Case closed.' : 'Start the case — nurse completes notes and handover.')
 
-  const arrivedAtHospital = workflowButtons.find((b) => b.id === 'arrived_at_hospital')?.state === 'completed'
+  const caseStartedByDriver = workflowButtons.find((b) => b.id === 'start_case')?.state === 'completed'
+  const caseFullyComplete = missionClosed || mission?.status === 'COMPLETED'
 
   const stickyPrimary = useMemo(() => {
     return workflowButtons.find((b) => b.state === 'active') ?? null
@@ -202,15 +195,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     syncWorkflow()
   }
 
-  const advanceStep = async (nextStep: WorkflowStepId, backendStatus?: string, note?: string) => {
-    if (!mission || readOnly) return
-    stampWorkflowStage(mission.id, nextStep, null)
-    setStoredPhase(mission.id, nextStep)
-    if (backendStatus) await updateBackend(backendStatus, note)
-    syncWorkflow()
-    toast.success(`Stage: ${MISSION_EXECUTION_STEPS.find((s) => s.id === nextStep)?.label}`)
-  }
-
   const openCase = (id: string) => {
     setMissionId(id)
     setDetailId(id)
@@ -222,49 +206,17 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       toast.error('Review the case details before starting workflow actions.')
       return
     }
-    const wasComplete = Boolean(getWorkflowMeta(mission.id).completedMilestones?.[buttonId])
 
-    switch (buttonId) {
-      case 'start_case':
-        markDriverMilestoneComplete(mission.id, 'start_case')
-        patchWorkflowMeta(mission.id, { enRouteStartedAt: new Date().toISOString() })
-        stampWorkflowStage(mission.id, 'EN_ROUTE_SCENE', null)
-        setStoredPhase(mission.id, 'EN_ROUTE_SCENE')
-        if (mission.status === 'ASSIGNED') {
-          await updateBackend('DISPATCHED', 'Driver started case — en route to scene')
-        }
-        syncWorkflow()
-        toast.success('Case started')
-        break
-      case 'going_to_patient':
-        markDriverMilestoneComplete(mission.id, 'going_to_patient')
-        logDriverNote(mission.id, 'Driver en route to scene')
-        syncWorkflow()
-        toast.success('Going to scene')
-        break
-      case 'arrived_at_patient':
-        markDriverMilestoneComplete(mission.id, 'arrived_at_patient')
-        await advanceStep('ARRIVED_SCENE', 'ARRIVED_SCENE', 'Driver arrived at scene')
-        break
-      case 'going_to_hospital': {
-        if (!hasLoadPatientSaved(careRecords, mission.id)) {
-          toast.error('Waiting for nurse to load the patient before transport.')
-          return
-        }
-        markDriverMilestoneComplete(mission.id, 'going_to_hospital')
-        await advanceStep('EN_ROUTE_HOSPITAL', 'TRANSPORTING', 'Transport to hospital started')
-        break
+    if (buttonId === 'start_case') {
+      markDriverRunStarted(mission.id)
+      patchWorkflowMeta(mission.id, { enRouteStartedAt: new Date().toISOString() })
+      stampWorkflowStage(mission.id, 'EN_ROUTE_SCENE', null)
+      setStoredPhase(mission.id, 'EN_ROUTE_SCENE')
+      if (mission.status === 'ASSIGNED') {
+        await updateBackend('DISPATCHED', 'Driver started case')
       }
-      case 'arrived_at_hospital':
-        markDriverMilestoneComplete(mission.id, 'arrived_at_hospital')
-        await advanceStep('ARRIVED_HOSPITAL', 'ARRIVED_HOSPITAL', 'Driver arrived at hospital')
-        break
-      default:
-        break
-    }
-
-    if (wasComplete) {
-      toast.success('Step updated')
+      syncWorkflow()
+      toast.success('Case started — waiting for nurse to complete handover')
     }
   }
 
@@ -284,13 +236,6 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     } else if (actionId === 'submit_report') {
       openRunReport()
     }
-  }
-
-  function logDriverNote(missionId: string, text: string) {
-    const meta = getWorkflowMeta(missionId)
-    patchWorkflowMeta(missionId, {
-      notes: { ...meta.notes, EN_ROUTE_SCENE: text },
-    })
   }
 
   const submitReport = async () => {
@@ -328,7 +273,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
       if (log.notes) entries.push({ time: log.createdAt, text: log.notes })
     })
     Object.entries(meta.notes || {}).forEach(([step, note]) => {
-      if (note) entries.push({ time: meta.timestamps[step as WorkflowStepId] || '', text: note })
+      if (note) entries.push({ time: meta.timestamps[step as keyof typeof meta.timestamps] || '', text: note })
     })
     return entries
       .filter((e) => e.text)
@@ -446,16 +391,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             id: s.id,
             label: s.label,
             shortLabel: s.shortLabel,
-            icon:
-              s.id === 'START'
-                ? Navigation2
-                : s.id === 'EN_ROUTE'
-                  ? Navigation2
-                  : s.id === 'ON_SCENE'
-                    ? MapPin
-                    : s.id === 'TRANSPORT'
-                      ? Truck
-                      : Building2,
+            icon: s.id === 'START' ? Navigation2 : CheckCircle2,
           }))}
           activeIndex={timelineIndex}
           completed={missionClosed}
@@ -477,8 +413,14 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           <p className="dcw-stage-name">{stageLabel}</p>
           <p className="dcw-stage-desc">{stageDescription}</p>
 
-          {!readOnly && workflowButtons.every((b) => b.state === 'completed') && (
-            <p className="dcw-warn">Your timeline is complete. The nurse will hand over and close the case.</p>
+          {!readOnly && caseStartedByDriver && !caseFullyComplete && (
+            <p className="dcw-warn">
+              Waiting for nurse to complete medical notes and handover.
+            </p>
+          )}
+
+          {!readOnly && caseFullyComplete && (
+            <p className="dcw-warn">Case complete.</p>
           )}
 
           {!readOnly && !caseReviewed && (
@@ -502,7 +444,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             />
           )}
 
-          {!readOnly && runReportSubmitted && arrivedAtHospital && (
+          {!readOnly && runReportSubmitted && caseFullyComplete && (
             <div className="dcw-run-report-summary">
               <p className="dcw-run-report-kicker">Run report complete</p>
               <ul className="dcw-run-report-list">
@@ -518,21 +460,16 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             </div>
           )}
 
-          {!readOnly && !runReportSubmitted && arrivedAtHospital && (
-          <div className="dcw-action-grid dcw-action-grid--secondary">
-            <button type="button" className="dcw-action-btn" onClick={() => handleAction('view_details')}>
-              View Case Summary
+          {!readOnly && caseFullyComplete && !runReportSubmitted && (
+            <button type="button" className="dcw-action-btn w-full mt-2" onClick={() => handleAction('submit_report')}>
+              Submit run report
             </button>
-            <button type="button" className="dcw-action-btn" onClick={() => handleAction('submit_report')}>
-              Submit Run Report
-            </button>
-          </div>
           )}
 
-          {!readOnly && !runReportSubmitted && !arrivedAtHospital && (
+          {!readOnly && !caseFullyComplete && (
           <div className="dcw-action-grid dcw-action-grid--secondary">
             <button type="button" className="dcw-action-btn" onClick={() => handleAction('view_details')}>
-              View Case Summary
+              Case details
             </button>
           </div>
           )}

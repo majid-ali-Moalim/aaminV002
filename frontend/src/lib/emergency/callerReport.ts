@@ -31,22 +31,44 @@ export const BREATHING_UI_OPTIONS = [
   { value: 'NOT_BREATHING', label: 'Not breathing' },
 ] as const
 
+function norm(s?: string | null): string {
+  return (s ?? '').trim()
+}
+
+function isUnknown(s?: string | null): boolean {
+  const v = norm(s).toUpperCase()
+  return !v || v === 'UNKNOWN' || v === 'N/A'
+}
+
 export function buildCallerReport(request: EmergencyRequest): CallerReportRow[] {
   const rows: CallerReportRow[] = []
 
-  if (request.patient?.fullName) rows.push({ label: 'Patient name', value: request.patient.fullName })
-  if (request.patient?.phone) rows.push({ label: 'Patient phone', value: request.patient.phone })
+  const patientPhone = norm(request.patient?.phone)
+  const callerPhone = norm(request.callerPhone)
+  const callerName = norm(request.callerName)
+  const patientName = norm(request.patient?.fullName)
+
+  if (!isUnknown(patientName)) rows.push({ label: 'Patient name', value: patientName })
+  if (patientPhone) rows.push({ label: 'Patient phone', value: patientPhone })
   if (request.patient?.gender) rows.push({ label: 'Gender', value: request.patient.gender })
   if (request.patient?.age != null) rows.push({ label: 'Age', value: String(request.patient.age) })
 
-  if (request.callerName) rows.push({ label: 'Caller name', value: request.callerName })
-  if (request.callerPhone) rows.push({ label: 'Caller phone', value: request.callerPhone })
+  if (!isUnknown(callerName) && callerName !== patientName) {
+    rows.push({ label: 'Caller name', value: callerName })
+  }
+  if (callerPhone && callerPhone !== patientPhone) {
+    rows.push({ label: 'Caller phone', value: callerPhone })
+  }
   if (request.requestSource) {
     rows.push({ label: 'Request source', value: request.requestSource.replace(/_/g, ' ') })
   }
 
-  rows.push({ label: 'Pickup location', value: request.pickupLocation })
-  if (request.pickupLandmark) rows.push({ label: 'Landmark / area', value: request.pickupLandmark })
+  const pickup = norm(request.pickupLocation)
+  const landmark = norm(request.pickupLandmark)
+  if (pickup) rows.push({ label: 'Pickup location', value: pickup })
+  if (landmark && landmark !== pickup) {
+    rows.push({ label: 'Landmark / area', value: landmark })
+  }
   if (request.destination) rows.push({ label: 'Destination', value: request.destination })
 
   if (request.incidentCategory?.name) {

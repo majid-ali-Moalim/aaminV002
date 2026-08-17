@@ -850,6 +850,234 @@ export type MedicalNotesFormState = AssessmentFormState &
   NotesFormState &
   TreatmentFormState
 
+export function MedicalNotesQuickFields({
+  form,
+  setForm,
+  errors = {},
+  readOnly = false,
+}: {
+  form: MedicalNotesFormState
+  setForm: (f: MedicalNotesFormState) => void
+  errors?: MedicalNotesFieldErrors
+  readOnly?: boolean
+}) {
+  const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
+  return (
+    <>
+      <label className="span-2">
+        Chief complaint *
+        <input
+          value={form.chiefComplaint}
+          onChange={(e) => setForm({ ...form, chiefComplaint: e.target.value })}
+          maxLength={500}
+          placeholder="Main reason for the call"
+          aria-invalid={Boolean(errors.chiefComplaint)}
+          {...ro}
+        />
+        <FieldError error={errors.chiefComplaint} />
+      </label>
+      <label>
+        Consciousness
+        {readOnly ? (
+          <input value={form.consciousnessLevel} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.consciousnessLevel}
+            onChange={(e) => setForm({ ...form, consciousnessLevel: e.target.value })}
+          >
+            {CONSCIOUSNESS_LEVELS.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        )}
+      </label>
+      <label>
+        Breathing
+        {readOnly ? (
+          <input value={form.breathingStatus} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.breathingStatus}
+            onChange={(e) => setForm({ ...form, breathingStatus: e.target.value })}
+          >
+            {BREATHING_STATUS.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        )}
+      </label>
+      <label>
+        BP <span className="nmw-optional">(opt)</span>
+        <input
+          value={form.bloodPressure}
+          onChange={(e) => setForm({ ...form, bloodPressure: e.target.value })}
+          placeholder="120/80"
+          aria-invalid={Boolean(errors.bloodPressure)}
+          {...ro}
+        />
+        <FieldError error={errors.bloodPressure} />
+      </label>
+      <label>
+        Pulse <span className="nmw-optional">(opt)</span>
+        <input
+          value={form.heartRate}
+          onChange={(e) => setForm({ ...form, heartRate: e.target.value })}
+          placeholder="bpm"
+          aria-invalid={Boolean(errors.heartRate)}
+          {...ro}
+        />
+        <FieldError error={errors.heartRate} />
+      </label>
+      <label>
+        SpO₂ <span className="nmw-optional">(opt)</span>
+        <input
+          value={form.oxygenSaturation}
+          onChange={(e) => setForm({ ...form, oxygenSaturation: e.target.value })}
+          placeholder="%"
+          aria-invalid={Boolean(errors.oxygenSaturation)}
+          {...ro}
+        />
+        <FieldError error={errors.oxygenSaturation} />
+      </label>
+      <label className="span-2">
+        Treatment given <span className="nmw-optional">(optional)</span>
+        <input
+          value={form.treatmentType === 'Other' ? form.treatmentOtherDetails : form.treatmentType}
+          onChange={(e) => setForm({ ...form, treatmentType: e.target.value, treatmentOtherDetails: '' })}
+          maxLength={500}
+          placeholder="Oxygen, IV, medication…"
+          {...ro}
+        />
+      </label>
+      <label className="span-2">
+        Notes <span className="nmw-optional">(optional)</span>
+        <textarea
+          rows={2}
+          value={form.notes}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          maxLength={2000}
+          placeholder="Anything else for dispatch or hospital"
+          aria-invalid={Boolean(errors.notes)}
+          {...ro}
+        />
+        <FieldError error={errors.notes} />
+      </label>
+    </>
+  )
+}
+
+export function HandoverQuickFields({
+  form,
+  setForm,
+  nurseName,
+  assignedDestination = '',
+  readOnly = false,
+  errors = {},
+}: {
+  form: HandoverFormState
+  setForm: (f: HandoverFormState) => void
+  nurseName?: string
+  assignedDestination?: string
+  readOnly?: boolean
+  errors?: HandoverFieldErrors
+}) {
+  const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
+  const outcomeLabel = handoverOutcomeLabel(form.patientOutcome)
+  const destination = assignedDestination.trim() || form.acceptedHospital
+
+  return (
+    <>
+      {destination && (
+        <label className="span-2">
+          Hospital
+          <input value={destination} readOnly className="readonly" />
+        </label>
+      )}
+      {!assignedDestination.trim() && !readOnly && (
+        <label className="span-2">
+          Hospital *
+          <input
+            value={form.acceptedHospital}
+            onChange={(e) => setForm({ ...form, acceptedHospital: e.target.value })}
+            maxLength={200}
+            placeholder="Receiving hospital"
+            aria-invalid={Boolean(errors.acceptedHospital)}
+          />
+          <FieldError error={errors.acceptedHospital} />
+        </label>
+      )}
+      <label className="span-2">
+        Patient status *
+        {readOnly ? (
+          <input value={outcomeLabel || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.patientOutcome}
+            onChange={(e) => setForm({ ...form, patientOutcome: e.target.value })}
+            aria-invalid={Boolean(errors.patientOutcome)}
+          >
+            <option value="">Select…</option>
+            {PATIENT_HANDOVER_OUTCOMES.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
+        <FieldError error={errors.patientOutcome} />
+      </label>
+      <label className="span-2">
+        Condition summary <span className="nmw-optional">(optional)</span>
+        <textarea
+          rows={2}
+          value={form.patientCondition}
+          onChange={(e) => setForm({ ...form, patientCondition: e.target.value })}
+          maxLength={2000}
+          placeholder="Brief status at handover"
+          aria-invalid={Boolean(errors.patientCondition)}
+          {...ro}
+        />
+        <FieldError error={errors.patientCondition} />
+      </label>
+      <label className="span-2">
+        Treatment en route <span className="nmw-optional">(optional)</span>
+        <textarea
+          rows={2}
+          value={form.treatmentGiven}
+          onChange={(e) => setForm({ ...form, treatmentGiven: e.target.value })}
+          maxLength={2000}
+          placeholder="Oxygen, IV, medication…"
+          aria-invalid={Boolean(errors.treatmentGiven)}
+          {...ro}
+        />
+        <FieldError error={errors.treatmentGiven} />
+      </label>
+      <label className="span-2">
+        Receiving doctor <span className="nmw-optional">(optional)</span>
+        <input
+          value={form.receivingStaff}
+          onChange={(e) => setForm({ ...form, receivingStaff: e.target.value })}
+          maxLength={120}
+          placeholder="Name if known"
+          aria-invalid={Boolean(errors.receivingStaff)}
+          {...ro}
+        />
+        <FieldError error={errors.receivingStaff} />
+      </label>
+      <label className="span-2">
+        Your signature (full name) *
+        <input
+          value={form.signature}
+          onChange={(e) => setForm({ ...form, signature: e.target.value })}
+          maxLength={120}
+          placeholder={nurseName || 'Full name'}
+          aria-invalid={Boolean(errors.signature)}
+          {...ro}
+        />
+        <FieldError error={errors.signature} />
+      </label>
+    </>
+  )
+}
+
 export function MedicalNotesCombinedFields({
   form,
   setForm,

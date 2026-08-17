@@ -6,7 +6,6 @@ import {
   RefreshCw,
   Search,
   MapPin,
-  User,
   ChevronRight,
   ClipboardCheck,
   Siren,
@@ -272,31 +271,29 @@ function PendingRequestsContent() {
         <main className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[520px]">
           {selectedRequest ? (
             <div className="flex-1 overflow-y-auto p-6 md:p-8">
-              <div className="mb-6 pb-6 border-b border-slate-100">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <PriorityBadge priority={selectedRequest.priority} size="lg" />
-                  <span
-                    className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                      isNonEmergencyCase(selectedRequest)
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {isNonEmergencyCase(selectedRequest) ? 'Non-emergency' : 'Emergency'}
-                  </span>
-                </div>
-                <h2 className="text-2xl font-black text-slate-900">{selectedRequest.trackingCode}</h2>
-                <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  {selectedRequest.patient?.fullName || 'Unknown'} · {selectedRequest.pickupLocation}
-                </p>
+              <div className="mb-5 pb-4 border-b border-slate-100 flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-black text-slate-900">{selectedRequest.trackingCode}</h2>
+                <PriorityBadge priority={selectedRequest.priority} size="sm" />
+                <span
+                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                    isNonEmergencyCase(selectedRequest)
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {isNonEmergencyCase(selectedRequest) ? 'Non-emergency' : 'Emergency'}
+                </span>
               </div>
 
               <DispatcherTriagePanel
                 request={selectedRequest}
                 onSaved={handleTriageSaved}
                 onAssign={() => setIsAssignModalOpen(true)}
-                onTransferred={handleTriageSaved}
+                onAssigned={() => fetchRequests(false)}
+                onTransferred={(updated) => {
+                  handleTriageSaved(updated)
+                  void fetchRequests(false)
+                }}
               />
             </div>
           ) : (

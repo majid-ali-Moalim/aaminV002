@@ -1,4 +1,5 @@
 import type { EmergencyRequest } from '@/types'
+import { ACTIVE_MISSION_STATUSES } from '@/components/features/emergency/missionStatusOptions'
 
 export type CaseTimingRow = {
   key: string
@@ -31,34 +32,17 @@ export function formatDurationMinutes(minutes: number | null | undefined): strin
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
+/** Simplified timing aligned with Start → Complete workflow (no en-route / on-scene rows). */
 export function buildCaseTimingRows(request: EmergencyRequest): CaseTimingRow[] {
   const created = request.createdAt
   const assigned = request.assignedAt
-  const dispatched = request.dispatchedAt
-  const arrivedScene = request.arrivedAtSceneAt
-  const departedScene = request.departedSceneAt
-  const arrivedHospital = request.arrivedDestinationAt
-  const completed = request.completedAt
-  const cancelled = request.cancelledAt
+  const started = request.dispatchedAt || assigned
+  const completed = request.completedAt || request.cancelledAt
+  const inProgress = ACTIVE_MISSION_STATUSES.includes(request.status)
 
-  const waitingStart = created
-  const waitingEnd = assigned || dispatched
-  const waitingMinutes = minutesBetween(waitingStart, waitingEnd)
-
-  const responseStart = dispatched || assigned || created
-  const responseMinutes =
-    request.responseMinutes ?? minutesBetween(responseStart, arrivedScene)
-
-  const transportStart = departedScene || arrivedScene
-  const transportMinutes = minutesBetween(transportStart, arrivedHospital)
-
-  const sceneMinutes = minutesBetween(arrivedScene, departedScene)
-
-  const totalEnd = completed || cancelled
-  const totalMinutes =
-    request.serviceMinutes ?? minutesBetween(created, totalEnd)
-
-  const dispatchMinutes = minutesBetween(assigned || created, dispatched)
+  const assignMinutes = minutesBetween(created, assigned)
+  const missionEnd = completed ?? (inProgress && started ? new Date().toISOString() : null)
+  const missionMinutes = minutesBetween(started, missionEnd)
 
   return [
     {
@@ -72,45 +56,23 @@ export function buildCaseTimingRows(request: EmergencyRequest): CaseTimingRow[] 
       key: 'assigned',
       label: 'Crew assigned',
       timestamp: assigned,
-      durationLabel: waitingMinutes != null ? 'Queue / waiting time' : null,
-      durationMinutes: waitingMinutes,
+      durationLabel: assignMinutes != null ? 'Time to assign crew' : null,
+      durationMinutes: assignMinutes,
     },
     {
-      key: 'dispatched',
-      label: 'Dispatched (en route)',
-      timestamp: dispatched,
-      durationLabel: dispatchMinutes != null ? 'Dispatch time' : null,
-      durationMinutes: dispatchMinutes,
-    },
-    {
-      key: 'arrived-scene',
-      label: 'Arrived at patient',
-      timestamp: arrivedScene,
-      durationLabel: responseMinutes != null ? 'Time to reach patient' : null,
-      durationMinutes: responseMinutes,
-      highlight: true,
-    },
-    {
-      key: 'departed-scene',
-      label: 'Departed scene',
-      timestamp: departedScene,
-      durationLabel: sceneMinutes != null ? 'Time on scene' : null,
-      durationMinutes: sceneMinutes,
-    },
-    {
-      key: 'arrived-hospital',
-      label: 'Arrived at hospital',
-      timestamp: arrivedHospital,
-      durationLabel: transportMinutes != null ? 'Time to reach hospital' : null,
-      durationMinutes: transportMinutes,
+      key: 'started',
+      label: 'Case started',
+      timestamp: started,
+      durationLabel: null,
+      durationMinutes: null,
       highlight: true,
     },
     {
       key: 'completed',
       label: request.status === 'CANCELLED' ? 'Case cancelled' : 'Case completed',
-      timestamp: completed || cancelled,
-      durationLabel: totalMinutes != null ? 'Total case time' : null,
-      durationMinutes: totalMinutes,
+      timestamp: completed,
+      durationLabel: missionMinutes != null ? 'Active mission time' : null,
+      durationMinutes: missionMinutes,
       highlight: true,
     },
   ]
@@ -118,11 +80,20 @@ export function buildCaseTimingRows(request: EmergencyRequest): CaseTimingRow[] 
 
 export function caseTimingSummary(request: EmergencyRequest) {
   const rows = buildCaseTimingRows(request)
+  const started = request.dispatchedAt || request.assignedAt
+  const completed = request.completedAt || request.cancelledAt
+  const inProgress = ACTIVE_MISSION_STATUSES.includes(request.status)
+  const missionEnd = completed ?? (inProgress && started ? new Date().toISOString() : null)
+
   return {
     rows,
-    waitingMinutes: rows.find((r) => r.key === 'assigned')?.durationMinutes ?? null,
-    responseMinutes: rows.find((r) => r.key === 'arrived-scene')?.durationMinutes ?? null,
-    transportMinutes: rows.find((r) => r.key === 'arrived-hospital')?.durationMinutes ?? null,
-    totalMinutes: rows.find((r) => r.key === 'completed')?.durationMinutes ?? null,
+    assignMinutes: rows.find((r) => r.key === 'assigned')?.durationMinutes ?? null,
+    missionMinutes: minutesBetween(started, missionEnd),
+    totalMinutes: minutesBetween(request.createdAt, completed),
   }
+}
+
+/** @deprecated Use buildCaseTimingRows — kept for imports that expect granular rows */
+export function buildGranularCaseTimingRows(request: EmergencyRequest): CaseTimingRow[] {
+  return buildCaseTimingRows(request)
 }

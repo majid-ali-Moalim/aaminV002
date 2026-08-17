@@ -1,7 +1,5 @@
 import type { CareRecord } from '@/lib/mission/workflowMilestones'
 import {
-  driverArrivedAtHospital,
-  driverArrivedAtPatient,
   hasHandoverSaved,
   hasLoadPatientSaved,
   hasMedicalNotesSaved,
@@ -25,12 +23,11 @@ export type NurseWorkflowButton = {
   editable?: boolean
 }
 
+/** Three visible steps — load patient & case close run automatically in the background. */
 const BUTTONS: { id: NurseWorkflowButtonId; label: string }[] = [
   { id: 'start_case', label: 'Start Case' },
-  { id: 'load_patient', label: 'Loaded the Patient' },
   { id: 'medical_notes', label: 'Medical Notes' },
-  { id: 'handover', label: 'Patient Handover' },
-  { id: 'complete_case', label: 'Complete Case' },
+  { id: 'handover', label: 'Handover' },
 ]
 
 function waitReasonFor(
@@ -40,23 +37,17 @@ function waitReasonFor(
     loaded: boolean
     notesSaved: boolean
     handoverDone: boolean
-    atHospital: boolean
   },
 ): string {
   switch (id) {
     case 'start_case':
       return 'Review the case first'
-    case 'load_patient':
-      return ctx.started ? 'Waiting for driver to arrive at patient' : 'Start the case first'
     case 'medical_notes':
-      return 'Load the patient first'
+      if (!ctx.started) return 'Start the case first'
+      return 'Waiting for driver to start the case'
     case 'handover':
+      if (!ctx.started) return 'Start the case first'
       if (!ctx.notesSaved) return 'Submit medical notes first'
-      if (!ctx.atHospital) return 'Waiting for driver to arrive at hospital'
-      return 'Complete the previous step first'
-    case 'complete_case':
-      if (!ctx.handoverDone) return 'Complete handover first'
-      if (!ctx.atHospital) return 'Waiting for driver to arrive at hospital'
       return 'Complete the previous step first'
     default:
       return 'Complete the previous step first'
@@ -88,7 +79,6 @@ export function getNurseWorkflowButtons(
   const notesSaved = hasMedicalNotesSaved(careRecords, mission.id) || Boolean(meta.completedTasks?.MEDICAL_NOTES)
   const handoverDone =
     hasHandoverSaved(careRecords, mission.id) || Boolean(meta.completedTasks?.HOSPITAL_HANDOVER)
-  const atHospital = driverArrivedAtHospital(status)
 
   const done = (id: NurseWorkflowButtonId) => {
     switch (id) {
@@ -109,14 +99,13 @@ export function getNurseWorkflowButtons(
 
   const canActivate: Record<NurseWorkflowButtonId, boolean> = {
     start_case: !started,
-    load_patient: started && driverArrivedAtPatient(status) && !loaded,
-    // Can run in parallel with driver transfer to hospital — no transport status required.
-    medical_notes: loaded && !notesSaved,
-    handover: notesSaved && !handoverDone && atHospital,
-    complete_case: handoverDone && atHospital && status !== 'COMPLETED',
+    load_patient: false,
+    medical_notes: started && mission.status !== 'ASSIGNED' && !notesSaved,
+    handover: started && notesSaved && !handoverDone,
+    complete_case: false,
   }
 
-  const ctx = { started, loaded, notesSaved, handoverDone, atHospital }
+  const ctx = { started, loaded, notesSaved, handoverDone }
 
   return BUTTONS.map((b) => {
     if (done(b.id)) {
@@ -152,9 +141,9 @@ export function getNurseWaitingMessage(
 }
 
 export const NURSE_STAGE_DESCRIPTIONS: Record<NurseWorkflowButtonId, string> = {
-  start_case: 'Review the case and confirm you are ready to begin clinical care.',
-  load_patient: 'Confirm the patient is loaded once the driver arrives on scene.',
-  medical_notes: 'Record assessment, vitals, and observations — can be done while en route to hospital.',
-  handover: 'Transfer patient information to receiving hospital staff after the driver arrives.',
-  complete_case: 'Close the case after handover and hospital arrival.',
+  start_case: 'Confirm you are ready — then record medical notes.',
+  load_patient: '',
+  medical_notes: 'Quick assessment and vitals — save while en route if needed.',
+  handover: 'Brief handover at hospital — case closes automatically when saved.',
+  complete_case: '',
 }
