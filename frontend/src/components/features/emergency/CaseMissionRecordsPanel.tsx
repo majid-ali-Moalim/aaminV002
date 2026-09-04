@@ -50,11 +50,19 @@ function nurseRecordBody(record: NonNullable<EmergencyRequest['patientCareRecord
   }
   const handover = parseHandover(record.clinicalNotes)
   if (handover) {
+    const rejected = (handover.rejectedHospitals ?? [])
+      .filter((r) => r.hospitalName?.trim())
+      .map((r) => r.hospitalName.trim())
+      .join(', ')
     return [
+      handover.acceptedHospital && `Hospital: ${handover.acceptedHospital}`,
       handover.patientOutcome && `Status: ${handoverOutcomeLabel(handover.patientOutcome)}`,
       handover.patientCondition && `Condition: ${handover.patientCondition}`,
       handover.treatmentGiven && `Treatment: ${handover.treatmentGiven}`,
+      handover.receivingStaff && `Receiving doctor: ${handover.receivingStaff}`,
+      rejected && `Rejected hospitals: ${rejected}`,
       handover.notes && `Notes: ${handover.notes}`,
+      handover.signature && `Signature: ${handover.signature}`,
     ]
       .filter(Boolean)
       .join('\n')

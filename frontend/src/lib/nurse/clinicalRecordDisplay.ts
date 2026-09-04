@@ -118,10 +118,19 @@ export function buildCaseFileClinicalBlocks(records: CareRecord[]): CaseFileClin
       if (handover.rejectedHospitals?.length) {
         const rejected = handover.rejectedHospitals
           .filter((r) => r.hospitalName?.trim())
-          .map((r) => r.hospitalName.trim())
-          .join(', ')
+          .map((r) => {
+            const parts = [r.hospitalName.trim()]
+            if (r.reason?.trim()) parts.push(`(${r.reason.trim()})`)
+            if (r.notes?.trim()) parts.push(`— ${r.notes.trim()}`)
+            return parts.join(' ')
+          })
+          .join('; ')
         pushField(fields, 'Rejected hospitals', rejected)
       }
+      pushField(fields, 'Age group', handover.ageGroup)
+      pushField(fields, 'Gender', handover.gender)
+      pushField(fields, 'Driver', handover.driverName)
+      pushField(fields, 'Nurse', handover.nurseName)
 
       blocks.push({
         id: handoverRecord.id,

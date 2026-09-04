@@ -1006,6 +1006,14 @@ export function HandoverQuickFields({
           <FieldError error={errors.acceptedHospital} />
         </label>
       )}
+
+      <HandoverRejectedHospitalsSection
+        entries={form.rejectedHospitals ?? []}
+        onChange={(rejectedHospitals) => setForm({ ...form, rejectedHospitals })}
+        readOnly={readOnly}
+        error={errors.rejectedHospitals}
+      />
+
       <label className="span-2">
         Patient status *
         {readOnly ? (

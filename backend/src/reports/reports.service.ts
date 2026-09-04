@@ -1305,101 +1305,510 @@ export class ReportsService {
     };
   }
 
+  private normalizeHospitalKey(name?: string | null) {
+    return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  private async loadPeriodHandoverRecords(period: ReportPeriod, filters: AdminReportFilters) {
+    const requestWhere = this.emergencyDimensionWhere(filters);
+    return this.prisma.patientCareRecord.findMany({
+      where: {
+        createdAt: { gte: period.start, lte: period.end },
+        clinicalNotes: { startsWith: '[EADS_HANDOVER]' },
+        emergencyRequest: requestWhere,
+      },
+      include: {
+        emergencyRequest: {
+          include: {
+            patient: true,
+            region: true,
+            district: true,
+            driver: true,
+            nurse: true,
+            destinationHospital: true,
+            incidentCategory: true,
+          },
+        },
+        nurse: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private latestHandoverByCase<T extends { requestId: string | null }>(records: T[]) {
+    const latestByCase = new Map<string, T>();
+    for (const record of records) {
+      if (!record.requestId || latestByCase.has(record.requestId)) continue;
+      latestByCase.set(record.requestId, record);
+    }
+    return latestByCase;
+  }
+
   private async getHospitalAcceptanceReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
     const hospitalWhere: any = {};
     if (filters.hospital) hospitalWhere.id = filters.hospital;
+    if (filters.region) hospitalWhere.regionId = filters.region;
+    if (filters.district) hospitalWhere.districtId = filters.district;
 
-    const [hospitals, referrals, accepted, rejected, completed, destinationCases] = await Promise.all([
-      this.prisma.hospital.findMany({
-        where: hospitalWhere,
-        orderBy: { name: 'asc' },
-        include: {
-          region: true,
-          district: true,
-          referrals: { where: { createdAt: { gte: period.start, lte: period.end } } },
-          requests: { where },
-        },
-      }),
-      this.prisma.referral.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
-      this.prisma.referral.count({ where: { status: 'ACCEPTED', createdAt: { gte: period.start, lte: period.end } } }),
-      this.prisma.referral.count({ where: { status: 'REJECTED', createdAt: { gte: period.start, lte: period.end } } }),
-      this.prisma.referral.count({ where: { status: 'COMPLETED', createdAt: { gte: period.start, lte: period.end } } }),
-      this.prisma.emergencyRequest.count({ where: { ...where, destinationHospitalId: { not: null } } }),
-    ]);
+    const [hospitals, referrals, coordinationCases, handoverRecords, destinationCases] =
+      await Promise.all([
+        this.prisma.hospital.findMany({
+          where: hospitalWhere,
+          orderBy: { name: 'asc' },
+          include: {
+            region: true,
+            district: true,
+            referrals: { where: { createdAt: { gte: period.start, lte: period.end } } },
+            requests: { where },
+            coordinationCases: {
+              where: {
+                deletedAt: null,
+                createdAt: { gte: period.start, lte: period.end },
+                ...(filters.hospital ? { hospitalId: filters.hospital } : {}),
+              },
+            },
+          },
+        }),
+        this.prisma.referral.findMany({
+          where: {
+            createdAt: { gte: period.start, lte: period.end },
+            ...(filters.hospital ? { hospitalId: filters.hospital } : {}),
+            emergencyRequest: this.emergencyDimensionWhere(filters),
+          },
+          select: { status: true, hospitalId: true, hospitalName: true },
+        }),
+        this.prisma.hospitalCoordinationCase.findMany({
+          where: {
+            deletedAt: null,
+            createdAt: { gte: period.start, lte: period.end },
+            ...(filters.hospital ? { hospitalId: filters.hospital } : {}),
+            emergencyRequest: this.emergencyDimensionWhere(filters),
+          },
+          select: { hospitalId: true, stage: true, status: true },
+        }),
+        this.loadPeriodHandoverRecords(period, filters),
+        this.prisma.emergencyRequest.count({
+          where: { ...where, destinationHospitalId: { not: null } },
+        }),
+      ]);
+
+    type HospitalStats = {
+      referralAccepted: number;
+      referralRejected: number;
+      referralCompleted: number;
+      referralTotal: number;
+      coordAccepted: number;
+      coordRejected: number;
+      handoverAccepted: number;
+      handoverRejected: number;
+      destinationCases: number;
+    };
+
+    const byHospitalId = new Map<string, HospitalStats>();
+    const byHospitalName = new Map<string, string>(); // normalized name -> hospital id
+    for (const h of hospitals) {
+      byHospitalId.set(h.id, {
+        referralAccepted: 0,
+        referralRejected: 0,
+        referralCompleted: 0,
+        referralTotal: 0,
+        coordAccepted: 0,
+        coordRejected: 0,
+        handoverAccepted: 0,
+        handoverRejected: 0,
+        destinationCases: h.requests.length,
+      });
+      byHospitalName.set(this.normalizeHospitalKey(h.name), h.id);
+    }
+
+    const matchHospitalId = (name?: string | null, hospitalId?: string | null) => {
+      if (hospitalId && byHospitalId.has(hospitalId)) return hospitalId;
+      const key = this.normalizeHospitalKey(name);
+      if (!key) return null;
+      return byHospitalName.get(key) ?? null;
+    };
+
+    let referralAccepted = 0;
+    let referralRejected = 0;
+    let referralCompleted = 0;
+    for (const r of referrals) {
+      const id = matchHospitalId(r.hospitalName, r.hospitalId);
+      if (r.status === 'ACCEPTED') referralAccepted += 1;
+      else if (r.status === 'REJECTED') referralRejected += 1;
+      else if (r.status === 'COMPLETED') referralCompleted += 1;
+      if (!id) continue;
+      const stats = byHospitalId.get(id)!;
+      stats.referralTotal += 1;
+      if (r.status === 'ACCEPTED') stats.referralAccepted += 1;
+      else if (r.status === 'REJECTED') stats.referralRejected += 1;
+      else if (r.status === 'COMPLETED') stats.referralCompleted += 1;
+    }
+
+    let coordAccepted = 0;
+    let coordRejected = 0;
+    for (const c of coordinationCases) {
+      const accepted = c.stage === 'ACCEPTED' || c.status === 'ACCEPTED';
+      const refused = c.stage === 'REFUSED' || c.status === 'REJECTED';
+      if (accepted) coordAccepted += 1;
+      if (refused) coordRejected += 1;
+      const stats = byHospitalId.get(c.hospitalId);
+      if (!stats) continue;
+      if (accepted) stats.coordAccepted += 1;
+      if (refused) stats.coordRejected += 1;
+    }
+
+    const latestHandovers = this.latestHandoverByCase(handoverRecords);
+    const handoverEventRows: Array<Array<string | number>> = [];
+    let nurseAccepted = 0;
+    let nurseRejected = 0;
+    const unmatchedAccepted: Record<string, number> = {};
+    const unmatchedRejected: Record<string, number> = {};
+
+    for (const record of latestHandovers.values()) {
+      const parsed = this.parseHandoverOutcome(record.clinicalNotes);
+      if (!parsed) continue;
+      const req = record.emergencyRequest;
+      const caseId = req?.trackingCode ?? '—';
+      const patient = req?.patient?.fullName ?? req?.callerName ?? '—';
+
+      const acceptedName =
+        parsed.acceptedHospital ||
+        req?.destinationHospital?.name ||
+        req?.destination ||
+        '';
+      if (acceptedName.trim()) {
+        nurseAccepted += 1;
+        const hid = matchHospitalId(acceptedName, req?.destinationHospitalId);
+        if (hid) byHospitalId.get(hid)!.handoverAccepted += 1;
+        else {
+          const key = acceptedName.trim();
+          unmatchedAccepted[key] = (unmatchedAccepted[key] ?? 0) + 1;
+        }
+        handoverEventRows.push([
+          caseId,
+          patient,
+          'Accepted',
+          acceptedName.trim(),
+          '—',
+          this.formatHandoverOutcomeLabel(parsed.patientOutcome),
+          req?.status ?? '—',
+          record.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+        ]);
+      }
+
+      for (const rejected of parsed.rejectedHospitals ?? []) {
+        const name = rejected.hospitalName?.trim();
+        if (!name) continue;
+        nurseRejected += 1;
+        const hid = matchHospitalId(name);
+        if (hid) byHospitalId.get(hid)!.handoverRejected += 1;
+        else unmatchedRejected[name] = (unmatchedRejected[name] ?? 0) + 1;
+        handoverEventRows.push([
+          caseId,
+          patient,
+          'Rejected',
+          name,
+          rejected.reason || '—',
+          this.formatHandoverOutcomeLabel(parsed.patientOutcome),
+          req?.status ?? '—',
+          record.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+        ]);
+      }
+    }
+
+    const totalAccepted =
+      referralAccepted + referralCompleted + coordAccepted + nurseAccepted;
+    const totalRejected = referralRejected + coordRejected + nurseRejected;
+    const totalDecisions = totalAccepted + totalRejected;
 
     return {
       title: 'Hospital Acceptance Reports',
-      subtitle: 'Full hospital referral and destination case listing for the selected period.',
+      subtitle:
+        'Hospital accept/reject from referrals, hospital coordination, destination assignment, and nurse handover (accepted & rejected hospitals).',
       period,
       summary: [
-        { label: 'Referrals', value: referrals },
-        { label: 'Accepted', value: accepted },
-        { label: 'Rejected', value: rejected },
-        { label: 'Completed', value: completed },
-        { label: 'Acceptance Rate', value: this.percent(accepted + completed, referrals), suffix: '%' },
+        { label: 'Referral Accepted', value: referralAccepted + referralCompleted },
+        { label: 'Referral Rejected', value: referralRejected },
+        { label: 'Coordination Accepted', value: coordAccepted },
+        { label: 'Coordination Rejected', value: coordRejected },
+        { label: 'Nurse Handover Accepted', value: nurseAccepted },
+        { label: 'Nurse Handover Rejected', value: nurseRejected },
         { label: 'Destination Cases', value: destinationCases },
+        {
+          label: 'Overall Accept Rate',
+          value: this.percent(totalAccepted, totalDecisions),
+          suffix: '%',
+        },
       ],
       table: {
         title: 'Hospital Performance Detail',
         columns: [
-          'Hospital', 'Status', 'Beds', 'ER Ready', 'Region', 'District',
-          'Referrals', 'Accepted', 'Rejected', 'Completed', 'Destination Cases', 'Phone',
+          'Hospital',
+          'Status',
+          'Region',
+          'District',
+          'Referral Acc.',
+          'Referral Rej.',
+          'Coord Acc.',
+          'Coord Rej.',
+          'Nurse Acc.',
+          'Nurse Rej.',
+          'Total Acc.',
+          'Total Rej.',
+          'Accept Rate',
+          'Destination Cases',
+          'Phone',
         ],
-        rows: hospitals.map((h) => [
-          h.name,
-          h.status,
-          h.beds ?? '—',
-          h.erReady ? 'Yes' : 'No',
-          h.region?.name ?? '—',
-          h.district?.name ?? '—',
-          h.referrals.length,
-          h.referrals.filter((r) => r.status === 'ACCEPTED').length,
-          h.referrals.filter((r) => r.status === 'REJECTED').length,
-          h.referrals.filter((r) => r.status === 'COMPLETED').length,
-          h.requests.length,
-          h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
-        ]),
+        rows: hospitals.map((h) => {
+          const s = byHospitalId.get(h.id)!;
+          const accepted =
+            s.referralAccepted + s.referralCompleted + s.coordAccepted + s.handoverAccepted;
+          const rejected = s.referralRejected + s.coordRejected + s.handoverRejected;
+          return [
+            h.name,
+            h.status,
+            h.region?.name ?? '—',
+            h.district?.name ?? '—',
+            s.referralAccepted + s.referralCompleted,
+            s.referralRejected,
+            s.coordAccepted,
+            s.coordRejected,
+            s.handoverAccepted,
+            s.handoverRejected,
+            accepted,
+            rejected,
+            accepted + rejected ? `${this.percent(accepted, accepted + rejected)}%` : '—',
+            s.destinationCases,
+            h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
+          ];
+        }),
+      },
+      secondaryTable: {
+        title: 'Nurse Handover Hospital Events',
+        columns: [
+          'Case ID',
+          'Patient',
+          'Decision',
+          'Hospital',
+          'Refusal Reason',
+          'Patient Status',
+          'Case Status',
+          'Handover Time',
+        ],
+        rows: handoverEventRows,
+      },
+      tertiaryTable: {
+        title: 'Unmatched Nurse-Entered Hospital Names',
+        columns: ['Hospital Name (free text)', 'Accepted Count', 'Rejected Count'],
+        rows: [
+          ...new Set([
+            ...Object.keys(unmatchedAccepted),
+            ...Object.keys(unmatchedRejected),
+          ]),
+        ]
+          .sort()
+          .map((name) => [
+            name,
+            unmatchedAccepted[name] ?? 0,
+            unmatchedRejected[name] ?? 0,
+          ]),
       },
     };
   }
 
+  private computeCaseResponseMinutes(r: {
+    responseMinutes?: number | null;
+    createdAt?: Date | null;
+    assignedAt?: Date | null;
+    dispatchedAt?: Date | null;
+    arrivedAtSceneAt?: Date | null;
+    completedAt?: Date | null;
+    cancelledAt?: Date | null;
+    serviceMinutes?: number | null;
+  }) {
+    const response =
+      r.responseMinutes ??
+      this.minutesBetweenDates(
+        r.createdAt,
+        r.dispatchedAt ?? r.assignedAt ?? r.arrivedAtSceneAt,
+      ) ??
+      this.minutesBetweenDates(r.dispatchedAt ?? r.assignedAt ?? r.createdAt, r.arrivedAtSceneAt);
+
+    const service =
+      r.serviceMinutes ??
+      this.minutesBetweenDates(r.createdAt, r.completedAt ?? r.cancelledAt);
+
+    return { response, service };
+  }
+
   private async getResponseTimeReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const [avg, completed, rows, regionGroups] = await Promise.all([
-      this.prisma.emergencyRequest.aggregate({
-        where: { ...where, responseMinutes: { not: null } },
-        _avg: { responseMinutes: true, serviceMinutes: true },
-      }),
-      this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
-      this.getFullResponseTimeRows(where),
-      this.getRegionResponseRows(where),
+    const cases = await this.prisma.emergencyRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        patient: true,
+        region: true,
+        district: true,
+        ambulance: true,
+        destinationHospital: true,
+      },
+    });
+
+    const statusCounts: Record<string, number> = {};
+    let responseSum = 0;
+    let responseCount = 0;
+    let serviceSum = 0;
+    let serviceCount = 0;
+    let pending = 0;
+    let dispatched = 0;
+    let inProgress = 0;
+    let completed = 0;
+    let cancelled = 0;
+
+    const PENDING_STATUSES = new Set(['PENDING', 'REVIEWING']);
+    const DISPATCHED_STATUSES = new Set(['ASSIGNED', 'DISPATCHED']);
+    const IN_PROGRESS_STATUSES = new Set([
+      'EN_ROUTE',
+      'ARRIVED_SCENE',
+      'PATIENT_STABILIZED',
+      'TRANSPORTING',
+      'ARRIVED_HOSPITAL',
     ]);
 
-    const measured = rows.length;
+    const regionAgg: Record<
+      string,
+      { count: number; responseSum: number; responseCount: number; serviceSum: number; serviceCount: number }
+    > = {};
+
+    const rows = cases.map((r) => {
+      statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+      if (PENDING_STATUSES.has(r.status)) pending += 1;
+      else if (DISPATCHED_STATUSES.has(r.status)) dispatched += 1;
+      else if (IN_PROGRESS_STATUSES.has(r.status)) inProgress += 1;
+      else if (r.status === 'COMPLETED') completed += 1;
+      else if (r.status === 'CANCELLED') cancelled += 1;
+
+      const { response, service } = this.computeCaseResponseMinutes(r);
+      if (response != null) {
+        responseSum += response;
+        responseCount += 1;
+      }
+      if (service != null) {
+        serviceSum += service;
+        serviceCount += 1;
+      }
+
+      const regionName = r.region?.name ?? 'Unassigned';
+      if (!regionAgg[regionName]) {
+        regionAgg[regionName] = {
+          count: 0,
+          responseSum: 0,
+          responseCount: 0,
+          serviceSum: 0,
+          serviceCount: 0,
+        };
+      }
+      regionAgg[regionName].count += 1;
+      if (response != null) {
+        regionAgg[regionName].responseSum += response;
+        regionAgg[regionName].responseCount += 1;
+      }
+      if (service != null) {
+        regionAgg[regionName].serviceSum += service;
+        regionAgg[regionName].serviceCount += 1;
+      }
+
+      return [
+        r.trackingCode,
+        r.patient?.fullName ?? 'Unknown',
+        r.priority,
+        r.status,
+        r.region?.name ?? '—',
+        r.district?.name ?? '—',
+        response ?? '—',
+        service ?? '—',
+        r.ambulance?.ambulanceNumber ?? '—',
+        r.destinationHospital?.name ?? r.destination ?? '—',
+        r.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+        r.dispatchedAt
+          ? r.dispatchedAt.toISOString().slice(0, 16).replace('T', ' ')
+          : r.assignedAt
+            ? r.assignedAt.toISOString().slice(0, 16).replace('T', ' ')
+            : '—',
+        r.completedAt
+          ? r.completedAt.toISOString().slice(0, 16).replace('T', ' ')
+          : '—',
+      ];
+    });
 
     return {
       title: 'Response Time Analysis',
-      subtitle: 'Case-level response and service duration with regional summary.',
+      subtitle:
+        'All cases in period — pending, dispatched, in progress, and completed — with response/service times computed from timestamps when needed.',
       period,
       summary: [
-        { label: 'Avg Response', value: Math.round(avg._avg.responseMinutes ?? 0), suffix: ' min' },
-        { label: 'Avg Service Time', value: Math.round(avg._avg.serviceMinutes ?? 0), suffix: ' min' },
-        { label: 'Measured Cases', value: measured },
-        { label: 'Completed Cases', value: completed },
+        {
+          label: 'Avg Response',
+          value: responseCount ? Math.round(responseSum / responseCount) : 0,
+          suffix: ' min',
+        },
+        {
+          label: 'Avg Service Time',
+          value: serviceCount ? Math.round(serviceSum / serviceCount) : 0,
+          suffix: ' min',
+        },
+        { label: 'Total Cases', value: cases.length },
+        { label: 'Pending', value: pending },
+        { label: 'Dispatched / Assigned', value: dispatched },
+        { label: 'In Progress', value: inProgress },
+        { label: 'Completed', value: completed },
+        { label: 'Cancelled', value: cancelled },
+        { label: 'Measured Response', value: responseCount },
       ],
       table: {
         title: 'Case Response Time Detail',
         columns: [
-          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District',
-          'Response (min)', 'Service (min)', 'Ambulance', 'Created', 'Dispatched', 'Completed',
+          'Tracking Code',
+          'Patient',
+          'Priority',
+          'Status',
+          'Region',
+          'District',
+          'Response (min)',
+          'Service (min)',
+          'Ambulance',
+          'Destination',
+          'Created',
+          'Dispatched',
+          'Completed',
         ],
         rows,
       },
       secondaryTable: {
+        title: 'Status Breakdown',
+        columns: ['Status', 'Cases'],
+        rows: Object.entries(statusCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([status, count]) => [status, count]),
+      },
+      tertiaryTable: {
         title: 'Regional Response Summary',
-        columns: ['Region', 'Measured Cases', 'Avg Response', 'Avg Service'],
-        rows: regionGroups,
+        columns: ['Region', 'Cases', 'Measured', 'Avg Response', 'Avg Service'],
+        rows: Object.entries(regionAgg)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([region, stats]) => [
+            region,
+            stats.count,
+            stats.responseCount,
+            stats.responseCount
+              ? `${Math.round(stats.responseSum / stats.responseCount)} min`
+              : '—',
+            stats.serviceCount
+              ? `${Math.round(stats.serviceSum / stats.serviceCount)} min`
+              : '—',
+          ]),
       },
     };
   }
@@ -1450,6 +1859,13 @@ export class ReportsService {
         receivingStaff?: string;
         acceptedHospital?: string;
         signature?: string;
+        notes?: string;
+        rejectedHospitals?: Array<{
+          id?: string;
+          hospitalName?: string;
+          reason?: string;
+          notes?: string;
+        }>;
       };
       const outcome =
         data.patientOutcome === 'Deceased'
@@ -1463,36 +1879,49 @@ export class ReportsService {
     }
   }
 
+  private formatRejectedHospitals(
+    rejected?: Array<{ hospitalName?: string; reason?: string; notes?: string }> | null,
+  ) {
+    if (!rejected?.length) return '';
+    return rejected
+      .filter((r) => r.hospitalName?.trim())
+      .map((r) => {
+        const parts = [r.hospitalName!.trim()];
+        if (r.reason?.trim()) parts.push(`(${r.reason.trim()})`);
+        if (r.notes?.trim()) parts.push(`— ${r.notes.trim()}`);
+        return parts.join(' ');
+      })
+      .join('; ');
+  }
+
   private async getHandoverOutcomeReport(period: ReportPeriod, filters: AdminReportFilters) {
-    const requestWhere = this.emergencyDimensionWhere(filters);
     const caseWhere = this.reportWhere(period, filters);
 
     const [handoverRecords, periodCases] = await Promise.all([
-      this.prisma.patientCareRecord.findMany({
-        where: {
-          createdAt: { gte: period.start, lte: period.end },
-          clinicalNotes: { startsWith: '[EADS_HANDOVER]' },
-          emergencyRequest: requestWhere,
-        },
-        include: {
-          emergencyRequest: {
-            include: {
-              patient: true,
-              region: true,
-              district: true,
-              driver: true,
-              nurse: true,
-              destinationHospital: true,
-              incidentCategory: true,
-            },
-          },
-          nurse: { select: { firstName: true, lastName: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
+      this.loadPeriodHandoverRecords(period, filters),
       this.prisma.emergencyRequest.findMany({
         where: caseWhere,
-        select: { id: true, notes: true, trackingCode: true },
+        select: {
+          id: true,
+          notes: true,
+          trackingCode: true,
+          status: true,
+          priority: true,
+          destination: true,
+          patient: { select: { fullName: true } },
+          callerName: true,
+          region: { select: { name: true } },
+          district: { select: { name: true } },
+          destinationHospital: { select: { name: true } },
+          driver: { select: { firstName: true, lastName: true } },
+          nurse: { select: { firstName: true, lastName: true } },
+          patientCareRecords: {
+            where: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { clinicalNotes: true, createdAt: true },
+          },
+        },
       }),
     ]);
 
@@ -1500,6 +1929,8 @@ export class ReportsService {
     const transportCaseCounts: Record<string, number> = {};
     let funeralCaseCount = 0;
     let otherTransportCaseCount = 0;
+    let awaitingHandover = 0;
+    let completedWithoutHandover = 0;
 
     for (const c of periodCases) {
       const transport = this.parseNoteField(c.notes, 'Transport Type') || 'Not specified';
@@ -1507,13 +1938,44 @@ export class ReportsService {
       transportCaseCounts[transport] = (transportCaseCounts[transport] ?? 0) + 1;
       if (this.isFuneralTransportLabel(transport)) funeralCaseCount += 1;
       else otherTransportCaseCount += 1;
+
+      const hasHandover = (c.patientCareRecords?.length ?? 0) > 0;
+      if (!hasHandover) {
+        if (c.status === 'COMPLETED') completedWithoutHandover += 1;
+        else if (!['CANCELLED', 'PENDING', 'REVIEWING'].includes(c.status)) awaitingHandover += 1;
+      }
     }
 
-    const latestByCase = new Map<string, (typeof handoverRecords)[number]>();
-    for (const record of handoverRecords) {
-      const caseId = record.requestId;
-      if (!caseId || latestByCase.has(caseId)) continue;
-      latestByCase.set(caseId, record);
+    // Prefer handovers linked to period cases; also keep handovers created in period
+    // even if the case itself was created earlier.
+    const latestByCase = this.latestHandoverByCase(handoverRecords);
+    for (const c of periodCases) {
+      if (latestByCase.has(c.id)) continue;
+      const care = c.patientCareRecords?.[0];
+      if (!care) continue;
+      latestByCase.set(c.id, {
+        id: `case-${c.id}`,
+        requestId: c.id,
+        clinicalNotes: care.clinicalNotes,
+        createdAt: care.createdAt,
+        nurse: null,
+        emergencyRequest: {
+          id: c.id,
+          trackingCode: c.trackingCode,
+          notes: c.notes,
+          status: c.status,
+          priority: c.priority,
+          destination: c.destination,
+          callerName: c.callerName,
+          patient: c.patient,
+          region: c.region,
+          district: c.district,
+          destinationHospital: c.destinationHospital,
+          driver: c.driver,
+          nurse: c.nurse,
+          incidentCategory: null,
+        },
+      } as any);
     }
 
     let live = 0;
@@ -1543,22 +2005,13 @@ export class ReportsService {
       if (outcome === 'Live') transportHandoverStats[transport].live += 1;
       else if (outcome === 'Deceased') transportHandoverStats[transport].dead += 1;
       else transportHandoverStats[transport].unknown += 1;
-    }
-
-    for (const record of latestByCase.values()) {
-      const parsed = this.parseHandoverOutcome(record.clinicalNotes);
-      const outcome = parsed?.patientOutcome ?? 'Unknown';
-      const req = record.emergencyRequest;
-      const transport =
-        (req?.id ? caseTransport.get(req.id) : null) ||
-        this.parseNoteField(req?.notes, 'Transport Type') ||
-        'Not specified';
 
       if (filters.transportType) {
         const needle = filters.transportType.toLowerCase();
         if (!transport.toLowerCase().includes(needle)) continue;
       }
       if (filters.patientOutcome && filters.patientOutcome !== outcome) continue;
+      if (filters.status && req?.status && filters.status !== req.status) continue;
 
       if (outcome === 'Live') live += 1;
       else if (outcome === 'Deceased') {
@@ -1580,20 +2033,24 @@ export class ReportsService {
         req?.destinationHospital?.name ||
         req?.destination ||
         '—';
+      const rejected = this.formatRejectedHospitals(parsed?.rejectedHospitals) || '—';
 
       rows.push([
         req?.trackingCode ?? '—',
         req?.patient?.fullName ?? req?.callerName ?? '—',
         transport,
         req?.priority ?? '—',
+        req?.status ?? '—',
         this.formatHandoverOutcomeLabel(outcome),
         destination,
+        rejected,
         parsed?.receivingStaff || '—',
         nurseName,
         driverName,
         req?.region?.name ?? '—',
         req?.district?.name ?? '—',
         parsed?.patientCondition?.slice(0, 80) || '—',
+        parsed?.treatmentGiven?.slice(0, 80) || '—',
         record.createdAt.toISOString().slice(0, 16).replace('T', ' '),
       ]);
     }
@@ -1619,7 +2076,7 @@ export class ReportsService {
     return {
       title: 'Handover & Transfer Outcomes',
       subtitle:
-        'Transport types (funeral vs other), patient status at handover — dead during transfer vs live.',
+        'Nurse handover Live/Dead status, accepted & rejected hospitals, transport type, and cases still awaiting handover.',
       period,
       summary: [
         { label: 'Total Cases (period)', value: periodCases.length },
@@ -1630,6 +2087,8 @@ export class ReportsService {
         { label: 'Dead During Transfer', value: deceased },
         { label: 'Dead — Funeral Transport', value: funeralDead },
         { label: 'Dead — Other Transport', value: nonFuneralDead },
+        { label: 'Awaiting Handover', value: awaitingHandover },
+        { label: 'Completed w/o Handover', value: completedWithoutHandover },
         { label: 'Dead Rate', value: this.percent(deceased, total), suffix: '%' },
         { label: 'Outcome Not Recorded', value: unknown },
       ],
@@ -1640,14 +2099,17 @@ export class ReportsService {
           'Patient',
           'Transport Type',
           'Priority',
+          'Case Status',
           'Handover Status',
-          'Destination',
+          'Accepted Hospital',
+          'Rejected Hospitals',
           'Receiving Doctor',
           'Nurse',
           'Driver',
           'Region',
           'District',
           'Condition Summary',
+          'Treatment',
           'Handover Time',
         ],
         rows,
@@ -1703,38 +2165,129 @@ export class ReportsService {
   private async getCaseOutcomeReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
     const handoverDeceased = await this.countDeceasedHandovers(period, filters);
-    const [total, completed, cancelled, careRecords, incidents, rows] = await Promise.all([
-      this.prisma.emergencyRequest.count({ where }),
-      this.prisma.emergencyRequest.count({ where: { ...where, status: 'COMPLETED' } }),
-      this.prisma.emergencyRequest.count({ where: { ...where, status: 'CANCELLED' } }),
-      this.prisma.patientCareRecord.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
-      this.prisma.incidentReport.count({ where: { createdAt: { gte: period.start, lte: period.end } } }),
-      this.getFullEmergencyRows(where),
+
+    const [cases, careRecords, incidents] = await Promise.all([
+      this.prisma.emergencyRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          patient: true,
+          region: true,
+          district: true,
+          incidentCategory: true,
+          ambulance: true,
+          driver: true,
+          nurse: true,
+          destinationHospital: true,
+          patientCareRecords: {
+            where: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { clinicalNotes: true, createdAt: true },
+          },
+        },
+      }),
+      this.prisma.patientCareRecord.count({
+        where: { createdAt: { gte: period.start, lte: period.end } },
+      }),
+      this.prisma.incidentReport.count({
+        where: { createdAt: { gte: period.start, lte: period.end } },
+      }),
     ]);
+
+    let completed = 0;
+    let cancelled = 0;
+    let pending = 0;
+    let dispatched = 0;
+    let inProgress = 0;
+    let live = 0;
+    let dead = 0;
+    let withHandover = 0;
+
+    const rows = cases.map((r) => {
+      if (r.status === 'COMPLETED') completed += 1;
+      else if (r.status === 'CANCELLED') cancelled += 1;
+      else if (['PENDING', 'REVIEWING'].includes(r.status)) pending += 1;
+      else if (['ASSIGNED', 'DISPATCHED'].includes(r.status)) dispatched += 1;
+      else inProgress += 1;
+
+      const handover = this.parseHandoverOutcome(r.patientCareRecords?.[0]?.clinicalNotes);
+      if (handover) {
+        withHandover += 1;
+        if (handover.patientOutcome === 'Live') live += 1;
+        else if (handover.patientOutcome === 'Deceased') dead += 1;
+      }
+
+      const destination =
+        handover?.acceptedHospital ||
+        r.destinationHospital?.name ||
+        r.destination ||
+        '—';
+      const rejected = this.formatRejectedHospitals(handover?.rejectedHospitals) || '—';
+      const { response } = this.computeCaseResponseMinutes(r);
+
+      return [
+        r.trackingCode,
+        r.patient?.fullName ?? 'Unknown',
+        r.priority,
+        r.status,
+        handover ? this.formatHandoverOutcomeLabel(handover.patientOutcome) : '—',
+        destination,
+        rejected,
+        r.region?.name ?? '—',
+        r.district?.name ?? '—',
+        r.incidentCategory?.name ?? '—',
+        r.pickupLocation,
+        r.ambulance?.ambulanceNumber ?? '—',
+        r.driver ? this.employeeDisplayName(r.driver) : '—',
+        r.nurse ? this.employeeDisplayName(r.nurse) : '—',
+        response ?? '—',
+        r.createdAt.toISOString().slice(0, 16).replace('T', ' '),
+        r.completedAt ? r.completedAt.toISOString().slice(0, 16).replace('T', ' ') : '—',
+      ];
+    });
 
     return {
       title: 'Case Outcome Reports',
-      subtitle: 'Complete case outcome listing with completion and cancellation details.',
+      subtitle:
+        'All cases in period with status, nurse handover Live/Dead outcome, accepted hospital, and rejected hospitals.',
       period,
       summary: [
-        { label: 'Total Cases', value: total },
+        { label: 'Total Cases', value: cases.length },
+        { label: 'Pending', value: pending },
+        { label: 'Dispatched / Assigned', value: dispatched },
+        { label: 'In Progress', value: inProgress },
         { label: 'Completed', value: completed },
         { label: 'Cancelled', value: cancelled },
-        { label: 'Completion Rate', value: this.percent(completed, total), suffix: '%' },
+        { label: 'Completion Rate', value: this.percent(completed, cases.length), suffix: '%' },
+        { label: 'Handovers Recorded', value: withHandover || handoverDeceased.total },
+        { label: 'Live at Handover', value: live },
+        { label: 'Dead at Handover', value: dead || handoverDeceased.deceased },
         { label: 'Care Records', value: careRecords },
         { label: 'Incident Reports', value: incidents },
-        { label: 'Dead at Handover', value: handoverDeceased.deceased },
-        { label: 'Handovers Recorded', value: handoverDeceased.total },
       ],
       table: {
         title: 'All Case Outcomes',
         columns: [
-          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
-          'Pickup', 'Destination', 'Ambulance', 'Response (min)', 'Created', 'Completed',
+          'Tracking Code',
+          'Patient',
+          'Priority',
+          'Status',
+          'Handover Status',
+          'Accepted Hospital',
+          'Rejected Hospitals',
+          'Region',
+          'District',
+          'Category',
+          'Pickup',
+          'Ambulance',
+          'Driver',
+          'Nurse',
+          'Response (min)',
+          'Created',
+          'Completed',
         ],
-        rows: rows.map((row) => [
-          row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[12], row[14], row[15],
-        ]),
+        rows,
       },
     };
   }

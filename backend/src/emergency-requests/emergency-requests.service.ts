@@ -609,7 +609,15 @@ export class EmergencyRequestsService {
         referrals: true,
         statusLogs: {
           orderBy: { createdAt: 'desc' }
-        }
+        },
+        patientCareRecords: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            nurse: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
