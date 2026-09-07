@@ -51,18 +51,37 @@ export async function validateDistrictNotAssignedToStation(
   districtId: string,
   districtName?: string,
 ) {
+  const homeStations = await prisma.station.findMany({
+    where: { isActive: true, districtId },
+    select: { id: true, name: true },
+  });
+
+  if (homeStations.length) {
+    const names = homeStations.map((s) => s.name).join(', ');
+    throw new BadRequestException(
+      `District "${districtName ?? districtId}" is the home district of station "${names}". Change or archive that station first.`,
+    );
+  }
+}
+
+/** Remove a district from active stations' coverage lists (home district is never stored there). */
+export async function detachDistrictFromStationCoverage(
+  prisma: PrismaService,
+  districtId: string,
+) {
   const stations = await prisma.station.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, districtId: true, coverageDistrictIds: true },
+    select: { id: true, coverageDistrictIds: true },
   });
 
   for (const station of stations) {
-    const assigned = collectStationAssignedDistrictIds(station);
-    if (assigned.includes(districtId)) {
-      throw new BadRequestException(
-        `District "${districtName ?? districtId}" is assigned to station "${station.name}". Remove it from that station before deactivating or archiving this district.`,
-      );
-    }
+    const coverage = parseCoverageDistrictIds(station.coverageDistrictIds);
+    if (!coverage.includes(districtId)) continue;
+    const next = coverage.filter((id) => id !== districtId);
+    await prisma.station.update({
+      where: { id: station.id },
+      data: { coverageDistrictIds: next.length ? next : [] },
+    });
   }
 }
 

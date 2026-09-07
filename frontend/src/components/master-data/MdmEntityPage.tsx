@@ -45,7 +45,7 @@ export default function MdmEntityPage({
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
   const [modalOpen, setModalOpen] = useState(false)
   const [viewRow, setViewRow] = useState<Row | null>(null)
   const [editRow, setEditRow] = useState<Row | null>(null)
@@ -87,24 +87,33 @@ export default function MdmEntityPage({
     }
   }, [def.fields, entityKey])
 
+  const reloadList = useCallback(
+    async (overrides?: { status?: 'all' | 'active' | 'inactive'; page?: number }) => {
+      const status = overrides?.status ?? statusFilter
+      const pageNum = overrides?.page ?? page
+      setLoading(true)
+      try {
+        const res = await mdmService.list(entityKey, {
+          search: search || undefined,
+          status,
+          page: pageNum,
+          limit: 15,
+          includeInactive: status !== 'active',
+        })
+        setItems(res?.items ?? [])
+        setTotal(res?.total ?? 0)
+      } catch {
+        toast.error(`Failed to load ${def.label}`)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [entityKey, search, statusFilter, page, def.label],
+  )
+
   const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await mdmService.list(entityKey, {
-        search: search || undefined,
-        status: statusFilter,
-        page,
-        limit: 15,
-        includeInactive: statusFilter !== 'active',
-      })
-      setItems(res?.items ?? [])
-      setTotal(res?.total ?? 0)
-    } catch {
-      toast.error(`Failed to load ${def.label}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [entityKey, search, statusFilter, page, def.label])
+    await reloadList()
+  }, [reloadList])
 
   useEffect(() => {
     loadOptions()
@@ -206,19 +215,34 @@ export default function MdmEntityPage({
       else await mdmService.activate(entityKey, row.id)
       toast.success(row.isActive ? 'Deactivated' : 'Activated')
       load()
-    } catch {
-      toast.error('Status update failed')
+    } catch (e: any) {
+      const msg = e?.response?.data?.message
+      toast.error(Array.isArray(msg) ? msg.join(', ') : msg || 'Status update failed')
     }
   }
 
   const handleDelete = async (row: Row) => {
-    if (readOnly || !confirm(`Archive this ${def.singular.toLowerCase()}?`)) return
+    if (readOnly || row.isActive === false) return
+    const confirmMessage =
+      entityKey === 'stations'
+        ? `Deactivate "${row.name}"? It will be removed from the active stations list (home district stays unchanged).`
+        : `Archive this ${def.singular.toLowerCase()}?`
+    if (!confirm(confirmMessage)) return
     try {
       await mdmService.remove(entityKey, row.id)
-      toast.success('Archived')
-      load()
-    } catch {
-      toast.error('Delete failed')
+      if (entityKey === 'stations') {
+        setStatusFilter('active')
+        setPage(1)
+        await loadOptions()
+        toast.success(`Station "${row.name}" removed from active list`)
+        await reloadList({ status: 'active', page: 1 })
+      } else {
+        toast.success('Archived')
+        load()
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.message
+      toast.error(Array.isArray(msg) ? msg.join(', ') : msg || 'Delete failed')
     }
   }
 
@@ -348,8 +372,16 @@ export default function MdmEntityPage({
                             </button>
                             <button
                               type="button"
-                              className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+                              className="p-2 rounded-lg hover:bg-red-50 text-red-600 disabled:opacity-30 disabled:pointer-events-none"
                               onClick={() => handleDelete(row)}
+                              disabled={row.isActive === false}
+                              title={
+                                row.isActive === false
+                                  ? 'Already archived'
+                                  : entityKey === 'stations'
+                                    ? 'Remove from active stations'
+                                    : 'Archive'
+                              }
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

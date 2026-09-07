@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import {
+  detachDistrictFromStationCoverage,
   rethrowPrismaUniqueError,
   validateDistrictNotAssignedToStation,
   validateDistrictPayload,
@@ -290,6 +291,7 @@ export class MasterDataService implements OnModuleInit {
     if (!isActive) {
       const existing = await this.getOne(entity, id);
       if (entity === 'districts') {
+        await detachDistrictFromStationCoverage(this.prisma, id);
         await validateDistrictNotAssignedToStation(
           this.prisma,
           id,
@@ -312,6 +314,7 @@ export class MasterDataService implements OnModuleInit {
     const existing = await this.getOne(entity, id);
 
     if (entity === 'districts') {
+      await detachDistrictFromStationCoverage(this.prisma, id);
       await validateDistrictNotAssignedToStation(
         this.prisma,
         id,

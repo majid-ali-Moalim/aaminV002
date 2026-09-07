@@ -497,8 +497,8 @@ export default function AddNurseForm() {
                 onClick={() => {
                   setCreatedNurse(null)
                   setStep('personal')
-                  setDistricts([])
-                  setStations([])
+                  setAllDistricts([])
+                  setAllStations([])
                   setFieldErrors({})
                   loadMasterData()
                   setForm({

@@ -1352,14 +1352,14 @@ export class ReportsService {
 
     const [hospitals, referrals, coordinationCases, handoverRecords, destinationCases] =
       await Promise.all([
-        this.prisma.hospital.findMany({
-          where: hospitalWhere,
-          orderBy: { name: 'asc' },
-          include: {
-            region: true,
-            district: true,
-            referrals: { where: { createdAt: { gte: period.start, lte: period.end } } },
-            requests: { where },
+      this.prisma.hospital.findMany({
+        where: hospitalWhere,
+        orderBy: { name: 'asc' },
+        include: {
+          region: true,
+          district: true,
+          referrals: { where: { createdAt: { gte: period.start, lte: period.end } } },
+          requests: { where },
             coordinationCases: {
               where: {
                 deletedAt: null,
@@ -1367,8 +1367,8 @@ export class ReportsService {
                 ...(filters.hospital ? { hospitalId: filters.hospital } : {}),
               },
             },
-          },
-        }),
+        },
+      }),
         this.prisma.referral.findMany({
           where: {
             createdAt: { gte: period.start, lte: period.end },
@@ -1562,10 +1562,10 @@ export class ReportsService {
             s.referralAccepted + s.referralCompleted + s.coordAccepted + s.handoverAccepted;
           const rejected = s.referralRejected + s.coordRejected + s.handoverRejected;
           return [
-            h.name,
-            h.status,
-            h.region?.name ?? '—',
-            h.district?.name ?? '—',
+          h.name,
+          h.status,
+          h.region?.name ?? '—',
+          h.district?.name ?? '—',
             s.referralAccepted + s.referralCompleted,
             s.referralRejected,
             s.coordAccepted,
@@ -1576,7 +1576,7 @@ export class ReportsService {
             rejected,
             accepted + rejected ? `${this.percent(accepted, accepted + rejected)}%` : '—',
             s.destinationCases,
-            h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
+          h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
           ];
         }),
       },
@@ -1608,7 +1608,7 @@ export class ReportsService {
             name,
             unmatchedAccepted[name] ?? 0,
             unmatchedRejected[name] ?? 0,
-          ]),
+        ]),
       },
     };
   }
