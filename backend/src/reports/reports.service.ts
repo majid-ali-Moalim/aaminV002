@@ -502,7 +502,7 @@ export class ReportsService {
 
   // ─── Unified Admin Dashboard (single real-time payload) ───
   private readonly DASHBOARD_ACTIVE_MISSION: EmergencyRequestStatus[] = [
-    'REVIEWING', 'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
+    'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
     'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
   ];
 
@@ -542,7 +542,9 @@ export class ReportsService {
       this.prisma.emergencyRequest.count({
         where: { status: { in: this.DASHBOARD_ACTIVE_MISSION } },
       }),
-      this.prisma.emergencyRequest.count({ where: { status: 'PENDING' } }),
+      this.prisma.emergencyRequest.count({
+        where: { status: { in: ['PENDING', 'REVIEWING'] } },
+      }),
       this.prisma.emergencyRequest.count({
         where: { priority: 'CRITICAL', ...openFilter },
       }),
@@ -799,17 +801,17 @@ export class ReportsService {
         format: 'number' as const,
       },
       {
+        key: 'pendingCases',
+        label: 'Pending Cases',
+        value: kpiMetrics.pendingCases,
+        format: 'number' as const,
+      },
+      {
         key: 'activeCases',
         label: 'Active Cases',
         value: kpiMetrics.activeCases,
         format: 'number' as const,
         live: true,
-      },
-      {
-        key: 'pendingCases',
-        label: 'Pending Cases',
-        value: kpiMetrics.pendingCases,
-        format: 'number' as const,
       },
       {
         key: 'completedCases',
@@ -818,45 +820,15 @@ export class ReportsService {
         format: 'number' as const,
       },
       {
-        key: 'delayedCases',
-        label: 'Delayed Cases',
-        value: kpiMetrics.delayedCases,
+        key: 'cancelledCases',
+        label: 'Cancelled Cases',
+        value: kpiMetrics.cancelledCases,
         format: 'number' as const,
       },
       {
         key: 'criticalCases',
         label: 'Critical Cases',
         value: kpiMetrics.criticalCases,
-        format: 'number' as const,
-      },
-      {
-        key: 'totalAmbulances',
-        label: 'Total Ambulances',
-        value: kpiMetrics.totalAmbulances,
-        format: 'number' as const,
-      },
-      {
-        key: 'totalDrivers',
-        label: 'Total Drivers',
-        value: kpiMetrics.totalDrivers,
-        format: 'number' as const,
-      },
-      {
-        key: 'totalNurses',
-        label: 'Total Nurses',
-        value: kpiMetrics.totalNurses,
-        format: 'number' as const,
-      },
-      {
-        key: 'totalDispatchers',
-        label: 'Total Dispatchers',
-        value: kpiMetrics.totalDispatchers,
-        format: 'number' as const,
-      },
-      {
-        key: 'totalHospitals',
-        label: 'Total Hospitals',
-        value: kpiMetrics.totalHospitals,
         format: 'number' as const,
       },
     ];
@@ -913,17 +885,26 @@ export class ReportsService {
     const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles, transportTypes] =
       await Promise.all([
         this.prisma.region.findMany({
-          where: { isActive: true, deletedAt: null },
+          where: { deletedAt: null },
           orderBy: { name: 'asc' },
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            districts: {
+              where: { deletedAt: null },
+              orderBy: { name: 'asc' },
+              select: { id: true, name: true, regionId: true, isActive: true },
+            },
+          },
         }),
         this.prisma.district.findMany({
-          where: { isActive: true, deletedAt: null },
+          where: { deletedAt: null },
           orderBy: { name: 'asc' },
-          select: { id: true, name: true, regionId: true },
+          select: { id: true, name: true, regionId: true, isActive: true },
         }),
         this.prisma.incidentCategory.findMany({
-          where: { isActive: true, deletedAt: null },
+          where: { deletedAt: null },
           orderBy: { name: 'asc' },
           select: { id: true, name: true },
         }),
@@ -948,16 +929,34 @@ export class ReportsService {
         }),
       ]);
 
+    // Prefer active rows, but keep inactive ones that still appear in case data.
+    const activeRegions = regions.filter((r) => r.isActive);
+    const regionList = activeRegions.length ? activeRegions : regions;
+    const activeDistricts = districts.filter((d) => d.isActive);
+    const districtList = activeDistricts.length ? activeDistricts : districts;
+
     return {
-      regions,
-      districts,
+      regions: regionList.map(({ id, name, districts: nested }) => ({
+        id,
+        name,
+        districts: (nested ?? [])
+          .filter((d) => d.isActive || !activeDistricts.length)
+          .map(({ id: did, name: dname, regionId }) => ({ id: did, name: dname, regionId })),
+      })),
+      districts: districtList.map(({ id, name, regionId }) => ({ id, name, regionId })),
       incidentCategories,
       ambulances,
       hospitals,
       employeeRoles,
       priorities: PRIORITY_OPTIONS.map((value) => ({ value, label: value })),
-      emergencyStatuses: EMERGENCY_STATUS_OPTIONS.map((value) => ({ value, label: value.replace(/_/g, ' ') })),
-      ambulanceStatuses: AMBULANCE_STATUS_OPTIONS.map((value) => ({ value, label: value.replace(/_/g, ' ') })),
+      emergencyStatuses: EMERGENCY_STATUS_OPTIONS.map((value) => ({
+        value,
+        label: value.replace(/_/g, ' '),
+      })),
+      ambulanceStatuses: AMBULANCE_STATUS_OPTIONS.map((value) => ({
+        value,
+        label: value.replace(/_/g, ' '),
+      })),
       vehicleTypes: [...new Set(ambulances.map((a) => a.vehicleType).filter(Boolean))].map((value) => ({
         value: value as string,
         label: value as string,
@@ -965,7 +964,7 @@ export class ReportsService {
       patientOutcomes: [
         { value: 'Live', label: 'Live at handover' },
         { value: 'Deceased', label: 'Dead during transfer' },
-        { value: 'Unknown', label: 'Outcome not recorded' },
+        { value: 'Unknown', label: 'Unknown at handover' },
       ],
       transportTypes: transportTypes.map((t) => ({
         value: t.name,
@@ -1528,18 +1527,15 @@ export class ReportsService {
         'Hospital accept/reject from referrals, hospital coordination, destination assignment, and nurse handover (accepted & rejected hospitals).',
       period,
       summary: [
-        { label: 'Referral Accepted', value: referralAccepted + referralCompleted },
-        { label: 'Referral Rejected', value: referralRejected },
-        { label: 'Coordination Accepted', value: coordAccepted },
-        { label: 'Coordination Rejected', value: coordRejected },
-        { label: 'Nurse Handover Accepted', value: nurseAccepted },
-        { label: 'Nurse Handover Rejected', value: nurseRejected },
-        { label: 'Destination Cases', value: destinationCases },
+        { label: 'Accepted', value: totalAccepted },
+        { label: 'Rejected', value: totalRejected },
         {
-          label: 'Overall Accept Rate',
+          label: 'Accept Rate',
           value: this.percent(totalAccepted, totalDecisions),
           suffix: '%',
         },
+        { label: 'Nurse Acc. / Rej.', value: `${nurseAccepted} / ${nurseRejected}` },
+        { label: 'Destination Cases', value: destinationCases },
       ],
       table: {
         title: 'Hospital Performance Detail',
@@ -1754,18 +1750,11 @@ export class ReportsService {
           value: responseCount ? Math.round(responseSum / responseCount) : 0,
           suffix: ' min',
         },
-        {
-          label: 'Avg Service Time',
-          value: serviceCount ? Math.round(serviceSum / serviceCount) : 0,
-          suffix: ' min',
-        },
         { label: 'Total Cases', value: cases.length },
         { label: 'Pending', value: pending },
-        { label: 'Dispatched / Assigned', value: dispatched },
-        { label: 'In Progress', value: inProgress },
+        { label: 'Dispatched', value: dispatched },
         { label: 'Completed', value: completed },
         { label: 'Cancelled', value: cancelled },
-        { label: 'Measured Response', value: responseCount },
       ],
       table: {
         title: 'Case Response Time Detail',
@@ -1867,12 +1856,15 @@ export class ReportsService {
           notes?: string;
         }>;
       };
+      const raw = data.patientOutcome
       const outcome =
-        data.patientOutcome === 'Deceased'
+        raw === 'Deceased' || raw === 'Dead'
           ? 'Deceased'
-          : data.patientOutcome === 'Live'
+          : raw === 'Live'
             ? 'Live'
-            : 'Unknown';
+            : raw === 'Unknown'
+              ? 'Unknown'
+              : 'Unknown'
       return { ...data, patientOutcome: outcome as 'Live' | 'Deceased' | 'Unknown' };
     } catch {
       return null;
@@ -2076,21 +2068,15 @@ export class ReportsService {
     return {
       title: 'Handover & Transfer Outcomes',
       subtitle:
-        'Nurse handover Live/Dead status, accepted & rejected hospitals, transport type, and cases still awaiting handover.',
+        'Nurse handover Live / Dead / Unknown, accepted & rejected hospitals. Detail rows hold full records.',
       period,
       summary: [
-        { label: 'Total Cases (period)', value: periodCases.length },
-        { label: 'Funeral Transports', value: funeralCaseCount },
-        { label: 'Other Transport Types', value: otherTransportCaseCount },
         { label: 'Total Handovers', value: total },
-        { label: 'Live at Handover', value: live },
-        { label: 'Dead During Transfer', value: deceased },
-        { label: 'Dead — Funeral Transport', value: funeralDead },
-        { label: 'Dead — Other Transport', value: nonFuneralDead },
+        { label: 'Live', value: live },
+        { label: 'Dead', value: deceased },
+        { label: 'Unknown', value: unknown },
         { label: 'Awaiting Handover', value: awaitingHandover },
-        { label: 'Completed w/o Handover', value: completedWithoutHandover },
         { label: 'Dead Rate', value: this.percent(deceased, total), suffix: '%' },
-        { label: 'Outcome Not Recorded', value: unknown },
       ],
       table: {
         title: 'Handover Records',
@@ -2202,6 +2188,7 @@ export class ReportsService {
     let inProgress = 0;
     let live = 0;
     let dead = 0;
+    let unknown = 0;
     let withHandover = 0;
 
     const rows = cases.map((r) => {
@@ -2216,6 +2203,7 @@ export class ReportsService {
         withHandover += 1;
         if (handover.patientOutcome === 'Live') live += 1;
         else if (handover.patientOutcome === 'Deceased') dead += 1;
+        else unknown += 1;
       }
 
       const destination =
@@ -2250,21 +2238,16 @@ export class ReportsService {
     return {
       title: 'Case Outcome Reports',
       subtitle:
-        'All cases in period with status, nurse handover Live/Dead outcome, accepted hospital, and rejected hospitals.',
+        'Case status and handover Live / Dead / Unknown. Full detail is in the records table.',
       period,
       summary: [
         { label: 'Total Cases', value: cases.length },
         { label: 'Pending', value: pending },
-        { label: 'Dispatched / Assigned', value: dispatched },
-        { label: 'In Progress', value: inProgress },
         { label: 'Completed', value: completed },
         { label: 'Cancelled', value: cancelled },
-        { label: 'Completion Rate', value: this.percent(completed, cases.length), suffix: '%' },
-        { label: 'Handovers Recorded', value: withHandover || handoverDeceased.total },
-        { label: 'Live at Handover', value: live },
-        { label: 'Dead at Handover', value: dead || handoverDeceased.deceased },
-        { label: 'Care Records', value: careRecords },
-        { label: 'Incident Reports', value: incidents },
+        { label: 'Live', value: live },
+        { label: 'Dead', value: dead },
+        { label: 'Unknown', value: unknown },
       ],
       table: {
         title: 'All Case Outcomes',
@@ -2294,7 +2277,7 @@ export class ReportsService {
 
   private async getOperationsIntelligenceReport(period: ReportPeriod, filters: AdminReportFilters) {
     const where = this.reportWhere(period, filters);
-    const [cases, trend, fleetStatus, referrals, todayPresence] = await Promise.all([
+    const [cases, fleetStatus, referrals, todayPresence] = await Promise.all([
       this.prisma.emergencyRequest.findMany({
         where,
         include: {
@@ -2311,7 +2294,6 @@ export class ReportsService {
           patientCareRecords: { select: { id: true, clinicalNotes: true } },
         },
       }),
-      this.getDailyEmergencyTrend(period, {}, filters),
       this.prisma.ambulance.groupBy({ by: ['status'], where: { isActive: true }, _count: true }),
       this.prisma.referral.findMany({
         where: { createdAt: { gte: period.start, lte: period.end } },
@@ -2449,9 +2431,92 @@ export class ReportsService {
     const topHospital = topEntries(hospitals)[0];
     const topEmergencyType = topEntries(emergencyTypes)[0];
     const topTransportType = topEntries(transportTypes)[0];
+    const topRegion = topEntries(regions)[0];
 
-    const peakHours = topEntries(hourBuckets, 5);
+    const cell = (value?: string | number | null, fallback = 'Not recorded') => {
+      if (value == null) return fallback;
+      const text = String(value).trim();
+      return text && text !== '—' ? text : fallback;
+    };
+
     const filterScope = await this.describeAppliedFilters(filters, period);
+
+    const caseKpiColumns = [
+      'Total Requests',
+      'Emergency',
+      'Non-Emergency',
+      'Referrals',
+      'Completed',
+      'Pending',
+      'Cancelled',
+      'Critical',
+      'Handovers',
+      'Completion Rate %',
+      'Avg Response (min)',
+      'Avg Dispatch (min)',
+    ];
+    const caseKpiRow: Array<string | number> = [
+      cases.length,
+      emergencyCount,
+      nonEmergencyCount,
+      referralCount,
+      completed,
+      pending,
+      cancelled,
+      critical,
+      handovers,
+      this.percent(completed, cases.length),
+      responseCount ? Math.round(responseSum / responseCount) : 0,
+      dispatchCount ? Math.round(dispatchSum / dispatchCount) : 0,
+    ];
+
+    const patientKpiColumns = [
+      'Male',
+      'Female',
+      'Unknown Gender',
+      'Available Ambulances',
+      'Busy Ambulances',
+      'Referrals Accepted',
+      'Referrals Rejected',
+      'Referrals Pending',
+      'Staff Available Today',
+    ];
+    const patientKpiRow: Array<string | number> = [
+      genders.MALE ?? 0,
+      genders.FEMALE ?? 0,
+      genders.Unknown ?? genders.UNKNOWN ?? 0,
+      availableAmb,
+      busyAmb,
+      referralAccepted,
+      referralRejected,
+      referralPending,
+      todayPresence.presentEmployees,
+    ];
+
+    const topTenColumns = [
+      'Top District',
+      'Top Region',
+      'Top Station',
+      'Top Driver',
+      'Top Nurse',
+      'Top Dispatcher',
+      'Top Ambulance',
+      'Top Hospital',
+      'Top Emergency Type',
+      'Top Transport Type',
+    ];
+    const topTenRow: Array<string | number> = [
+      topDistrict ? `${topDistrict[0]} (${topDistrict[1]})` : 'Not recorded',
+      topRegion ? `${topRegion[0]} (${topRegion[1]})` : 'Not recorded',
+      topStation ? `${topStation[0]} (${topStation[1]})` : 'Not recorded',
+      topDriver ? `${topDriver[0]} (${topDriver[1]})` : 'Not recorded',
+      topNurse ? `${topNurse[0]} (${topNurse[1]})` : 'Not recorded',
+      topDispatcher ? `${topDispatcher[0]} (${topDispatcher[1]})` : 'Not recorded',
+      topAmbulance ? `${topAmbulance[0]} (${topAmbulance[1]})` : 'Not recorded',
+      topHospital ? `${topHospital[0]} (${topHospital[1]})` : 'Not recorded',
+      topEmergencyType ? `${topEmergencyType[0]} (${topEmergencyType[1]})` : 'Not recorded',
+      topTransportType ? `${topTransportType[0]} (${topTransportType[1]})` : 'Not recorded',
+    ];
 
     return {
       title: 'Operations Intelligence',
@@ -2459,137 +2524,132 @@ export class ReportsService {
       filterScope,
       period,
       permissions: ['report.view', 'report.kpi', 'report.export', 'report.audit'],
-      summary: [
-        { label: 'Total Requests', value: cases.length },
-        { label: 'Emergency Cases', value: emergencyCount },
-        { label: 'Non-Emergency Cases', value: nonEmergencyCount },
-        { label: 'Hospital Referrals', value: referralCount },
-        { label: 'Completed Cases', value: completed },
-        { label: 'Pending Cases', value: pending },
-        { label: 'Cancelled Cases', value: cancelled },
-        { label: 'Critical Cases', value: critical },
-        { label: 'Male Patients', value: genders.MALE ?? 0 },
-        { label: 'Female Patients', value: genders.FEMALE ?? 0 },
-        { label: 'Unknown Gender', value: genders.Unknown ?? genders.UNKNOWN ?? 0 },
-        { label: 'Patient Handovers', value: handovers },
-        { label: 'Avg Response Time', value: responseCount ? Math.round(responseSum / responseCount) : 0, suffix: ' min' },
-        { label: 'Avg Dispatch Time', value: dispatchCount ? Math.round(dispatchSum / dispatchCount) : 0, suffix: ' min' },
-        { label: 'Case Completion Rate', value: this.percent(completed, cases.length), suffix: '%' },
-        { label: 'Available Ambulances', value: availableAmb },
-        { label: 'Busy Ambulances', value: busyAmb },
-        { label: 'Referrals Accepted', value: referralAccepted },
-        { label: 'Referrals Rejected', value: referralRejected },
-        { label: 'Referrals Pending', value: referralPending },
-        { label: 'Staff Available Today', value: todayPresence.presentEmployees },
-        { label: 'Top Station', value: topStation ? topStation[0] : '—' },
-        { label: 'Top Driver', value: topDriver ? topDriver[0] : '—' },
-        { label: 'Top Nurse', value: topNurse ? topNurse[0] : '—' },
-        { label: 'Top Dispatcher', value: topDispatcher ? topDispatcher[0] : '—' },
-        { label: 'Top Ambulance', value: topAmbulance ? topAmbulance[0] : '—' },
-        { label: 'Most Common Emergency', value: topEmergencyType ? topEmergencyType[0] : '—' },
-        { label: 'Most Common Transport', value: topTransportType ? topTransportType[0] : '—' },
-        { label: 'Most Requested District', value: topDistrict ? topDistrict[0] : '—' },
-        { label: 'Most Selected Hospital', value: topHospital ? topHospital[0] : '—' },
-      ],
-      charts: [
-        { title: 'Request Types', type: 'pie', data: this.mapCountChart(requestTypes) },
-        { title: 'Patient Gender', type: 'pie', data: this.mapCountChart(genders) },
-        { title: 'Priority Mix', type: 'pie', data: this.mapCountChart(priorities) },
-        { title: 'Daily Requests', type: 'bar', data: trend.map((t) => ({ name: t.label, value: t.requests })) },
-        { title: 'Response Time Buckets', type: 'bar', data: this.mapCountChart(responseBuckets) },
-        { title: 'Peak Hours', type: 'bar', data: peakHours.map(([name, value]) => ({ name, value })) },
-      ],
+      summary: topTenColumns.map((label, index) => ({
+        label,
+        value: topTenRow[index],
+      })),
+      charts: [],
       sections: [
+        {
+          title: 'Top 10 Rankings',
+          columns: topTenColumns,
+          rows: [topTenRow],
+        },
+        {
+          title: 'Case KPI Records',
+          columns: caseKpiColumns,
+          rows: [caseKpiRow],
+        },
+        {
+          title: 'Patient & Resource KPI Records',
+          columns: patientKpiColumns,
+          rows: [patientKpiRow],
+        },
         {
           title: 'Top Districts by Requests',
           columns: ['District', 'Requests'],
-          rows: topEntries(districts).map(([name, count]) => [name, count]),
+          rows: topEntries(districts).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Regions',
           columns: ['Region', 'Requests'],
-          rows: topEntries(regions).map(([name, count]) => [name, count]),
+          rows: topEntries(regions).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Stations',
           columns: ['Station', 'Cases'],
-          rows: topEntries(stations).map(([name, count]) => [name, count]),
+          rows: topEntries(stations).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Ambulances',
           columns: ['Ambulance', 'Missions'],
-          rows: topEntries(ambulances).map(([name, count]) => [name, count]),
+          rows: topEntries(ambulances).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Drivers',
           columns: ['Driver', 'Cases'],
-          rows: topEntries(drivers).map(([name, count]) => [name, count]),
+          rows: topEntries(drivers).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Nurses',
           columns: ['Nurse', 'Cases'],
-          rows: topEntries(nurses).map(([name, count]) => [name, count]),
+          rows: topEntries(nurses).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Dispatchers',
           columns: ['Dispatcher', 'Cases Handled'],
-          rows: topEntries(dispatchers).map(([name, count]) => [name, count]),
+          rows: topEntries(dispatchers).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Top Hospitals',
           columns: ['Hospital', 'Cases'],
-          rows: topEntries(hospitals).map(([name, count]) => [name, count]),
+          rows: topEntries(hospitals).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Emergency Types',
           columns: ['Type', 'Count'],
-          rows: topEntries(emergencyTypes, 15).map(([name, count]) => [name, count]),
+          rows: topEntries(emergencyTypes, 15).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Non-Emergency Transport Types',
           columns: ['Transport Type', 'Count'],
-          rows: topEntries(transportTypes, 15).map(([name, count]) => [name, count]),
+          rows: topEntries(transportTypes, 15).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Blood Groups',
           columns: ['Blood Group', 'Patients'],
-          rows: topEntries(bloodTypes).map(([name, count]) => [name.replace(/_/g, ' '), count]),
+          rows: topEntries(bloodTypes).map(([name, count]) => [cell(name.replace(/_/g, ' ')), count]),
         },
         {
           title: 'Cancellation Reasons',
           columns: ['Reason', 'Count'],
-          rows: topEntries(cancelReasons).map(([name, count]) => [name, count]),
+          rows: topEntries(cancelReasons).map(([name, count]) => [cell(name), count]),
         },
       ],
       table: {
         title:
           filterScope.mode === 'filtered'
             ? 'Filtered Cases Overview'
-            : 'Recent Cases Overview',
+            : 'All Cases Overview',
         columns: [
           'Tracking Code', 'Type', 'Patient', 'Gender', 'Priority', 'Status',
-          'District', 'Station', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Total (min)', 'Created',
+          'Category', 'Destination', 'District', 'Station', 'Ambulance', 'Driver', 'Nurse',
+          'Response (min)', 'Total (min)', 'Created',
         ],
-        rows: cases.slice(0, 100).map((c) => [
-          c.trackingCode,
-          this.parseRequestType(c.notes, c.requestSource),
-          c.patient?.fullName ?? 'Unknown',
-          c.patient?.gender ?? '—',
-          c.priority,
-          c.status,
-          c.district?.name ?? '—',
-          c.station?.name ?? '—',
-          c.ambulance?.ambulanceNumber ?? '—',
-          c.driver ? this.employeeDisplayName(c.driver) : '—',
-          c.nurse ? this.employeeDisplayName(c.nurse) : '—',
-          c.responseMinutes ??
-            this.minutesBetweenDates(c.dispatchedAt ?? c.assignedAt ?? c.createdAt, c.arrivedAtSceneAt) ??
-            '—',
-          c.serviceMinutes ??
-            this.minutesBetweenDates(c.createdAt, c.completedAt ?? c.cancelledAt) ??
-            '—',
-          c.createdAt.toISOString().slice(0, 16).replace('T', ' '),
-        ]),
+        rows: cases.map((c) => {
+          const handover = (c.patientCareRecords ?? [])
+            .map((r) => this.parseHandoverOutcome(r.clinicalNotes))
+            .find(Boolean);
+          const category =
+            this.parseNoteField(c.notes, 'Emergency Type') ||
+            c.incidentCategory?.name ||
+            this.parseNoteField(c.notes, 'Transport Type') ||
+            'Not recorded';
+          const destination =
+            handover?.acceptedHospital ||
+            c.destinationHospital?.name ||
+            c.destination ||
+            'Not assigned';
+          const { response, service } = this.computeCaseResponseMinutes(c);
+          return [
+            cell(c.trackingCode),
+            cell(this.parseRequestType(c.notes, c.requestSource)),
+            cell(c.patient?.fullName, 'Unknown'),
+            cell(c.patient?.gender, 'Unknown'),
+            cell(c.priority),
+            cell(c.status),
+            cell(category),
+            cell(destination),
+            cell(c.district?.name, 'Not assigned'),
+            cell(c.station?.name, 'Not assigned'),
+            cell(c.ambulance?.ambulanceNumber, 'Not assigned'),
+            cell(c.driver ? this.employeeDisplayName(c.driver) : null, 'Not assigned'),
+            cell(c.nurse ? this.employeeDisplayName(c.nurse) : null, 'Not assigned'),
+            response ?? 'Not recorded',
+            service ?? 'Not recorded',
+            cell(c.createdAt.toISOString().slice(0, 16).replace('T', ' ')),
+          ];
+        }),
       },
     };
   }
@@ -2684,27 +2744,56 @@ export class ReportsService {
         driver: true,
         nurse: true,
         destinationHospital: true,
+        patientCareRecords: {
+          where: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { clinicalNotes: true },
+        },
       },
     });
 
-    return rows.map((r) => [
-      r.trackingCode,
-      r.patient?.fullName ?? 'Unknown',
-      r.priority,
-      r.status,
-      r.region?.name ?? '—',
-      r.district?.name ?? '—',
-      r.incidentCategory?.name ?? '—',
-      r.pickupLocation,
-      r.destination ?? r.destinationHospital?.name ?? '—',
-      r.ambulance?.ambulanceNumber ?? '—',
-      r.driver ? this.employeeDisplayName(r.driver) : '—',
-      r.nurse ? this.employeeDisplayName(r.nurse) : '—',
-      r.responseMinutes ?? '—',
-      r.serviceMinutes ?? '—',
-      r.createdAt.toISOString().slice(0, 16).replace('T', ' '),
-      r.completedAt ? r.completedAt.toISOString().slice(0, 16).replace('T', ' ') : '—',
-    ]);
+    const cell = (value?: string | number | null, fallback = 'Not recorded') => {
+      if (value == null) return fallback;
+      const text = String(value).trim();
+      return text && text !== '—' ? text : fallback;
+    };
+
+    return rows.map((r) => {
+      const handover = this.parseHandoverOutcome(r.patientCareRecords?.[0]?.clinicalNotes);
+      const category =
+        this.parseNoteField(r.notes, 'Emergency Type') ||
+        r.incidentCategory?.name ||
+        this.parseNoteField(r.notes, 'Transport Type') ||
+        'Not recorded';
+      const destination =
+        handover?.acceptedHospital ||
+        r.destinationHospital?.name ||
+        r.destination ||
+        'Not assigned';
+      const { response, service } = this.computeCaseResponseMinutes(r);
+
+      return [
+        cell(r.trackingCode),
+        cell(r.patient?.fullName, 'Unknown'),
+        cell(r.priority),
+        cell(r.status),
+        cell(r.region?.name, 'Not assigned'),
+        cell(r.district?.name, 'Not assigned'),
+        cell(category),
+        cell(r.pickupLocation, 'Not recorded'),
+        cell(destination),
+        cell(r.ambulance?.ambulanceNumber, 'Not assigned'),
+        cell(r.driver ? this.employeeDisplayName(r.driver) : null, 'Not assigned'),
+        cell(r.nurse ? this.employeeDisplayName(r.nurse) : null, 'Not assigned'),
+        response ?? 'Not recorded',
+        service ?? 'Not recorded',
+        cell(r.createdAt.toISOString().slice(0, 16).replace('T', ' ')),
+        r.completedAt
+          ? cell(r.completedAt.toISOString().slice(0, 16).replace('T', ' '))
+          : 'Not completed',
+      ];
+    });
   }
 
   private async getFullResponseTimeRows(where: any) {

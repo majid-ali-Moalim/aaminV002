@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity,
   AlertTriangle,
   BarChart2,
   Download,
@@ -11,7 +10,6 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  ShieldCheck,
 } from 'lucide-react'
 import {
   getAdminReport,
@@ -19,6 +17,7 @@ import {
   type AdminReportFilterOptions,
 } from '@/lib/reports/adminReportsApi'
 import { downloadMultiReportPdf, downloadReportPdf } from '@/lib/reports/exportPdf'
+import ReportFiltersBar, { type ReportFilterDef } from '@/components/reports/ReportFiltersBar'
 import toast from 'react-hot-toast'
 
 type SummaryItem = {
@@ -48,24 +47,7 @@ type ReportData = {
 
 type FilterOptions = AdminReportFilterOptions
 
-type FilterDef = {
-  key: string
-  label: string
-  source:
-    | 'regions'
-    | 'districts'
-    | 'priorities'
-    | 'emergencyStatuses'
-    | 'incidentCategories'
-    | 'ambulances'
-    | 'ambulanceStatuses'
-    | 'vehicleTypes'
-    | 'employeeRoles'
-    | 'hospitals'
-    | 'patientOutcomes'
-    | 'transportTypes'
-  dependsOnRegion?: boolean
-}
+type FilterDef = ReportFilterDef
 
 const REPORT_LABELS: Record<string, string> = {
   emergency: 'Emergency Reports',
@@ -128,43 +110,6 @@ const FILTERS_BY_TYPE: Record<string, FilterDef[]> = {
   ],
 }
 
-function getSelectOptions(filter: FilterDef, options: FilterOptions | null, regionId: string) {
-  if (!options) return []
-  switch (filter.source) {
-    case 'regions':
-      return options.regions.map((r) => ({ value: r.id, label: r.name }))
-    case 'districts':
-      return options.districts
-        .filter((d) => !filter.dependsOnRegion || !regionId || d.regionId === regionId)
-        .map((d) => ({ value: d.id, label: d.name }))
-    case 'priorities':
-      return options.priorities
-    case 'emergencyStatuses':
-      return options.emergencyStatuses
-    case 'incidentCategories':
-      return options.incidentCategories.map((c) => ({ value: c.id, label: c.name }))
-    case 'ambulances':
-      return options.ambulances.map((a) => ({
-        value: a.id,
-        label: `${a.ambulanceNumber}${a.plateNumber ? ` (${a.plateNumber})` : ''}`,
-      }))
-    case 'ambulanceStatuses':
-      return options.ambulanceStatuses
-    case 'vehicleTypes':
-      return options.vehicleTypes
-    case 'employeeRoles':
-      return options.employeeRoles.map((r) => ({ value: r.id, label: r.name }))
-    case 'hospitals':
-      return options.hospitals.map((h) => ({ value: h.id, label: h.name }))
-    case 'patientOutcomes':
-      return options.patientOutcomes ?? []
-    case 'transportTypes':
-      return options.transportTypes ?? []
-    default:
-      return []
-  }
-}
-
 export default function AdminReportPage({ type }: { type: string }) {
   const [range, setRange] = useState('30d')
   const [startDate, setStartDate] = useState('')
@@ -175,11 +120,33 @@ export default function AdminReportPage({ type }: { type: string }) {
   const [error, setError] = useState('')
   const [report, setReport] = useState<ReportData | null>(null)
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
+  const [filtersLoading, setFiltersLoading] = useState(true)
+  const [filtersError, setFiltersError] = useState('')
+  const [soleFilter, setSoleFilter] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
-    getAdminReportFilterOptions().then(setFilterOptions).catch(() => {})
+    let active = true
+    setFiltersLoading(true)
+    setFiltersError('')
+    getAdminReportFilterOptions()
+      .then((data) => {
+        if (!active) return
+        setFilterOptions(data)
+        if (!data.regions.length) {
+          setFiltersError('Regions/districts could not be loaded. Check setup data or permissions.')
+        }
+      })
+      .catch(() => {
+        if (active) setFiltersError('Failed to load filter options.')
+      })
+      .finally(() => {
+        if (active) setFiltersLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
@@ -221,19 +188,92 @@ export default function AdminReportPage({ type }: { type: string }) {
   const heading = report?.title || REPORT_LABELS[type] || 'Analytics Report'
   const activeFilters = FILTERS_BY_TYPE[type] || []
 
+  const searchQuery = search.trim().toLowerCase()
+
+  const summaryHorizontal = useMemo(() => {
+    if (!report?.summary?.length) return null
+    return {
+      title: 'KPI Summary',
+      columns: report.summary.map((item) => item.label),
+      rows: [
+        report.summary.map((item) =>
+          item.suffix ? `${item.value}${item.suffix}` : item.value,
+        ),
+      ],
+    }
+  }, [report?.summary])
+
   const exportRows = useMemo(() => {
     const table = report?.table
     if (!table) return []
-    const normalizedSearch = search.trim().toLowerCase()
-    const rows = normalizedSearch
+    const rows = searchQuery
       ? table.rows.filter((row) =>
-          row.some((cell) => String(cell ?? '').toLowerCase().includes(normalizedSearch)),
+          row.some((cell) => String(cell ?? '').toLowerCase().includes(searchQuery)),
         )
       : table.rows
     return [table.columns, ...rows]
-  }, [search, report?.table])
+  }, [searchQuery, report?.table])
 
   const visibleRows = useMemo(() => exportRows.slice(1), [exportRows])
+
+  const secondaryVisibleRows = useMemo(() => {
+    const table = report?.secondaryTable
+    if (!table) return []
+    if (!searchQuery) return table.rows
+    return table.rows.filter((row) =>
+      row.some((cell) => String(cell ?? '').toLowerCase().includes(searchQuery)),
+    )
+  }, [report?.secondaryTable, searchQuery])
+
+  const tertiaryVisibleRows = useMemo(() => {
+    const table = report?.tertiaryTable
+    if (!table) return []
+    if (!searchQuery) return table.rows
+    return table.rows.filter((row) =>
+      row.some((cell) => String(cell ?? '').toLowerCase().includes(searchQuery)),
+    )
+  }, [report?.tertiaryTable, searchQuery])
+
+  const generateCsvFromVisible = () => {
+    const chunks: string[] = []
+    if (summaryHorizontal) {
+      chunks.push(`"${summaryHorizontal.title}"`)
+      chunks.push(summaryHorizontal.columns.map((c) => `"${c}"`).join(','))
+      for (const row of summaryHorizontal.rows) {
+        chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      }
+      chunks.push('')
+    }
+    if (report?.table) {
+      chunks.push(`"${report.table.title}"`)
+      chunks.push(report.table.columns.map((c) => `"${c}"`).join(','))
+      for (const row of visibleRows) {
+        chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      }
+      chunks.push('')
+    }
+    if (report?.secondaryTable) {
+      chunks.push(`"${report.secondaryTable.title}"`)
+      chunks.push(report.secondaryTable.columns.map((c) => `"${c}"`).join(','))
+      for (const row of secondaryVisibleRows) {
+        chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      }
+      chunks.push('')
+    }
+    if (report?.tertiaryTable) {
+      chunks.push(`"${report.tertiaryTable.title}"`)
+      chunks.push(report.tertiaryTable.columns.map((c) => `"${c}"`).join(','))
+      for (const row of tertiaryVisibleRows) {
+        chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      }
+    }
+    if (!chunks.length) {
+      toast.error('No data to generate')
+      return
+    }
+    downloadText(`${type}-report-${range}.csv`, chunks.join('\n'), 'text/csv')
+    toast.success('CSV report generated from this report’s current search/filters')
+  }
 
   const downloadCsv = (name = type, rows = exportRows) => {
     if (!rows.length) return
@@ -359,12 +399,12 @@ export default function AdminReportPage({ type }: { type: string }) {
             </select>
             <button
               type="button"
-              onClick={() => downloadCsv()}
-              disabled={!report?.table}
+              onClick={generateCsvFromVisible}
+              disabled={!report}
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FileSpreadsheet className="h-4 w-4" />
-              CSV
+              Generate CSV
             </button>
             <button
               type="button"
@@ -373,7 +413,7 @@ export default function AdminReportPage({ type }: { type: string }) {
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {pdfExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              PDF
+              Generate PDF
             </button>
             <button
               type="button"
@@ -399,79 +439,47 @@ export default function AdminReportPage({ type }: { type: string }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden">
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Filters</p>
-            <h2 className="mt-1 text-lg font-black text-slate-900">Report Controls</h2>
+      <div className="print:hidden space-y-4">
+        <ReportFiltersBar
+          filterOptions={filterOptions}
+          filters={filters}
+          setFilters={setFilters}
+          filterDefs={activeFilters}
+          startDate={startDate}
+          endDate={endDate}
+          setStartDate={setStartDate}
+          setEndDate={setEndDate}
+          soleFilter={soleFilter}
+          setSoleFilter={setSoleFilter}
+          filtersLoading={filtersLoading}
+          filtersError={filtersError}
+          permissionLabel={report?.permissions?.join(', ') || 'report.view'}
+          onClear={() => {
+            setStartDate('')
+            setEndDate('')
+            setFilters({})
+            setSearch('')
+          }}
+        />
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            Search this report only
+          </p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search records in this report (Destination, Category, Response, patient…)"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold text-slate-700 outline-none focus:border-red-500"
+            />
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="space-y-1.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Start Date</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-red-500"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">End Date</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-red-500"
-              />
-            </label>
-            {activeFilters.map((filter) => {
-              const options = getSelectOptions(filter, filterOptions, filters.region || '')
-              return (
-                <label key={filter.key} className="space-y-1.5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    {filter.label}
-                  </span>
-                  <select
-                    value={filters[filter.key] || ''}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setFilters((current) => {
-                        const next = { ...current, [filter.key]: value }
-                        if (filter.key === 'region') next.district = ''
-                        return next
-                      })
-                    }}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-red-500"
-                  >
-                    <option value="">All {filter.label}s</option>
-                    {options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )
-            })}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setStartDate('')
-                setEndDate('')
-                setFilters({})
-                setSearch('')
-              }}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-600"
-            >
-              Clear Filters
-            </button>
-            <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-              <ShieldCheck className="h-4 w-4" />
-              Permission: {report?.permissions?.join(', ') || 'report.view'}
-            </div>
-          </div>
+          {searchQuery && (
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              {visibleRows.length} matching row(s) in this report
+            </p>
+          )}
         </div>
       </div>
 
@@ -496,20 +504,44 @@ export default function AdminReportPage({ type }: { type: string }) {
 
       {!loading && !error && report && (
         <>
-          {!!report.summary?.length && (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-              {report.summary.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-2 flex items-center justify-between">
-                    <Activity className="h-4 w-4 text-red-600" />
-                  </div>
-                  <p className="text-2xl font-black text-slate-950">
-                    {item.value}
-                    {item.suffix && <span className="ml-1 text-sm text-slate-500">{item.suffix}</span>}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">{item.label}</p>
-                </div>
-              ))}
+          {summaryHorizontal && (
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-black text-slate-900">{summaryHorizontal.title}</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {summaryHorizontal.columns.length} KPI columns
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-max w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      {summaryHorizontal.columns.map((column) => (
+                        <th
+                          key={column}
+                          className="whitespace-nowrap px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500 border-r border-slate-100 last:border-r-0"
+                        >
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {summaryHorizontal.rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={`${cellIndex}-${String(cell)}`}
+                            className="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-800 border-r border-slate-50 last:border-r-0"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -563,6 +595,7 @@ export default function AdminReportPage({ type }: { type: string }) {
               setSearch={setSearch}
               visibleRows={visibleRows}
               onRefresh={() => setReloadKey((c) => c + 1)}
+              hideSearch
             />
           )}
 
@@ -571,7 +604,7 @@ export default function AdminReportPage({ type }: { type: string }) {
               table={report.secondaryTable}
               search=""
               setSearch={() => {}}
-              visibleRows={report.secondaryTable.rows}
+              visibleRows={secondaryVisibleRows}
               onRefresh={() => setReloadKey((c) => c + 1)}
               hideSearch
             />
@@ -582,7 +615,7 @@ export default function AdminReportPage({ type }: { type: string }) {
               table={report.tertiaryTable}
               search=""
               setSearch={() => {}}
-              visibleRows={report.tertiaryTable.rows}
+              visibleRows={tertiaryVisibleRows}
               onRefresh={() => setReloadKey((c) => c + 1)}
               hideSearch
             />

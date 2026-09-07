@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Truck,
   Users,
+  XCircle,
   Zap,
 } from 'lucide-react'
 import { LiveOperationsView } from '@/components/dashboard/LiveOperationsView'
@@ -56,6 +57,7 @@ const KPI_ICONS: Record<string, typeof Activity> = {
   activeCases: Activity,
   pendingCases: Clock,
   completedCases: CheckCircle,
+  cancelledCases: XCircle,
   delayedCases: Zap,
   criticalCases: AlertTriangle,
   totalAmbulances: Truck,
@@ -76,6 +78,7 @@ const KPI_TONES: Record<string, { accent: string; bg: string }> = {
   activeCases: { accent: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
   pendingCases: { accent: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
   completedCases: { accent: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  cancelledCases: { accent: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-800' },
   delayedCases: { accent: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/40' },
   criticalCases: { accent: 'text-red-700 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40' },
   totalAmbulances: { accent: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-50 dark:bg-cyan-950/40' },

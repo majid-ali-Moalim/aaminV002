@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function StationCasesPage() {
-  redirect('/admin/stations/operations?tab=cases')
+  redirect('/admin/stations')
 }

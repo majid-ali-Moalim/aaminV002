@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   LayoutGrid,
-  Activity,
   BarChart2,
   Users,
 } from 'lucide-react'
@@ -35,7 +34,6 @@ const stationMenuItems: MenuItem[] = [
   { href: '/admin/stations', label: 'Dashboard', icon: LayoutGrid, exact: true },
   { href: '/admin/stations/manage', label: 'Manage Stations', icon: Building2 },
   { href: '/admin/stations/crew', label: 'Station Crew', icon: Users },
-  { href: '/admin/stations/operations', label: 'Operations', icon: Activity },
   { href: '/admin/stations/reports', label: 'Reports & Coverage', icon: BarChart2 },
 ]
 

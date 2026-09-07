@@ -722,7 +722,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           receivingStaff: handoverForm.receivingStaff,
           notes: handoverForm.notes,
           signature: handoverForm.signature,
-          patientOutcome: handoverForm.patientOutcome as 'Live' | 'Deceased',
+          patientOutcome: handoverForm.patientOutcome as 'Live' | 'Deceased' | 'Unknown',
           acceptedHospital:
             mission.destinationHospital?.name || mission.destination || handoverForm.acceptedHospital,
           rejectedHospitals: sanitizeHandoverRejectedHospitals(handoverForm.rejectedHospitals),

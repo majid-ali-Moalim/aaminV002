@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity,
   AlertTriangle,
   BarChart2,
   Download,
@@ -11,19 +10,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  ShieldCheck,
 } from 'lucide-react'
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import toast from 'react-hot-toast'
 import {
   getAdminReport,
@@ -31,14 +18,10 @@ import {
   type AdminReportFilterOptions,
 } from '@/lib/reports/adminReportsApi'
 import { downloadOperationsReportPdf } from '@/lib/reports/exportOperationsPdf'
+import ReportFiltersBar from '@/components/reports/ReportFiltersBar'
 
 type SummaryItem = { label: string; value: string | number; suffix?: string }
 type ReportTable = { title: string; columns: string[]; rows: Array<Array<string | number>> }
-type ChartSpec = {
-  title: string
-  type: 'pie' | 'bar'
-  data: Array<{ name: string; value: number }>
-}
 
 type OperationsReport = {
   title: string
@@ -51,13 +34,10 @@ type OperationsReport = {
     containsNote: string
   }
   summary?: SummaryItem[]
-  charts?: ChartSpec[]
   sections?: ReportTable[]
   table?: ReportTable
   permissions?: string[]
 }
-
-const CHART_COLORS = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#64748b']
 
 function downloadText(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime })
@@ -67,6 +47,73 @@ function downloadText(filename: string, content: string, mime: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function rowMatches(row: Array<string | number>, q: string) {
+  return row.some((cell) => String(cell ?? '').toLowerCase().includes(q))
+}
+
+function HorizontalTable({
+  table,
+  onExport,
+}: {
+  table: ReportTable
+  onExport: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-black text-slate-900">{table.title}</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {table.columns.length} columns · {table.rows.length} row{table.rows.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onExport}
+          className="text-xs font-bold text-red-600 hover:text-red-700"
+        >
+          Export CSV
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-max">
+          <thead>
+            <tr className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
+              {table.columns.map((col) => (
+                <th key={col} className="px-4 py-3 whitespace-nowrap border-r border-slate-100 last:border-r-0">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {table.rows.length === 0 ? (
+              <tr>
+                <td colSpan={table.columns.length} className="px-4 py-8 text-center text-slate-400">
+                  No matching records
+                </td>
+              </tr>
+            ) : (
+              table.rows.map((row, idx) => (
+                <tr key={idx} className="hover:bg-slate-50/80">
+                  {row.map((cell, ci) => (
+                    <td
+                      key={ci}
+                      className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap border-r border-slate-50 last:border-r-0"
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export default function OperationsReportPage() {
@@ -79,11 +126,33 @@ export default function OperationsReportPage() {
   const [error, setError] = useState('')
   const [report, setReport] = useState<OperationsReport | null>(null)
   const [filterOptions, setFilterOptions] = useState<AdminReportFilterOptions | null>(null)
+  const [filtersLoading, setFiltersLoading] = useState(true)
+  const [filtersError, setFiltersError] = useState('')
+  const [soleFilter, setSoleFilter] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
-    getAdminReportFilterOptions().then(setFilterOptions).catch(() => {})
+    let active = true
+    setFiltersLoading(true)
+    setFiltersError('')
+    getAdminReportFilterOptions()
+      .then((data) => {
+        if (!active) return
+        setFilterOptions(data)
+        if (!data.regions.length) {
+          setFiltersError('Regions/districts could not be loaded. Check setup data or permissions.')
+        }
+      })
+      .catch(() => {
+        if (active) setFiltersError('Failed to load filter options.')
+      })
+      .finally(() => {
+        if (active) setFiltersLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
@@ -120,16 +189,28 @@ export default function OperationsReportPage() {
     }
   }, [range, startDate, endDate, filters, reloadKey])
 
+  const q = search.trim().toLowerCase()
+
+  const filteredSections = useMemo(() => {
+    const sections = report?.sections ?? []
+    if (!q) return sections
+    return sections
+      .map((section) => {
+        // Keep horizontal KPI header rows if the section title or any column/value matches
+        const headerHit =
+          section.title.toLowerCase().includes(q) ||
+          section.columns.some((c) => c.toLowerCase().includes(q))
+        const rows = section.rows.filter((row) => rowMatches(row, q) || headerHit)
+        return { ...section, rows: headerHit && rows.length === 0 ? section.rows : rows }
+      })
+      .filter((section) => section.rows.length > 0)
+  }, [report?.sections, q])
+
   const mainRows = useMemo(() => {
     const table = report?.table
     if (!table) return []
-    const q = search.trim().toLowerCase()
-    return q
-      ? table.rows.filter((row) =>
-          row.some((cell) => String(cell ?? '').toLowerCase().includes(q)),
-        )
-      : table.rows
-  }, [report?.table, search])
+    return q ? table.rows.filter((row) => rowMatches(row, q)) : table.rows
+  }, [report?.table, q])
 
   const downloadCsv = (table: ReportTable, name: string) => {
     const csv = [table.columns, ...table.rows]
@@ -142,30 +223,57 @@ export default function OperationsReportPage() {
   const regionName = filterOptions?.regions.find((r) => r.id === filters.region)?.name
   const districtName = filterOptions?.districts.find((d) => d.id === filters.district)?.name
 
-  const downloadPdf = async () => {
-    if (!report || pdfExporting) return
-    const hasData =
-      Boolean(report.table?.rows.length) ||
-      Boolean(report.sections?.some((s) => s.rows.length)) ||
-      Boolean(report.charts?.some((c) => c.data.length))
+  const generateReport = async (format: 'pdf' | 'csv' | 'json') => {
+    if (!report) return
+    if (format === 'json') {
+      downloadText(`operations-${range}.json`, JSON.stringify(report, null, 2), 'application/json')
+      toast.success('JSON report generated')
+      return
+    }
+    if (format === 'csv') {
+      const chunks: string[] = []
+      for (const section of filteredSections) {
+        chunks.push(`"${section.title}"`)
+        chunks.push(section.columns.map((c) => `"${c}"`).join(','))
+        for (const row of section.rows) {
+          chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+        }
+        chunks.push('')
+      }
+      if (report.table) {
+        chunks.push(`"${report.table.title}"`)
+        chunks.push(report.table.columns.map((c) => `"${c}"`).join(','))
+        for (const row of mainRows) {
+          chunks.push(row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+        }
+      }
+      downloadText(`operations-report-${range}.csv`, chunks.join('\n'), 'text/csv')
+      toast.success('CSV report generated from current search/filters')
+      return
+    }
+
+    const hasData = mainRows.length > 0 || filteredSections.some((s) => s.rows.length > 0)
     if (!hasData) {
-      toast.error('No data to export')
+      toast.error('No data to generate')
       return
     }
     setPdfExporting(true)
     try {
-      await downloadOperationsReportPdf(report, mainRows, {
-        range,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        regionName,
-        districtName,
-        search,
-      })
-      toast.success('PDF report downloaded')
+      await downloadOperationsReportPdf(
+        { ...report, sections: filteredSections },
+        mainRows,
+        {
+          range,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          regionName,
+          districtName,
+          search,
+        },
+      )
+      toast.success('PDF report generated')
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
-      toast.error(message)
+      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
     } finally {
       setPdfExporting(false)
     }
@@ -180,25 +288,11 @@ export default function OperationsReportPage() {
               <BarChart2 className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-200">
-                AADS Analytics
-              </p>
-              <h1 className="mt-1 text-2xl font-black">
-                {report?.filterScope?.mode === 'filtered'
-                  ? `${report?.title || 'Operations Intelligence'} — Filtered`
-                  : report?.title || 'Operations Intelligence'}
-              </h1>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-200">AADS Analytics</p>
+              <h1 className="mt-1 text-2xl font-black">{report?.title || 'Operations Intelligence'}</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                {report?.filterScope?.containsNote ||
-                  report?.subtitle ||
-                  'Case overview, emergency analysis, resources, locations, hospitals, and performance.'}
+                Horizontal KPI columns, full case records, search this report, then generate PDF/CSV.
               </p>
-              {report?.filterScope && (
-                <p className="mt-2 inline-flex items-center rounded-lg bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-200">
-                  {report.filterScope.label}
-                  {report.filterScope.description ? ` · ${report.filterScope.description}` : ''}
-                </p>
-              )}
               {report?.period?.label && (
                 <p className="mt-2 text-xs font-semibold text-slate-400">Period: {report.period.label}</p>
               )}
@@ -223,78 +317,81 @@ export default function OperationsReportPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            {report && (
-              <>
-                {report.table && (
-                  <button
-                    type="button"
-                    onClick={() => downloadCsv(report.table!, 'operations-cases')}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-900"
-                  >
-                    <Download className="h-4 w-4" />
-                    CSV
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void downloadPdf()}
-                  disabled={pdfExporting}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {pdfExporting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileText className="h-4 w-4" />
-                  )}
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadText(`operations-${range}.json`, JSON.stringify(report, null, 2), 'application/json')}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-bold"
-                >
-                  <FileJson className="h-4 w-4" />
-                  JSON
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => void generateReport('csv')}
+              disabled={!report}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-900 disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              Generate CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => void generateReport('pdf')}
+              disabled={!report || pdfExporting}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {pdfExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Generate PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => void generateReport('json')}
+              disabled={!report}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/20 px-4 text-sm font-bold disabled:opacity-50"
+            >
+              <FileJson className="h-4 w-4" />
+              JSON
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Filters</p>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold" />
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold" />
-          <select
-            value={filters.region || ''}
-            onChange={(e) => setFilters((f) => ({ ...f, region: e.target.value, district: '' }))}
-            className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold"
-          >
-            <option value="">All regions</option>
-            {filterOptions?.regions.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <select
-            value={filters.district || ''}
-            onChange={(e) => setFilters((f) => ({ ...f, district: e.target.value }))}
-            className="h-10 rounded-xl border border-slate-200 px-3 text-sm font-semibold"
-          >
-            <option value="">All districts</option>
-            {filterOptions?.districts
-              .filter((d) => !filters.region || d.regionId === filters.region)
-              .map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-          </select>
-        </div>
-        <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-          <ShieldCheck className="h-4 w-4" />
-          Permission: {report?.permissions?.join(', ') || 'report.view'}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Search this report</p>
+          <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search only this report’s KPI columns and case records…"
+              className="h-11 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm font-semibold outline-none focus:border-red-500"
+            />
+          </div>
+          {q && (
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              Showing matches in this report only · {mainRows.length} case row(s) · {filteredSections.length} section(s)
+            </p>
+          )}
         </div>
       </div>
+
+      <ReportFiltersBar
+        filterOptions={filterOptions}
+        filters={filters}
+        setFilters={setFilters}
+        filterDefs={[
+          { key: 'region', label: 'Region', source: 'regions' },
+          { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
+        ]}
+        startDate={startDate}
+        endDate={endDate}
+        setStartDate={setStartDate}
+        setEndDate={setEndDate}
+        soleFilter={soleFilter}
+        setSoleFilter={setSoleFilter}
+        filtersLoading={filtersLoading}
+        filtersError={filtersError}
+        permissionLabel={report?.permissions?.join(', ') || 'report.view'}
+        onClear={() => {
+          setStartDate('')
+          setEndDate('')
+          setFilters({})
+          setSearch('')
+        }}
+      />
 
       {loading && (
         <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-20 text-slate-500">
@@ -315,134 +412,30 @@ export default function OperationsReportPage() {
 
       {!loading && !error && report && (
         <>
-          {!!report.summary?.length && (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-              {report.summary.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <Activity className="h-4 w-4 text-red-600 mb-2" />
-                  <p className="text-xl font-black text-slate-950 truncate" title={String(item.value)}>
-                    {item.value}
-                    {item.suffix && <span className="ml-1 text-xs text-slate-500">{item.suffix}</span>}
-                  </p>
-                  <p className="mt-1 text-[11px] font-semibold text-slate-500 leading-tight">{item.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!!report.charts?.length && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              {report.charts.map((chart) => (
-                <div key={chart.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-sm font-black text-slate-900 mb-4">{chart.title}</h2>
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      {chart.type === 'pie' ? (
-                        <PieChart>
-                          <Pie data={chart.data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                            {chart.data.map((_, i) => (
-                              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      ) : (
-                        <BarChart data={chart.data}>
-                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#dc2626" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      )}
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {report.sections?.map((section) => (
-            <div key={section.title} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-black text-slate-900">{section.title}</h2>
-                <button
-                  type="button"
-                  onClick={() => downloadCsv(section, section.title.toLowerCase().replace(/\s+/g, '-'))}
-                  className="text-xs font-bold text-red-600 hover:text-red-700"
-                >
-                  Export CSV
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      {section.columns.map((col) => (
-                        <th key={col} className="px-4 py-3">{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {section.rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={section.columns.length} className="px-4 py-8 text-center text-slate-400">
-                          No data for this period
-                        </td>
-                      </tr>
-                    ) : (
-                      section.rows.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80">
-                          {row.map((cell, ci) => (
-                            <td key={ci} className="px-4 py-2.5 font-medium text-slate-800">{cell}</td>
-                          ))}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {filteredSections.map((section) => (
+            <HorizontalTable
+              key={section.title}
+              table={section}
+              onExport={() => downloadCsv(section, section.title.toLowerCase().replace(/\s+/g, '-'))}
+            />
           ))}
 
           {report.table && (
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 className="text-sm font-black text-slate-900">
-                  {report.filterScope?.mode === 'filtered' || search.trim()
-                    ? `Filtered Cases Overview (${mainRows.length} row(s))`
-                    : report.table.title}
-                </h2>
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search cases…"
-                    className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[1100px]">
-                  <thead>
-                    <tr className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      {report.table.columns.map((col) => (
-                        <th key={col} className="px-3 py-3">{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {mainRows.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80">
-                        {row.map((cell, ci) => (
-                          <td key={ci} className="px-3 py-2 text-xs font-medium text-slate-800">{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <HorizontalTable
+              table={{
+                ...report.table,
+                title: q
+                  ? `Case records matching search (${mainRows.length})`
+                  : `${report.table.title} (${mainRows.length})`,
+                rows: mainRows,
+              }}
+              onExport={() =>
+                downloadCsv(
+                  { ...report.table!, rows: mainRows },
+                  'operations-cases',
+                )
+              }
+            />
           )}
         </>
       )}

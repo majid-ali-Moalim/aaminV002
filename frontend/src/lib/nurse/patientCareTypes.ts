@@ -71,8 +71,8 @@ export type HandoverData = {
   receivingStaff: string
   notes: string
   signature: string
-  /** Live patient at handover, or deceased */
-  patientOutcome?: 'Live' | 'Deceased'
+  /** Live, deceased, or unknown at handover */
+  patientOutcome?: 'Live' | 'Deceased' | 'Unknown'
   acceptedHospital?: string
   rejectedHospitals?: Array<{
     id: string
@@ -217,6 +217,7 @@ export const PAIN_LEVEL_OPTIONS = [
 export const PATIENT_HANDOVER_OUTCOMES = [
   { value: 'Live', label: 'Live — Patient alive at handover' },
   { value: 'Deceased', label: 'Dead — Patient deceased during transfer' },
+  { value: 'Unknown', label: 'Unknown — Status not confirmed' },
 ] as const
 
 /** Display label for handover outcome (Deceased stored in DB → shown as Dead). */
@@ -224,12 +225,16 @@ export function handoverOutcomeLabel(value?: string | null): string {
   if (!value) return '—'
   if (value === 'Deceased' || value === 'Dead') return 'Dead'
   if (value === 'Live') return 'Live'
+  if (value === 'Unknown') return 'Unknown'
   return value
 }
 
-export function normalizeHandoverOutcome(value?: string | null): 'Live' | 'Deceased' | '' {
+export function normalizeHandoverOutcome(
+  value?: string | null,
+): 'Live' | 'Deceased' | 'Unknown' | '' {
   if (value === 'Live') return 'Live'
   if (value === 'Deceased' || value === 'Dead') return 'Deceased'
+  if (value === 'Unknown') return 'Unknown'
   return ''
 }
 

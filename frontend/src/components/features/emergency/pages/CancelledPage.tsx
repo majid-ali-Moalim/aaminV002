@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   XCircle,
@@ -11,6 +11,7 @@ import {
   User,
   Clock,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmergencyRequest } from '@/types'
@@ -26,6 +27,14 @@ function cancellationReason(request: EmergencyRequest): string {
     request.notes?.trim() ||
     'No cancellation reason recorded'
   )
+}
+
+function normalizeReason(reason: string): string {
+  const trimmed = reason.trim()
+  if (!trimmed || trimmed === 'No cancellation reason recorded') return 'No reason recorded'
+  // Collapse long free-text to a short label for KPI grouping
+  if (trimmed.length > 60) return `${trimmed.slice(0, 57)}…`
+  return trimmed
 }
 
 export default function CancelledRequestsPage() {
@@ -51,6 +60,17 @@ export default function CancelledRequestsPage() {
   useEffect(() => {
     void fetchRequests()
   }, [])
+
+  const topReasons = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const request of requests) {
+      const key = normalizeReason(cancellationReason(request))
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+  }, [requests])
 
   const filteredRequests = requests
     .filter((request) => {
@@ -86,6 +106,38 @@ export default function CancelledRequestsPage() {
             Refresh
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm px-6 py-5 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">
+              Total Cancelled
+            </p>
+            <p className="text-3xl font-black text-slate-800">{requests.length}</p>
+          </div>
+          <XCircle className="w-9 h-9 text-slate-300" />
+        </div>
+        {topReasons.map(([reason, count], index) => (
+          <div
+            key={reason}
+            className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5"
+          >
+            <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest mb-1">
+              Top reason #{index + 1}
+            </p>
+            <p className="text-2xl font-black text-slate-800">{count}</p>
+            <p className="mt-1 text-xs font-medium text-slate-500 line-clamp-2" title={reason}>
+              {reason}
+            </p>
+          </div>
+        ))}
+        {topReasons.length === 0 && !isLoading && (
+          <div className="sm:col-span-3 bg-white rounded-2xl border border-dashed border-slate-200 px-6 py-5 flex items-center gap-3 text-slate-500">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <p className="text-sm font-medium">No cancellation reasons to summarize yet.</p>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -182,7 +234,7 @@ export default function CancelledRequestsPage() {
                         variant="outline"
                         size="sm"
                         className="rounded-xl font-bold text-xs"
-                        onClick={() => router.push(paths.caseTimeline(request.id))}
+                        onClick={() => router.push(paths.caseDetail(request.id))}
                       >
                         <Eye className="w-3.5 h-3.5 mr-1.5" />
                         View

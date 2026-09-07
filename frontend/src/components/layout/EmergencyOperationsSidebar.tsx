@@ -11,7 +11,6 @@ import {
   Clock,
   AlertTriangle,
   HeartHandshake,
-  CheckCircle2,
   AlertCircle,
   XCircle,
 } from 'lucide-react'
@@ -69,7 +68,6 @@ const emergencySections: MenuSection[] = [
     workflow: true,
     items: [
       { href: '/admin/emergency-requests/handover', label: 'Patient Handover', icon: HeartHandshake },
-      { href: '/admin/emergency-requests/completed', label: 'Mission Completed', icon: CheckCircle2, accent: 'success' },
     ],
   },
   {

@@ -52,7 +52,7 @@ export default function CriticalCasesPage() {
   const [requests, setRequests] = useState<EmergencyRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [rangePreset, setRangePreset] = useState<CriticalRangePreset>('day')
+  const [rangePreset, setRangePreset] = useState<CriticalRangePreset>('week')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -60,24 +60,30 @@ export default function CriticalCasesPage() {
     try {
       if (showLoader) setIsLoading(true)
       const range = getCriticalRange(rangePreset)
+      const isOpenCritical = (r: EmergencyRequest) =>
+        r.priority === 'CRITICAL' && !['COMPLETED', 'CANCELLED', 'FAILED'].includes(r.status)
+
       if (portal === 'dispatcher') {
-        const [pending, active] = await Promise.all([
+        const [pending, active, myCases] = await Promise.all([
           fetchEmergencyRequests('dispatcher', 'pending'),
           fetchEmergencyRequests('dispatcher', 'my-active'),
+          fetchEmergencyRequests('dispatcher', 'my-cases'),
         ])
-        const merged = [...pending, ...active]
+        const merged = [...pending, ...active, ...myCases]
         const seen = new Set<string>()
         setRequests(
           merged.filter((r) => {
             if (seen.has(r.id)) return false
             seen.add(r.id)
-            return isCriticalCaseInRange(r, range)
+            return isOpenCritical(r) || isCriticalCaseInRange(r, range)
           }),
         )
       } else {
         const data = await fetchEmergencyRequests('admin')
         setRequests(
-          Array.isArray(data) ? data.filter((r) => isCriticalCaseInRange(r, range)) : [],
+          Array.isArray(data)
+            ? data.filter((r) => isOpenCritical(r) || isCriticalCaseInRange(r, range))
+            : [],
         )
       }
     } catch (err) {

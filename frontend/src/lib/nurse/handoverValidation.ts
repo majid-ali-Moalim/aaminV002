@@ -51,9 +51,9 @@ export function validateHandoverForm(
   }
 
   if (!form.patientOutcome) {
-    errors.patientOutcome = 'Select whether the patient is live or dead'
-  } else if (!['Live', 'Deceased'].includes(form.patientOutcome)) {
-    errors.patientOutcome = 'Select Live or Dead'
+    errors.patientOutcome = 'Select whether the patient is live, dead, or unknown'
+  } else if (!['Live', 'Deceased', 'Unknown'].includes(form.patientOutcome)) {
+    errors.patientOutcome = 'Select Live, Dead, or Unknown'
   }
 
   const conditionErr = optionalText(form.patientCondition, MAX_TEXT, 'Patient condition summary')
