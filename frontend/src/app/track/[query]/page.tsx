@@ -26,32 +26,57 @@ import Link from 'next/link';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
-const STATUS_ORDER = [
-  'PENDING',
-  'REVIEWING',
-  'ASSIGNED',
-  'DISPATCHED',
-  'EN_ROUTE',
-  'ARRIVED_SCENE',
-  'PATIENT_STABILIZED',
-  'TRANSPORTING',
-  'ARRIVED_HOSPITAL',
-  'COMPLETED',
-];
+const PUBLIC_TRACK_STEPS = [
+  {
+    key: 'received',
+    label: 'Request received',
+    statuses: ['PENDING', 'REVIEWING'],
+  },
+  {
+    key: 'assigned',
+    label: 'Team assigned',
+    statuses: ['ASSIGNED'],
+  },
+  {
+    key: 'in_progress',
+    label: 'Case in progress',
+    statuses: ['DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE', 'PATIENT_STABILIZED', 'TRANSPORTING'],
+  },
+  {
+    key: 'hospital',
+    label: 'At hospital',
+    statuses: ['ARRIVED_HOSPITAL'],
+  },
+  {
+    key: 'complete',
+    label: 'Complete',
+    statuses: ['COMPLETED'],
+  },
+] as const
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Request Submitted',
-  REVIEWING: 'Dispatcher Reviewing',
-  ASSIGNED: 'Ambulance Assigned',
-  DISPATCHED: 'Team Dispatched',
-  EN_ROUTE: 'En Route',
-  ARRIVED_SCENE: 'Arrived at Scene',
-  PATIENT_STABILIZED: 'Patient Stabilized',
-  TRANSPORTING: 'Transporting Patient',
-  ARRIVED_HOSPITAL: 'Arrived at Hospital',
-  COMPLETED: 'Case Completed',
+  PENDING: 'Waiting for dispatch',
+  REVIEWING: 'Being reviewed',
+  ASSIGNED: 'Team assigned',
+  DISPATCHED: 'Case started',
+  EN_ROUTE: 'Case in progress',
+  ARRIVED_SCENE: 'Case in progress',
+  PATIENT_STABILIZED: 'Case in progress',
+  TRANSPORTING: 'Going to hospital',
+  ARRIVED_HOSPITAL: 'At hospital',
+  COMPLETED: 'Complete',
   CANCELLED: 'Cancelled',
-};
+}
+
+function stepIndexForStatus(status: string): number {
+  if (status === 'CANCELLED') return -1
+  const idx = PUBLIC_TRACK_STEPS.findIndex((s) => s.statuses.includes(status))
+  return idx >= 0 ? idx : 0
+}
+
+function simpleStatusLabel(status: string): string {
+  return STATUS_LABELS[status] || status.replace(/_/g, ' ')
+}
 
 export default function TrackingResultPage() {
   const params = useParams();
@@ -155,16 +180,27 @@ export default function TrackingResultPage() {
     }
   };
 
-  const getStatusIconContent = (status: string, currentStatus: string) => {
-    if (status === 'CANCELLED') return <AlertCircle size={12} className="text-white" />;
-    
-    const targetIndex = STATUS_ORDER.indexOf(status);
-    const currentIndex = STATUS_ORDER.indexOf(currentStatus);
-    
-    if (targetIndex < currentIndex) return <CheckCircle2 size={12} className="text-green-600" />;
-    if (targetIndex === currentIndex) return <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />;
-    return <div className="w-2 h-2 bg-slate-300 rounded-full" />;
-  };
+  const getStatusIconContent = (stepIndex: number, currentIndex: number, cancelled: boolean) => {
+    if (cancelled) return <AlertCircle size={12} className="text-white" />
+    if (stepIndex < currentIndex) return <CheckCircle2 size={12} className="text-green-600" />
+    if (stepIndex === currentIndex) return <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+    return <div className="w-2 h-2 bg-slate-300 rounded-full" />
+  }
+
+  const currentStepIndex = stepIndexForStatus(data?.status ?? 'PENDING')
+  const isCancelled = data?.status === 'CANCELLED'
+  const driverInfo =
+    data?.driver && typeof data.driver === 'object'
+      ? data.driver
+      : data?.driver
+        ? { name: String(data.driver), phone: null }
+        : null
+  const nurseInfo =
+    data?.nurse && typeof data.nurse === 'object'
+      ? data.nurse
+      : data?.nurse
+        ? { name: String(data.nurse), phone: null }
+        : null
 
   if (loading) {
     return (
@@ -219,7 +255,7 @@ export default function TrackingResultPage() {
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold shadow-md transition-colors ${data.priorityLevel === 'CRITICAL' ? 'bg-red-600 animate-pulse' : 'bg-slate-800'}`}>
               <Activity size={18} />
             </div>
-            <h1 className="font-bold text-lg text-slate-900 leading-tight">Live Tracking</h1>
+            <h1 className="font-bold text-lg text-slate-900 leading-tight">Tracking Patient</h1>
           </div>
           
           <div className="w-20 flex justify-end">
@@ -270,42 +306,49 @@ export default function TrackingResultPage() {
               </h3>
               
               <div className="relative pl-4 space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                {STATUS_ORDER.map((status, index) => {
-                  const targetIndex = STATUS_ORDER.indexOf(status);
-                  const currentIndex = STATUS_ORDER.indexOf(data.status);
-                  const isPast = targetIndex < currentIndex;
-                  const isCurrent = targetIndex === currentIndex;
-                  const isFuture = targetIndex > currentIndex;
-                  
-                  // Find timestamp if it exists in timeline
-                  const timelineEvent = data.timeline?.find((t: any) => t.status === status);
-                  
+                {PUBLIC_TRACK_STEPS.map((step, index) => {
+                  const isPast = !isCancelled && index < currentStepIndex
+                  const isCurrent = !isCancelled && index === currentStepIndex
+                  const isFuture = isCancelled || index > currentStepIndex
+
+                  const timelineEvent = data.timeline?.find((t: { status: string; timestamp: string }) =>
+                    step.statuses.includes(t.status),
+                  )
+
                   return (
-                    <div key={status} className={`relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group transition-all duration-500`}>
-                      {/* Icon Indicator */}
+                    <div key={step.key} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group transition-all duration-500">
                       <div className={`flex items-center justify-center w-5 h-5 rounded-full border border-white shadow-sm shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 -ml-2.5 sm:-ml-0 z-10 transition-colors ${
                         isPast ? 'bg-green-100 border-green-200' : isCurrent ? 'bg-red-100 border-red-300 ring-4 ring-red-50' : 'bg-slate-100 border-slate-200'
                       }`}>
-                        {getStatusIconContent(status, data.status)}
+                        {getStatusIconContent(index, currentStepIndex, isCancelled)}
                       </div>
-                      
-                      {/* Content */}
-                      <div className={`w-[calc(100%-2.5rem)] md:w-[calc(50%-2rem)] transition-all duration-500 ${isFuture ? 'opacity-40 translate-x-2 md:translate-x-0 md:group-even:translate-x-2 md:group-odd:-translate-x-2' : 'opacity-100 translate-x-0'}`}>
-                        <div className={`flex flex-col rounded-xl transition-all duration-300 ${isCurrent ? 'bg-red-50 p-4 border border-red-100 shadow-sm scale-[1.02]' : isPast ? 'py-1' : ''}`}>
+
+                      <div className={`w-[calc(100%-2.5rem)] md:w-[calc(50%-2rem)] transition-all duration-500 ${isFuture ? 'opacity-40' : 'opacity-100'}`}>
+                        <div className={`flex flex-col rounded-xl transition-all duration-300 ${isCurrent ? 'bg-red-50 p-4 border border-red-100 shadow-sm' : isPast ? 'py-1' : ''}`}>
                           <span className={`font-semibold text-sm ${isCurrent ? 'text-red-700' : isPast ? 'text-slate-900' : 'text-slate-500'}`}>
-                            {STATUS_LABELS[status]}
+                            {step.label}
                           </span>
                           {(timelineEvent || isCurrent) && (
                             <span className={`text-xs mt-1 flex items-center gap-1 ${isCurrent ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
                               <Clock size={12} />
-                              {timelineEvent ? new Date(timelineEvent.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'In Progress'}
+                              {timelineEvent
+                                ? new Date(timelineEvent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : isCurrent
+                                  ? 'In progress'
+                                  : ''}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
-                  );
+                  )
                 })}
+                {isCancelled && (
+                  <div className="relative flex items-center gap-3 text-sm text-slate-600 bg-slate-100 rounded-xl p-3 border border-slate-200">
+                    <AlertCircle size={16} />
+                    This case was cancelled.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -324,18 +367,18 @@ export default function TrackingResultPage() {
                   <p className="text-slate-500 mt-1 text-sm">Requested: {new Date(data.requestTime).toLocaleDateString()} at {new Date(data.requestTime).toLocaleTimeString()}</p>
                 </div>
                 <div className={`px-4 py-2 rounded-full border font-bold text-sm text-center shadow-sm ${getStatusColor(data.status)}`}>
-                  {STATUS_LABELS[data.status] || data.status}
+                  {simpleStatusLabel(data.status)}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 relative z-10">
-                <div className="flex items-start gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-500 shrink-0 shadow-sm">
-                    <Activity size={20} className={data.priorityLevel === 'CRITICAL' ? 'text-red-600' : 'text-slate-600'} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                <div className="flex items-start gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 sm:col-span-2">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-blue-600 shrink-0 shadow-sm">
+                    <Building2 size={20} />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Priority Level</p>
-                    <p className={`font-bold text-lg ${data.priorityLevel === 'CRITICAL' ? 'text-red-600' : 'text-slate-900'}`}>{data.priorityLevel || 'Standard'}</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Station</p>
+                    <p className="font-bold text-slate-900">{data.station || 'Not assigned yet'}</p>
                   </div>
                 </div>
 
@@ -344,155 +387,63 @@ export default function TrackingResultPage() {
                     <MapPin size={20} className="text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Pickup Location</p>
-                    <p className="font-bold text-slate-900">{data.landmark || 'Location Provided'}</p>
-                    <p className="text-xs text-slate-500">{data.district}, {data.region}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pre-Arrival Instructions (Only show before arrival) */}
-            {['PENDING', 'REVIEWING', 'ASSIGNED', 'DISPATCHED', 'EN_ROUTE'].includes(data.status) && (
-              <div className="bg-yellow-50 rounded-2xl shadow-sm border border-yellow-200 p-6 flex flex-col relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                  <AlertTriangle size={120} />
-                </div>
-                <h3 className="font-bold text-yellow-900 mb-4 flex items-center gap-2 relative z-10">
-                  <ClipboardList className="text-yellow-700" size={20} />
-                  Pre-Arrival Instructions
-                </h3>
-                <ul className="space-y-3 relative z-10">
-                  <li className="flex items-start gap-3 text-sm text-yellow-800">
-                    <div className="mt-1 w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0" />
-                    <p><strong>Clear the pathway:</strong> Ensure doors are unlocked, exterior lights are on, and paths are clear for the stretcher.</p>
-                  </li>
-                  <li className="flex items-start gap-3 text-sm text-yellow-800">
-                    <div className="mt-1 w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0" />
-                    <p><strong>Gather documents:</strong> Prepare the patient's ID, insurance, and all current medications in a bag.</p>
-                  </li>
-                  <li className="flex items-start gap-3 text-sm text-yellow-800">
-                    <div className="mt-1 w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0" />
-                    <p><strong>Secure pets:</strong> Place all pets in a separate, closed room to ensure paramedic safety.</p>
-                  </li>
-                  <li className="flex items-start gap-3 text-sm text-yellow-800">
-                    <div className="mt-1 w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0" />
-                    <p><strong>Stay calm:</strong> Do not attempt to move the patient unless they are in immediate, life-threatening danger.</p>
-                  </li>
-                </ul>
-              </div>
-            )}
-
-            {/* Ambulance & Staff Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
-                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Car className="text-slate-700" size={20} />
-                  Ambulance Team
-                </h3>
-                {data.ambulance ? (
-                  <div className="space-y-4 flex-1">
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Vehicle</p>
-                      <p className="font-bold text-slate-900 text-lg">{data.ambulance.code}</p>
-                      <p className="text-sm text-slate-600">{data.ambulance.type || 'Standard Care'}</p>
-                    </div>
-                    <div className="pt-2">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Personnel</p>
-                      <div className="flex items-center gap-3 mb-3 bg-white border border-slate-100 shadow-sm rounded-lg p-2.5">
-                        <div className="bg-slate-100 p-1.5 rounded-md text-slate-500"><User size={16} /></div>
-                        <div>
-                          <p className="text-xs text-slate-500 leading-none mb-1">Driver</p>
-                          <p className="text-sm font-semibold text-slate-900 leading-none">{data.driver || 'Pending'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 bg-white border border-slate-100 shadow-sm rounded-lg p-2.5">
-                        <div className="bg-slate-100 p-1.5 rounded-md text-slate-500"><User size={16} /></div>
-                        <div>
-                          <p className="text-xs text-slate-500 leading-none mb-1">Nurse</p>
-                          <p className="text-sm font-semibold text-slate-900 leading-none">{data.nurse || 'Pending'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Ambulance Capabilities */}
-                    <div className="pt-3 border-t border-slate-100 flex gap-2 flex-wrap mt-2">
-                      {data.ambulance.type === 'Advanced Life Support' || data.priorityLevel === 'CRITICAL' ? (
-                        <>
-                          <span className="flex items-center gap-1.5 bg-red-50 text-red-700 text-[11px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider"><HeartPulse size={12}/> ALS Equipped</span>
-                          <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[11px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider"><Stethoscope size={12}/> Defibrillator</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 text-[11px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider"><Stethoscope size={12}/> BLS Equipped</span>
-                          <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[11px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Oxygen</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-                    <Car size={32} className="mb-2 opacity-50" />
-                    Ambulance assignment pending
-                  </div>
-                )}
-              </div>
-
-              {/* Hospital Info */}
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
-                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Building2 className="text-slate-700" size={20} />
-                  Destination
-                </h3>
-                {data.hospital ? (
-                  <div className="space-y-4 flex-1 flex flex-col">
-                    <div className="flex items-start gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <div className="w-12 h-12 bg-white text-red-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-slate-100">
-                        <Building2 size={24} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-lg leading-tight mb-1">{data.hospital}</p>
-                        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Target Hospital</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1"></div> {/* Spacer */}
-
-                    {data.estimatedArrival && !['COMPLETED', 'CANCELLED'].includes(data.status) && (
-                      <div className="bg-green-50 rounded-xl p-4 border border-green-200 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-green-500 opacity-10 rounded-full -mr-8 -mt-8"></div>
-                        <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                          <Clock size={14} /> Estimated Arrival
-                        </p>
-                        <p className="font-black text-green-900 text-3xl tracking-tight">{data.estimatedArrival}</p>
-                      </div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Pickup area</p>
+                    <p className="font-bold text-slate-900">{data.landmark || 'Location provided'}</p>
+                    {(data.district || data.region) && (
+                      <p className="text-xs text-slate-500">{[data.district, data.region].filter(Boolean).join(', ')}</p>
                     )}
+                  </div>
+                </div>
 
-                    {/* Hospital Contact & Navigation */}
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex gap-3">
-                      <a href={`tel:112`} className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold py-2.5 rounded-lg transition-colors">
-                        <Phone size={16}/> Call ER
-                      </a>
-                      <a href={`https://maps.google.com/?q=${encodeURIComponent(data.hospital)}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-bold py-2.5 rounded-lg transition-colors">
-                        <Navigation size={16}/> Navigate
-                      </a>
-                    </div>
+                <div className="flex items-start gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-500 shrink-0 shadow-sm">
+                    <Building2 size={20} className="text-emerald-600" />
                   </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-                    <Building2 size={32} className="mb-2 opacity-50" />
-                    Destination hospital not yet determined
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Hospital</p>
+                    <p className="font-bold text-slate-900">{data.hospital || 'To be confirmed'}</p>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
-            {/* Disclaimer */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+              <h3 className="font-bold text-slate-900 mb-4">Your crew</h3>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Driver</p>
+                  <p className="font-bold text-slate-900">{driverInfo?.name || 'Not assigned'}</p>
+                  {driverInfo?.phone ? (
+                    <a href={`tel:${driverInfo.phone}`} className="inline-flex items-center gap-1 text-sm text-red-600 font-semibold mt-2">
+                      <Phone size={14} /> {driverInfo.phone}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2">Phone shared when assigned</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Nurse</p>
+                  <p className="font-bold text-slate-900">{nurseInfo?.name || 'Not assigned'}</p>
+                  {nurseInfo?.phone ? (
+                    <a href={`tel:${nurseInfo.phone}`} className="inline-flex items-center gap-1 text-sm text-red-600 font-semibold mt-2">
+                      <Phone size={14} /> {nurseInfo.phone}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2">Phone shared when assigned</p>
+                  )}
+                </div>
+              </div>
+              {data.ambulance?.code && (
+                <p className="text-sm text-slate-600 mt-4">
+                  Ambulance: <span className="font-bold text-slate-900">{data.ambulance.code}</span>
+                </p>
+              )}
+            </div>
+
             <div className="bg-blue-50 text-blue-800 text-sm rounded-xl p-4 border border-blue-100 flex items-start gap-3 shadow-sm">
               <CheckCircle2 className="shrink-0 mt-0.5 text-blue-600" size={18} />
-              <p className="leading-relaxed font-medium">This page updates automatically. Data shown is strictly operational. For medical questions, coordinate with the receiving hospital upon arrival.</p>
+              <p className="leading-relaxed">This page updates automatically. For medical questions, speak with the hospital when the patient arrives.</p>
             </div>
-
           </div>
         </div>
       </main>

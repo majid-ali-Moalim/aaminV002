@@ -86,6 +86,8 @@ export type HandoverData = {
   maritalStatus?: string
   driverName?: string
   nurseName?: string
+  handoverDocumentUrl?: string
+  handoverDocumentName?: string
 }
 
 export function encodeMonitoring(data: Omit<MonitoringData, '_type'>): string {

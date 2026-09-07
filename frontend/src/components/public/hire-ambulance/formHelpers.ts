@@ -480,6 +480,7 @@ export function validateEmergencyFormFields(
   if (data.conditionDescription.length > 100) {
     errors.conditionDescription = t.validation.conditionMax
   }
+  if (!data.consent) errors.consent = t.validation.consent
 
   return errors
 }

@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @ApiTags('employees')
 @Controller('employees')
@@ -58,8 +59,8 @@ export class EmployeesController {
   @Patch(':id')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Update employee' })
-  update(@Param('id') id: string, @Body() updateEmployeeDto: any, @CurrentUser() user: any) {
-    return this.employeesService.update(id, updateEmployeeDto, user?.id);
+  update(@Param('id') id: string, @Body() updateEmployeeDto: UpdateEmployeeDto, @CurrentUser() user: any) {
+    return this.employeesService.update(id, updateEmployeeDto as Record<string, unknown>, user?.id);
   }
 
   @Delete(':id')

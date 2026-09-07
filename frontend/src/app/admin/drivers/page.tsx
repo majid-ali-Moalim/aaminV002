@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +24,8 @@ import {
   getCrewOperationalStatusStyles,
   getEmploymentStatusLabel,
   getEmploymentStatusStyles,
+  getStaffStatusLabel,
+  getStaffStatusStyles,
   mapStaffShiftStatus,
 } from '@/lib/staff/status'
 import { SOMALIA_DRIVER_LICENSE_CLASSES } from '@/lib/drivers/somaliaDriverLicense'
@@ -36,11 +38,13 @@ interface Driver {
   phone?: string
   alternativePhone?: string
   email?: string
+  user?: { email?: string; username?: string }
+  username?: string
   nationalIdNumber?: string
   nationalId?: string
   address?: string
   stationId?: string
-  station?: { id: string; name: string }
+  station?: { id: string; name: string; regionId?: string; districtId?: string; region?: { name?: string }; district?: { name?: string } }
   assignedAmbulanceId?: string
   assignedAmbulance?: { id: string; ambulanceNumber: string }
   shiftStatus?: 'AVAILABLE' | 'ON_DUTY' | 'ON_BREAK' | 'UNAVAILABLE'
@@ -74,7 +78,6 @@ interface Driver {
   emergencyContactRelationship?: string
   assignAmbulanceNow?: boolean
   createAccount?: boolean
-  username?: string
   password?: string
   mobileAppAccess?: boolean
   address?: string
@@ -91,9 +94,19 @@ interface Driver {
   employmentStatus?: string
 }
 
+function mapDriverRow(driver: Driver): Driver {
+  return {
+    ...driver,
+    email: driver.email ?? driver.user?.email,
+    username: driver.username ?? driver.user?.username,
+  }
+}
+
 interface Station {
   id: string
   name: string
+  regionId?: string
+  districtId?: string
 }
 
 interface Ambulance {
@@ -109,6 +122,9 @@ export default function DriversPage() {
   const [stats, setStats] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [stations, setStations] = useState<Station[]>([])
+  const [regions, setRegions] = useState<{ id: string; name: string; districts?: { id: string; name: string; isActive?: boolean }[] }[]>([])
+  const [allDistricts, setAllDistricts] = useState<{ id: string; name: string; regionId?: string; isActive?: boolean }[]>([])
+  const [allStations, setAllStations] = useState<Station[]>([])
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
   const [ambulances, setAmbulances] = useState<Ambulance[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -194,7 +210,7 @@ export default function DriversPage() {
         driversService.getAll(),
         driversService.getStats()
       ])
-      setDrivers(driversData)
+      setDrivers((driversData as Driver[]).map(mapDriverRow))
       setStats(statsData)
     } catch (err) {
       console.error('Failed to fetch drivers data:', err)
@@ -206,12 +222,27 @@ export default function DriversPage() {
 
   const fetchMasterData = async () => {
     try {
-      const [stationsData, ambulancesData, departmentsData] = await Promise.all([
+      const [regionsData, districtsData, stationsData, ambulancesData, departmentsData] = await Promise.all([
+        systemSetupService.getRegions(),
+        systemSetupService.getDistricts().catch(() => []),
         systemSetupService.getStations(),
         ambulancesService.getAll(),
         systemSetupService.getDepartments(),
       ])
-      setStations(stationsData)
+      const regionsList = Array.isArray(regionsData) ? regionsData : []
+      let districtList = Array.isArray(districtsData) ? districtsData : []
+      if (!districtList.length) {
+        districtList = regionsList.flatMap((r) =>
+          Array.isArray(r.districts) ? r.districts.filter((d) => d.isActive !== false) : [],
+        )
+      }
+      const stationList = (Array.isArray(stationsData) ? stationsData : []).filter(
+        (s: Station & { isActive?: boolean }) => s.isActive !== false,
+      )
+      setRegions(regionsList)
+      setAllDistricts(districtList.filter((d) => d.isActive !== false))
+      setAllStations(stationList)
+      setStations(stationList)
       setAmbulances(ambulancesData)
       setDepartments(departmentsData ?? [])
     } catch (err) {
@@ -219,6 +250,29 @@ export default function DriversPage() {
       toast.error('Failed to load master data')
     }
   }
+
+  const districtsForRegion = useMemo(() => {
+    if (!formData.regionId) return []
+    return allDistricts.filter((d) => d.regionId === formData.regionId)
+  }, [formData.regionId, allDistricts])
+
+  const stationsForSelection = useMemo(() => {
+    return [...allStations].sort((a, b) => a.name.localeCompare(b.name))
+  }, [allStations])
+
+  const stationOptionLabel = useCallback(
+    (station: Station) => {
+      const district =
+        allDistricts.find((d) => d.id === station.districtId)?.name ||
+        (station as Station & { district?: { name?: string } }).district?.name
+      const region =
+        regions.find((r) => r.id === station.regionId)?.name ||
+        (station as Station & { region?: { name?: string } }).region?.name
+      const place = [district, region].filter(Boolean).join(', ')
+      return place ? `${station.name} — ${place}` : station.name
+    },
+    [allDistricts, regions],
+  )
 
   const filteredDrivers = useMemo(() => {
     return drivers.filter(driver => {
@@ -229,7 +283,10 @@ export default function DriversPage() {
         driver.phone?.includes(searchTerm) ||
         driver.email?.toLowerCase().includes(searchTerm.toLowerCase())
       
-      const stationMatch = !stationFilter || driver.stationId === stationFilter
+      const stationMatch =
+        !stationFilter ||
+        driver.stationId === stationFilter ||
+        driver.station?.id === stationFilter
       const statusMatch =
         !statusFilter ||
         (statusFilter === 'AVAILABLE'
@@ -271,6 +328,8 @@ export default function DriversPage() {
 
   const handleEdit = (driver: Driver) => {
     setEditingDriver(driver)
+    const linkedStation = driver.station
+    const resolvedStationId = driver.stationId || linkedStation?.id || ''
     const employmentDate =
       driver.employmentDate || driver.joinDate
         ? String(driver.employmentDate || driver.joinDate).slice(0, 10)
@@ -284,13 +343,13 @@ export default function DriversPage() {
       dateOfBirth: driver.dateOfBirth ? String(driver.dateOfBirth).slice(0, 10) : '',
       phone: driver.phone || '',
       alternativePhone: driver.alternativePhone || '',
-      email: driver.email || '',
+      email: driver.email ?? driver.user?.email ?? '',
       nationalIdNumber: driver.nationalIdNumber || driver.nationalId || '',
       
       // Address & Location (4 fields)
       residentialAddress: driver.residentialAddress || driver.address || '',
-      regionId: driver.regionId || '',
-      districtId: driver.districtId || '',
+      regionId: linkedStation?.regionId || (linkedStation as { region?: { id?: string } })?.region?.id || driver.regionId || '',
+      districtId: linkedStation?.districtId || (linkedStation as { district?: { id?: string } })?.district?.id || driver.districtId || '',
       currentArea: driver.currentArea || '',
       
       // Emergency Contact (3 fields)
@@ -324,12 +383,12 @@ export default function DriversPage() {
       
       // Account Access (Optional)
       createAccount: driver.createAccount || false,
-      username: driver.username || '',
+      username: driver.username ?? driver.user?.username ?? '',
       password: driver.password || '',
       mobileAppAccess: driver.mobileAppAccess || false,
       
       // Legacy fields for compatibility
-      stationId: driver.stationId || '',
+      stationId: resolvedStationId,
       isActive: driver.isActive ?? true,
     })
     setIsModalOpen(true)
@@ -340,7 +399,7 @@ export default function DriversPage() {
     setIsLoading(true)
     try {
       if (editingDriver) {
-        const updatePayload = {
+        const updatePayload: Record<string, unknown> = {
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
           gender: formData.gender || undefined,
@@ -350,8 +409,8 @@ export default function DriversPage() {
           nationalId: formData.nationalIdNumber.trim() || undefined,
           dateOfBirth: formData.dateOfBirth || undefined,
           profilePhoto: formData.profilePhoto || undefined,
-          departmentId: formData.departmentId || undefined,
-          stationId: formData.stationId || undefined,
+          departmentId: formData.departmentId,
+          stationId: formData.stationId,
           emergencyContactName: formData.emergencyContactName.trim() || undefined,
           emergencyPhone: formData.emergencyContactPhone.trim() || undefined,
           relationship: formData.emergencyContactRelationship || undefined,
@@ -368,7 +427,19 @@ export default function DriversPage() {
             ? Number(formData.yearsOfExperience)
             : undefined,
         }
-        await employeesService.update(editingDriver.id, updatePayload)
+        if (formData.email.trim()) {
+          updatePayload.email = formData.email.trim()
+        }
+                        if (formData.assignedAmbulanceId) {
+          updatePayload.assignedAmbulanceId = formData.assignedAmbulanceId
+        }
+        const updated = await employeesService.update(editingDriver.id, updatePayload)
+        const mapped = mapDriverRow({ ...editingDriver, ...updated })
+        setDrivers((prev) =>
+          prev.map((d) =>
+            d.id === editingDriver.id ? mapped : d,
+          ),
+        )
         toast.success('Driver updated successfully')
       } else {
         toast.error('Use Add Driver to register a new driver with a full profile and login account.')
@@ -376,7 +447,8 @@ export default function DriversPage() {
         return
       }
       setIsModalOpen(false)
-      fetchData()
+      setEditingDriver(null)
+      await fetchData()
     } catch (error: unknown) {
       console.error('Failed to save driver:', error)
       const message =
@@ -777,7 +849,7 @@ export default function DriversPage() {
                             <Phone className="w-3 h-3 mr-1 text-slate-400" />
                             {driver.phone || 'N/A'}
                           </div>
-                          <div className="text-xs text-slate-500 truncate max-w-xs">{driver.email || 'N/A'}</div>
+                          <div className="text-xs text-slate-500 truncate max-w-xs">{driver.email ?? driver.user?.email ?? 'N/A'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -802,9 +874,15 @@ export default function DriversPage() {
                           </p>
                           <span className={cn(
                             'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
+                            getStaffStatusStyles(driver.shiftStatus || 'UNAVAILABLE').badge
+                          )}>
+                            Shift: {getStaffStatusLabel(driver.shiftStatus || 'UNAVAILABLE')}
+                          </span>
+                          <span className={cn(
+                            'inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase border',
                             getAvailabilityColor(driver.operationalStatus)
                           )}>
-                            {getCrewOperationalStatusLabel(driver.operationalStatus)}
+                            Dispatch: {getCrewOperationalStatusLabel(driver.operationalStatus)}
                           </span>
                           {driver.unavailableReason ? (
                             <p className="text-[10px] text-slate-500">{driver.unavailableReason}</p>
@@ -902,7 +980,13 @@ export default function DriversPage() {
                           {driver.station?.name || 'Unassigned'}
                         </div>
                         
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center gap-2 justify-between">
+                          <span className={cn(
+                            'inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border',
+                            getStaffStatusStyles(driver.shiftStatus || 'UNAVAILABLE').badge
+                          )}>
+                            {getStaffStatusLabel(driver.shiftStatus || 'UNAVAILABLE')}
+                          </span>
                           <span className={cn(
                             'inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium border',
                             getAvailabilityColor(driver.operationalStatus)
@@ -1201,12 +1285,19 @@ export default function DriversPage() {
                     </label>
                     <select
                       value={formData.regionId}
-                      onChange={(e) => setFormData({ ...formData, regionId: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          regionId: e.target.value,
+                          districtId: '',
+                          stationId: '',
+                        })
+                      }
                       className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                     >
                       <option value="">Select Region</option>
-                      {stations.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                      {regions.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1217,14 +1308,40 @@ export default function DriversPage() {
                     </label>
                     <select
                       value={formData.districtId}
-                      onChange={(e) => setFormData({ ...formData, districtId: e.target.value })}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          districtId: e.target.value,
+                          stationId: '',
+                        })
+                      }
+                      disabled={!formData.regionId}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400 disabled:opacity-60"
                     >
                       <option value="">Select District</option>
-                      {stations.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                      {districtsForRegion.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Assigned Station *
+                    </label>
+                    <select
+                      value={formData.stationId}
+                      onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                    >
+                      <option value="">Select Station</option>
+                      {stationsForSelection.map((s) => (
+                        <option key={s.id} value={s.id}>{stationOptionLabel(s)}</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500">
+                      All active stations are listed. Region and district above are optional reference only.
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1326,22 +1443,6 @@ export default function DriversPage() {
                       <option value="">Select Department</option>
                       {departments.map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Station
-                    </label>
-                    <select
-                      value={formData.stationId}
-                      onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 text-slate-800 outline-none transition-all focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
-                    >
-                      <option value="">Select Station</option>
-                      {stations.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                   </div>

@@ -128,6 +128,12 @@ export function isFieldShiftRole(roleName?: string | null): boolean {
   return bucket === 'drivers' || bucket === 'nurses' || bucket === 'dispatchers';
 }
 
+/** Drivers and nurses only — crew availability / dispatch roster (excludes admin & dispatcher). */
+export function isCrewAvailabilityRole(roleName?: string | null): boolean {
+  const bucket = staffRoleBucket(roleName);
+  return bucket === 'drivers' || bucket === 'nurses';
+}
+
 export function fieldRoleBucket(roleName?: string | null): 'drivers' | 'nurses' | 'dispatchers' | 'other' {
   const bucket = staffRoleBucket(roleName);
   if (bucket === 'admins') return 'other';

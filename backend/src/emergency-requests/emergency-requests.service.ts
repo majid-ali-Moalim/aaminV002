@@ -547,7 +547,17 @@ export class EmergencyRequestsService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         detail = `Prisma Error ${error.code}: ${error.message} - Target: ${JSON.stringify(error.meta)}`;
       }
-      throw new BadRequestException(detail || 'Severe error during emergency dispatch.');
+      const detailText = String(detail || '');
+      if (
+        detailText.includes('No space left on device') ||
+        detailText.includes('53100') ||
+        detailText.includes('could not extend file')
+      ) {
+        throw new BadRequestException(
+          'Unable to save this request because the server database storage is full. Please call the emergency hotline immediately.',
+        );
+      }
+      throw new BadRequestException(detailText || 'Severe error during emergency dispatch.');
     }
   }
 

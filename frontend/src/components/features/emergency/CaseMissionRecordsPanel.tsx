@@ -165,9 +165,14 @@ const kindStyles: Record<CaseTimelineEvent['kind'], string> = {
 type Props = {
   request: EmergencyRequest
   compact?: boolean
+  hideCrewSummary?: boolean
 }
 
-export default function CaseMissionRecordsPanel({ request, compact = false }: Props) {
+export default function CaseMissionRecordsPanel({
+  request,
+  compact = false,
+  hideCrewSummary = false,
+}: Props) {
   const timeline = buildCaseTimeline(request)
   const driverName = request.driver
     ? `${request.driver.firstName} ${request.driver.lastName}`.trim()
@@ -178,6 +183,7 @@ export default function CaseMissionRecordsPanel({ request, compact = false }: Pr
 
   return (
     <div className="space-y-5">
+      {!hideCrewSummary && (
       <div className="grid sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
@@ -200,6 +206,7 @@ export default function CaseMissionRecordsPanel({ request, compact = false }: Pr
           <p className="text-sm font-semibold text-slate-800 mt-1">{nurseName || 'Unassigned'}</p>
         </div>
       </div>
+      )}
 
       <div>
         <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2 mb-3">

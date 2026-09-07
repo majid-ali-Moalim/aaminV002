@@ -171,14 +171,8 @@ const AssignModal: React.FC<AssignModalProps> = ({
           nurseId: nurseOk ? prev.nurseId : '',
           ambulanceId: ambOk ? prev.ambulanceId : '',
         };
-        // For reassign, do not auto-pick the first available unit —
-        // the admin must explicitly choose the new team.
-        if (isReassign || next.driverId || next.ambulanceId) return next;
-        return {
-          ...next,
-          driverId: drivers[0]?.id || '',
-          ambulanceId: ambulances[0]?.id || '',
-        };
+        // Do not auto-select — admin/dispatcher chooses crew explicitly (click again to unselect).
+        return next;
       });
     } catch (err) {
       console.error('Failed to fetch available units:', err);
@@ -339,7 +333,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
               <p className="text-[11px] text-slate-500 mt-1">
                 {isReassign
                   ? 'Select a new ambulance, driver, and nurse. Only crew marked Available (not on another case) are listed.'
-                  : 'Only drivers and nurses with Available status, on the current shift, and not on another open case.'}
+                  : 'Only drivers and nurses with Available status, on the current shift, and not on another open case. Tap a selected crew member again to unselect.'}
               </p>
             </div>
           </div>
@@ -504,7 +498,12 @@ const AssignModal: React.FC<AssignModalProps> = ({
               ) : availableAmbulances.map(amb => (
                 <div
                   key={amb.id}
-                  onClick={() => setAssignmentParams(prev => ({ ...prev, ambulanceId: amb.id }))}
+                  onClick={() =>
+                    setAssignmentParams((prev) => ({
+                      ...prev,
+                      ambulanceId: prev.ambulanceId === amb.id ? '' : amb.id,
+                    }))
+                  }
                   className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${assignmentParams.ambulanceId === amb.id
                       ? 'border-red-500 bg-red-50/50'
                       : 'border-slate-100 hover:border-slate-300 bg-white'
@@ -556,7 +555,12 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 ) : availableDrivers.map(driver => (
                   <div
                     key={driver.id}
-                    onClick={() => setAssignmentParams(prev => ({ ...prev, driverId: driver.id }))}
+                    onClick={() =>
+                      setAssignmentParams((prev) => ({
+                        ...prev,
+                        driverId: prev.driverId === driver.id ? '' : driver.id,
+                      }))
+                    }
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${assignmentParams.driverId === driver.id
                         ? 'border-blue-500 bg-blue-50/50'
                         : 'border-slate-100 hover:border-slate-300 bg-white'
@@ -607,7 +611,12 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 ) : availableNurses.map(nurse => (
                   <div
                     key={nurse.id}
-                    onClick={() => setAssignmentParams(prev => ({ ...prev, nurseId: nurse.id }))}
+                    onClick={() =>
+                      setAssignmentParams((prev) => ({
+                        ...prev,
+                        nurseId: prev.nurseId === nurse.id ? '' : nurse.id,
+                      }))
+                    }
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${assignmentParams.nurseId === nurse.id
                         ? 'border-emerald-500 bg-emerald-50/50'
                         : 'border-slate-100 hover:border-slate-300 bg-white'

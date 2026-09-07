@@ -54,7 +54,12 @@ export class DriversService {
         user: true,
         employeeRole: true,
         department: true,
-        station: true,
+        station: {
+          include: {
+            region: true,
+            district: true,
+          },
+        },
         assignedAmbulance: true,
       },
       orderBy: { createdAt: 'desc' },

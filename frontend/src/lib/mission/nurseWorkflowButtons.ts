@@ -26,8 +26,8 @@ export type NurseWorkflowButton = {
 /** Three visible steps — load patient & case close run automatically in the background. */
 const BUTTONS: { id: NurseWorkflowButtonId; label: string }[] = [
   { id: 'start_case', label: 'Start Case' },
-  { id: 'medical_notes', label: 'Medical Notes' },
-  { id: 'handover', label: 'Handover' },
+  { id: 'medical_notes', label: 'Medical Treatment' },
+  { id: 'handover', label: 'Handover & Complete' },
 ]
 
 function waitReasonFor(
@@ -143,7 +143,7 @@ export function getNurseWaitingMessage(
 export const NURSE_STAGE_DESCRIPTIONS: Record<NurseWorkflowButtonId, string> = {
   start_case: 'Confirm you are ready — then record medical notes.',
   load_patient: '',
-  medical_notes: 'Quick assessment and vitals — save while en route if needed.',
-  handover: 'Brief handover at hospital — case closes automatically when saved.',
+  medical_notes: 'Record assessment, vitals, and treatment notes.',
+  handover: 'Upload handover document and save — case closes automatically.',
   complete_case: '',
 }

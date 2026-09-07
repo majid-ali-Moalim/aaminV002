@@ -23,9 +23,9 @@ const en = {
   requestEmergencyAmbulance: 'Request Emergency Ambulance',
   bookAmbulance: 'Book Ambulance',
   unknownPatient: 'Use "Unknown Patient"',
-  submitting: 'SubmittingΓÇª',
+  submitting: 'Submitting...',
   needHelp: 'Need help?',
-  helpSecure: 'Your data is sent directly to dispatch ΓÇö encrypted in transit.',
+  helpSecure: 'Your data is sent directly to dispatch — encrypted in transit.',
   helpCall: 'A dispatcher will call you to confirm details.',
   helpHotline: 'For immediate life-threatening emergencies, also call',
   // Steps
@@ -48,7 +48,7 @@ const en = {
     label: 'Emergency Type',
     otherLabel: 'Specify Emergency Type',
     otherPlaceholder: 'Describe the emergency',
-    loading: 'Loading emergency typesΓÇª',
+    loading: 'Loading emergency types...',
     retry: 'Retry loading types',
     empty: 'No emergency types configured. Please call the hotline.',
   },
@@ -111,7 +111,7 @@ const en = {
     otherLabel: 'Specify Transport Type',
     otherPlaceholder: 'Describe the transport needed',
     notesLabel: 'Additional notes (optional)',
-    notesPlaceholder: 'Appointment time, mobility needs, special instructionsΓÇª',
+    notesPlaceholder: 'Appointment time, mobility needs, special instructions...',
   },
   transportTypes: {
     HOSPITAL_APPOINTMENT: 'Hospital Appointment',
@@ -176,9 +176,9 @@ const en = {
     district: 'District',
     area: 'Area / Sub-area',
     landmark: 'Landmark',
-    landmarkPlaceholder: 'Near mosque, market, school, or well-known buildingΓÇª',
+    landmarkPlaceholder: 'Near mosque, market, school, or well-known building...',
     directions: 'Additional directions (optional)',
-    directionsPlaceholder: 'Street name, gate color, floor numberΓÇª',
+    directionsPlaceholder: 'Street name, gate color, floor number...',
     destination: 'Destination',
     destinationFuneral: 'Destination',
     destinationFuneralHint: 'e.g. Cemetery, Funeral Home, Family Home',
@@ -199,7 +199,7 @@ const en = {
     destinationHospital: 'Destination hospital',
     destinationHospitalPlaceholder: 'Hospital name or facility',
     special: 'Special instructions (optional)',
-    specialPlaceholder: 'Gate code, allergies, accessibility needsΓÇª',
+    specialPlaceholder: 'Gate code, allergies, accessibility needs...',
   },
   review: {
     title: 'Review Your Request',
@@ -254,7 +254,7 @@ const en = {
     invalidText: 'Please enter meaningful text (avoid repeated letters or keyboard patterns)',
   },
   fleet: {
-    checking: 'Checking ambulance availabilityΓÇª',
+    checking: 'Checking ambulance availability...',
     unavailableTitle: 'No Ambulances Available',
     unavailableDesc:
       'All ambulances are currently assigned. The online form cannot accept new bookings right now.',
@@ -266,6 +266,8 @@ const en = {
   errors: {
     submitFailed: 'Failed to submit request. Please try again.',
     noFleet: 'No ambulances available right now. Please call the emergency hotline.',
+    serverStorageFull:
+      'We could not save your request because the server storage is full. Please call the emergency hotline immediately.',
   },
   success: {
     title: 'Request Submitted Successfully',
@@ -293,7 +295,7 @@ const so = {
   heroTitle: 'Codso',
   heroTitleAccent: 'Ambalaas',
   heroSubtitle:
-    'Gaadiid caafimaad oo degdeg ah. Buuxi foomkan ΓÇö xarunta dispatch-ka ayaa isla markiiba helaysa codsigaaga.',
+    'Gaadiid caafimaad oo degdeg ah. Buuxi foomkan — xarunta dispatch-ka ayaa isla markiiba helaysa codsigaaga.',
   fleetReady: 'ambalaas diyaar ah',
   fleetAvailable: 'Hadda diyaar',
   fleetLive: 'Xaaladda Fleet-ka',
@@ -307,9 +309,9 @@ const so = {
   requestEmergencyAmbulance: 'Codso Ambalaas Degdeg ah',
   bookAmbulance: 'Ballan Ambalaas',
   unknownPatient: 'Isticmaal "Bukaan aan la aqoon"',
-  submitting: 'Waa la dirayaaΓÇª',
+  submitting: 'Waa la dirayaa...',
   needHelp: 'Caawimaad?',
-  helpSecure: 'Xogtaada si toos ah ayaa loo diraa dispatch-ka ΓÇö ammaan.',
+  helpSecure: 'Xogtaada si toos ah ayaa loo diraa dispatch-ka — ammaan.',
   helpCall: 'Dispatcher ayaa ku soo wici doona si uu u xaqiijiyo faahfaahinta.',
   helpHotline: 'Haddii ay tahay degdeg halis ah, sidoo kale wac',
   steps: {
@@ -331,7 +333,7 @@ const so = {
     label: 'Nooca Degdegga',
     otherLabel: 'Qeex Nooca Degdegga',
     otherPlaceholder: 'Sharax degdegga',
-    loading: 'Waa la soo rarayaa noocyada degdeggaΓÇª',
+    loading: 'Waa la soo rarayaa noocyada degdegga...',
     retry: 'Isku day mar kale',
     empty: 'Noocyo degdeg ma jiraan. Fadlan wac khadka degdegga.',
   },
@@ -347,7 +349,7 @@ const so = {
     briefDescriptionHint: 'Ugu badnaan 100 xaraf — dispatch ayaa faahfaahin buuxda telefoon ku qaadan doona',
     briefDescriptionPlaceholder: 'Shil baabuur laba qof ku dhaawacmay.',
     whatHappened: 'Maxaa dhacay?',
-    whatHappenedHint: 'Ikhtiyaari ΓÇö ugu badnaan 100 xaraf',
+    whatHappenedHint: 'Ikhtiyaari — ugu badnaan 100 xaraf',
     whatHappenedPlaceholder: 'Shil baabuur laba qof ku dhaawacmay.',
   },
   schedule: {
@@ -394,7 +396,7 @@ const so = {
     otherLabel: 'Qeex Nooca Gaadiidka',
     otherPlaceholder: 'Sharax gaadiidka loo baahan yahay',
     notesLabel: 'Qoraallo dheeri ah (ikhtiyaari)',
-    notesPlaceholder: 'Waqtiga ballanta, baahiyaha dhaqdhaqaaqaΓÇª',
+    notesPlaceholder: 'Waqtiga ballanta, baahiyaha dhaqdhaqaaqa...',
   },
   transportTypes: {
     HOSPITAL_APPOINTMENT: 'Ballan Isbitaal',
@@ -459,9 +461,9 @@ const so = {
     district: 'Degmo',
     area: 'Aag / Deegaan',
     landmark: 'Calaamad muuqata',
-    landmarkPlaceholder: 'U dhow masaajid, suuq, iskuulΓÇª',
+    landmarkPlaceholder: 'U dhow masaajid, suuq, iskuul...',
     directions: 'Tilmaamo dheeri ah (ikhtiyaari)',
-    directionsPlaceholder: 'Magaca waddada, albaabka, dabaqaΓÇª',
+    directionsPlaceholder: 'Magaca waddada, albaabka, dabaqa...',
     destination: 'Halka loo socdo',
     destinationFuneral: 'Halka loo socdo',
     destinationFuneralHint: 'tusaale: Qabriga, Guriga aaska, Guriga qoyska',
@@ -482,7 +484,7 @@ const so = {
     destinationHospital: 'Isbitaalka loo socdo',
     destinationHospitalPlaceholder: 'Magaca isbitaalka',
     special: 'Tilmaamo gaar ah (ikhtiyaari)',
-    specialPlaceholder: 'Koodhka albaabka, xasaasiyadahaΓÇª',
+    specialPlaceholder: 'Koodhka albaabka, xasaasiyadaha...',
   },
   review: {
     title: 'Dib u eeg Codsigaaga',
@@ -536,7 +538,7 @@ const so = {
     invalidText: 'Fadlan geli qoraal macno leh (ka fogow xarfo isku xiga ama qaab keyboard ah)',
   },
   fleet: {
-    checking: 'Waa la hubinayaa helitaanka ambalaaskaΓÇª',
+    checking: 'Waa la hubinayaa helitaanka ambalaaska...',
     unavailableTitle: 'Ambalaas lama heli karo',
     unavailableDesc:
       'Dhammaan ambalaasyadu waa mashquul. Foomka online-ka ma aqbalin karo codsiyo cusub hadda.',
@@ -548,6 +550,8 @@ const so = {
   errors: {
     submitFailed: 'Codsiga lama dirin. Fadlan isku day mar kale.',
     noFleet: 'Ambalaas ma jiraan hadda. Wac khadka degdegga.',
+    serverStorageFull:
+      'Codsiga lama kaydin karin sababtoo ah kaydinta server-ka way buux daa. Fadlan isla markiiba wac khadka degdegga.',
   },
   success: {
     title: 'Codsiga si Guul leh ayaa loo Gudbiyay',

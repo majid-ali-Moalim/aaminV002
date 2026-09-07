@@ -7,25 +7,23 @@ import {
   FileText,
   Search,
   Loader2,
-  Truck,
-  ExternalLink,
   ClipboardList,
   CheckCircle2,
   XCircle,
   Activity,
   Trash2,
   Pencil,
+  ExternalLink,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { Button } from '@/components/ui/button'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
-import StatusBadge from '@/components/features/emergency/StatusBadge'
 import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
+import { simpleActiveCaseStatus } from '@/components/features/emergency/missionStatusOptions'
 import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
-import CaseDetailModal from '@/components/features/emergency/CaseDetailModal'
 import { downloadPatientCasesReportPdf } from '@/lib/patients/exportPatientCasesPdf'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
@@ -34,10 +32,12 @@ export type PatientPortal = 'admin' | 'dispatcher'
 
 function patientPaths(portal: PatientPortal) {
   const base = portal === 'dispatcher' ? '/dispatcher/patients' : '/admin/patients'
+  const emergencyBase =
+    portal === 'dispatcher' ? '/dispatcher/emergency-requests' : '/admin/emergency-requests'
   return {
     patients: base,
     cases: `${base}/cases`,
-    emergencyCase: (id: string) => `${base}/${id}`,
+    emergencyCase: (id: string) => `${emergencyBase}/${id}`,
   }
 }
 
@@ -48,16 +48,7 @@ export interface PatientCaseRecordsViewProps {
 }
 
 function emergencyTypeLabel(req: EmergencyRequest): string {
-  return (
-    req.incidentCategory?.name ||
-    req.patientCondition ||
-    req.symptoms?.slice(0, 40) ||
-    'General emergency'
-  )
-}
-
-function completedDate(req: EmergencyRequest): string | null {
-  return req.completedAt || (req.status === 'CANCELLED' ? req.cancelledAt ?? null : null)
+  return req.incidentCategory?.name || req.patientCondition || 'General emergency'
 }
 
 export default function PatientCaseRecordsView({
@@ -77,8 +68,6 @@ export default function PatientCaseRecordsView({
   const [priorityFilter, setPriorityFilter] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
-  const [detailCaseId, setDetailCaseId] = useState<string | null>(null)
-  const [detailPreview, setDetailPreview] = useState<EmergencyRequest | null>(null)
   const [pdfExporting, setPdfExporting] = useState(false)
 
   useEffect(() => {
@@ -217,14 +206,13 @@ export default function PatientCaseRecordsView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { label: closedOnly ? 'Closed Cases' : activeOnly ? 'Active Cases' : 'Total Cases', value: stats.total, icon: FileText },
+          { label: closedOnly ? 'Closed' : activeOnly ? 'Active' : 'Total', value: stats.total, icon: FileText },
           { label: 'Completed', value: stats.completed, icon: CheckCircle2 },
-          { label: 'Cancelled', value: stats.cancelled, icon: XCircle },
           ...(closedOnly
-            ? []
-            : [{ label: 'In Progress', value: stats.active, icon: Activity }]),
+            ? [{ label: 'Cancelled', value: stats.cancelled, icon: XCircle }]
+            : [{ label: 'In progress', value: stats.active, icon: Activity }]),
         ].map((item) => {
           const Icon = item.icon
           return (
@@ -306,20 +294,10 @@ export default function PatientCaseRecordsView({
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[960px]">
+          <table className="w-full border-collapse min-w-[720px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                {[
-                  'Case Number',
-                  'Patient Name',
-                  'Emergency Type',
-                  'Priority',
-                  'Status',
-                  'Ambulance',
-                  'Created',
-                  'Completed',
-                  '',
-                ].map((h) => (
+                {['Case', 'Patient', 'Type', 'Priority', 'Status', 'Date', ''].map((h) => (
                   <th
                     key={h || 'actions'}
                     className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap"
@@ -332,7 +310,7 @@ export default function PatientCaseRecordsView({
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <Loader2 className="w-10 h-10 animate-spin mx-auto text-red-500 mb-3" />
                     <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">
                       Loading cases…
@@ -341,7 +319,7 @@ export default function PatientCaseRecordsView({
                 </tr>
               ) : filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                     <p className="font-semibold text-slate-700">No cases found</p>
                   </td>
@@ -350,62 +328,48 @@ export default function PatientCaseRecordsView({
                 filteredRequests.map((req) => {
                   const patientName =
                     req.patient?.fullName || req.callerName || 'Unknown patient'
-                  const done = completedDate(req)
+                  const statusLabel = simpleActiveCaseStatus(req.status)
 
                   return (
                     <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-4">
-                        <span className="font-mono text-xs font-black text-red-600">
+                        <Link
+                          href={paths.emergencyCase(req.id)}
+                          className="font-mono text-xs font-black text-red-600 hover:underline"
+                        >
                           {req.trackingCode}
-                        </span>
+                        </Link>
                       </td>
                       <td className="px-4 py-4">
-                        <div>
-                          <p className="font-bold text-slate-900">{patientName}</p>
-                          {req.patient?.patientCode && (
-                            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                              {req.patient.patientCode}
-                            </p>
-                          )}
-                        </div>
+                        <p className="font-bold text-slate-900">{patientName}</p>
+                        {req.patient?.phone && (
+                          <p className="text-[10px] text-slate-500 mt-0.5">{req.patient.phone}</p>
+                        )}
                       </td>
-                      <td className="px-4 py-4 max-w-[200px]">
-                        <p className="text-sm text-slate-700 line-clamp-2">
-                          {emergencyTypeLabel(req)}
-                        </p>
+                      <td className="px-4 py-4 max-w-[180px]">
+                        <p className="text-sm text-slate-700 line-clamp-2">{emergencyTypeLabel(req)}</p>
                       </td>
                       <td className="px-4 py-4">
                         <PriorityBadge priority={req.priority} size="sm" />
                       </td>
                       <td className="px-4 py-4">
-                        <StatusBadge status={req.status} size="sm" />
-                      </td>
-                      <td className="px-4 py-4">
-                        {req.ambulance ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                            <Truck className="w-3 h-3" />
-                            {req.ambulance.ambulanceNumber}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400 font-semibold">Unassigned</span>
-                        )}
+                        <span className="text-xs font-bold text-slate-700">{statusLabel}</span>
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-600 whitespace-nowrap">
                         {formatDateTimeShort(req.createdAt)}
                       </td>
-                      <td className="px-4 py-4 text-sm whitespace-nowrap">
-                        {done ? (
-                          <span className="font-semibold text-emerald-700">
-                            {formatDateTimeShort(done)}
-                          </span>
-                        ) : req.status === 'CANCELLED' ? (
-                          <span className="text-red-500 font-semibold">Cancelled</span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Link href={paths.emergencyCase(req.id)}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg h-8 gap-1"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Open
+                            </Button>
+                          </Link>
                           <Button
                             variant="outline"
                             size="sm"
@@ -413,26 +377,14 @@ export default function PatientCaseRecordsView({
                             onClick={() => setUpdatingCase(req)}
                           >
                             <Pencil className="w-3.5 h-3.5" />
-                            Update
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-lg h-8 gap-1"
-                            onClick={() => {
-                              setDetailCaseId(req.id)
-                              setDetailPreview(req)
-                            }}
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Open
+                            Edit
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete(req)}
                             disabled={deletingId === req.id}
-                            className="rounded-lg h-8 gap-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            className="rounded-lg h-8 gap-1 border-red-200 text-red-600 hover:bg-red-50"
                             title="Delete case"
                           >
                             {deletingId === req.id ? (
@@ -440,7 +392,6 @@ export default function PatientCaseRecordsView({
                             ) : (
                               <Trash2 className="w-3.5 h-3.5" />
                             )}
-                            Delete
                           </Button>
                         </div>
                       </td>
@@ -464,17 +415,6 @@ export default function PatientCaseRecordsView({
           }}
         />
       )}
-
-      <CaseDetailModal
-        caseId={detailCaseId}
-        open={Boolean(detailCaseId)}
-        preview={detailPreview}
-        onClose={() => {
-          setDetailCaseId(null)
-          setDetailPreview(null)
-        }}
-        casePageBase={portal === 'dispatcher' ? '/dispatcher/emergency-requests' : '/admin/emergency-requests'}
-      />
     </div>
   )
 }

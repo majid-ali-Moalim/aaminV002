@@ -29,6 +29,7 @@ const Navbar = () => {
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
     { href: '/contact', label: 'Contact' },
+    { href: '/track', label: 'Tracking Patient' },
   ]
 
   const getDashboardLink = () => {

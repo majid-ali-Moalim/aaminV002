@@ -9,6 +9,7 @@ import {
   fieldRoleBucket,
   isStaffEmployeeRole,
   isFieldShiftRole,
+  isCrewAvailabilityRole,
   staffRoleBucket,
   getActiveShiftCodeAt,
   activeShiftLabel,
@@ -457,7 +458,7 @@ export class EmployeeAttendanceService {
     const dayEnd = endOfDay(day);
     const isToday = startOfDay(new Date()).getTime() === dayStart.getTime();
 
-    const [employees, records, workShifts] = await Promise.all([
+    const [allEmployees, records, workShifts] = await Promise.all([
       this.getActiveEmployees(),
       this.prisma.attendanceRecord.findMany({
         where: { date: { gte: dayStart, lte: dayEnd } },
@@ -465,6 +466,10 @@ export class EmployeeAttendanceService {
       }),
       this.listWorkShifts(),
     ]);
+
+    const employees = allEmployees.filter((e) =>
+      isCrewAvailabilityRole(e.employeeRole?.name),
+    );
 
     const recordByEmp = new Map(records.map((r) => [r.employeeId, r]));
 

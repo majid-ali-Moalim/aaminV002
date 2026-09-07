@@ -465,10 +465,46 @@ export class EmployeesService {
     return payload;
   }
 
+  private async syncLinkedUserOnUpdate(
+    userId: string,
+    data: Record<string, unknown>,
+    existingEmail: string,
+  ) {
+    const userData: { email?: string; username?: string } = {};
+    if (typeof data.email === 'string' && data.email.trim()) {
+      userData.email = normalizeUserEmail(
+        data.email,
+        typeof data.username === 'string' ? data.username : undefined,
+      );
+    }
+    if (typeof data.username === 'string' && data.username.trim()) {
+      userData.username = data.username.trim();
+    }
+    if (!Object.keys(userData).length) return;
+
+    if (userData.email && userData.email !== existingEmail) {
+      const taken = await this.prisma.user.findFirst({
+        where: { email: userData.email, not: { id: userId } },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new ConflictException('An account with this email already exists.');
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: userData,
+    });
+  }
+
   async update(id: string, data: Record<string, unknown>, createdById?: string) {
     const existing = await this.prisma.employee.findUnique({
       where: { id },
-      include: { employeeRole: true },
+      include: {
+        employeeRole: true,
+        user: { select: { id: true, email: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Employee not found');
 
@@ -487,6 +523,12 @@ export class EmployeesService {
 
     let result;
     try {
+      await this.syncLinkedUserOnUpdate(
+        existing.userId,
+        data,
+        existing.user?.email ?? '',
+      );
+
       result = await this.prisma.employee.update({
         where: { id },
         data: normalized,

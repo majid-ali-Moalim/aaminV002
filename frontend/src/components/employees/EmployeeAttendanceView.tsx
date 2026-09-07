@@ -369,7 +369,7 @@ export default function EmployeeAttendanceView() {
         <div>
           <h1 className="text-2xl font-black text-gray-900">{AVAILABILITY_LABELS.module}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Mark drivers, nurses, dispatchers, and admins as available or unavailable for dispatch during their shift
+            Mark drivers and nurses as available or unavailable for dispatch during their shift
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -460,8 +460,7 @@ export default function EmployeeAttendanceView() {
       {viewingToday && (
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           <span className="font-bold">Active shift now:</span> {activeShift}. Available and unavailable
-          can only be set for staff whose assigned shift matches this window (drivers, nurses,
-          dispatchers).
+          can only be set for crew whose assigned shift matches this window (drivers and nurses).
         </div>
       )}
 
@@ -473,7 +472,7 @@ export default function EmployeeAttendanceView() {
               <Users className="w-5 h-5 text-blue-600" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 mt-1">
-              Staff employees
+              Crew members
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">

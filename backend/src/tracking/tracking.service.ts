@@ -24,13 +24,29 @@ export class TrackingService {
           select: { fullName: true, phone: true }
         },
         ambulance: {
-          select: { ambulanceNumber: true, vehicleType: true, plateNumber: true, stationId: true }
+          select: {
+            ambulanceNumber: true,
+            vehicleType: true,
+            plateNumber: true,
+            stationId: true,
+            station: { select: { name: true } },
+          },
         },
         driver: {
-          select: { firstName: true, lastName: true }
+          select: {
+            firstName: true,
+            lastName: true,
+            phone: true,
+            station: { select: { name: true } },
+          },
         },
         nurse: {
-          select: { firstName: true, lastName: true }
+          select: {
+            firstName: true,
+            lastName: true,
+            phone: true,
+            station: { select: { name: true } },
+          },
         },
         region: {
           select: { name: true }
@@ -63,6 +79,11 @@ export class TrackingService {
       ambulanceId: request.ambulanceId
     } as any);
 
+    const stationName =
+      request.driver?.station?.name ||
+      request.ambulance?.station?.name ||
+      null;
+
     // Expose only operational data
     return {
       id: request.id,
@@ -76,12 +97,23 @@ export class TrackingService {
       district: request.district?.name,
       landmark: request.pickupLocation,
       patientPhone: request.patient?.phone,
+      station: stationName,
       ambulance: request.ambulance ? {
         code: request.ambulance.ambulanceNumber,
         type: request.ambulance.vehicleType,
       } : null,
-      driver: request.driver ? `${request.driver.firstName || ''} ${request.driver.lastName || ''}`.trim() : null,
-      nurse: request.nurse ? `${request.nurse.firstName || ''} ${request.nurse.lastName || ''}`.trim() : null,
+      driver: request.driver
+        ? {
+            name: `${request.driver.firstName || ''} ${request.driver.lastName || ''}`.trim(),
+            phone: request.driver.phone || null,
+          }
+        : null,
+      nurse: request.nurse
+        ? {
+            name: `${request.nurse.firstName || ''} ${request.nurse.lastName || ''}`.trim(),
+            phone: request.nurse.phone || null,
+          }
+        : null,
       hospital: request.destinationHospital?.name,
       estimatedArrival,
       timeline: request.statusLogs.map(log => ({

@@ -43,8 +43,8 @@ export default function TrackPatientPage() {
               <Activity size={24} />
             </div>
             <div>
-              <h1 className="font-bold text-xl text-slate-900 leading-tight">EADS Tracking</h1>
-              <p className="text-xs text-slate-500 font-medium">Public Patient Tracker</p>
+              <h1 className="font-bold text-xl text-slate-900 leading-tight">Tracking Patient</h1>
+              <p className="text-xs text-slate-500 font-medium">Follow your ambulance case</p>
             </div>
           </Link>
         </div>
@@ -55,8 +55,8 @@ export default function TrackPatientPage() {
         <div className="w-full max-w-md">
           {/* Hero Section */}
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Track an Ambulance</h2>
-            <p className="text-slate-600">Enter your Case Tracking Code or Patient Phone Number to view real-time updates.</p>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Track Your Patient</h2>
+            <p className="text-slate-600">Enter your case tracking code or phone number for a simple status update.</p>
           </div>
 
           {/* Search Card */}

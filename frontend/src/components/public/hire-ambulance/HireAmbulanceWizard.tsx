@@ -1,13 +1,14 @@
 'use client'
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm, useWatch } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import {
   AlertTriangle,
   Calendar,
+  CheckCircle2,
   Clock,
+  Home,
   Loader2,
   MapPin,
   Phone,
@@ -87,10 +88,11 @@ function fieldClass(base: string, hasError: boolean) {
 }
 
 export default function HireAmbulanceWizard() {
-  const router = useRouter()
   const submitLockRef = useRef(false)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [submitPhase, setSubmitPhase] = useState<'idle' | 'submitting' | 'success'>('idle')
+  const [submittedTrackingCode, setSubmittedTrackingCode] = useState('')
   const [lang, setLang] = useState<HireLang>('en')
   const [regions, setRegions] = useState<Region[]>([])
   const [districts, setDistricts] = useState<District[]>([])
@@ -245,9 +247,11 @@ export default function HireAmbulanceWizard() {
     if (submitLockRef.current) return
     submitLockRef.current = true
     setSubmitting(true)
+    setSubmitPhase('submitting')
     try {
       if (fleetStatus === 'unavailable' || fleet.available <= 0) {
         toast.error(t.errors.noFleet)
+        setSubmitPhase('idle')
         return
       }
       const errors = runValidation(data)
@@ -256,6 +260,7 @@ export default function HireAmbulanceWizard() {
         const firstKey = Object.keys(errors)[0]
         toast.error(errors[firstKey as keyof HireFormValues] ?? t.validation.requestType)
         document.querySelector(`[data-field="${firstKey}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setSubmitPhase('idle')
         return
       }
       setFormErrors({})
@@ -266,14 +271,22 @@ export default function HireAmbulanceWizard() {
       })
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}))
-        throw new Error(errorBody?.message || t.errors.submitFailed)
+        const rawMessage = errorBody?.message
+        const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : rawMessage
+        const text = String(message || '')
+        if (text.includes('No space left on device') || text.includes('53100')) {
+          throw new Error(t.errors.serverStorageFull)
+        }
+        throw new Error(text || t.errors.submitFailed)
       }
       const result = (await response.json()) as { trackingCode?: string }
+      const code = result.trackingCode || ''
+      setSubmittedTrackingCode(code)
       sessionStorage.removeItem(DRAFT_KEY)
-      router.push(
-        `/hire-ambulance/success?code=${encodeURIComponent(result.trackingCode || '')}&at=${encodeURIComponent(new Date().toISOString())}&lang=${encodeURIComponent(lang)}`,
-      )
+      setSubmitPhase('success')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
+      setSubmitPhase('idle')
       toast.error(error instanceof Error ? error.message : t.errors.submitFailed)
     } finally {
       submitLockRef.current = false
@@ -361,6 +374,55 @@ export default function HireAmbulanceWizard() {
         onSubmit={handleSubmit(onSubmit)}
         className="mx-auto w-full max-w-xl space-y-4 px-4 py-5 sm:py-6"
       >
+        {submitPhase !== 'idle' && (
+          <div className="rounded-3xl overflow-hidden shadow-2xl border border-red-100 bg-white dark:bg-slate-900 dark:border-red-900/40">
+            <div className="bg-gradient-to-r from-red-600 to-rose-500 px-6 py-8 text-center text-white">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+                {submitPhase === 'submitting' ? (
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-8 h-8" />
+                )}
+              </div>
+              <h2 className="text-xl font-black tracking-tight">
+                {submitPhase === 'submitting' ? t.submitting : t.success.title}
+              </h2>
+              {submitPhase === 'submitting' ? (
+                <p className="text-red-100 text-sm mt-2">{t.success.received}</p>
+              ) : (
+                <p className="text-red-100 text-sm mt-2">{t.success.thankYou}</p>
+              )}
+            </div>
+            <div className="p-6 space-y-4">
+              {submitPhase === 'success' && (
+                <>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{t.success.received}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{t.success.emergencyNote}</p>
+                  {submittedTrackingCode ? (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-center">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        {t.success.requestNumber}
+                      </p>
+                      <p className="mt-1 text-lg font-black text-red-600">{submittedTrackingCode}</p>
+                    </div>
+                  ) : null}
+                  <a
+                    href="/"
+                    className="h-12 flex items-center justify-center gap-2 rounded-xl bg-red-600 text-white font-bold uppercase text-sm hover:bg-red-700 transition"
+                  >
+                    <Home className="w-4 h-4" />
+                    {t.success.returnHome}
+                  </a>
+                </>
+              )}
+              {submitPhase === 'submitting' && (
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center">{t.helpCall}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className={submitPhase !== 'idle' ? 'hidden' : undefined}>
         {fleetStatus !== 'available' && (
           <div className={`rounded-2xl border p-4 text-sm ${fleetStatus === 'loading' ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
             <div className="flex items-start gap-2">
@@ -465,6 +527,21 @@ export default function HireAmbulanceWizard() {
                 </div>
               </div>
 
+              <label
+                data-field="consent"
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 ${
+                  formErrors.consent ? 'border-red-300 bg-red-50/40' : 'border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  {...register('consent', { onChange: () => clearError('consent') })}
+                  className="mt-1 h-5 w-5 accent-red-600"
+                />
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t.review.consent}</span>
+              </label>
+              <FieldError message={formErrors.consent} />
+
               <button
                 type="submit"
                 disabled={submitting}
@@ -473,7 +550,7 @@ export default function HireAmbulanceWizard() {
                 {submitting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    {t.submitting}
+                    Submitting...
                   </>
                 ) : (
                   <>
@@ -730,7 +807,7 @@ export default function HireAmbulanceWizard() {
               {submitting ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  {t.submitting}
+                  Submitting...
                 </>
               ) : (
                 <>
@@ -748,6 +825,7 @@ export default function HireAmbulanceWizard() {
             {EMERGENCY_HOTLINE}
           </a>
         </p>
+        </div>
       </form>
     </div>
   )

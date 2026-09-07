@@ -1,6 +1,9 @@
 'use client'
 
-import { Loader2, Save, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Save, ChevronLeft, ChevronRight, Plus, Trash2, Upload, FileText } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { uploadService } from '@/lib/api'
 import {
   HOSPITAL_REFUSAL_REASON_OPTIONS,
   newRejectedHospitalEntry,
@@ -483,6 +486,8 @@ export type HandoverFormState = {
   receivingStaff: string
   notes: string
   signature: string
+  handoverDocumentUrl?: string
+  handoverDocumentName?: string
   ageGroup: string
   gender: string
   nationalityType: string
@@ -637,6 +642,7 @@ export function HandoverTaskFields({
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
+  const [uploadingDoc, setUploadingDoc] = useState(false)
   const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
   const outcomeLabel = handoverOutcomeLabel(form.patientOutcome)
   const dispatcherDestination = assignedDestination.trim() || caseContext?.acceptedHospital?.trim() || ''
@@ -648,6 +654,32 @@ export function HandoverTaskFields({
     form.nationalityType && !COUNTRY_NAMES.includes(form.nationalityType as (typeof COUNTRY_NAMES)[number])
       ? [form.nationalityType, ...COUNTRY_NAMES]
       : COUNTRY_NAMES
+
+  const handleHandoverDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || readOnly) return
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File must be under 10 MB')
+      return
+    }
+    setUploadingDoc(true)
+    try {
+      const res = (await uploadService.uploadFile(file)) as { url?: string }
+      const url = res?.url
+      if (!url) throw new Error('No URL returned')
+      setForm({
+        ...form,
+        handoverDocumentUrl: url,
+        handoverDocumentName: file.name,
+      })
+      toast.success('Handover document uploaded')
+    } catch {
+      toast.error('Could not upload document')
+    } finally {
+      setUploadingDoc(false)
+      e.target.value = ''
+    }
+  }
 
   return (
     <>
@@ -829,6 +861,59 @@ export function HandoverTaskFields({
         />
         <FieldError error={errors.notes} />
       </label>
+      <div className="span-2 nmw-handover-doc">
+        <span className="block text-sm font-semibold text-zinc-800 mb-2">
+          Handover document <span className="nmw-optional">(hospital form / PDF / photo)</span>
+        </span>
+        {form.handoverDocumentUrl ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <FileText size={18} className="text-emerald-700 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-emerald-900 truncate">
+                {form.handoverDocumentName || 'Uploaded document'}
+              </p>
+              <a
+                href={form.handoverDocumentUrl.startsWith('http') ? form.handoverDocumentUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3001'}${form.handoverDocumentUrl}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-emerald-700 underline"
+              >
+                View file
+              </a>
+            </div>
+            {!readOnly && (
+              <button
+                type="button"
+                className="text-xs font-bold text-red-600"
+                onClick={() => setForm({ ...form, handoverDocumentUrl: '', handoverDocumentName: '' })}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        ) : readOnly ? (
+          <p className="text-sm text-zinc-500">No document uploaded.</p>
+        ) : (
+          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 cursor-pointer hover:border-red-300 hover:bg-red-50/40 transition-colors">
+            {uploadingDoc ? (
+              <Loader2 className="animate-spin text-red-600" size={22} />
+            ) : (
+              <Upload className="text-zinc-500" size={22} />
+            )}
+            <span className="text-sm font-semibold text-zinc-700">
+              {uploadingDoc ? 'Uploading…' : 'Upload handover document'}
+            </span>
+            <span className="text-xs text-zinc-500">PDF, JPG, or PNG — max 10 MB</span>
+            <input
+              type="file"
+              className="sr-only"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+              disabled={uploadingDoc}
+              onChange={handleHandoverDocUpload}
+            />
+          </label>
+        )}
+      </div>
       <label className="span-2">
         Digital signature (full name) *
         <input

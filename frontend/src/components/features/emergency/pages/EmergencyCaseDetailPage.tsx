@@ -8,37 +8,46 @@ import {
   MapPin,
   User,
   Phone,
-  Truck,
   Clock,
   RefreshCw,
   Navigation,
-  FileText,
-  Stethoscope,
-  Activity,
   ClipboardList,
   Building2,
+  AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
 import { format, formatDistanceToNow } from 'date-fns'
-import StatusBadge from '@/components/features/emergency/StatusBadge'
 import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { simpleActiveCaseStatus } from '@/components/features/emergency/missionStatusOptions'
-import { buildCaseFileClinicalBlocks } from '@/lib/nurse/clinicalRecordDisplay'
 import '@/components/features/emergency/case-detail.css'
-import { getCaseStationLabels } from '@/lib/emergency/caseStationLabels'
 import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
+import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
+import CaseMissionRecordsPanel from '@/components/features/emergency/CaseMissionRecordsPanel'
 
-function CaseField({ label, value }: { label: string; value?: string | null }) {
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value?: string | null
+  mono?: boolean
+}) {
   return (
     <div className="case-detail-field">
       <p className="case-detail-label">{label}</p>
-      <p className="case-detail-value">{value || '—'}</p>
+      <p className={`case-detail-value${mono ? ' font-mono text-sm' : ''}`}>{value?.trim() || '—'}</p>
     </div>
   )
+}
+
+function crewName(emp?: { firstName?: string | null; lastName?: string | null } | null) {
+  if (!emp) return '—'
+  return `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || '—'
 }
 
 export default function EmergencyCaseDetailPage() {
@@ -100,14 +109,13 @@ export default function EmergencyCaseDetailPage() {
     )
   }
 
-  const logs = [...(request.statusLogs ?? [])].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
-  const nurseRecords = request.patientCareRecords ?? []
-  const clinicalBlocks = buildCaseFileClinicalBlocks(nurseRecords)
-  const driverReports = logs.filter((log) => log.notes?.includes('[Driver Report]'))
-  const { assignedStation, transferredFromStation } = getCaseStationLabels(request)
   const simpleStatus = simpleActiveCaseStatus(request.status)
+  const equipment = [
+    request.needsOxygen && 'Oxygen',
+    request.needsStretcher && 'Stretcher',
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className="case-detail-page">
@@ -120,7 +128,7 @@ export default function EmergencyCaseDetailPage() {
           <Link href={paths.pending}>
             <Button variant="outline" className="rounded-xl">
               <ClipboardList className="w-4 h-4 mr-2" />
-              Pending Queue
+              Pending queue
             </Button>
           </Link>
         </div>
@@ -139,236 +147,115 @@ export default function EmergencyCaseDetailPage() {
       </div>
 
       <header className="case-detail-hero">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <p className="case-detail-hero-kicker">Case file</p>
-            <h1 className="case-detail-hero-title">{request.trackingCode}</h1>
-            <p className="case-detail-hero-meta">
-              <Clock className="w-4 h-4" />
-              Created {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
-              <span>·</span>
-              {format(new Date(request.createdAt), 'PPp')}
-            </p>
-            <div className="case-detail-hero-badges">
-              <PriorityBadge priority={request.priority} size="sm" />
-              <StatusBadge status={request.status} size="sm" />
-              <span className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg bg-white/15 border border-white/25">
-                {simpleStatus}
-              </span>
-            </div>
-          </div>
+        <p className="case-detail-hero-kicker">Emergency case</p>
+        <h1 className="case-detail-hero-title">{request.trackingCode}</h1>
+        <p className="case-detail-hero-meta">
+          <Clock className="w-4 h-4" />
+          {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
+          <span>·</span>
+          {format(new Date(request.createdAt), 'PPp')}
+        </p>
+        <div className="case-detail-hero-badges">
+          <PriorityBadge priority={request.priority} size="sm" />
+          <span className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg bg-white/15 border border-white/25">
+            {simpleStatus}
+          </span>
         </div>
       </header>
 
-      <div className="case-detail-layout">
-        <div className="case-detail-main">
-          <section className="case-detail-card">
-            <h2 className="case-detail-section-title">
-              <User className="w-4 h-4" />
-              Patient
-            </h2>
-            <div className="case-detail-grid">
-              <CaseField label="Name" value={request.patient?.fullName || 'Unknown'} />
-              <div className="case-detail-field">
-                <p className="case-detail-label">Phone</p>
-                <p className="case-detail-value flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 opacity-60" />
-                  {request.patient?.phone || request.callerPhone || '—'}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <CaseTimingPanel request={request} />
-
-          {clinicalBlocks.length > 0 && (
-            <section className="case-detail-card case-detail-card--accent">
-              <h2 className="case-detail-section-title case-detail-section-title--rose">
-                <Stethoscope className="w-4 h-4" />
-                Clinical records
-              </h2>
-              <div className="space-y-4">
-                {clinicalBlocks.map((block) => (
-                  <article key={block.id} className="case-detail-clinical-item">
-                    <div className="mb-3">
-                      <p className="case-detail-value">{block.title}</p>
-                      <p className="case-detail-subvalue">
-                        {block.nurseName} · {format(new Date(block.createdAt), 'PPp')}
-                      </p>
-                    </div>
-                    <div className="case-detail-grid">
-                      {block.fields.map((field) => (
-                        <div key={field.label} className="case-detail-clinical-cell">
-                          <p className="case-detail-label">{field.label}</p>
-                          <p className="case-detail-value case-detail-value--muted">{field.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {(assignedStation || transferredFromStation) && (
-            <section className="case-detail-card">
-              <h2 className="case-detail-section-title">
-                <Building2 className="w-4 h-4" />
-                Station routing
-              </h2>
-              <div className="case-detail-grid">
-                {transferredFromStation && (
-                  <CaseField label="Transferred from" value={transferredFromStation} />
-                )}
-                {assignedStation && (
-                  <CaseField label="Assigned station" value={assignedStation} />
-                )}
-              </div>
-            </section>
-          )}
-
-          <section className="case-detail-card">
-            <h2 className="case-detail-section-title">
-              <MapPin className="w-4 h-4" />
-              Locations
-            </h2>
-            <div className="space-y-4">
-              <div className="case-detail-field">
-                <p className="case-detail-label">Pickup</p>
-                <p className="case-detail-value">{request.pickupLocation}</p>
-                {request.pickupLandmark && (
-                  <p className="case-detail-subvalue">{request.pickupLandmark}</p>
-                )}
-              </div>
-              <PickupGpsPanel request={request} />
-              <CaseField label="Destination" value={request.destination || 'Not set'} />
-            </div>
-          </section>
-
-          <section className="case-detail-card">
-            <h2 className="case-detail-section-title">
-              <Stethoscope className="w-4 h-4" />
-              Clinical information
-            </h2>
-            <div className="case-detail-grid">
-              <CaseField label="Condition" value={request.patientCondition} />
-              <CaseField label="Symptoms" value={request.symptoms} />
-              <CaseField
-                label="Conscious / Breathing"
-                value={`${request.consciousStatus || '—'} / ${request.breathingStatus || '—'}`}
-              />
-              <CaseField
-                label="Equipment needs"
-                value={
-                  [request.needsOxygen && 'Oxygen', request.needsStretcher && 'Stretcher']
-                    .filter(Boolean)
-                    .join(', ') || 'None noted'
-                }
-              />
-            </div>
-            {(request.notes || request.manualDispatchNotes) && (
-              <div className="case-detail-divider">
-                <p className="case-detail-label flex items-center gap-1 mb-2">
-                  <FileText className="w-3 h-3" />
-                  Notes
-                </p>
-                <p className="case-detail-value case-detail-value--muted whitespace-pre-wrap">
-                  {request.manualDispatchNotes || request.notes}
-                </p>
-              </div>
-            )}
-          </section>
-
-          <section className="case-detail-card">
-            <h2 className="case-detail-section-title">
-              <Truck className="w-4 h-4" />
-              Assignment
-            </h2>
-            <div className="case-detail-grid case-detail-grid--3">
-              <div className="case-detail-stat-tile">
-                <p className="case-detail-label">Ambulance</p>
-                <p className="case-detail-value highlight">
-                  {request.ambulance?.ambulanceNumber || 'Unassigned'}
-                </p>
-              </div>
-              <div className="case-detail-stat-tile">
-                <p className="case-detail-label">Driver</p>
-                <p className="case-detail-value">
-                  {request.driver
-                    ? `${request.driver.firstName} ${request.driver.lastName}`
-                    : 'Unassigned'}
-                </p>
-              </div>
-              <div className="case-detail-stat-tile">
-                <p className="case-detail-label">Nurse</p>
-                <p className="case-detail-value">
-                  {request.nurse
-                    ? `${request.nurse.firstName} ${request.nurse.lastName}`
-                    : 'Unassigned'}
-                </p>
-              </div>
-            </div>
-            <p className="case-detail-hint">
-              Driver starts the case; nurse records medical notes and handover. Status updates sync from the field.
-            </p>
-          </section>
-
-          {driverReports.length > 0 && (
-            <section className="case-detail-card case-detail-card--warn">
-              <h2 className="case-detail-section-title case-detail-section-title--amber">
-                <FileText className="w-4 h-4" />
-                Driver run report
-              </h2>
-              <div className="space-y-3">
-                {driverReports.map((log) => (
-                  <div key={log.id} className="case-detail-note-block">
-                    <p className="case-detail-subvalue mb-1">
-                      {format(new Date(log.createdAt), 'PPp')}
-                    </p>
-                    <p className="case-detail-value case-detail-value--muted whitespace-pre-wrap">
-                      {log.notes?.replace('[Driver Report]', '').trim()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+      <section className="case-detail-card">
+        <h2 className="case-detail-section-title">Case overview</h2>
+        <div className="case-detail-grid case-detail-grid--3">
+          <Field label="Status" value={simpleStatus} />
+          <Field label="Priority" value={request.priority} />
+          <Field label="Emergency type" value={request.incidentCategory?.name || request.patientCondition} />
+          <Field label="Source" value={request.requestSource?.replace(/_/g, ' ')} />
+          <Field label="Patient" value={request.patient?.fullName || request.callerName} />
+          <Field label="Patient phone" value={request.patient?.phone || request.callerPhone} />
+          <Field label="Caller" value={request.callerName} />
+          <Field label="Caller phone" value={request.callerPhone} />
+          <Field
+            label="Hospital destination"
+            value={request.destinationHospital?.name || request.destination}
+          />
         </div>
+      </section>
 
-        <aside className="case-detail-aside">
-          <section className="case-detail-card lg:sticky lg:top-6">
-            <h2 className="case-detail-section-title">
-              <Activity className="w-4 h-4" />
-              Status history
-            </h2>
-            {logs.length === 0 ? (
-              <p className="case-detail-value case-detail-value--muted">No status updates yet.</p>
-            ) : (
-              <div className="case-detail-timeline">
-                {logs.map((log, idx) => (
-                  <div key={log.id} className="case-detail-timeline-item">
-                    <div className="case-detail-timeline-rail">
-                      <div className={`case-detail-timeline-dot${idx === 0 ? ' active' : ''}`} />
-                      {idx < logs.length - 1 && <div className="case-detail-timeline-line" />}
-                    </div>
-                    <div className="case-detail-timeline-body">
-                      <p className="case-detail-timeline-status">
-                        {simpleActiveCaseStatus(log.toStatus)}
-                      </p>
-                      <p className="case-detail-timeline-time">
-                        {format(new Date(log.createdAt), 'PPp')}
-                      </p>
-                      {log.notes && (
-                        <p className="case-detail-timeline-notes">{log.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </aside>
-      </div>
+      <CaseTimingPanel request={request} />
+
+      <CaseStationSummary request={request} />
+
+      <section className="case-detail-card">
+        <h2 className="case-detail-section-title">
+          <MapPin className="w-4 h-4" />
+          Location
+        </h2>
+        <div className="case-detail-grid">
+          <Field label="Pickup address" value={request.pickupLocation} />
+          <Field label="Landmark" value={request.pickupLandmark} />
+          <Field
+            label="Region / district"
+            value={[request.region?.name, request.district?.name].filter(Boolean).join(' · ')}
+          />
+          <Field label="Destination" value={request.destination || request.destinationHospital?.name} />
+        </div>
+        <div className="case-detail-divider">
+          <PickupGpsPanel request={request} title="Pickup GPS" />
+        </div>
+      </section>
+
+      <section className="case-detail-card">
+        <h2 className="case-detail-section-title">
+          <User className="w-4 h-4" />
+          Dispatch team
+        </h2>
+        <div className="case-detail-grid case-detail-grid--3">
+          <Field label="Dispatcher" value={crewName(request.dispatcher)} />
+          <Field label="Ambulance" value={request.ambulance?.ambulanceNumber} mono />
+          <Field label="Plate" value={request.ambulance?.plateNumber} mono />
+          <Field label="Driver" value={crewName(request.driver)} />
+          <Field label="Driver phone" value={request.driver?.phone} />
+          <Field label="Nurse" value={crewName(request.nurse)} />
+          <Field label="Nurse phone" value={request.nurse?.phone} />
+          <Field label="Station" value={request.station?.name} />
+        </div>
+        <p className="case-detail-hint mt-3">
+          Driver starts the case; nurse records medical treatment and hospital handover.
+        </p>
+      </section>
+
+      <section className="case-detail-card">
+        <h2 className="case-detail-section-title">
+          <AlertCircle className="w-4 h-4" />
+          Patient condition (at request)
+        </h2>
+        <div className="case-detail-grid">
+          <Field label="Condition" value={request.patientCondition} />
+          <Field label="Symptoms" value={request.symptoms} />
+          <Field label="Conscious" value={request.consciousStatus} />
+          <Field label="Breathing" value={request.breathingStatus} />
+          <Field label="Bleeding" value={request.bleedingStatus} />
+          <Field label="Equipment needed" value={equipment || 'None noted'} />
+        </div>
+        {(request.notes || request.manualDispatchNotes) && (
+          <div className="case-detail-divider">
+            <Field label="Dispatch notes" value={request.manualDispatchNotes || request.notes} />
+          </div>
+        )}
+        {request.cancellationReason && (
+          <div className="case-detail-divider">
+            <Field label="Cancellation reason" value={request.cancellationReason} />
+          </div>
+        )}
+      </section>
+
+      <section className="case-detail-card case-detail-card--accent">
+        <h2 className="case-detail-section-title case-detail-section-title--rose">
+          <Building2 className="w-4 h-4" />
+          Mission timeline & records
+        </h2>
+        <CaseMissionRecordsPanel request={request} hideCrewSummary />
+      </section>
     </div>
   )
 }
