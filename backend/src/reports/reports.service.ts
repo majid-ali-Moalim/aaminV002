@@ -2276,8 +2276,15 @@ export class ReportsService {
   }
 
   private async getOperationsIntelligenceReport(period: ReportPeriod, filters: AdminReportFilters) {
-    const where = this.reportWhere(period, filters);
-    const [cases, fleetStatus, referrals, todayPresence] = await Promise.all([
+    const where = {
+      ...this.emergencyDimensionWhere({
+        ...filters,
+        emergencyType: undefined,
+        transportType: undefined,
+      }),
+      createdAt: { gte: period.start, lte: period.end },
+    };
+    const [rawCases, fleetStatus, referrals, todayPresence, emergencyTypeMeta] = await Promise.all([
       this.prisma.emergencyRequest.findMany({
         where,
         include: {
@@ -2300,7 +2307,23 @@ export class ReportsService {
         select: { status: true, hospitalName: true },
       }),
       this.attendance.getTodayStaffPresence(),
+      filters.emergencyType
+        ? this.prisma.incidentCategory.findUnique({
+            where: { id: filters.emergencyType },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
     ]);
+
+    let cases = rawCases;
+    if (filters.emergencyType) {
+      cases = cases.filter((c) =>
+        this.caseMatchesEmergencyTypeFilter(c, filters.emergencyType!, emergencyTypeMeta?.name),
+      );
+    }
+    if (filters.transportType) {
+      cases = cases.filter((c) => this.caseMatchesTransportTypeFilter(c, filters.transportType!));
+    }
 
     const countBy = <T extends string>(map: Record<string, number>, key: T | null | undefined, fallback = 'Unknown') => {
       const k = key && String(key).trim() ? String(key) : fallback;
@@ -2310,7 +2333,6 @@ export class ReportsService {
     const requestTypes: Record<string, number> = {};
     const priorities: Record<string, number> = {};
     const genders: Record<string, number> = {};
-    const bloodTypes: Record<string, number> = {};
     const districts: Record<string, number> = {};
     const regions: Record<string, number> = {};
     const stations: Record<string, number> = {};
@@ -2357,7 +2379,6 @@ export class ReportsService {
       else if (c.status === 'PENDING' || c.status === 'REVIEWING') pending += 1;
 
       countBy(genders, c.patient?.gender ?? 'UNKNOWN', 'Unknown');
-      countBy(bloodTypes, c.patient?.bloodType ?? 'UNKNOWN', 'Unknown');
       countBy(districts, c.district?.name);
       countBy(regions, c.region?.name);
       countBy(stations, c.station?.name);
@@ -2365,14 +2386,14 @@ export class ReportsService {
       if (c.driver) countBy(drivers, this.employeeDisplayName(c.driver));
       if (c.nurse) countBy(nurses, this.employeeDisplayName(c.nurse));
       if (c.dispatcher) countBy(dispatchers, this.employeeDisplayName(c.dispatcher));
-      const hospitalName = c.destinationHospital?.name || c.destination;
+      const hospitalName = this.resolveHandoverHospital(c);
       if (hospitalName) countBy(hospitals, hospitalName);
 
-      const parsedEmergencyType = this.parseNoteField(c.notes, 'Emergency Type');
-      const parsedTransport = this.parseNoteField(c.notes, 'Transport Type');
-      if (parsedEmergencyType) countBy(emergencyTypes, parsedEmergencyType);
-      else if (c.incidentCategory?.name) countBy(emergencyTypes, c.incidentCategory.name);
-      if (parsedTransport) countBy(transportTypes, parsedTransport);
+      const emergencyLabel = this.resolveEmergencyTypeLabel(c);
+      if (emergencyLabel) countBy(emergencyTypes, emergencyLabel);
+
+      const transportLabel = this.resolveTransportTypeLabel(c);
+      if (transportLabel) countBy(transportTypes, transportLabel);
 
       if (c.cancellationReason) countBy(cancelReasons, c.cancellationReason);
 
@@ -2596,11 +2617,6 @@ export class ReportsService {
           rows: topEntries(transportTypes, 15).map(([name, count]) => [cell(name), count]),
         },
         {
-          title: 'Blood Groups',
-          columns: ['Blood Group', 'Patients'],
-          rows: topEntries(bloodTypes).map(([name, count]) => [cell(name.replace(/_/g, ' ')), count]),
-        },
-        {
           title: 'Cancellation Reasons',
           columns: ['Reason', 'Count'],
           rows: topEntries(cancelReasons).map(([name, count]) => [cell(name), count]),
@@ -2617,19 +2633,13 @@ export class ReportsService {
           'Response (min)', 'Total (min)', 'Created',
         ],
         rows: cases.map((c) => {
-          const handover = (c.patientCareRecords ?? [])
-            .map((r) => this.parseHandoverOutcome(r.clinicalNotes))
-            .find(Boolean);
           const category =
-            this.parseNoteField(c.notes, 'Emergency Type') ||
+            this.resolveEmergencyTypeLabel(c) ||
+            this.resolveTransportTypeLabel(c) ||
             c.incidentCategory?.name ||
             this.parseNoteField(c.notes, 'Transport Type') ||
             'Not recorded';
-          const destination =
-            handover?.acceptedHospital ||
-            c.destinationHospital?.name ||
-            c.destination ||
-            'Not assigned';
+          const destination = this.resolveHandoverHospital(c) || 'Not assigned';
           const { response, service } = this.computeCaseResponseMinutes(c);
           return [
             cell(c.trackingCode),
@@ -2672,6 +2682,92 @@ export class ReportsService {
     const line = notes.split('\n').find((l) => l.startsWith(`${field}:`));
     if (!line) return null;
     return line.slice(field.length + 1).trim() || null;
+  }
+
+  private resolveEmergencyTypeLabel(caseRow: {
+    notes?: string | null;
+    requestSource?: string | null;
+    incidentCategory?: { name?: string | null } | null;
+    patientCondition?: string | null;
+  }): string | null {
+    if (this.parseRequestType(caseRow.notes, caseRow.requestSource) !== 'Emergency') return null;
+
+    const fromNotes = this.parseNoteField(caseRow.notes, 'Emergency Type');
+    if (fromNotes) return fromNotes;
+
+    if (caseRow.incidentCategory?.name?.trim()) return caseRow.incidentCategory.name.trim();
+
+    const condition = caseRow.patientCondition?.trim() ?? '';
+    if (
+      condition &&
+      !condition.toLowerCase().startsWith('non-emergency') &&
+      !condition.toLowerCase().includes('triage')
+    ) {
+      return condition;
+    }
+
+    return null;
+  }
+
+  private resolveTransportTypeLabel(caseRow: {
+    notes?: string | null;
+    requestSource?: string | null;
+    patientCondition?: string | null;
+  }): string | null {
+    const reqType = this.parseRequestType(caseRow.notes, caseRow.requestSource);
+    if (reqType !== 'Non-Emergency') return null;
+
+    const fromNotes = this.parseNoteField(caseRow.notes, 'Transport Type');
+    if (fromNotes) return fromNotes;
+
+    const condition = caseRow.patientCondition?.trim() ?? '';
+    if (condition.toLowerCase().startsWith('non-emergency transport:')) {
+      return condition.replace(/^non-emergency transport:\s*/i, '').trim() || null;
+    }
+
+    return null;
+  }
+
+  private resolveHandoverHospital(caseRow: {
+    destination?: string | null;
+    destinationHospital?: { name?: string | null } | null;
+    patientCareRecords?: Array<{ clinicalNotes?: string | null }> | null;
+  }): string | null {
+    for (const record of caseRow.patientCareRecords ?? []) {
+      const handover = this.parseHandoverOutcome(record.clinicalNotes);
+      if (handover?.acceptedHospital?.trim()) return handover.acceptedHospital.trim();
+    }
+    return caseRow.destinationHospital?.name?.trim() || caseRow.destination?.trim() || null;
+  }
+
+  private caseMatchesEmergencyTypeFilter(
+    caseRow: {
+      incidentCategoryId?: string | null;
+      notes?: string | null;
+      requestSource?: string | null;
+      incidentCategory?: { name?: string | null } | null;
+      patientCondition?: string | null;
+    },
+    emergencyTypeId: string,
+    emergencyTypeName?: string | null,
+  ) {
+    if (caseRow.incidentCategoryId === emergencyTypeId) return true;
+    const label = this.resolveEmergencyTypeLabel(caseRow);
+    if (!label || !emergencyTypeName) return false;
+    return label.toLowerCase() === emergencyTypeName.toLowerCase();
+  }
+
+  private caseMatchesTransportTypeFilter(
+    caseRow: {
+      notes?: string | null;
+      requestSource?: string | null;
+      patientCondition?: string | null;
+    },
+    transportType: string,
+  ) {
+    const label = this.resolveTransportTypeLabel(caseRow);
+    if (!label) return false;
+    return label.toLowerCase().includes(transportType.toLowerCase());
   }
 
   private minutesBetweenDates(from?: Date | null, to?: Date | null) {
@@ -2922,6 +3018,9 @@ export class ReportsService {
       });
       parts.push(`Emergency type: ${category?.name ?? filters.emergencyType}`);
     }
+    if (filters.transportType) {
+      parts.push(`Transport type: ${filters.transportType}`);
+    }
     if (filters.startDate || filters.endDate) {
       parts.push(`Custom dates: ${filters.startDate || '…'} to ${filters.endDate || '…'}`);
     } else {
@@ -2940,6 +3039,7 @@ export class ReportsService {
         filters.priority ||
         filters.status ||
         filters.emergencyType ||
+        filters.transportType ||
         filters.startDate ||
         filters.endDate,
     );

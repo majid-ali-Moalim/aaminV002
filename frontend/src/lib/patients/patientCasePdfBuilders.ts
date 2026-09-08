@@ -1,5 +1,6 @@
 import type { EmergencyRequest } from '@/types'
 import { buildCaseTimeline } from '@/components/features/emergency/CaseMissionRecordsPanel'
+import { formatTimelineEventDetails } from '@/lib/emergency/caseMissionTimeline'
 import { buildCallerReport } from '@/lib/emergency/callerReport'
 import { buildCaseTimingRows } from '@/lib/emergency/caseTimingMetrics'
 import {
@@ -195,7 +196,7 @@ export function buildTimelineTable(req: EmergencyRequest) {
     rows: events.map((ev) => [
       formatDateTimeShort(ev.at),
       ev.title,
-      ev.body || '—',
+      formatTimelineEventDetails(ev),
       ev.actor || '—',
     ]),
   }

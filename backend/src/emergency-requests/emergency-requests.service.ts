@@ -721,15 +721,11 @@ export class EmergencyRequestsService {
             },
           },
         },
+        // Public tracking never exposes crew identity or contact details —
+        // only the station they respond from.
         driver: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                email: true,
-              },
-            },
+          select: {
+            station: { select: { id: true, name: true } },
           },
         },
         ambulance: {
@@ -739,14 +735,8 @@ export class EmergencyRequestsService {
           }
         },
         nurse: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                email: true,
-              },
-            },
+          select: {
+            station: { select: { id: true, name: true } },
           },
         },
         region: true,
@@ -1561,6 +1551,7 @@ export class EmergencyRequestsService {
 
     const { assignable, ineligible } = partitionDispatchEmployees(drivers, {
       busyEmployeeIds: new Set(busyDriverIds),
+      presentEmployeeIds: presentIds,
       stationId: stationId || undefined,
     });
 
@@ -1611,6 +1602,7 @@ export class EmergencyRequestsService {
 
     const { assignable, ineligible } = partitionDispatchEmployees(nurses, {
       busyEmployeeIds: new Set(busyNurseIds),
+      presentEmployeeIds: presentIds,
       stationId: stationId || undefined,
     });
 

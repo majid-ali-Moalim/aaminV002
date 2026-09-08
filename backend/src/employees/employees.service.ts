@@ -484,7 +484,7 @@ export class EmployeesService {
 
     if (userData.email && userData.email !== existingEmail) {
       const taken = await this.prisma.user.findFirst({
-        where: { email: userData.email, not: { id: userId } },
+        where: { email: userData.email, NOT: { id: userId } },
         select: { id: true },
       });
       if (taken) {

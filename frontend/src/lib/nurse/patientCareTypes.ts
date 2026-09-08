@@ -18,18 +18,49 @@ export type TreatmentData = {
 
 const ASSESSMENT_PREFIX = '[EADS_ASSESSMENT]'
 
+function parseEmbeddedPayload<T>(notes: string | null | undefined, prefix: string): T | null {
+  if (!notes) return null
+  const idx = notes.indexOf(prefix)
+  if (idx < 0) return null
+  const after = notes.slice(idx + prefix.length).trimStart()
+  if (!after.startsWith('{')) return null
+  let depth = 0
+  for (let i = 0; i < after.length; i++) {
+    const ch = after[i]
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        try {
+          return JSON.parse(after.slice(0, i + 1)) as T
+        } catch {
+          return null
+        }
+      }
+    }
+  }
+  return null
+}
+
+function parsePrefixedPayload<T>(notes: string | null | undefined, prefix: string): T | null {
+  if (!notes) return null
+  if (notes.startsWith(prefix)) {
+    try {
+      return JSON.parse(notes.slice(prefix.length)) as T
+    } catch {
+      /* fall through to embedded parse */
+    }
+  }
+  return parseEmbeddedPayload<T>(notes, prefix)
+}
+
 export function encodeAssessment(data: Omit<AssessmentData, '_type'>): string {
   const payload: AssessmentData = { _type: 'assessment', ...data }
   return `${ASSESSMENT_PREFIX}${JSON.stringify(payload)}`
 }
 
 export function parseClinicalRecord(notes?: string | null): AssessmentData | null {
-  if (!notes?.startsWith(ASSESSMENT_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(ASSESSMENT_PREFIX.length)) as AssessmentData
-  } catch {
-    return null
-  }
+  return parsePrefixedPayload<AssessmentData>(notes, ASSESSMENT_PREFIX)
 }
 
 export function isAssessmentRecord(record: { clinicalNotes?: string | null }): boolean {
@@ -95,12 +126,7 @@ export function encodeMonitoring(data: Omit<MonitoringData, '_type'>): string {
 }
 
 export function parseMonitoring(notes?: string | null): MonitoringData | null {
-  if (!notes?.startsWith(MONITORING_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(MONITORING_PREFIX.length)) as MonitoringData
-  } catch {
-    return null
-  }
+  return parsePrefixedPayload<MonitoringData>(notes, MONITORING_PREFIX)
 }
 
 export function isMonitoringRecord(record: { clinicalNotes?: string | null }): boolean {
@@ -112,12 +138,7 @@ export function encodeHandover(data: Omit<HandoverData, '_type'>): string {
 }
 
 export function parseHandover(notes?: string | null): HandoverData | null {
-  if (!notes?.startsWith(HANDOVER_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(HANDOVER_PREFIX.length)) as HandoverData
-  } catch {
-    return null
-  }
+  return parsePrefixedPayload<HandoverData>(notes, HANDOVER_PREFIX)
 }
 
 export function isHandoverRecord(record: { clinicalNotes?: string | null }): boolean {
@@ -156,12 +177,7 @@ export function encodeLoadPatient(data?: { notes?: string }): string {
 }
 
 export function parseLoadPatient(notes?: string | null): LoadPatientData | null {
-  if (!notes?.startsWith(LOAD_PATIENT_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(LOAD_PATIENT_PREFIX.length)) as LoadPatientData
-  } catch {
-    return null
-  }
+  return parsePrefixedPayload<LoadPatientData>(notes, LOAD_PATIENT_PREFIX)
 }
 
 export function isLoadPatientRecord(record: { clinicalNotes?: string | null }): boolean {
@@ -186,12 +202,7 @@ export function encodeTransferToHospital(data?: { notes?: string }): string {
 }
 
 export function parseTransferToHospital(notes?: string | null): TransferHospitalData | null {
-  if (!notes?.startsWith(TRANSFER_HOSPITAL_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(TRANSFER_HOSPITAL_PREFIX.length)) as TransferHospitalData
-  } catch {
-    return null
-  }
+  return parsePrefixedPayload<TransferHospitalData>(notes, TRANSFER_HOSPITAL_PREFIX)
 }
 
 export function isTransferToHospitalRecord(record: { clinicalNotes?: string | null }): boolean {

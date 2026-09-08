@@ -305,6 +305,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     handoverDocumentName: '',
     ageGroup: '',
     gender: '',
+    category: '',
     nationalityType: '',
     maritalStatus: '',
     driverName: '',

@@ -22,6 +22,9 @@ import type { MedicalNotesFieldErrors } from '@/lib/nurse/medicalNotesValidation
 import type { HandoverFieldErrors } from '@/lib/nurse/handoverValidation'
 import { COUNTRY_NAMES } from '@/lib/countries'
 import { AGE_GROUPS } from '@/components/public/hire-ambulance/constants'
+import { genderOptions } from '@/lib/nurseFormMasterData'
+import { formatGender } from '@/lib/patients/patientDisplay'
+import { downloadUploadedFile, uploadedFileUrl } from '@/lib/uploads/fileUrl'
 
 type TaskShellProps = {
   title: string
@@ -500,6 +503,37 @@ function formatAgeGroupLabel(value: string) {
   return AGE_GROUPS.find((g) => g.value === value)?.label || value || '—'
 }
 
+function GenderField({
+  form,
+  setForm,
+  readOnly,
+}: {
+  form: HandoverFormState
+  setForm: (f: HandoverFormState) => void
+  readOnly?: boolean
+}) {
+  const options = genderOptions()
+  if (readOnly) {
+    return (
+      <label>
+        Gender
+        <input value={formatGender(form.gender as 'MALE' | 'FEMALE' | undefined) || '—'} readOnly className="readonly" />
+      </label>
+    )
+  }
+  return (
+    <label>
+      Gender
+      <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+        <option value="">Select…</option>
+        {options.map((g) => (
+          <option key={g.id} value={g.id}>{g.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 function refusalReasonLabel(value: string) {
   return HOSPITAL_REFUSAL_REASON_OPTIONS.find((o) => o.value === value)?.label || value || '—'
 }
@@ -623,43 +657,25 @@ function HandoverRejectedHospitalsSection({
   )
 }
 
-export function HandoverTaskFields({
+/** Matches the backend upload limit in uploads.controller.ts. */
+const MAX_HANDOVER_DOC_BYTES = 5 * 1024 * 1024
+
+export function HandoverDocumentUpload({
   form,
   setForm,
-  nurseName,
-  caseContext,
-  destinationAssigned = false,
-  assignedDestination = '',
   readOnly = false,
-  errors = {},
 }: {
   form: HandoverFormState
   setForm: (f: HandoverFormState) => void
-  nurseName?: string
-  caseContext?: HandoverCaseContext
-  destinationAssigned?: boolean
-  assignedDestination?: string
   readOnly?: boolean
-  errors?: HandoverFieldErrors
 }) {
   const [uploadingDoc, setUploadingDoc] = useState(false)
-  const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
-  const outcomeLabel = handoverOutcomeLabel(form.patientOutcome)
-  const dispatcherDestination = assignedDestination.trim() || caseContext?.acceptedHospital?.trim() || ''
-  const isDestinationAssigned = destinationAssigned || Boolean(dispatcherDestination)
-  const displayedDestination = isDestinationAssigned
-    ? dispatcherDestination
-    : form.acceptedHospital || (readOnly ? '—' : '')
-  const nationalityOptions =
-    form.nationalityType && !COUNTRY_NAMES.includes(form.nationalityType as (typeof COUNTRY_NAMES)[number])
-      ? [form.nationalityType, ...COUNTRY_NAMES]
-      : COUNTRY_NAMES
 
   const handleHandoverDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || readOnly) return
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File must be under 10 MB')
+    if (file.size > MAX_HANDOVER_DOC_BYTES) {
+      toast.error('File must be under 5 MB')
       return
     }
     setUploadingDoc(true)
@@ -680,6 +696,108 @@ export function HandoverTaskFields({
       e.target.value = ''
     }
   }
+
+  return (
+    <div className="span-2 nmw-handover-doc">
+      <span className="block text-sm font-semibold text-zinc-800 mb-2">
+        Handover document <span className="nmw-optional">(hospital form / PDF / photo)</span>
+      </span>
+      {form.handoverDocumentUrl ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <FileText size={18} className="text-emerald-700 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-emerald-900 truncate">
+              {form.handoverDocumentName || 'Uploaded document'}
+            </p>
+            <span className="flex items-center gap-3">
+              <a
+                href={uploadedFileUrl(form.handoverDocumentUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-emerald-700 underline"
+              >
+                View file
+              </a>
+              <button
+                type="button"
+                className="text-xs font-bold text-emerald-700 underline"
+                onClick={() =>
+                  void downloadUploadedFile(
+                    form.handoverDocumentUrl,
+                    form.handoverDocumentName,
+                  )
+                }
+              >
+                Download
+              </button>
+            </span>
+          </div>
+          {!readOnly && (
+            <button
+              type="button"
+              className="text-xs font-bold text-red-600"
+              onClick={() => setForm({ ...form, handoverDocumentUrl: '', handoverDocumentName: '' })}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ) : readOnly ? (
+        <p className="text-sm text-zinc-500">No document uploaded.</p>
+      ) : (
+        <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 cursor-pointer hover:border-red-300 hover:bg-red-50/40 transition-colors">
+          {uploadingDoc ? (
+            <Loader2 className="animate-spin text-red-600" size={22} />
+          ) : (
+            <Upload className="text-zinc-500" size={22} />
+          )}
+          <span className="text-sm font-semibold text-zinc-700">
+            {uploadingDoc ? 'Uploading…' : 'Upload handover document'}
+          </span>
+          <span className="text-xs text-zinc-500">PDF, JPG, or PNG — max 5 MB</span>
+          <input
+            type="file"
+            className="sr-only"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+            disabled={uploadingDoc}
+            onChange={handleHandoverDocUpload}
+          />
+        </label>
+      )}
+    </div>
+  )
+}
+
+export function HandoverTaskFields({
+  form,
+  setForm,
+  nurseName,
+  caseContext,
+  destinationAssigned = false,
+  assignedDestination = '',
+  readOnly = false,
+  errors = {},
+}: {
+  form: HandoverFormState
+  setForm: (f: HandoverFormState) => void
+  nurseName?: string
+  caseContext?: HandoverCaseContext
+  destinationAssigned?: boolean
+  assignedDestination?: string
+  readOnly?: boolean
+  errors?: HandoverFieldErrors
+}) {
+  const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
+  const outcomeLabel = handoverOutcomeLabel(form.patientOutcome)
+  const dispatcherDestination = assignedDestination.trim() || caseContext?.acceptedHospital?.trim() || ''
+  const isDestinationAssigned = destinationAssigned || Boolean(dispatcherDestination)
+  const displayedDestination = isDestinationAssigned
+    ? dispatcherDestination
+    : form.acceptedHospital || (readOnly ? '—' : '')
+  const nationalityOptions =
+    form.nationalityType && !COUNTRY_NAMES.includes(form.nationalityType as (typeof COUNTRY_NAMES)[number])
+      ? [form.nationalityType, ...COUNTRY_NAMES]
+      : COUNTRY_NAMES
 
   return (
     <>
@@ -750,10 +868,7 @@ export function HandoverTaskFields({
           </select>
         )}
       </label>
-      <label>
-        Gender
-        <input value={form.gender || '—'} readOnly className="readonly" />
-      </label>
+      <GenderField form={form} setForm={setForm} readOnly={readOnly} />
       <label>
         Nationality
         {readOnly ? (
@@ -861,59 +976,7 @@ export function HandoverTaskFields({
         />
         <FieldError error={errors.notes} />
       </label>
-      <div className="span-2 nmw-handover-doc">
-        <span className="block text-sm font-semibold text-zinc-800 mb-2">
-          Handover document <span className="nmw-optional">(hospital form / PDF / photo)</span>
-        </span>
-        {form.handoverDocumentUrl ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-            <FileText size={18} className="text-emerald-700 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-emerald-900 truncate">
-                {form.handoverDocumentName || 'Uploaded document'}
-              </p>
-              <a
-                href={form.handoverDocumentUrl.startsWith('http') ? form.handoverDocumentUrl : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:3001'}${form.handoverDocumentUrl}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-emerald-700 underline"
-              >
-                View file
-              </a>
-            </div>
-            {!readOnly && (
-              <button
-                type="button"
-                className="text-xs font-bold text-red-600"
-                onClick={() => setForm({ ...form, handoverDocumentUrl: '', handoverDocumentName: '' })}
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        ) : readOnly ? (
-          <p className="text-sm text-zinc-500">No document uploaded.</p>
-        ) : (
-          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 cursor-pointer hover:border-red-300 hover:bg-red-50/40 transition-colors">
-            {uploadingDoc ? (
-              <Loader2 className="animate-spin text-red-600" size={22} />
-            ) : (
-              <Upload className="text-zinc-500" size={22} />
-            )}
-            <span className="text-sm font-semibold text-zinc-700">
-              {uploadingDoc ? 'Uploading…' : 'Upload handover document'}
-            </span>
-            <span className="text-xs text-zinc-500">PDF, JPG, or PNG — max 10 MB</span>
-            <input
-              type="file"
-              className="sr-only"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
-              disabled={uploadingDoc}
-              onChange={handleHandoverDocUpload}
-            />
-          </label>
-        )}
-      </div>
+      <HandoverDocumentUpload form={form} setForm={setForm} readOnly={readOnly} />
       <label className="span-2">
         Digital signature (full name) *
         <input
@@ -1099,6 +1162,9 @@ export function HandoverQuickFields({
         error={errors.rejectedHospitals}
       />
 
+      <p className="nmw-form-section-label span-2">Patient details</p>
+      <GenderField form={form} setForm={setForm} readOnly={readOnly} />
+
       <label className="span-2">
         Patient status *
         {readOnly ? (
@@ -1155,6 +1221,7 @@ export function HandoverQuickFields({
         />
         <FieldError error={errors.receivingStaff} />
       </label>
+      <HandoverDocumentUpload form={form} setForm={setForm} readOnly={readOnly} />
       <label className="span-2">
         Your signature (full name) *
         <input

@@ -17,7 +17,6 @@ import {
   RefreshCw,
   ClipboardList,
   Navigation,
-  Phone,
   HeartPulse,
   Stethoscope,
   AlertTriangle
@@ -189,18 +188,6 @@ export default function TrackingResultPage() {
 
   const currentStepIndex = stepIndexForStatus(data?.status ?? 'PENDING')
   const isCancelled = data?.status === 'CANCELLED'
-  const driverInfo =
-    data?.driver && typeof data.driver === 'object'
-      ? data.driver
-      : data?.driver
-        ? { name: String(data.driver), phone: null }
-        : null
-  const nurseInfo =
-    data?.nurse && typeof data.nurse === 'object'
-      ? data.nurse
-      : data?.nurse
-        ? { name: String(data.nurse), phone: null }
-        : null
 
   if (loading) {
     return (
@@ -408,29 +395,31 @@ export default function TrackingResultPage() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-bold text-slate-900 mb-4">Your crew</h3>
+              <h3 className="font-bold text-slate-900 mb-4">Responding team</h3>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Driver</p>
-                  <p className="font-bold text-slate-900">{driverInfo?.name || 'Not assigned'}</p>
-                  {driverInfo?.phone ? (
-                    <a href={`tel:${driverInfo.phone}`} className="inline-flex items-center gap-1 text-sm text-red-600 font-semibold mt-2">
-                      <Phone size={14} /> {driverInfo.phone}
-                    </a>
-                  ) : (
-                    <p className="text-xs text-slate-500 mt-2">Phone shared when assigned</p>
-                  )}
+                  <p className="font-bold text-slate-900">
+                    {data.driverAssigned ? 'Assigned' : 'Not assigned'}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                    <Building2 size={12} />
+                    {data.driverAssigned
+                      ? data.driverStation || data.station || 'Station not set'
+                      : 'Station shown once assigned'}
+                  </p>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Nurse</p>
-                  <p className="font-bold text-slate-900">{nurseInfo?.name || 'Not assigned'}</p>
-                  {nurseInfo?.phone ? (
-                    <a href={`tel:${nurseInfo.phone}`} className="inline-flex items-center gap-1 text-sm text-red-600 font-semibold mt-2">
-                      <Phone size={14} /> {nurseInfo.phone}
-                    </a>
-                  ) : (
-                    <p className="text-xs text-slate-500 mt-2">Phone shared when assigned</p>
-                  )}
+                  <p className="font-bold text-slate-900">
+                    {data.nurseAssigned ? 'Assigned' : 'Not assigned'}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                    <Building2 size={12} />
+                    {data.nurseAssigned
+                      ? data.nurseStation || data.station || 'Station not set'
+                      : 'Station shown once assigned'}
+                  </p>
                 </div>
               </div>
               {data.ambulance?.code && (
@@ -438,6 +427,10 @@ export default function TrackingResultPage() {
                   Ambulance: <span className="font-bold text-slate-900">{data.ambulance.code}</span>
                 </p>
               )}
+              <p className="text-xs text-slate-500 mt-4">
+                Crew names and phone numbers are kept private. Call the emergency line if you need
+                to reach the team.
+              </p>
             </div>
 
             <div className="bg-blue-50 text-blue-800 text-sm rounded-xl p-4 border border-blue-100 flex items-start gap-3 shadow-sm">

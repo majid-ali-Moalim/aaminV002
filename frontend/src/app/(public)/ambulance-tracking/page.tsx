@@ -270,29 +270,31 @@ function TrackingContent() {
                     </div>
                     
                     <div className="space-y-4">
-                      <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest leading-none">Type: Members:</p>
+                      <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest leading-none">Responding team</p>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-                          <img 
-                            src={getFullImageUrl(trackingData.nurse?.profilePhoto) || 'https://images.unsplash.com/photo-1559839734-2b71f1e3c77d?auto=format&fit=crop&q=80&w=200'} 
-                            className="w-16 h-16 rounded-xl object-cover mb-3 shadow-md"
-                            onError={(e: any) => { e.target.src = 'https://images.unsplash.com/photo-1559839734-2b71f1e3c77d?auto=format&fit=crop&q=80&w=200' }}
-                          />
-                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Nurse: {trackingData.nurse?.firstName || 'Najma'}</p>
-                          <p className="text-[8px] text-slate-400 uppercase tracking-widest">License: AA-5713</p>
+                        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 text-center">
+                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Nurse</p>
+                          <p className="text-xs font-black text-slate-800">
+                            {trackingData.nurse ? 'Assigned' : 'Not assigned'}
+                          </p>
+                          <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">
+                            {trackingData.nurse?.station?.name || '—'}
+                          </p>
                         </div>
-                        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-                          <img 
-                            src={getFullImageUrl(trackingData.driver?.profilePhoto) || 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=200'} 
-                            className="w-16 h-16 rounded-xl object-cover mb-3 shadow-md border-2 border-white"
-                            onError={(e: any) => { e.target.src = 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=200' }}
-                          />
-                          <p className="text-[10px] font-bold text-red-500 uppercase mb-1">Driver: {trackingData.driver?.firstName || 'Mohamed'}</p>
-                          <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">ETA: Trained in Emergency</p>
+                        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 text-center">
+                          <p className="text-[10px] font-bold text-red-500 uppercase mb-1">Driver</p>
+                          <p className="text-xs font-black text-slate-800">
+                            {trackingData.driver ? 'Assigned' : 'Not assigned'}
+                          </p>
+                          <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">
+                            {trackingData.driver?.station?.name || '—'}
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <p className="text-xs font-bold text-slate-400 tracking-widest">License AA-5713</p>
+                    <p className="text-xs font-medium text-slate-400">
+                      Crew names and contact details are kept private.
+                    </p>
                   </div>
                 </div>
 

@@ -8,6 +8,7 @@ export const DISPATCH_ASSIGNABLE_SHIFT_STATUSES = ['AVAILABLE'] as const;
 
 export type DispatchExclusionReason =
   | 'on_case'
+  | 'absent'
   | 'wrong_shift'
   | 'unavailable_status'
   | 'inactive'
@@ -37,6 +38,8 @@ export function evaluateDispatchAssignability(
   employee: DispatchAssignabilityInput,
   opts: {
     busyEmployeeIds?: Set<string>;
+    /** When supplied, only crew marked present in today's attendance are assignable. */
+    presentEmployeeIds?: Set<string>;
     stationId?: string | null;
     at?: Date;
   } = {},
@@ -72,6 +75,17 @@ export function evaluateDispatchAssignability(
       dispatchAssignable: false,
       exclusionReason: 'on_case',
       exclusionDetail: 'On an open case',
+      onCurrentShift,
+      shiftCode: shift.code,
+      shiftName: shift.name,
+    };
+  }
+
+  if (opts.presentEmployeeIds && !opts.presentEmployeeIds.has(employee.id)) {
+    return {
+      dispatchAssignable: false,
+      exclusionReason: 'absent',
+      exclusionDetail: 'Absent — not marked present in attendance',
       onCurrentShift,
       shiftCode: shift.code,
       shiftName: shift.name,
@@ -141,6 +155,7 @@ export function enrichWithDispatchAssignability<
   employee: T,
   opts: {
     busyEmployeeIds?: Set<string>;
+    presentEmployeeIds?: Set<string>;
     stationId?: string | null;
     at?: Date;
   } = {},
@@ -164,6 +179,7 @@ export function filterDispatchAssignableEmployees<
   employees: T[],
   opts: {
     busyEmployeeIds?: Set<string>;
+    presentEmployeeIds?: Set<string>;
     stationId?: string | null;
     at?: Date;
   } = {},
@@ -179,6 +195,7 @@ export function partitionDispatchEmployees<
   employees: T[],
   opts: {
     busyEmployeeIds?: Set<string>;
+    presentEmployeeIds?: Set<string>;
     stationId?: string | null;
     at?: Date;
   } = {},
@@ -194,6 +211,8 @@ export function getDispatchExclusionLabel(reason?: DispatchExclusionReason): str
   switch (reason) {
     case 'on_case':
       return 'On active case';
+    case 'absent':
+      return 'Absent today';
     case 'wrong_shift':
       return 'Not on current shift';
     case 'unavailable_status':

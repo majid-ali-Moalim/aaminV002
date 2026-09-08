@@ -11,12 +11,7 @@ loadEnv({ path: join(process.cwd(), '.env') });
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Serve static assets
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads',
-  });
-
-  // Enable CORS (all local dev ports)
+  // Enable CORS (all local dev ports) — before static assets so /uploads is fetchable
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true)
@@ -28,6 +23,11 @@ async function bootstrap() {
       callback(null, false)
     },
     credentials: true,
+  });
+
+  // Serve static assets
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads',
   });
 
   // Global validation pipe

@@ -254,7 +254,7 @@ export default function EmergencyCaseDetailPage() {
           <Building2 className="w-4 h-4" />
           Mission timeline & records
         </h2>
-        <CaseMissionRecordsPanel request={request} hideCrewSummary />
+        <CaseMissionRecordsPanel request={request} hideCrewSummary hideTitle />
       </section>
     </div>
   )

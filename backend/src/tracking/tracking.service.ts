@@ -32,19 +32,15 @@ export class TrackingService {
             station: { select: { name: true } },
           },
         },
+        // Public tracking never exposes crew identity or contact details —
+        // only the station they respond from.
         driver: {
           select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
             station: { select: { name: true } },
           },
         },
         nurse: {
           select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
             station: { select: { name: true } },
           },
         },
@@ -102,18 +98,10 @@ export class TrackingService {
         code: request.ambulance.ambulanceNumber,
         type: request.ambulance.vehicleType,
       } : null,
-      driver: request.driver
-        ? {
-            name: `${request.driver.firstName || ''} ${request.driver.lastName || ''}`.trim(),
-            phone: request.driver.phone || null,
-          }
-        : null,
-      nurse: request.nurse
-        ? {
-            name: `${request.nurse.firstName || ''} ${request.nurse.lastName || ''}`.trim(),
-            phone: request.nurse.phone || null,
-          }
-        : null,
+      driverAssigned: Boolean(request.driverId),
+      nurseAssigned: Boolean(request.nurseId),
+      driverStation: request.driver?.station?.name || null,
+      nurseStation: request.nurse?.station?.name || null,
       hospital: request.destinationHospital?.name,
       estimatedArrival,
       timeline: request.statusLogs.map(log => ({

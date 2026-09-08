@@ -65,7 +65,9 @@ type DispatchCrewMember = Employee & {
 
 function isAssignableCrewMember(member: DispatchCrewMember): boolean {
   if (member.dispatchAssignable === false || member.dispatchEligible === false) return false
-  if (member.exclusionReason === 'on_case') return false
+  if (member.exclusionReason) return false
+  // Crew availability treats absent staff as unavailable — keep dispatch lists in sync.
+  if (member.isPresent === false) return false
   const shift = String(member.shiftStatus ?? '').toUpperCase()
   if (shift && shift !== 'AVAILABLE') return false
   return true

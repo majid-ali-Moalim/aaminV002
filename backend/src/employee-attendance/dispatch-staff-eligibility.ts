@@ -51,7 +51,10 @@ export function enrichDispatchEligibleEmployee<
   } = {},
 ) {
   const present = presentIds.has(employee.id);
-  const enriched = enrichWithDispatchAssignability(employee, opts);
+  const enriched = enrichWithDispatchAssignability(employee, {
+    ...opts,
+    presentEmployeeIds: presentIds,
+  });
   return {
     ...enriched,
     isPresent: present,
@@ -78,7 +81,10 @@ export function filterDispatchEligibleEmployees<
     at?: Date;
   } = {},
 ) {
-  return filterDispatchAssignableEmployees(employees, opts).map((e) => ({
+  return filterDispatchAssignableEmployees(employees, {
+    ...opts,
+    presentEmployeeIds: presentIds,
+  }).map((e) => ({
     ...e,
     isPresent: presentIds.has(e.id),
   }));
@@ -108,6 +114,19 @@ export async function assertDispatchEligibleStaff(
   if (!hasDispatchAssignableShiftStatus(emp.shiftStatus)) {
     throw new BadRequestException(
       `${name} is not available for dispatch (status: ${emp.shiftStatus ?? 'unknown'})`,
+    );
+  }
+
+  const presentToday = await prisma.attendanceRecord.findFirst({
+    where: {
+      employeeId,
+      date: { gte: startOfDay(), lte: endOfDay() },
+    },
+    select: { id: true },
+  });
+  if (!presentToday) {
+    throw new BadRequestException(
+      `${name} is not marked present in today's attendance and cannot be assigned`,
     );
   }
 
