@@ -106,6 +106,15 @@ export class NotificationsService {
         } else if (recipient?.role === 'EMPLOYEE' && roleName.includes('nurse')) {
           recipientRedirect = '/nurse/dashboard';
         }
+      } else if (
+        payload.entityType === 'DriverIncident' ||
+        (payload.eventKey === 'INCIDENT_REPORT' && category === 'INCIDENT')
+      ) {
+        if (roleName.includes('dispatcher')) {
+          recipientRedirect = '/dispatcher/operational-alerts';
+        } else if (recipient?.role === 'ADMIN') {
+          recipientRedirect = '/admin/operational-alerts';
+        }
       }
 
       try {

@@ -19,6 +19,7 @@ import { EmergencyRequest, Ambulance, Employee } from '@/types';
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel';
 import { activeShiftLabel } from '@/lib/employment/shiftTypes';
 import { caseRequiresNurse } from '@/lib/emergency/caseNurseRequirement';
+import { formatBookingLabel, isScheduledFutureCase } from '@/lib/emergency/bookingTime';
 import { getCaseStationLabels, resourceBelongsToStation } from '@/lib/emergency/caseStationLabels';
 import { useDispatcherAccess } from '@/lib/hooks/useDispatcherAccess';
 
@@ -239,6 +240,8 @@ const AssignModal: React.FC<AssignModalProps> = ({
   }, [stationFilterId, availableAmbulances, availableDrivers, availableNurses]);
 
   const nurseRequired = caseRequiresNurse(request);
+  const scheduledFuture = isScheduledFutureCase(request.notes);
+  const bookingLabel = formatBookingLabel(request.notes);
 
   const selectedDriver = availableDrivers.find(d => d.id === assignmentParams.driverId);
   const selectedNurse = availableNurses.find(n => n.id === assignmentParams.nurseId);
@@ -264,6 +267,14 @@ const AssignModal: React.FC<AssignModalProps> = ({
   };
 
   const handleAssign = async () => {
+    if (scheduledFuture) {
+      toast.error(
+        bookingLabel
+          ? `This case is scheduled for ${bookingLabel}. Crew cannot be assigned until booking time.`
+          : 'This case is scheduled for a future time. Crew cannot be assigned yet.',
+      );
+      return;
+    }
     if (!assignmentParams.ambulanceId) {
       return alert('Please select an ambulance');
     }
@@ -273,7 +284,10 @@ const AssignModal: React.FC<AssignModalProps> = ({
     if (nurseRequired && !assignmentParams.nurseId) {
       return alert('Please select a nurse — this case requires a nurse before dispatch can proceed');
     }
-
+    if (!nurseRequired && assignmentParams.nurseId) {
+      toast.error('This non-emergency case does not require a nurse — remove the nurse selection.');
+      return;
+    }
     const stationMismatch = assertSelectedCrewMatchCaseStation();
     if (stationMismatch) {
       toast.error(stationMismatch);
@@ -288,7 +302,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
         request.id,
         ambulanceId,
         assignmentParams.driverId,
-        assignmentParams.nurseId
+        nurseRequired ? assignmentParams.nurseId : undefined,
       );
       onSuccess();
       onClose();
@@ -347,9 +361,21 @@ const AssignModal: React.FC<AssignModalProps> = ({
           </button>
         </div>
 
+        {scheduledFuture && (
+          <div className="mx-8 mt-6 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-sm font-semibold">
+            Scheduled case — booking time is {bookingLabel ?? 'in the future'}. Crew assignment is blocked until then.
+          </div>
+        )}
+
         {nurseRequired && (
           <div className="mx-8 mt-6 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50 text-violet-900 text-sm font-semibold">
             Nurse required — assign a nurse to this case before dispatch can proceed.
+          </div>
+        )}
+
+        {!nurseRequired && (
+          <div className="mx-8 mt-6 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-semibold">
+            Nurse not required for this non-emergency case — assign driver and ambulance only.
           </div>
         )}
 
@@ -531,12 +557,14 @@ const AssignModal: React.FC<AssignModalProps> = ({
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
+          <div className={`grid gap-8 ${nurseRequired ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
             {/* Driver Section */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">Select available Driver</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex-1">
+                  Select available Driver <span className="text-red-600">*</span>
+                </h3>
                 <Filter className="w-4 h-4 text-slate-400" />
               </div>
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
@@ -587,7 +615,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
               </div>
             </div>
 
-            {/* Nurse Section */}
+            {nurseRequired && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
@@ -642,6 +670,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 ))}
               </div>
             </div>
+            )}
           </div>
         </div>
 
@@ -672,6 +701,7 @@ const AssignModal: React.FC<AssignModalProps> = ({
                 isSubmitting ||
                 !assignmentParams.ambulanceId ||
                 !assignmentParams.driverId ||
+                scheduledFuture ||
                 (nurseRequired && !assignmentParams.nurseId)
               }
               className={`flex-1 sm:flex-none px-8 h-12 text-white font-bold uppercase text-xs tracking-widest rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 ${

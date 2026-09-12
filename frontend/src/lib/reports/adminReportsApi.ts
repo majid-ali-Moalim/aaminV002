@@ -24,6 +24,8 @@ export type AdminReportFilterOptions = {
   vehicleTypes: Array<{ value: string; label: string }>
   patientOutcomes?: Array<{ value: string; label: string }>
   transportTypes?: Array<{ value: string; label: string; code?: string }>
+  requestSources?: Array<{ value: string; label: string }>
+  stations?: Array<{ value: string; label: string }>
 }
 
 function authHeaders() {

@@ -227,6 +227,7 @@ export interface Ambulance {
   defibrillatorAvailable?: boolean;
   registrationExpiry?: string | null;
   registrationDocumentUrl?: string | null;
+  photoUrl?: string | null;
   isActive: boolean;
   
   fuelLevel?: number | null;

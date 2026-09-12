@@ -145,8 +145,6 @@ export default function CaseDetailModal({
                       request.patient?.age != null ? String(request.patient.age) : undefined
                     }
                   />
-                  <DetailField label="Caller name" value={request.callerName} />
-                  <DetailField label="Caller phone" value={request.callerPhone} />
                 </div>
               </section>
 

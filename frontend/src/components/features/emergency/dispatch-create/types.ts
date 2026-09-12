@@ -43,6 +43,7 @@ export type NonEmergencyDispatchForm = {
   destinationHospitalBranchId: string
   destinationHospitalBranchName: string
   bookingDateTime: string
+  bookNow: boolean
   mobilityRequirement: string
   wheelchairNeeded: boolean
   stretcherNeeded: boolean
@@ -120,6 +121,7 @@ export const defaultNonEmergencyForm = (): NonEmergencyDispatchForm => ({
   destinationHospitalBranchId: '',
   destinationHospitalBranchName: '',
   bookingDateTime: '',
+  bookNow: false,
   mobilityRequirement: '',
   wheelchairNeeded: false,
   stretcherNeeded: false,
@@ -187,6 +189,7 @@ export function normalizeDispatchDraft(raw: Partial<DispatchCreateDraft>): Dispa
     nonEmergency.destinationHospitalName = nonEmergency.destination || ''
   }
   if (!('needsNurse' in nonEmergency)) nonEmergency.needsNurse = null
+  if (!('bookNow' in nonEmergency)) nonEmergency.bookNow = false
   if (!('ageGroup' in nonEmergency)) nonEmergency.ageGroup = ''
   if (!('gender' in nonEmergency)) nonEmergency.gender = ''
 

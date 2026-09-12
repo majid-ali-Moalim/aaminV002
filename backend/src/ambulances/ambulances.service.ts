@@ -564,6 +564,7 @@ export class AmbulancesService {
       'oxygenAvailable',
       'defibrillatorAvailable',
       'registrationDocumentUrl',
+      'photoUrl',
       'isActive',
       'fuelLevel',
       'mileage',

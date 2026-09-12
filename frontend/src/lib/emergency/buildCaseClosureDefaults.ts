@@ -9,7 +9,12 @@ import {
 
 export type RejectedHospitalEntry = {
   id: string
+  hospitalId?: string
   hospitalName: string
+  branchId?: string
+  branchName?: string
+  location?: string
+  phone?: string
   reason: string
   notes: string
 }

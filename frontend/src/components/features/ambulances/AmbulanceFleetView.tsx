@@ -22,7 +22,7 @@ import {
   Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ambulancesService, systemSetupService } from '@/lib/api'
+import { ambulancesService, systemSetupService, API_BASE_URL } from '@/lib/api'
 import { Ambulance, AmbulanceStatus, Station } from '@/types'
 import {
   ADMIN_AMBULANCE_STATUS_OPTIONS,
@@ -33,6 +33,13 @@ import {
 } from '@/lib/ambulance/status'
 
 const UNAVAILABLE_FILTER = '__UNAVAILABLE__'
+
+function toPublicImageUrl(url?: string | null): string {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (url.startsWith('/uploads')) return `${API_BASE_URL}${url}`
+  return url
+}
 
 const inputClass =
   'w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300'
@@ -383,23 +390,44 @@ export default function AmbulanceFleetView({
                 key={ambulance.id}
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-red-100 transition-all duration-300 flex flex-col"
               >
-                <div className={`bg-gradient-to-r ${style.header} p-4 text-white`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                {ambulance.photoUrl ? (
+                  <div className="relative h-40 bg-slate-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={toPublicImageUrl(ambulance.photoUrl)}
+                      alt={`${ambulance.ambulanceNumber} photo`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pt-10 text-white`}>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">
                         Ambulance ID
                       </p>
                       <p className="text-xl font-black truncate">{ambulance.ambulanceNumber}</p>
                       <p className="text-xs font-mono text-white/80 mt-0.5">{ambulance.plateNumber}</p>
-                      {ambulance.fleetNumber && (
-                        <p className="text-[10px] text-white/70 mt-1">Fleet {ambulance.fleetNumber}</p>
-                      )}
                     </div>
-                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-white/20 border-white/30">
+                    <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-black/40 border-white/30 text-white">
                       {style.label}
                     </span>
                   </div>
-                </div>
+                ) : (
+                  <div className={`bg-gradient-to-r ${style.header} p-4 text-white`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                          Ambulance ID
+                        </p>
+                        <p className="text-xl font-black truncate">{ambulance.ambulanceNumber}</p>
+                        <p className="text-xs font-mono text-white/80 mt-0.5">{ambulance.plateNumber}</p>
+                        {ambulance.fleetNumber && (
+                          <p className="text-[10px] text-white/70 mt-1">Fleet {ambulance.fleetNumber}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-white/20 border-white/30">
+                        {style.label}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-5 flex-1 space-y-4">
                   <div>

@@ -152,4 +152,25 @@ export class DriversAppController {
   markAllRead(@Request() req) {
     return this.service.markAllNotificationsRead(req.user.sub);
   }
+
+  // ─── INCIDENT REPORTS ─────────────────────────────────────────────────────
+
+  @Post('incidents')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Submit a field incident report to dispatch' })
+  createIncidentReport(@Request() req, @Body() body: Record<string, unknown>) {
+    return this.service.createIncidentReport(req.user.sub, {
+      requestId: String(body.requestId ?? ''),
+      title: String(body.title ?? ''),
+      type: String(body.type ?? ''),
+      description: String(body.description ?? ''),
+      priority: body.priority ? String(body.priority) : undefined,
+    });
+  }
+
+  @Get('incidents')
+  @ApiOperation({ summary: 'List driver incident reports' })
+  getIncidentReports(@Request() req) {
+    return this.service.getIncidentReports(req.user.sub);
+  }
 }

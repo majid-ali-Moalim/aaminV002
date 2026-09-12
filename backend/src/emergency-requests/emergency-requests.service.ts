@@ -38,10 +38,12 @@ import {
   releaseCrewForCase,
   reconcileCrewOccupancy,
 } from '../common/occupied-crew';
+import { isScheduledFutureCase, parseBookingDateTimeFromNotes } from '../common/booking-time';
 import {
   filterAmbulancesByStation,
   assertAssignCrewMatchesCaseStation,
 } from '../common/crew-station-filter';
+import { formatAssignStatusNotes } from '../common/resolve-case-dispatcher';
 
 type AuthUser = {
   sub?: string;
@@ -280,6 +282,34 @@ export class EmergencyRequestsService {
 
         if (existingPatient) {
           patientId = existingPatient.id;
+
+          // The phone matched an existing patient. Honour the name the
+          // dispatcher just typed so the case doesn't silently display a
+          // stale/previous patient name (and so no separate "caller" name
+          // is shown for what is really the same person).
+          const enteredName = data.newPatient.fullName
+            ? String(data.newPatient.fullName).trim()
+            : '';
+          const isUnknownName = enteredName.toUpperCase() === 'UNKNOWN';
+          if (
+            enteredName &&
+            !isUnknownName &&
+            enteredName !== (existingPatient.fullName || '').trim()
+          ) {
+            const patientPatch: any = { fullName: enteredName };
+            const mappedGender = this.mapGender(data.newPatient.gender);
+            if (mappedGender && !existingPatient.gender) {
+              patientPatch.gender = mappedGender;
+            }
+            if (data.newPatient.age && existingPatient.age == null) {
+              const parsedAge = parseInt(String(data.newPatient.age), 10);
+              if (!Number.isNaN(parsedAge)) patientPatch.age = parsedAge;
+            }
+            await this.prisma.patient.update({
+              where: { id: existingPatient.id },
+              data: patientPatch,
+            });
+          }
         } else {
           // Create new user & patient
           const count = await this.prisma.patient.count();
@@ -394,12 +424,26 @@ export class EmergencyRequestsService {
       if (data.destinationHospitalBranchId) finalPayload.destinationHospitalBranchId = String(data.destinationHospitalBranchId);
       if (data.destinationHospitalBranchName) finalPayload.destinationHospitalBranchName = String(data.destinationHospitalBranchName);
 
+      // Caller fields mirror the linked patient — no separate caller identity
+      const linkedPatient = await this.prisma.patient.findUnique({
+        where: { id: patientId },
+        select: { fullName: true, phone: true },
+      });
+      if (linkedPatient?.fullName) {
+        finalPayload.callerName = linkedPatient.fullName;
+      }
+      const resolvedCallerPhone =
+        linkedPatient?.phone || data.callerPhone || data.newPatient?.phone;
+      if (resolvedCallerPhone) {
+        finalPayload.callerPhone = String(resolvedCallerPhone);
+      }
+
       // Add optional string fields
       const optionalStrings = [
-        'destination', 'callerName', 'callerPhone', 'symptoms',
+        'destination', 'symptoms',
         'pickupLandmark', 'destinationLandmark', 'patientCondition',
         'consciousStatus', 'breathingStatus', 'bleedingStatus',
-        'notes', 'manualDispatchNotes'
+        'notes', 'manualDispatchNotes',
       ];
       optionalStrings.forEach(field => {
         if (data[field]) finalPayload[field] = String(data[field]);
@@ -782,12 +826,26 @@ export class EmergencyRequestsService {
 
     await reconcileCrewOccupancy(this.prisma);
 
+    if (isScheduledFutureCase(existing.notes)) {
+      const booking = parseBookingDateTimeFromNotes(existing.notes);
+      const label = booking?.toISOString() ?? 'the scheduled time';
+      throw new BadRequestException(
+        `This case is scheduled for ${label}. Crew cannot be assigned until booking time.`,
+      );
+    }
+
     if (!data.driverId) {
       throw new BadRequestException('A driver must be assigned before dispatch');
     }
-    if (caseRequiresNurse(existing) && !data.nurseId) {
+    const needsNurse = caseRequiresNurse(existing);
+    if (needsNurse && !data.nurseId) {
       throw new BadRequestException(
         'Nurse required — assign a nurse to this case before dispatch can proceed',
+      );
+    }
+    if (!needsNurse && data.nurseId) {
+      throw new BadRequestException(
+        'This case does not require a nurse — assign driver and ambulance only',
       );
     }
 
@@ -840,6 +898,20 @@ export class EmergencyRequestsService {
         : 'ASSIGNED');
     const updateData: any = { ...data, status: newStatus, assignedAt: new Date() };
 
+    let assignerEmployeeId = user?.employeeId ?? data.dispatcherId ?? null;
+    if (!assignerEmployeeId && user?.sub) {
+      const linked = await this.prisma.employee.findFirst({
+        where: { userId: user.sub },
+        select: { id: true },
+      });
+      assignerEmployeeId = linked?.id ?? null;
+    }
+    if (assignerEmployeeId) {
+      updateData.dispatcherId = assignerEmployeeId;
+    }
+
+    const assignNotes = formatAssignStatusNotes(isReassign, user?.sub);
+
     const result = await this.prisma.emergencyRequest.update({
       where: { id },
       data: {
@@ -848,7 +920,8 @@ export class EmergencyRequestsService {
           create: {
             fromStatus: existing.status,
             toStatus: newStatus,
-            notes: isReassign ? 'Team reassigned' : 'Team assigned',
+            changedByEmployeeId: assignerEmployeeId ?? undefined,
+            notes: assignNotes,
           }
         }
       },

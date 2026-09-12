@@ -18,7 +18,8 @@ import {
   User,
   CheckCircle2,
 } from 'lucide-react'
-import { emergencyRequestsService, getApiErrorMessage, isApiNetworkError, nursesService } from '@/lib/api'
+import { emergencyRequestsService, getApiErrorMessage, hospitalsService, isApiNetworkError, nursesService } from '@/lib/api'
+import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
@@ -305,7 +306,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     handoverDocumentName: '',
     ageGroup: '',
     gender: '',
-    category: '',
     nationalityType: '',
     maritalStatus: '',
     driverName: '',
@@ -317,6 +317,21 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const [handoverEditing, setHandoverEditing] = useState(false)
   const [handoverErrors, setHandoverErrors] = useState<HandoverFieldErrors>({})
   const [handoverMedicalNotesPrompt, setHandoverMedicalNotesPrompt] = useState(false)
+  const [hospitals, setHospitals] = useState<HospitalOption[]>([])
+
+  useEffect(() => {
+    void hospitalsService.getAll().then((rows) => {
+      setHospitals(
+        (Array.isArray(rows) ? rows : [])
+          .filter((h: { id?: string; name?: string }) => h.id && h.name)
+          .map((h: { id: string; name: string; branches?: unknown }) => ({
+            id: h.id,
+            name: h.name,
+            branches: h.branches,
+          })),
+      )
+    }).catch(() => setHospitals([]))
+  }, [])
 
   useEffect(() => {
     if (selectedCaseId) setMissionId(selectedCaseId)
@@ -1097,6 +1112,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 }}
                 nurseName={fullName}
                 assignedDestination={assignedDestination}
+                hospitals={hospitals}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}
               />

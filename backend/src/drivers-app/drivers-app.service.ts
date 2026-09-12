@@ -1,15 +1,37 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CaseWorkflowNotificationService } from '../notifications/case-workflow-notification.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ACTIVE_CASE_STATUSES } from '../common/active-case-statuses';
 import { releaseCrewForCase } from '../common/occupied-crew';
+import {
+  DRIVER_INCIDENT_PREFIX,
+  fetchRecentDriverIncidents,
+  type DriverIncidentRecord,
+} from '../common/driver-incident';
+import {
+  resolveCaseAssignerUserId,
+  resolveCaseDispatcher,
+} from '../common/resolve-case-dispatcher';
 
 @Injectable()
 export class DriversAppService {
   constructor(
     private prisma: PrismaService,
     private caseWorkflowNotifications: CaseWorkflowNotificationService,
+    private notifications: NotificationsService,
   ) {}
+
+  private async attachCaseDispatcher<T extends { id: string; dispatcherId?: string | null; dispatcher?: unknown }>(
+    mission: T | null,
+  ): Promise<T | null> {
+    if (!mission) return null;
+    if (mission.dispatcher) return mission;
+    const resolved = await resolveCaseDispatcher(this.prisma, mission.id, mission.dispatcherId);
+    if (!resolved) return mission;
+    return { ...mission, dispatcher: resolved };
+  }
 
   // ─────────────────────────────────────────
   // PROFILE
@@ -178,7 +200,7 @@ export class DriversAppService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return mission;
+    return this.attachCaseDispatcher(mission);
   }
 
   async getMissionHistory(userId: string, page = 1, limit = 20, status?: string) {
@@ -261,7 +283,7 @@ export class DriversAppService {
       throw new ForbiddenException('Access denied to this mission');
     }
 
-    return mission;
+    return this.attachCaseDispatcher(mission);
   }
 
   async updateMissionStatus(userId: string, missionId: string, status: string, notes?: string) {
@@ -276,9 +298,24 @@ export class DriversAppService {
 
     const allowedStatuses = [
       'ASSIGNED', 'DISPATCHED', 'ARRIVED_SCENE', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
+      'COMPLETED',
     ];
     if (!allowedStatuses.includes(status)) {
       throw new BadRequestException(`Invalid status: ${status}`);
+    }
+
+    if (status === 'COMPLETED') {
+      // A driver may only close the case themselves when no nurse is on it.
+      // When both a driver and nurse are assigned, the case completes
+      // automatically once the nurse finishes the hospital handover.
+      if (mission.nurseId) {
+        throw new BadRequestException(
+          'This case has a nurse — it completes automatically when the nurse finishes the hospital handover.',
+        );
+      }
+      if (mission.status === 'ASSIGNED') {
+        throw new BadRequestException('Start the case before completing it.');
+      }
     }
 
     if (status === 'TRANSPORTING') {
@@ -300,6 +337,15 @@ export class DriversAppService {
     else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
     else if (status === 'ARRIVED_HOSPITAL') updateData.arrivedDestinationAt = new Date();
+    else if (status === 'COMPLETED') updateData.completedAt = new Date();
+
+    if (status === 'COMPLETED') {
+      await releaseCrewForCase(this.prisma, {
+        driverId: mission.driverId,
+        nurseId: mission.nurseId,
+        ambulanceId: mission.ambulanceId,
+      });
+    }
 
     const updated = await this.prisma.emergencyRequest.update({
       where: { id: missionId },
@@ -519,5 +565,147 @@ export class DriversAppService {
       shiftStatus: employee.shiftStatus,
       recentShifts: shiftRecords,
     };
+  }
+
+  // ─────────────────────────────────────────
+  // FIELD INCIDENT REPORTS
+  // ─────────────────────────────────────────
+
+  async createIncidentReport(
+    userId: string,
+    data: {
+      requestId: string;
+      title: string;
+      type: string;
+      description: string;
+      priority?: string;
+    },
+  ) {
+    const employee = await this.prisma.employee.findFirst({ where: { userId } });
+    if (!employee) throw new NotFoundException('Driver profile not found');
+
+    const title = data.title.trim();
+    const description = data.description.trim();
+    const type = data.type.trim() || 'Other';
+    const priority = (data.priority || 'MEDIUM').toUpperCase();
+
+    if (!title) throw new BadRequestException('Title is required');
+    if (!description) throw new BadRequestException('Description is required');
+
+    let requestId = data.requestId?.trim();
+    let mission = requestId
+      ? await this.prisma.emergencyRequest.findUnique({
+          where: { id: requestId },
+          select: { id: true, trackingCode: true, status: true, driverId: true, dispatcherId: true },
+        })
+      : null;
+
+    if (!mission) {
+      mission = await this.prisma.emergencyRequest.findFirst({
+        where: {
+          driverId: employee.id,
+          status: { in: ACTIVE_CASE_STATUSES },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true, trackingCode: true, status: true, driverId: true, dispatcherId: true },
+      });
+      requestId = mission?.id;
+    }
+
+    if (!mission || !requestId) {
+      throw new BadRequestException('No active mission to attach this report to');
+    }
+    if (mission.driverId !== employee.id) {
+      throw new ForbiddenException('You can only report incidents for your assigned cases');
+    }
+
+    const driverName =
+      `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Driver';
+    const incidentId = randomUUID();
+    const now = new Date().toISOString();
+    const payload = {
+      id: incidentId,
+      title,
+      type,
+      description,
+      priority,
+      driverId: employee.id,
+      driverName,
+      requestId,
+      trackingCode: mission.trackingCode,
+      createdAt: now,
+    };
+
+    const log = await this.prisma.emergencyStatusLog.create({
+      data: {
+        emergencyRequestId: requestId,
+        fromStatus: mission.status,
+        toStatus: mission.status,
+        changedByEmployeeId: employee.id,
+        notes: `${DRIVER_INCIDENT_PREFIX}${JSON.stringify(payload)}`,
+      },
+    });
+
+    await this.prisma.emergencyRequest.update({
+      where: { id: requestId },
+      data: { updatedAt: new Date() },
+    });
+
+    const assignerUserId = await resolveCaseAssignerUserId(
+      this.prisma,
+      requestId,
+      mission.dispatcherId,
+    );
+
+    const recipientUserIds: string[] = assignerUserId ? [assignerUserId] : [];
+
+    if (!recipientUserIds.length) {
+      const adminUsers = await this.prisma.user.findMany({
+        where: { role: 'ADMIN' },
+        select: { id: true },
+      });
+      recipientUserIds.push(...adminUsers.map((u) => u.id));
+    }
+
+    const notifPriority =
+      priority === 'CRITICAL' || priority === 'HIGH' ? 'HIGH' : 'MEDIUM';
+
+    await this.notifications.dispatchEvent({
+      eventKey: 'INCIDENT_REPORT',
+      title: 'Incident report submitted to dispatch',
+      message: `${mission.trackingCode}: ${title} (${type}) — ${description.slice(0, 120)}`,
+      type: 'COMPLIANCE',
+      category: 'INCIDENT',
+      priority: notifPriority,
+      senderName: driverName,
+      entityType: 'DriverIncident',
+      entityId: log.id,
+      redirectUrl: '/admin/operational-alerts',
+      context: {
+        createdById: userId,
+        directOnly: true,
+        recipientUserIds: [...new Set(recipientUserIds)],
+      },
+    });
+
+    return {
+      id: log.id,
+      ...payload,
+      submittedAt: log.createdAt.toISOString(),
+    };
+  }
+
+  async getIncidentReports(userId: string): Promise<DriverIncidentRecord[]> {
+    const employee = await this.prisma.employee.findFirst({ where: { userId } });
+    if (!employee) throw new NotFoundException('Driver profile not found');
+
+    const driverMissions = await this.prisma.emergencyRequest.findMany({
+      where: { driverId: employee.id },
+      select: { id: true },
+      take: 100,
+      orderBy: { updatedAt: 'desc' },
+    });
+    const requestIds = driverMissions.map((m) => m.id);
+    return fetchRecentDriverIncidents(this.prisma, { take: 50, requestIds });
   }
 }

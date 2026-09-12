@@ -135,6 +135,23 @@ export const driverMissionsApi = {
   },
 }
 
+export const driverIncidentsApi = {
+  submit: async (data: {
+    requestId?: string
+    title: string
+    type: string
+    description: string
+    priority?: string
+  }) => {
+    const res = await createDriverApi().post('/driver-app/incidents', data)
+    return res.data
+  },
+  list: async () => {
+    const res = await createDriverApi().get('/driver-app/incidents')
+    return res.data
+  },
+}
+
 // ─── AMBULANCE ─────────────────────────────────────────────────────────────
 
 export const driverAmbulanceApi = {

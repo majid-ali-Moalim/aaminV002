@@ -47,6 +47,8 @@ import {
 } from '@/lib/mission/driverWorkflowButtons'
 import { getTimelineActiveIndex, getTimelineButtonStates } from '@/lib/mission/workflowTimeline'
 import { onMissionAssigned } from '@/lib/mission/missionAssignedEvents'
+import { formatCaseDestination, formatDispatcherLabel } from '@/lib/emergency/caseDestinationLabel'
+import { parseCaseRequestType } from '@/lib/emergency/caseRequestType'
 
 const CLOSED = ['COMPLETED', 'CANCELLED']
 
@@ -163,13 +165,21 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
     ?? nextLockedButton?.label
     ?? workflowButtons.filter((b) => b.state === 'completed').at(-1)?.label
     ?? 'Assigned'
+  const noNurse = !(mission?.nurse || mission?.nurseId)
   const stageDescription = activeWorkflowButton
-    ? DRIVER_STAGE_DESCRIPTIONS[activeWorkflowButton.id]
+    ? activeWorkflowButton.id === 'case_complete' && noNurse
+      ? 'Transport done — press “Case Complete” to close this case.'
+      : DRIVER_STAGE_DESCRIPTIONS[activeWorkflowButton.id]
     : nextLockedButton?.waitReason
-      ?? (missionClosed ? 'Case closed.' : 'Start the case — nurse completes notes and handover.')
+      ?? (missionClosed
+        ? 'Case closed.'
+        : noNurse
+          ? 'Start the case — you can complete it yourself when the transport is done.'
+          : 'Start the case — nurse completes notes and handover.')
 
   const caseStartedByDriver = workflowButtons.find((b) => b.id === 'start_case')?.state === 'completed'
   const caseFullyComplete = missionClosed || mission?.status === 'COMPLETED'
+  const hasNurse = Boolean(mission?.nurse) || Boolean(mission?.nurseId)
 
   const stickyPrimary = useMemo(() => {
     return workflowButtons.find((b) => b.state === 'active') ?? null
@@ -216,7 +226,28 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
         await updateBackend('DISPATCHED', 'Driver started case')
       }
       syncWorkflow()
-      toast.success('Case started — waiting for nurse to complete handover')
+      toast.success(
+        hasNurse
+          ? 'Case started — waiting for nurse to complete handover'
+          : 'Case started — complete it when the transport is done',
+      )
+      return
+    }
+
+    if (buttonId === 'case_complete') {
+      if (hasNurse) {
+        toast.error(
+          'This case has a nurse — it completes automatically when the nurse finishes the handover.',
+        )
+        return
+      }
+      if (!window.confirm('Mark this transport case as complete?')) return
+      try {
+        await updateBackend('COMPLETED', 'Driver completed transport case')
+        toast.success('Case completed')
+      } catch {
+        toast.error('Could not complete the case')
+      }
     }
   }
 
@@ -339,8 +370,9 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
   const nurseName = mission.nurse
     ? `${mission.nurse.firstName || ''} ${mission.nurse.lastName || ''}`.trim()
     : '—'
-  const destinationLabel =
-    mission.destination || mission.destinationHospital?.name || '—'
+  const destinationLabel = formatCaseDestination(mission)
+  const caseTypeLabel = parseCaseRequestType(mission.notes, mission.requestSource)
+  const dispatcherLabel = formatDispatcherLabel(mission.dispatcher)
   const regionLabel = [mission.region?.name, mission.district?.name].filter(Boolean).join(' · ')
   const patientPhone = resolvePatientPhone(mission)
 
@@ -413,9 +445,15 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
           <p className="dcw-stage-name">{stageLabel}</p>
           <p className="dcw-stage-desc">{stageDescription}</p>
 
-          {!readOnly && caseStartedByDriver && !caseFullyComplete && (
+          {!readOnly && caseStartedByDriver && !caseFullyComplete && hasNurse && (
             <p className="dcw-warn">
               Waiting for nurse to complete medical notes and handover.
+            </p>
+          )}
+
+          {!readOnly && caseStartedByDriver && !caseFullyComplete && !hasNurse && (
+            <p className="dcw-warn">
+              No nurse on this case — press “Case Complete” when the transport is finished.
             </p>
           )}
 
@@ -487,8 +525,11 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             <InfoItem label="Case ID" value={mission.trackingCode} />
             <InfoItem label="Status" value={mission.status?.replace(/_/g, ' ')} />
             <InfoItem label="Priority" value={mission.priority} />
-            <InfoItem label="Case type" value={mission.incidentCategory?.name} />
-            <InfoItem label="Patient" value={mission.patient?.fullName || mission.callerName} />
+            <InfoItem
+              label="Case type"
+              value={caseTypeLabel || mission.incidentCategory?.name}
+            />
+            <InfoItem label="Patient" value={mission.patient?.fullName} />
             <InfoItem label="Patient phone" value={formatSomaliaPhoneDisplay(patientPhone)} />
             <div className="dcw-info-item dcw-info-item--full">
               <DispatcherContactActions
@@ -510,7 +551,7 @@ function DriverMissionWorkspaceInner({ selectedCaseId }: Props) {
             <InfoItem label="Condition" value={mission.patientCondition} />
             <InfoItem label="Ambulance" value={mission.ambulance?.ambulanceNumber || profile?.assignedAmbulance?.ambulanceNumber} />
             <InfoItem label="Nurse" value={nurseName !== '—' ? nurseName : undefined} />
-            <InfoItem label="Dispatcher" value={mission.dispatcher?.user?.username} />
+            <InfoItem label="Dispatcher" value={dispatcherLabel} />
             <InfoItem
               label="Assigned"
               value={mission.assignedAt ? format(new Date(mission.assignedAt), 'MMM d, h:mm a') : undefined}

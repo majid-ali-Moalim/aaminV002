@@ -24,6 +24,7 @@ import {
   ambulancesService,
   systemSetupService,
   uploadService,
+  API_BASE_URL,
 } from '@/lib/api'
 import {
   AmbulanceStatus,
@@ -77,6 +78,7 @@ const initialForm = {
   firstAidKitAvailable: false,
   registrationExpiry: '',
   registrationDocumentUrl: '',
+  photoUrl: '',
   notes: '',
 }
 
@@ -90,7 +92,9 @@ export default function AddAmbulancePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false)
   const [registrationFileName, setRegistrationFileName] = useState('')
+  const [photoFileName, setPhotoFileName] = useState('')
   const [form, setForm] = useState(initialForm)
   const [fieldErrors, setFieldErrors] = useState<AmbulanceFormErrors>({})
 
@@ -141,6 +145,30 @@ export default function AddAmbulancePage() {
       delete next[key]
       return next
     })
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Upload a photo of the ambulance (JPEG or PNG)')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be smaller than 5 MB')
+      return
+    }
+    try {
+      setIsPhotoUploading(true)
+      const result = await uploadService.uploadFile(file)
+      setField('photoUrl', result.url)
+      setPhotoFileName(file.name)
+      toast.success('Ambulance photo uploaded')
+    } catch {
+      toast.error('Failed to upload photo')
+    } finally {
+      setIsPhotoUploading(false)
+    }
   }
 
   const handleRegistrationUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,6 +258,7 @@ export default function AddAmbulancePage() {
           ? new Date(form.registrationExpiry).toISOString()
           : undefined,
         registrationDocumentUrl: form.registrationDocumentUrl || undefined,
+        photoUrl: form.photoUrl || undefined,
         notes,
         isActive: true,
       }
@@ -466,6 +495,41 @@ export default function AddAmbulancePage() {
                   </div>
                 </div>
                 <div>
+                  <label className={labelClass}>Ambulance Photo</label>
+                  <label className="flex flex-col sm:flex-row items-center gap-3 p-4 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 cursor-pointer hover:border-red-300 transition-colors">
+                    <Upload className="w-5 h-5 text-red-500 shrink-0" />
+                    <div className="flex-1 text-center sm:text-left">
+                      <p className="text-sm font-semibold text-slate-700">
+                        {photoFileName || 'Upload a photo of the ambulance'}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">JPEG or PNG, max 5 MB</p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={isPhotoUploading}
+                    />
+                    {isPhotoUploading && (
+                      <RefreshCw className="w-4 h-4 animate-spin text-red-500" />
+                    )}
+                    {form.photoUrl && !isPhotoUploading && (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                    )}
+                  </label>
+                  {form.photoUrl && (
+                    <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 aspect-video max-w-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={form.photoUrl.startsWith('/uploads') ? `${API_BASE_URL}${form.photoUrl}` : form.photoUrl}
+                        alt="Ambulance preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div>
                   <label className={labelClass}>Status</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {ADMIN_AMBULANCE_STATUS_OPTIONS.map((opt) => (
@@ -582,6 +646,10 @@ export default function AddAmbulancePage() {
                   {
                     label: 'Registration Document',
                     value: registrationFileName || (form.registrationDocumentUrl ? 'Uploaded' : 'Not uploaded'),
+                  },
+                  {
+                    label: 'Ambulance Photo',
+                    value: photoFileName || (form.photoUrl ? 'Uploaded' : 'Not uploaded'),
                   },
                 ].map((row) => (
                   <div

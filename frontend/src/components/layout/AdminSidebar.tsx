@@ -25,6 +25,7 @@ import {
   Activity,
   FileText,
   Bell,
+  AlertTriangle,
   MessageSquare,
   LogOut,
   ClipboardList,
@@ -41,7 +42,6 @@ import {
   UserCog,
   Database,
   Settings,
-  AlertTriangle,
   PlusCircle,
   ShieldCheck,
   XCircle,
@@ -131,6 +131,7 @@ export default function AdminSidebar() {
 
   const isDashboardActive =
     pathname === '/admin/dashboard' || pathname.startsWith('/admin/dashboard/')
+  const isOperationalAlertsActive = pathname.startsWith('/admin/operational-alerts')
   const isNotificationsActive = pathname.startsWith('/admin/notifications')
   const isChatActive = pathname.startsWith('/admin/chat')
   const isEmergencyOperationsActive = isEmergencyOperationsPath(pathname)
@@ -316,6 +317,7 @@ export default function AdminSidebar() {
       <nav className="flex-1 overflow-y-auto py-2 space-y-px px-2.5 custom-scrollbar">
         <SectionLabel label="Modules" />
         {renderLink('/admin/dashboard', 'Dashboard', LayoutGrid, isDashboardActive)}
+        {renderLink('/admin/operational-alerts', 'Operational Alerts', AlertTriangle, isOperationalAlertsActive)}
         {renderLink('/admin/notifications', 'Notifications', Bell, isNotificationsActive, notificationUnread, 'red', '#EF4444')}
         {renderLink('/admin/chat', 'Communication', MessageSquare, isChatActive, chatUnread, 'green', '#10B981')}
 

@@ -57,6 +57,16 @@ export class HospitalCoordinationController {
     });
   }
 
+  @Post('hospitals/manual')
+  @RequirePermissions('case.create')
+  @ApiOperation({
+    summary:
+      'Quick-create a custom hospital + branch during dispatch (editable later in coordination)',
+  })
+  createManualHospital(@Body() body: ManualAssignHospitalDto) {
+    return this.hospitals.createManualAssignmentHospital(body);
+  }
+
   @Patch('hospitals/:id/availability')
   @RequirePermissions('hospital.manage')
   updateAvailability(@Param('id') id: string, @Body() body: any, @CurrentUser() user: any) {

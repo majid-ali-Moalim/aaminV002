@@ -515,6 +515,7 @@ model Ambulance {
   defibrillatorAvailable  Boolean            @default(false)
   registrationExpiry      DateTime?
   registrationDocumentUrl String?
+  photoUrl                String?
   isActive                Boolean            @default(true)
   fuelLevel               Int?               @default(100)
   mileage                 Int?               @default(0)

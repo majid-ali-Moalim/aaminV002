@@ -59,6 +59,10 @@ export const dispatcherDashboardApi = {
     const res = await createDispatcherApi().get('/dispatcher-app/dashboard')
     return res.data
   },
+  getOperationalAlerts: async () => {
+    const res = await createDispatcherApi().get('/reports/operational-alerts')
+    return res.data
+  },
   getOverview: async () => {
     const res = await createDispatcherApi().get('/dispatcher-app/dashboard/overview')
     return res.data

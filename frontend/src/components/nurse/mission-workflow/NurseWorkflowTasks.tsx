@@ -25,6 +25,8 @@ import { AGE_GROUPS } from '@/components/public/hire-ambulance/constants'
 import { genderOptions } from '@/lib/nurseFormMasterData'
 import { formatGender } from '@/lib/patients/patientDisplay'
 import { downloadUploadedFile, uploadedFileUrl } from '@/lib/uploads/fileUrl'
+import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import { HospitalHandoverField } from '@/components/hospitals/HospitalHandoverField'
 
 type TaskShellProps = {
   title: string
@@ -482,6 +484,9 @@ export type HandoverCaseContext = {
 
 export type HandoverFormState = {
   acceptedHospital: string
+  acceptedHospitalId?: string
+  acceptedHospitalBranchId?: string
+  acceptedHospitalBranchName?: string
   rejectedHospitals: RejectedHospitalEntry[]
   patientOutcome: string
   patientCondition: string
@@ -541,11 +546,13 @@ function refusalReasonLabel(value: string) {
 function HandoverRejectedHospitalsSection({
   entries,
   onChange,
+  hospitals = [],
   readOnly = false,
   error,
 }: {
   entries: RejectedHospitalEntry[]
   onChange: (entries: RejectedHospitalEntry[]) => void
+  hospitals?: HospitalOption[]
   readOnly?: boolean
   error?: string
 }) {
@@ -577,76 +584,30 @@ function HandoverRejectedHospitalsSection({
         <p className="nmw-field-hint">
           {readOnly
             ? 'No rejected hospitals recorded.'
-            : 'Hospitals that refused the patient before final destination. Click + to add one.'}
+            : 'Pick from hospital records or enter custom details for hospitals that refused the patient.'}
         </p>
-      ) : readOnly ? (
-        <div className="space-y-3">
-          {entries.map((entry, index) => (
-            <div key={entry.id} className="nmw-rejected-card">
-              <div className="nmw-rejected-card-head">
-                <span>Rejected hospital #{index + 1}</span>
-              </div>
-              <label className="span-2">
-                Hospital name
-                <input value={entry.hospitalName || '—'} readOnly className="readonly" />
-              </label>
-              <label>
-                Refusal reason
-                <input value={refusalReasonLabel(entry.reason)} readOnly className="readonly" />
-              </label>
-              <label>
-                Notes
-                <input value={entry.notes || '—'} readOnly className="readonly" />
-              </label>
-            </div>
-          ))}
-        </div>
       ) : (
         <div className="space-y-3">
           {entries.map((entry, index) => (
-            <div key={entry.id} className="nmw-rejected-card">
-              <div className="nmw-rejected-card-head">
-                <span>Rejected hospital #{index + 1}</span>
+            <div key={entry.id} className="relative">
+              {!readOnly && (
                 <button
                   type="button"
-                  className="nmw-icon-btn"
+                  className="nmw-icon-btn absolute top-2 right-2 z-10"
                   onClick={() => removeEntry(entry.id)}
                   aria-label="Remove rejected hospital"
                 >
                   <Trash2 size={14} />
                 </button>
-              </div>
-              <label className="span-2">
-                Hospital name
-                <input
-                  value={entry.hospitalName}
-                  onChange={(e) => updateEntry(entry.id, { hospitalName: e.target.value })}
-                  maxLength={120}
-                  placeholder="Hospital that refused the patient"
-                />
-              </label>
-              <label>
-                Refusal reason
-                <select
-                  value={entry.reason}
-                  onChange={(e) => updateEntry(entry.id, { reason: e.target.value })}
-                >
-                  {HOSPITAL_REFUSAL_REASON_OPTIONS.map((opt) => (
-                    <option key={opt.value || 'empty'} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Notes
-                <input
-                  value={entry.notes}
-                  onChange={(e) => updateEntry(entry.id, { notes: e.target.value })}
-                  maxLength={2000}
-                  placeholder="Optional details"
-                />
-              </label>
+              )}
+              <HospitalHandoverField
+                hospitals={hospitals}
+                entry={entry}
+                index={index}
+                readOnly={readOnly}
+                refusalOptions={HOSPITAL_REFUSAL_REASON_OPTIONS}
+                onChange={(patch) => updateEntry(entry.id, patch)}
+              />
             </div>
           ))}
         </div>
@@ -775,6 +736,7 @@ export function HandoverTaskFields({
   caseContext,
   destinationAssigned = false,
   assignedDestination = '',
+  hospitals = [],
   readOnly = false,
   errors = {},
 }: {
@@ -784,6 +746,7 @@ export function HandoverTaskFields({
   caseContext?: HandoverCaseContext
   destinationAssigned?: boolean
   assignedDestination?: string
+  hospitals?: HospitalOption[]
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -832,20 +795,34 @@ export function HandoverTaskFields({
               <FieldError error={errors.acceptedHospital} />
             </label>
           ) : (
-            <label className="span-2">
-              Destination hospital *
-              <input
-                value={form.acceptedHospital}
-                onChange={(e) => setForm({ ...form, acceptedHospital: e.target.value })}
-                maxLength={200}
-                placeholder="Hospital or facility where the patient was handed over"
-                aria-invalid={Boolean(errors.acceptedHospital)}
+            <div className="span-2">
+              <HospitalDestinationPicker
+                combobox
+                hospitals={hospitals}
+                hospitalId={form.acceptedHospitalId ?? ''}
+                hospitalName={form.acceptedHospital}
+                branchId={form.acceptedHospitalBranchId ?? ''}
+                branchName={form.acceptedHospitalBranchName ?? ''}
+                hospitalLabel="Destination hospital *"
+                hospitalPlaceholder="Select or type receiving hospital"
+                hospitalError={errors.acceptedHospital}
+                onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
+                  setForm({
+                    ...form,
+                    acceptedHospitalId: hospitalId,
+                    acceptedHospital: branchName
+                      ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
+                      : hospitalName,
+                    acceptedHospitalBranchId: branchId,
+                    acceptedHospitalBranchName: branchName,
+                  })
+                }
               />
               <p className="nmw-field-hint">
-                Dispatcher has not assigned a destination — enter where the patient was received.
+                Dispatcher has not assigned a destination — pick from records or enter custom hospital details.
               </p>
               <FieldError error={errors.acceptedHospital} />
-            </label>
+            </div>
           )}
           <label className="span-2">
             Dispatcher
@@ -904,6 +881,7 @@ export function HandoverTaskFields({
       <HandoverRejectedHospitalsSection
         entries={form.rejectedHospitals ?? []}
         onChange={(rejectedHospitals) => setForm({ ...form, rejectedHospitals })}
+        hospitals={hospitals}
         readOnly={readOnly}
         error={errors.rejectedHospitals}
       />
@@ -1119,6 +1097,7 @@ export function HandoverQuickFields({
   setForm,
   nurseName,
   assignedDestination = '',
+  hospitals = [],
   readOnly = false,
   errors = {},
 }: {
@@ -1126,6 +1105,7 @@ export function HandoverQuickFields({
   setForm: (f: HandoverFormState) => void
   nurseName?: string
   assignedDestination?: string
+  hospitals?: HospitalOption[]
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -1142,22 +1122,36 @@ export function HandoverQuickFields({
         </label>
       )}
       {!assignedDestination.trim() && !readOnly && (
-        <label className="span-2">
-          Hospital *
-          <input
-            value={form.acceptedHospital}
-            onChange={(e) => setForm({ ...form, acceptedHospital: e.target.value })}
-            maxLength={200}
-            placeholder="Receiving hospital"
-            aria-invalid={Boolean(errors.acceptedHospital)}
+        <div className="span-2">
+          <HospitalDestinationPicker
+            combobox
+            hospitals={hospitals}
+            hospitalId={form.acceptedHospitalId ?? ''}
+            hospitalName={form.acceptedHospital}
+            branchId={form.acceptedHospitalBranchId ?? ''}
+            branchName={form.acceptedHospitalBranchName ?? ''}
+            hospitalLabel="Hospital *"
+            hospitalError={errors.acceptedHospital}
+            onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
+              setForm({
+                ...form,
+                acceptedHospitalId: hospitalId,
+                acceptedHospital: branchName
+                  ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
+                  : hospitalName,
+                acceptedHospitalBranchId: branchId,
+                acceptedHospitalBranchName: branchName,
+              })
+            }
           />
           <FieldError error={errors.acceptedHospital} />
-        </label>
+        </div>
       )}
 
       <HandoverRejectedHospitalsSection
         entries={form.rejectedHospitals ?? []}
         onChange={(rejectedHospitals) => setForm({ ...form, rejectedHospitals })}
+        hospitals={hospitals}
         readOnly={readOnly}
         error={errors.rejectedHospitals}
       />

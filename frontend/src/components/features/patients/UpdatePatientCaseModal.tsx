@@ -198,10 +198,8 @@ export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: 
 
       const casePayload = {
         priority: form.priority,
-        callerName: form.callerName.trim() || form.fullName.trim(),
-        callerPhone: form.callerPhone.trim()
-          ? normalizePhoneDigits(form.callerPhone)
-          : normalizePhoneDigits(form.phone),
+        callerName: form.fullName.trim(),
+        callerPhone: normalizePhoneDigits(form.phone),
         pickupLocation: form.pickupLocation.trim(),
         pickupLandmark: form.pickupLandmark.trim() || undefined,
         destination: form.destination.trim() || undefined,
@@ -524,22 +522,6 @@ export default function UpdatePatientCaseModal({ request, onClose, onSuccess }: 
                 ))}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-slate-500">Caller Name</label>
-                  <input
-                    className={fieldClass()}
-                    value={form.callerName}
-                    onChange={(e) => patch({ callerName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-slate-500">Caller Phone</label>
-                  <input
-                    className={fieldClass(errors.callerPhone)}
-                    value={form.callerPhone}
-                    onChange={(e) => patch({ callerPhone: e.target.value })}
-                  />
-                </div>
                 <div className="sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase text-slate-500">
                     Pickup Location *

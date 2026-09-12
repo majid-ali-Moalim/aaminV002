@@ -12,6 +12,7 @@ import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TrackingService } from '../tracking/tracking.service';
 import { HospitalsService } from '../hospitals/hospitals.service';
 import { ManualAssignHospitalDto } from './dto/manual-assign-hospital.dto';
+import { parseHandoverFromClinicalNotes } from '../common/parse-handover-notes';
 
 const CASE_INCLUDE = {
   hospital: { include: { region: true, district: true } },
@@ -377,12 +378,64 @@ export class HospitalCoordinationService {
         }));
       const acceptedEntry =
         history.find((h) => h.stage === 'ACCEPTED' || h.status === 'ACCEPTED') ?? null;
-      const nurseRecord = c.emergencyRequest?.patientCareRecords?.[0];
+      const nurseRecord = c.emergencyRequest?.patientCareRecords?.find((r) =>
+        String(r.clinicalNotes ?? '').includes('[EADS_HANDOVER]'),
+      ) ?? c.emergencyRequest?.patientCareRecords?.[0];
+      const parsedHandover = parseHandoverFromClinicalNotes(nurseRecord?.clinicalNotes ?? null);
       const nurseName = nurseRecord?.nurse
         ? `${nurseRecord.nurse.firstName ?? ''} ${nurseRecord.nurse.lastName ?? ''}`.trim()
         : c.emergencyRequest?.nurse
           ? `${c.emergencyRequest.nurse.firstName ?? ''} ${c.emergencyRequest.nurse.lastName ?? ''}`.trim()
           : null;
+
+      const nurseRejected = (parsedHandover?.rejectedHospitals ?? []).map((entry) => ({
+        hospitalId: entry.hospitalId ?? null,
+        hospitalName: entry.hospitalName,
+        branchName: entry.branchName ?? null,
+        location: entry.location ?? null,
+        phone: entry.phone ?? null,
+        refusalReason: this.refusalReasonLabel(entry.reason),
+        refusalReasonCode: entry.reason,
+        refusalNotes: entry.notes,
+        source: 'nurse_handover' as const,
+      }));
+
+      const mergedRejected: Array<
+        (typeof rejectedHospitals)[number] & {
+          location?: string | null;
+          phone?: string | null;
+          source?: string;
+        }
+      > = [...rejectedHospitals];
+      for (const nr of nurseRejected) {
+        const dup = mergedRejected.some(
+          (r) =>
+            r.hospitalName?.toLowerCase() === nr.hospitalName?.toLowerCase() &&
+            (r.refusalReasonCode === nr.refusalReasonCode || r.refusalReason === nr.refusalReason),
+        );
+        if (!dup) {
+          mergedRejected.push({
+            hospitalId: nr.hospitalId ?? '',
+            hospitalName: nr.hospitalName,
+            branchName: nr.branchName,
+            refusalReason: nr.refusalReason,
+            refusalReasonCode: (nr.refusalReasonCode || 'OTHER') as typeof rejectedHospitals[number]['refusalReasonCode'],
+            refusalNotes: nr.refusalNotes,
+            rejectedAt: nurseRecord?.createdAt ?? new Date(),
+            location: nr.location,
+            phone: nr.phone,
+            source: nr.source,
+          });
+        }
+      }
+
+      const nurseAccepted = parsedHandover?.acceptedHospital?.trim()
+        ? {
+            hospitalName: parsedHandover.acceptedHospital,
+            source: 'nurse_handover' as const,
+            recordedAt: nurseRecord?.createdAt ?? null,
+          }
+        : null;
 
       return {
         ...c,
@@ -393,6 +446,7 @@ export class HospitalCoordinationService {
               receivingStaffName: acceptedEntry.receivingStaffName,
               handoverCompletedAt: acceptedEntry.handoverCompletedAt,
               acceptedAt: acceptedEntry.updatedAt,
+              source: 'coordination' as const,
             }
           : c.stage === 'ACCEPTED'
             ? {
@@ -401,12 +455,15 @@ export class HospitalCoordinationService {
                 receivingStaffName: c.receivingStaffName,
                 handoverCompletedAt: c.handoverCompletedAt,
                 acceptedAt: c.updatedAt,
+                source: 'coordination' as const,
               }
-            : null,
-        rejectedHospitals,
+            : nurseAccepted,
+        rejectedHospitals: mergedRejected,
         nurseHandover: nurseRecord
           ? {
               nurseName,
+              acceptedHospital: parsedHandover?.acceptedHospital ?? null,
+              rejectedHospitals: parsedHandover?.rejectedHospitals ?? [],
               interventions: nurseRecord.treatmentGiven,
               notes: nurseRecord.clinicalNotes ?? nurseRecord.treatmentGiven,
               recordedAt: nurseRecord.createdAt,

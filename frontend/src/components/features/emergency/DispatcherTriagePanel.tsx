@@ -176,7 +176,7 @@ export default function DispatcherTriagePanel({
       <section className="rounded-xl border border-slate-100 bg-slate-50/80 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Caller priority</span>
+            <span className="text-xs font-semibold text-slate-500">Reported priority</span>
             <PriorityBadge priority={request.priority} size="sm" />
           </div>
           {stationName && (

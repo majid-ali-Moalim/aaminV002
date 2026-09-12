@@ -10,6 +10,7 @@ import PatientDemographicsFields from './PatientDemographicsFields'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import type { DispatchFormErrors, ReferralDispatchForm } from './types'
 
 const PRIORITIES = [
@@ -27,6 +28,7 @@ type Props = {
   hospitals: HospitalOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<ReferralDispatchForm>) => void
+  onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   onCancel: () => void
   onSubmit: () => void
   submitting: boolean
@@ -40,6 +42,7 @@ export default function ReferralDispatchFormView({
   hospitals,
   loadingDistricts,
   onChange,
+  onCreateCustomHospital,
   onCancel,
   onSubmit,
   submitting,
@@ -109,6 +112,7 @@ export default function ReferralDispatchFormView({
                   receivingHospital: hospitalName || branchName,
                 })
               }
+              onCreateCustomHospital={onCreateCustomHospital}
             />
           </div>
           <div className="sm:col-span-2">

@@ -19,6 +19,8 @@ export type ReportFilterDef = {
     | 'hospitals'
     | 'patientOutcomes'
     | 'transportTypes'
+    | 'requestSources'
+    | 'stations'
   dependsOnRegion?: boolean
 }
 
@@ -35,6 +37,8 @@ const SOLE_KEYS = new Set([
   'ambulanceStatus',
   'vehicleType',
   'staffRole',
+  'requestSource',
+  'station',
 ])
 
 function getSelectOptions(
@@ -93,6 +97,10 @@ function getSelectOptions(
       return options.patientOutcomes ?? []
     case 'transportTypes':
       return options.transportTypes ?? []
+    case 'requestSources':
+      return options.requestSources ?? []
+    case 'stations':
+      return options.stations ?? []
     default:
       return []
   }

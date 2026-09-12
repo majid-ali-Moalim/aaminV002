@@ -145,6 +145,9 @@ export function buildHandoverFields(record: CareRecord): CaseFileField[] {
       .filter((r) => r.hospitalName?.trim())
       .map((r) => {
         const parts = [r.hospitalName.trim()]
+        if (r.branchName?.trim()) parts.push(`branch: ${r.branchName.trim()}`)
+        if (r.location?.trim()) parts.push(`loc: ${r.location.trim()}`)
+        if (r.phone?.trim()) parts.push(`tel: ${r.phone.trim()}`)
         if (r.reason?.trim()) parts.push(`(${r.reason.trim()})`)
         if (r.notes?.trim()) parts.push(`— ${r.notes.trim()}`)
         return parts.join(' ')

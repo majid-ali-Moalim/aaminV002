@@ -127,11 +127,7 @@ export class EmergencyRequestsController {
   @Roles('ADMIN', 'DISPATCHER')
   @ApiOperation({ summary: 'Assign ambulance and driver to emergency request' })
   assign(@Param('id') id: string, @Body() assignDto: any, @Request() req) {
-    if (
-      req.user?.role === 'EMPLOYEE' &&
-      req.user?.employeeId &&
-      !assignDto.dispatcherId
-    ) {
+    if (!assignDto.dispatcherId && req.user?.employeeId) {
       assignDto.dispatcherId = req.user.employeeId;
     }
     return this.emergencyRequestsService.assign(id, assignDto, req.user);

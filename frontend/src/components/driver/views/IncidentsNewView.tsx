@@ -4,6 +4,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { DriverPanel } from '@/components/driver/DriverModuleShell'
 import { useDriverStore } from '@/lib/stores/driverStore'
+import { driverIncidentsApi } from '@/lib/driverApi'
 
 const INCIDENT_TYPES = [
   'Traffic Delay',
@@ -25,23 +26,45 @@ export default function IncidentsNewView() {
   })
   const [saving, setSaving] = useState(false)
 
-  const submit = async (draft = false) => {
+  const submit = async () => {
     if (!form.title.trim() || !form.description.trim()) {
       toast.error('Title and description are required')
       return
     }
+    if (!activeMission?.id) {
+      toast.error('No active mission — open your active case first')
+      return
+    }
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 600))
-    setSaving(false)
-    toast.success(draft ? 'Draft saved' : 'Incident report submitted to dispatch')
-    if (!draft) {
+    try {
+      await driverIncidentsApi.submit({
+        requestId: activeMission.id,
+        title: form.title.trim(),
+        type: form.type,
+        description: form.description.trim(),
+        priority: form.priority,
+      })
+      toast.success('Incident report submitted to dispatch')
       setForm({ title: '', type: INCIDENT_TYPES[0], description: '', priority: 'MEDIUM' })
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string | string[] } } }).response?.data
+              ?.message
+          : undefined
+      const text = Array.isArray(message) ? message.join(', ') : message
+      toast.error(text || 'Could not submit incident report')
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
     <div className="driver-form-stack">
       <DriverPanel title="New Incident Report">
+        <p className="text-sm text-zinc-400 mb-4">
+          Dispatch and the admin who assigned this case will be notified immediately.
+        </p>
         <div className="driver-form-field">
           <label>Incident Title</label>
           <input
@@ -94,8 +117,14 @@ export default function IncidentsNewView() {
           />
         </div>
         <div className="driver-form-actions">
-          <button type="button" className="driver-btn-sm ghost" disabled={saving} onClick={() => submit(true)}>Save Draft</button>
-          <button type="button" className="driver-btn-sm primary" disabled={saving} onClick={() => submit(false)}>Submit Report</button>
+          <button
+            type="button"
+            className="driver-btn-sm primary"
+            disabled={saving || !activeMission?.id}
+            onClick={() => void submit()}
+          >
+            {saving ? 'Submitting…' : 'Submit Report'}
+          </button>
         </div>
       </DriverPanel>
     </div>

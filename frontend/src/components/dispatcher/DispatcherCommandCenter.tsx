@@ -64,7 +64,7 @@ function CaseRow({
   onAssign?: () => void
   canAssign?: boolean
 }) {
-  const patient = item.patient?.fullName || item.callerName || 'Unknown'
+  const patient = item.patient?.fullName || 'Unknown'
   return (
     <div className="flex items-start justify-between gap-3 py-3 border-b border-slate-100 last:border-0">
       <div className="min-w-0 flex-1">

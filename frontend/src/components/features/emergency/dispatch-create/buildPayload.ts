@@ -94,8 +94,11 @@ export function buildNonEmergencyPayload(
   const label = transportLabel(data, transportTypes)
   const funeral = isFuneralTransport(data.transportType)
   const needsNurse = funeral ? false : data.needsNurse
-  const bookingDate = data.bookingDateTime.slice(0, 10)
-  const bookingTime = data.bookingDateTime.slice(11, 16)
+  const effectiveBooking = data.bookNow
+    ? new Date().toISOString().slice(0, 16)
+    : data.bookingDateTime
+  const bookingDate = effectiveBooking.slice(0, 10)
+  const bookingTime = effectiveBooking.slice(11, 16)
 
   const destinationName = funeral
     ? data.destinationHospitalName || data.destination.trim()
@@ -106,7 +109,10 @@ export function buildNonEmergencyPayload(
   const notes = [
     'Request Type: Non-Emergency',
     `Transport Type: ${label}`,
+    data.bookNow ? 'Book Now: Yes' : '',
     `Booking: ${bookingDate} ${bookingTime}`,
+    data.wheelchairNeeded ? 'Wheelchair Needed: Yes' : 'Wheelchair Needed: No',
+    data.stretcherNeeded ? 'Stretcher Needed: Yes' : 'Stretcher Needed: No',
     data.specialInstructions.trim() ? `Special Instructions: ${data.specialInstructions.trim()}` : '',
     nurseLine(needsNurse),
   ]

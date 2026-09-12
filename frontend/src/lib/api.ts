@@ -581,6 +581,16 @@ export const reportsService = {
     return normalizeUnifiedDashboard(raw)
   },
 
+  getOperationalAlerts: async () => {
+    const api = new ApiService()
+    return await api.get<{
+      criticalCases: unknown[]
+      delayedCases: unknown[]
+      driverIncidents: unknown[]
+      generatedAt?: string
+    }>('/api/reports/operational-alerts')
+  },
+
   getSystemHealth: async () => {
     const api = new ApiService()
     return await api.get('/api/reports/system/health')
@@ -1506,6 +1516,22 @@ export const hospitalCoordinationService = {
   ) => {
     const api = new ApiService()
     return await api.post(`/api/hospital-coordination/requests/${requestId}/assign-manual`, data)
+  },
+  createManualHospital: async (data: {
+    name: string
+    address: string
+    regionId: string
+    districtId: string
+    branchName?: string
+    branchAddress?: string
+    primaryPhone?: string
+    hospitalType?: string
+  }) => {
+    const api = new ApiService()
+    return await api.post<{ id: string; name: string; branches?: unknown }>(
+      '/api/hospital-coordination/hospitals/manual',
+      data,
+    )
   },
   acceptCase: async (id: string, receivingStaffName?: string) => {
     const api = new ApiService()

@@ -3,6 +3,7 @@ import { EmergencyRequestStatus, RequestSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeAttendanceService } from '../employee-attendance/employee-attendance.service';
 import { isStaffEmployeeRole } from '../employee-attendance/shift-types';
+import { fetchRecentDriverIncidents } from '../common/driver-incident';
 
 type ReportPeriod = {
   start: Date;
@@ -27,6 +28,8 @@ type AdminReportFilters = {
   hospital?: string;
   patientOutcome?: string;
   transportType?: string;
+  requestSource?: string;
+  station?: string;
 };
 
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
@@ -500,6 +503,67 @@ export class ReportsService {
     };
   }
 
+  /** Critical cases, delays, and driver field reports for operational alert panels. */
+  async getOperationalAlerts() {
+    const now = new Date();
+    const closedStatuses: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
+    const openFilter = { status: { notIn: closedStatuses } };
+    const pendingDelayCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+    const missionDelayCutoff = new Date(now.getTime() - 45 * 60 * 1000);
+    const activeMissionStatuses: EmergencyRequestStatus[] = [
+      'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
+      'PATIENT_STABILIZED', 'TRANSPORTING', 'ARRIVED_HOSPITAL',
+    ];
+
+    const caseSelect = {
+      id: true,
+      trackingCode: true,
+      status: true,
+      priority: true,
+      pickupLocation: true,
+      updatedAt: true,
+      createdAt: true,
+      patient: { select: { fullName: true } },
+    };
+
+    const [criticalCases, delayedPending, delayedMission, driverIncidents] = await Promise.all([
+      this.prisma.emergencyRequest.findMany({
+        where: { priority: 'CRITICAL', ...openFilter },
+        select: caseSelect,
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: { status: 'PENDING', createdAt: { lt: pendingDelayCutoff } },
+        select: caseSelect,
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+      }),
+      this.prisma.emergencyRequest.findMany({
+        where: {
+          status: { in: activeMissionStatuses },
+          updatedAt: { lt: missionDelayCutoff },
+        },
+        select: caseSelect,
+        orderBy: { updatedAt: 'asc' },
+        take: 20,
+      }),
+      fetchRecentDriverIncidents(this.prisma, { take: 20 }),
+    ]);
+
+    const delayedMap = new Map<string, typeof criticalCases[number]>();
+    for (const row of [...delayedPending, ...delayedMission]) {
+      delayedMap.set(row.id, row);
+    }
+
+    return {
+      criticalCases,
+      delayedCases: Array.from(delayedMap.values()),
+      driverIncidents,
+      generatedAt: now.toISOString(),
+    };
+  }
+
   // ─── Unified Admin Dashboard (single real-time payload) ───
   private readonly DASHBOARD_ACTIVE_MISSION: EmergencyRequestStatus[] = [
     'ASSIGNED', 'DISPATCHED', 'EN_ROUTE', 'ARRIVED_SCENE',
@@ -831,6 +895,37 @@ export class ReportsService {
         value: kpiMetrics.criticalCases,
         format: 'number' as const,
       },
+      {
+        key: 'delayedCases',
+        label: 'Delayed Cases',
+        value: kpiMetrics.delayedCases,
+        format: 'number' as const,
+        live: true,
+      },
+      {
+        key: 'totalAmbulances',
+        label: 'Total Ambulances',
+        value: kpiMetrics.totalAmbulances,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalDrivers',
+        label: 'Total Drivers',
+        value: kpiMetrics.totalDrivers,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalNurses',
+        label: 'Total Nurses',
+        value: kpiMetrics.totalNurses,
+        format: 'number' as const,
+      },
+      {
+        key: 'totalDispatchers',
+        label: 'Total Dispatchers',
+        value: kpiMetrics.totalDispatchers,
+        format: 'number' as const,
+      },
     ];
 
     const criticalAlertText = criticalAlerts
@@ -882,7 +977,7 @@ export class ReportsService {
   }
 
   async getAdminReportFilterOptions() {
-    const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles, transportTypes] =
+    const [regions, districts, incidentCategories, ambulances, hospitals, employeeRoles, transportTypes, stations] =
       await Promise.all([
         this.prisma.region.findMany({
           where: { deletedAt: null },
@@ -926,6 +1021,11 @@ export class ReportsService {
           where: { isActive: true, deletedAt: null },
           orderBy: { name: 'asc' },
           select: { id: true, code: true, name: true },
+        }),
+        this.prisma.station.findMany({
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, code: true },
         }),
       ]);
 
@@ -971,6 +1071,17 @@ export class ReportsService {
         label: t.name,
         code: t.code,
       })),
+      stations: stations.map((s) => ({
+        value: s.id,
+        label: s.code ? `${s.name} (${s.code})` : s.name,
+      })),
+      requestSources: [
+        { value: 'PHONE_CALL', label: 'Phone call' },
+        { value: 'WALK_IN', label: 'Walk in' },
+        { value: 'STAFF', label: 'Staff' },
+        { value: 'REFERRAL', label: 'Referral' },
+        { value: 'OTHER', label: 'Other' },
+      ],
     };
   }
 
@@ -3070,6 +3181,10 @@ export class ReportsService {
     if (filters.region) where.regionId = filters.region;
     if (filters.district) where.districtId = filters.district;
     if (filters.emergencyType) where.incidentCategoryId = filters.emergencyType;
+    if (filters.hospital) where.destinationHospitalId = filters.hospital;
+    if (filters.ambulance) where.ambulanceId = filters.ambulance;
+    if (filters.requestSource) where.requestSource = filters.requestSource;
+    if (filters.station) where.stationId = filters.station;
     return where;
   }
 

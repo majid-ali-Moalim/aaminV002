@@ -170,10 +170,8 @@ export default function EmergencyCaseDetailPage() {
           <Field label="Priority" value={request.priority} />
           <Field label="Emergency type" value={request.incidentCategory?.name || request.patientCondition} />
           <Field label="Source" value={request.requestSource?.replace(/_/g, ' ')} />
-          <Field label="Patient" value={request.patient?.fullName || request.callerName} />
+          <Field label="Patient" value={request.patient?.fullName} />
           <Field label="Patient phone" value={request.patient?.phone || request.callerPhone} />
-          <Field label="Caller" value={request.callerName} />
-          <Field label="Caller phone" value={request.callerPhone} />
           <Field
             label="Hospital destination"
             value={request.destinationHospital?.name || request.destination}

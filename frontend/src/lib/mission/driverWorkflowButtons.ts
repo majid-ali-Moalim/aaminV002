@@ -52,6 +52,7 @@ export function getDriverWorkflowButtons(
   const meta = getWorkflowMeta(mission.id)
   const started = caseStarted(meta, mission)
   const closed = mission.status === 'COMPLETED' || mission.status === 'CANCELLED'
+  const hasNurse = Boolean(mission.nurse) || Boolean(mission.nurseId)
 
   return BUTTONS.map((b) => {
     if (b.id === 'start_case') {
@@ -62,6 +63,9 @@ export function getDriverWorkflowButtons(
     // case_complete
     if (closed) return { ...b, state: 'completed' }
     if (started) {
+      // Driver-only case: the driver closes it themselves.
+      if (!hasNurse) return { ...b, state: 'active' }
+      // Driver + nurse: closes automatically when the nurse finishes handover.
       return {
         ...b,
         state: 'locked',

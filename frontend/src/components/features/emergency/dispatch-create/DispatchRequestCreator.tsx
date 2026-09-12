@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/context/AuthContext'
 import {
   emergencyRequestsService,
+  hospitalCoordinationService,
   hospitalsService,
   systemSetupService,
 } from '@/lib/api'
@@ -29,6 +30,7 @@ import { fetchTransportTypes, type TransportTypeOption } from '@/lib/emergency/t
 import { buildPayloadForType } from './buildPayload'
 import EmergencyDispatchFormView from './EmergencyFormView'
 import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import NonEmergencyDispatchFormView from './NonEmergencyFormView'
 import ReferralDispatchFormView from './ReferralFormView'
 import {
@@ -264,6 +266,36 @@ export default function DispatchRequestCreator({
       return next
     })
   }
+
+  const createCustomHospital = useCallback(
+    async (
+      regionId: string,
+      districtId: string,
+      draft: CustomHospitalDraft,
+    ): Promise<HospitalOption | null> => {
+      if (!regionId || !districtId) {
+        throw new Error('Select region and district first, then add a custom hospital')
+      }
+      const created = await hospitalCoordinationService.createManualHospital({
+        name: draft.name.trim(),
+        address: draft.address.trim() || draft.name.trim(),
+        regionId,
+        districtId,
+        branchName: draft.branchName.trim() || undefined,
+        branchAddress: draft.branchAddress.trim() || undefined,
+        primaryPhone: draft.primaryPhone.trim() || undefined,
+      })
+      const option: HospitalOption = {
+        id: created.id,
+        name: created.name,
+        branches: created.branches,
+      }
+      setHospitals((prev) => [option, ...prev.filter((h) => h.id !== option.id)])
+      toast.success('Custom hospital created — you can edit full details in Hospital Coordination')
+      return option
+    },
+    [],
+  )
 
   const handleCancel = () => {
     if (window.confirm('Discard this request and go back?')) {
@@ -513,6 +545,9 @@ export default function DispatchRequestCreator({
                   transportTypes={transportTypes}
                   loadingDistricts={loadingDistricts}
                   onChange={patchNonEmergency}
+                  onCreateCustomHospital={(d) =>
+                    createCustomHospital(draft.nonEmergency.regionId, draft.nonEmergency.districtId, d)
+                  }
                   onCancel={handleCancel}
                   onSubmit={handleSubmit}
                   submitting={submitting}
@@ -528,6 +563,9 @@ export default function DispatchRequestCreator({
                   hospitals={hospitals}
                   loadingDistricts={loadingDistricts}
                   onChange={patchReferral}
+                  onCreateCustomHospital={(d) =>
+                    createCustomHospital(draft.referral.regionId, draft.referral.districtId, d)
+                  }
                   onCancel={handleCancel}
                   onSubmit={handleSubmit}
                   submitting={submitting}

@@ -19,6 +19,13 @@ export class ReportsController {
     return this.reportsService.getUnifiedDashboard();
   }
 
+  @Get('operational-alerts')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('report.view')
+  getOperationalAlerts() {
+    return this.reportsService.getOperationalAlerts();
+  }
+
   // ─── KPI endpoints (used by /admin/dashboard and /admin/dashboard/kpi) ───
   @Get('kpi/emergency')
   getEmergencyKPIs(@Query('timeRange') timeRange?: string) {

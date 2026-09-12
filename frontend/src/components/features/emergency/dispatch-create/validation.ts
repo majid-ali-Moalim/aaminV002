@@ -93,8 +93,8 @@ export function validateNonEmergencyDispatchForm(
     ? 'Graveyard'
     : 'Destination hospital or place'
   if (!hasHospital) errors.destinationHospitalId = `${destinationLabel} is required`
-  if (!data.bookingDateTime) errors.bookingDateTime = 'Booking date and time is required'
-  else {
+  if (!data.bookNow && !data.bookingDateTime) errors.bookingDateTime = 'Booking date and time is required'
+  else if (!data.bookNow) {
     const booking = new Date(data.bookingDateTime)
     if (Number.isNaN(booking.getTime())) {
       errors.bookingDateTime = 'Enter a valid booking date and time'

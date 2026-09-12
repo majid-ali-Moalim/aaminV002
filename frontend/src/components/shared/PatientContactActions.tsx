@@ -16,7 +16,7 @@ type Props = {
 }
 
 export function PatientContactActions({ caseData, variant = 'driver' }: Props) {
-  const patientName = caseData?.patient?.fullName || caseData?.callerName || 'Patient'
+  const patientName = caseData?.patient?.fullName || 'Patient'
   const phone = resolvePatientPhone(caseData)
   const display = formatSomaliaPhoneDisplay(phone)
   const tel = telHref(phone)

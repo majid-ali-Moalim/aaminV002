@@ -24,7 +24,6 @@ export function buildSimpleCaseSummary(request: EmergencyRequest): SimpleCaseFie
   const patientName = request.patient?.fullName
   const patientPhone = request.patient?.phone
   const callerPhone = request.callerPhone
-  const callerName = request.callerName
 
   if (!isUnknown(patientName)) {
     rows.push({ label: 'Patient', value: norm(patientName) })
@@ -56,10 +55,6 @@ export function buildSimpleCaseSummary(request: EmergencyRequest): SimpleCaseFie
     rows.push({ label: 'Source', value: request.requestSource.replace(/_/g, ' ') })
   }
 
-  if (!isUnknown(callerName) && norm(callerName) !== norm(patientName)) {
-    rows.push({ label: 'Caller', value: norm(callerName) })
-  }
-
   const statusLine = [
     triageOptionLabel(CONSCIOUS_STATUS_OPTIONS, request.consciousStatus),
     triageOptionLabel(BREATHING_STATUS_OPTIONS, normalizeBreathingStatus(request.breathingStatus)),
@@ -69,7 +64,7 @@ export function buildSimpleCaseSummary(request: EmergencyRequest): SimpleCaseFie
     .join(' · ')
 
   if (statusLine) {
-    rows.push({ label: 'Quick triage (caller)', value: statusLine })
+    rows.push({ label: 'Quick triage', value: statusLine })
   }
 
   if (caseRequiresNurseFlag(request)) {

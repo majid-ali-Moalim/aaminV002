@@ -42,7 +42,8 @@ export function resolveRedirectUrl(input: {
   if (entityType.includes('employee') && entityId) return `/admin/employees/${entityId}`;
   if (entityType.includes('dispatcher') && entityId) return `/admin/dispatchers/${entityId}`;
   if (entityType.includes('nurse') && entityId) return `/admin/nurses/${entityId}`;
-  if (entityType.includes('incident') && entityId) return `/admin/incidents/${entityId}`;
+  if (entityType.includes('driverincident')) return '/admin/operational-alerts';
+  if (entityType.includes('incident') && entityId) return '/admin/operational-alerts';
   if (
     (entityType.includes('emergency') || entityType.includes('case') || entityType.includes('mission')) &&
     entityId
@@ -65,7 +66,7 @@ export function resolveRedirectUrl(input: {
     case 'HOSPITAL':
       return entityId ? `/admin/hospitals/incoming?id=${entityId}` : '/admin/hospitals/incoming';
     case 'INCIDENT':
-      return '/admin/notifications?tab=all';
+      return '/admin/operational-alerts';
     case 'BROADCAST':
       return '/admin/notifications?tab=broadcasts';
     case 'SYSTEM':

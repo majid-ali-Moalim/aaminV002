@@ -10,6 +10,7 @@ import PatientDemographicsFields from './PatientDemographicsFields'
 import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly } from './ui'
 import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import type { DispatchFormErrors, NonEmergencyDispatchForm } from './types'
 
 type Props = {
@@ -21,6 +22,7 @@ type Props = {
   transportTypes: TransportTypeOption[]
   loadingDistricts: boolean
   onChange: (patch: Partial<NonEmergencyDispatchForm>) => void
+  onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   onCancel: () => void
   onSubmit: () => void
   submitting: boolean
@@ -35,6 +37,7 @@ export default function NonEmergencyDispatchFormView({
   transportTypes,
   loadingDistricts,
   onChange,
+  onCreateCustomHospital,
   onCancel,
   onSubmit,
   submitting,
@@ -80,8 +83,8 @@ export default function NonEmergencyDispatchFormView({
             error={errors.patientName}
             onChange={(patientName) => onChange({ patientName })}
             label={isFuneral ? 'Relative Name' : 'Patient Name'}
-            placeholder={isFuneral ? 'Full name of caller / relative' : 'Full name or UNKNOWN'}
-            showUnknownButton={!isFuneral}
+            placeholder={isFuneral ? 'Full name of caller / relative' : 'Patient full name'}
+            showUnknownButton={false}
           />
           <div>
             <FieldLabel required error={errors.phone}>Phone Number</FieldLabel>
@@ -203,19 +206,43 @@ export default function NonEmergencyDispatchFormView({
                   destination: isFuneral ? hospitalName : branchName || hospitalName,
                 })
               }
+              onCreateCustomHospital={isFuneral ? undefined : onCreateCustomHospital}
             />
           </div>
           <div className="sm:col-span-2">
-            <FieldLabel required error={errors.bookingDateTime}>Booking Date & Time</FieldLabel>
+            <FieldLabel required={!form.bookNow} error={errors.bookingDateTime}>Booking Date & Time</FieldLabel>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={form.bookNow}
+                onChange={(e) => {
+                  const bookNow = e.target.checked
+                  onChange({
+                    bookNow,
+                    bookingDateTime: bookNow
+                      ? new Date().toISOString().slice(0, 16)
+                      : form.bookingDateTime,
+                  })
+                }}
+                className="h-4 w-4 accent-blue-600"
+              />
+              Book now (immediate dispatch window)
+            </label>
             <input
               type="datetime-local"
               min={bookingBounds.min}
               max={bookingBounds.max}
               className={fieldInputClass(errors.bookingDateTime)}
               value={form.bookingDateTime}
-              onChange={(e) => onChange({ bookingDateTime: e.target.value })}
+              disabled={form.bookNow}
+              onChange={(e) => onChange({ bookingDateTime: e.target.value, bookNow: false })}
             />
-            {isFuneral && (
+            {form.bookNow && (
+              <p className="mt-1.5 text-xs text-emerald-700">
+                Crew can be assigned immediately. A reminder is sent when the booking time is reached.
+              </p>
+            )}
+            {isFuneral && !form.bookNow && (
               <p className="mt-1.5 text-xs text-slate-500">
                 Funeral bookings must be scheduled within the next 24 hours.
               </p>

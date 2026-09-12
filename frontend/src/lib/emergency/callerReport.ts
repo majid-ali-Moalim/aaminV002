@@ -45,20 +45,13 @@ export function buildCallerReport(request: EmergencyRequest): CallerReportRow[] 
 
   const patientPhone = norm(request.patient?.phone)
   const callerPhone = norm(request.callerPhone)
-  const callerName = norm(request.callerName)
   const patientName = norm(request.patient?.fullName)
 
   if (!isUnknown(patientName)) rows.push({ label: 'Patient name', value: patientName })
-  if (patientPhone) rows.push({ label: 'Patient phone', value: patientPhone })
+  const phone = patientPhone || callerPhone
+  if (phone) rows.push({ label: 'Phone', value: phone })
   if (request.patient?.gender) rows.push({ label: 'Gender', value: request.patient.gender })
   if (request.patient?.age != null) rows.push({ label: 'Age', value: String(request.patient.age) })
-
-  if (!isUnknown(callerName) && callerName !== patientName) {
-    rows.push({ label: 'Caller name', value: callerName })
-  }
-  if (callerPhone && callerPhone !== patientPhone) {
-    rows.push({ label: 'Caller phone', value: callerPhone })
-  }
   if (request.requestSource) {
     rows.push({ label: 'Request source', value: request.requestSource.replace(/_/g, ' ') })
   }

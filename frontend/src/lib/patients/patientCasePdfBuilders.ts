@@ -16,14 +16,6 @@ function empName(employee?: { firstName?: string | null; lastName?: string | nul
   return name || '—'
 }
 
-function callerRoleLabel(req: EmergencyRequest): string {
-  const patient = req.patient?.fullName?.trim().toLowerCase()
-  const caller = req.callerName?.trim().toLowerCase()
-  if (!req.callerName?.trim()) return '—'
-  if (patient && caller && patient === caller) return 'Patient (self)'
-  return 'Caller / relative'
-}
-
 function parseRequestType(notes?: string | null, requestSource?: string | null): string {
   if (notes?.includes('Request Type: Referral') || requestSource === 'REFERRAL') return 'Referral'
   if (notes?.includes('Request Type: Non-Emergency')) return 'Non-Emergency'
@@ -65,8 +57,8 @@ export function buildPatientCasesFilterScope(
 
   const filterDescription = parts.join(' · ')
   const scopeNote = isFiltered
-    ? `This dossier contains ${caseCount} case(s) matching your filters (${filterDescription}). Patient, caller/relative contacts, mission updates, and clinical timeline are included for each case.`
-    : `This dossier contains ${caseCount} case(s) with full patient, caller/relative, and mission update details for the selected scope.`
+    ? `This dossier contains ${caseCount} case(s) matching your filters (${filterDescription}). Patient contacts, mission updates, and clinical timeline are included for each case.`
+    : `This dossier contains ${caseCount} case(s) with full patient and mission update details for the selected scope.`
 
   return { scopeNote, filterDescription, isFiltered }
 }
@@ -77,7 +69,6 @@ export function buildCasesOverviewTable(cases: EmergencyRequest[]) {
     columns: [
       'Case #',
       'Patient',
-      'Caller / relative',
       'Phone',
       'Type',
       'Priority',
@@ -88,8 +79,7 @@ export function buildCasesOverviewTable(cases: EmergencyRequest[]) {
     ],
     rows: cases.map((req) => [
       req.trackingCode,
-      req.patient?.fullName || req.callerName || 'Unknown',
-      req.callerName && req.callerName !== req.patient?.fullName ? req.callerName : '—',
+      req.patient?.fullName || 'Unknown',
       req.patient?.phone || req.callerPhone || '—',
       parseRequestType(req.notes, req.requestSource),
       req.priority,
@@ -116,7 +106,7 @@ export function buildCaseSummaryStats(cases: EmergencyRequest[]) {
 export function buildPatientRelativeSection(req: EmergencyRequest): [string, string][] {
   const p = req.patient
   const rows: [string, string][] = [
-    ['Patient name', p?.fullName || req.callerName || 'Unknown'],
+    ['Patient name', p?.fullName || 'Unknown'],
     ['Patient ID', p?.patientCode || '—'],
     ['Patient phone', p?.phone || req.callerPhone || '—'],
     ['Age', p ? formatPatientAge(p) : '—'],
@@ -127,10 +117,6 @@ export function buildPatientRelativeSection(req: EmergencyRequest): [string, str
     ['Allergies', p?.allergies || '—'],
     ['Conditions', p?.conditions || '—'],
     ['Insurance', p?.insuranceProvider || '—'],
-    ['—', '—'],
-    ['Caller / relative name', req.callerName || '—'],
-    ['Caller / relative phone', req.callerPhone || '—'],
-    ['Contact role', callerRoleLabel(req)],
     ['Request source', req.requestSource?.replace(/_/g, ' ') || '—'],
   ]
   return rows
