@@ -191,7 +191,7 @@ export function UnifiedAdminDashboard({ data, isRefreshing, onRefresh }: Unified
                 )}
               </div>
               <p className="text-lg font-black text-admin-text mt-1.5 leading-none">{kpi.displayValue}</p>
-              <p className="text-[9px] font-bold text-admin-text-muted uppercase tracking-wide mt-1 leading-tight line-clamp-2">
+              <p className="text-[9px] font-bold text-admin-text uppercase tracking-wide mt-1 leading-tight line-clamp-2">
                 {kpi.label}
               </p>
             </div>

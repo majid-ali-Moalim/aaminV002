@@ -44,7 +44,7 @@ function toPublicImageUrl(url?: string | null): string {
 const inputClass =
   'w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-300'
 
-const labelClass = 'text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block'
+const labelClass = 'text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1 block'
 
 type EditAmbulanceForm = {
   ambulanceNumber: string
@@ -431,13 +431,13 @@ export default function AmbulanceFleetView({
 
                 <div className="p-5 flex-1 space-y-4">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1">
                       Vehicle
                     </p>
-                    <p className="text-sm font-semibold text-slate-800 line-clamp-2">
+                    <p className="text-sm font-semibold text-slate-900 line-clamp-2">
                       {ambulance.vehicleType || 'Ambulance'}
                     </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-800 mt-0.5">
                       {[ambulance.vehicleBrand, ambulance.vehicleModel, ambulance.vehicleYear]
                         .filter(Boolean)
                         .join(' · ') || '—'}
@@ -447,10 +447,10 @@ export default function AmbulanceFleetView({
                   <div className="flex items-start gap-2 text-sm">
                     <Warehouse className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wider">
                         Base Station
                       </p>
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="text-sm font-semibold text-slate-900">
                         {ambulance.station?.name || 'Not assigned'}
                       </p>
                     </div>

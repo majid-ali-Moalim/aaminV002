@@ -8,8 +8,8 @@
   --admin-border: 214 32% 91%;
   --admin-border-subtle: 214 32% 94%;
   --admin-text: 222 47% 11%;
-  --admin-text-secondary: 215 16% 47%;
-  --admin-text-muted: 215 20% 65%;
+  --admin-text-secondary: 222 47% 11%;
+  --admin-text-muted: 222 40% 15%;
   --admin-topbar: 0 0% 100%;
   --admin-input: 0 0% 100%;
   --admin-input-border: 214 32% 88%;
@@ -73,6 +73,13 @@
   color-scheme: dark;
 }
 
+/* Light mode — keep body copy black instead of pale gray utilities */
+.admin-shell .text-slate-400,
+.admin-shell .text-slate-500,
+.admin-shell .text-slate-600 {
+  color: hsl(var(--admin-text)) !important;
+}
+
 .admin-page-bg {
   background-color: hsl(var(--admin-bg));
   color: hsl(var(--admin-text));
@@ -100,7 +107,7 @@
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: hsl(var(--admin-text-secondary));
+  color: hsl(var(--admin-text));
 }
 
 .admin-input {
@@ -128,7 +135,7 @@
 }
 
 .admin-muted-text {
-  color: hsl(var(--admin-text-secondary));
+  color: hsl(var(--admin-text-muted));
 }
 
 .admin-topbar-surface {
