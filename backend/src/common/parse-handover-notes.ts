@@ -2,6 +2,8 @@ const HANDOVER_PREFIX = '[EADS_HANDOVER]';
 
 export type ParsedHandoverNotes = {
   acceptedHospital?: string;
+  receivingStaff?: string;
+  notes?: string;
   rejectedHospitals?: Array<{
     id: string;
     hospitalId?: string;

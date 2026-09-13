@@ -23,8 +23,10 @@ import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { hospitalCoordinationService } from '@/lib/api'
 import { getCachedDistricts, getCachedRegions, loadLocationReferenceData } from '@/lib/cache/referenceData'
-import { AVAILABILITY_STATUSES, REFUSAL_REASONS, refusalReasonLabel, parseHospitalBranches, type CoordinationView } from '@/lib/hospital-coordination/constants'
+import { AVAILABILITY_STATUSES, refusalReasonLabel, parseHospitalBranches, type CoordinationView } from '@/lib/hospital-coordination/constants'
 import { Stethoscope, GitBranch } from 'lucide-react'
+import { downloadSectionPdf } from '@/lib/reports/exportPdf'
+import { useAuth } from '@/context/AuthContext'
 
 function KpiCard({ label, value, icon: Icon, accent = 'teal' }: { label: string; value: number | string; icon: React.ElementType; accent?: string }) {
   const colors: Record<string, string> = {
@@ -46,6 +48,7 @@ function KpiCard({ label, value, icon: Icon, accent = 'teal' }: { label: string;
 }
 
 export default function HospitalCoordinationView({ view }: { view: CoordinationView }) {
+  const { user } = useAuth()
   const [dataLoading, setDataLoading] = useState(false)
   const [overview, setOverview] = useState<any>(null)
   const [hospitals, setHospitals] = useState<any[]>([])
@@ -62,6 +65,11 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
   const [rejectedTotalCount, setRejectedTotalCount] = useState(0)
   const [acceptedTotalCount, setAcceptedTotalCount] = useState(0)
   const [detailCase, setDetailCase] = useState<any | null>(null)
+  const [detailVariant, setDetailVariant] = useState<'accepted' | 'refused'>('refused')
+  const [pdfExporting, setPdfExporting] = useState(false)
+
+  const generatedBy =
+    user?.username || user?.email || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || undefined
 
   const titles: Record<CoordinationView, { title: string; desc: string }> = {
     'all-hospitals': { title: 'All Hospitals', desc: 'All registered hospitals in the coordination network' },
@@ -107,7 +115,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           locationPromise,
           overviewPromise,
         ]
-        if (view === 'refused') {
+        if (view === 'refused' || view === 'accepted') {
           requests.push(
             hospitalCoordinationService.listCases({ stage: 'REFUSED' }),
             hospitalCoordinationService.listCases({ stage: 'ACCEPTED' }),
@@ -116,7 +124,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         const results = await Promise.all(requests)
         const caseRows = results[0] as any[]
         setCases(caseRows ?? [])
-        if (view === 'refused') {
+        if (view === 'refused' || view === 'accepted') {
           const allRejected = results[3] as any[]
           const allAccepted = results[4] as any[]
           setRejectedTotalCount(allRejected?.length ?? 0)
@@ -164,10 +172,10 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         { label: 'Pending Review', value: k.pendingIncoming ?? 0, icon: Clock, accent: 'amber' },
       ],
       accepted: [
-        { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: CheckCircle2, accent: 'green' },
-        { label: 'Total Accepted', value: cases.length || '—', icon: Building2, accent: 'teal' },
-        { label: 'Rejected Today', value: k.refusedToday ?? 0, icon: XCircle, accent: 'rose' },
-        { label: 'Incoming Today', value: k.incomingToday ?? 0, icon: Activity, accent: 'blue' },
+        { label: 'Total Accepted Cases', value: acceptedTotalCount, icon: CheckCircle2, accent: 'green' },
+        { label: 'Filtered Results', value: cases.length, icon: Building2, accent: 'teal' },
+        { label: 'Total Rejected Cases', value: rejectedTotalCount, icon: XCircle, accent: 'rose' },
+        { label: 'Accepted Today', value: k.acceptedToday ?? 0, icon: Activity, accent: 'blue' },
       ],
       refused: [
         { label: 'Total Rejected Cases', value: rejectedTotalCount, icon: XCircle, accent: 'rose' },
@@ -241,27 +249,56 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
         <RefusedCasesTable
           cases={cases}
           loading={dataLoading && cases.length === 0}
-          onShow={setDetailCase}
+          onShow={(row) => {
+            setDetailVariant('refused')
+            setDetailCase(row)
+          }}
+          onExportPdf={async () => {
+            setPdfExporting(true)
+            try {
+              await exportCoordinationCasesPdf(cases, 'refused', generatedBy)
+              toast.success('Rejected cases PDF downloaded')
+            } catch {
+              toast.error('PDF export failed')
+            } finally {
+              setPdfExporting(false)
+            }
+          }}
+          pdfExporting={pdfExporting}
         />
       ) : view === 'accepted' ? (
-        <div className="space-y-4">
-          {dataLoading && cases.length === 0 ? (
-            <ContentSkeleton rows={4} />
-          ) : cases.length === 0 ? (
-            <p className="text-center py-16 text-gray-500">No cases in this view</p>
-          ) : (
-            cases.map((c) => (
-              <CaseCard key={c.id} caseRow={c} view={view} onAction={load} />
-            ))
-          )}
-        </div>
+        <AcceptedCasesTable
+          cases={cases}
+          loading={dataLoading && cases.length === 0}
+          onShow={(row) => {
+            setDetailVariant('accepted')
+            setDetailCase(row)
+          }}
+          onExportPdf={async () => {
+            setPdfExporting(true)
+            try {
+              await exportCoordinationCasesPdf(cases, 'accepted', generatedBy)
+              toast.success('Accepted cases PDF downloaded')
+            } catch {
+              toast.error('PDF export failed')
+            } finally {
+              setPdfExporting(false)
+            }
+          }}
+          pdfExporting={pdfExporting}
+        />
       ) : (
         <HospitalTable hospitals={hospitals} loading={dataLoading && hospitals.length === 0} />
       )}
       </div>
 
       {detailCase && (
-        <RefusedCaseDetailModal caseRow={detailCase} onClose={() => setDetailCase(null)} />
+        <CoordinationCaseDetailModal
+          caseRow={detailCase}
+          variant={detailVariant}
+          generatedBy={generatedBy}
+          onClose={() => setDetailCase(null)}
+        />
       )}
     </div>
   )
@@ -464,14 +501,67 @@ function formatEmployeeName(person?: { firstName?: string | null; lastName?: str
   return name || '—'
 }
 
+async function exportCoordinationCasesPdf(
+  cases: any[],
+  variant: 'accepted' | 'refused',
+  generatedBy?: string,
+) {
+  const isAccepted = variant === 'accepted'
+  const columns = isAccepted
+    ? ['Case #', 'Patient', 'Mission', 'Accepted Hospital', 'Receiving Staff', 'Prior Rejections', 'Handover Date']
+    : ['Case #', 'Patient', 'Mission', 'Hospital', 'Refusal Reason', 'Rejected At']
+  const rows = cases.map((row) => {
+    const req = row.emergencyRequest
+    if (isAccepted) {
+      const hospitalName = row.acceptedHospital?.hospitalName ?? row.hospital?.name ?? '—'
+      const rejectCount = row.rejectedHospitals?.length ?? 0
+      return [
+        row.caseNumber,
+        req?.patient?.fullName ?? 'Unknown',
+        req?.trackingCode ?? '—',
+        hospitalName,
+        row.acceptedHospital?.receivingStaffName ?? row.receivingStaffName ?? '—',
+        rejectCount,
+        new Date(row.handoverCompletedAt ?? row.updatedAt).toLocaleString(),
+      ]
+    }
+    const hospitalName = row.hospital?.name ?? row.rejectedHospitals?.[0]?.hospitalName ?? '—'
+    const reason =
+      row.refusalReason
+        ? refusalReasonLabel(row.refusalReason)
+        : row.rejectedHospitals?.[0]?.refusalReason ?? 'Not specified'
+    return [
+      row.caseNumber,
+      req?.patient?.fullName ?? 'Unknown',
+      req?.trackingCode ?? '—',
+      hospitalName,
+      reason,
+      new Date(row.updatedAt).toLocaleString(),
+    ]
+  })
+  await downloadSectionPdf(
+    {
+      title: isAccepted ? 'Accepted Hospital Cases' : 'Rejected Hospital Cases',
+      subtitle: 'Hospital coordination — nurse handover and refusal records',
+      generatedBy,
+    },
+    { title: isAccepted ? 'Accepted Cases' : 'Rejected Cases', columns, rows },
+    `hospital-coordination-${variant}.pdf`,
+  )
+}
+
 function RefusedCasesTable({
   cases,
   loading,
   onShow,
+  onExportPdf,
+  pdfExporting,
 }: {
   cases: any[]
   loading?: boolean
   onShow: (row: any) => void
+  onExportPdf?: () => void
+  pdfExporting?: boolean
 }) {
   if (loading) return <ContentSkeleton rows={5} />
   if (!cases.length) {
@@ -486,6 +576,15 @@ function RefusedCasesTable({
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-hidden shadow-sm">
+      <div className="px-4 py-3 border-b flex items-center justify-between gap-3 bg-slate-50/80">
+        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{cases.length} rejected case(s)</p>
+        {onExportPdf && (
+          <Button size="sm" variant="outline" className="rounded-lg font-bold gap-1.5" disabled={pdfExporting} onClick={onExportPdf}>
+            <Download className="w-3.5 h-3.5" />
+            Export PDF
+          </Button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-gray-800/80 text-[10px] font-black uppercase tracking-wider text-slate-500">
@@ -554,21 +653,189 @@ function RefusedCasesTable({
   )
 }
 
-function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: () => void }) {
+function AcceptedCasesTable({
+  cases,
+  loading,
+  onShow,
+  onExportPdf,
+  pdfExporting,
+}: {
+  cases: any[]
+  loading?: boolean
+  onShow: (row: any) => void
+  onExportPdf?: () => void
+  pdfExporting?: boolean
+}) {
+  if (loading) return <ContentSkeleton rows={5} />
+  if (!cases.length) {
+    return (
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-dashed py-16 text-center">
+        <CheckCircle2 className="w-10 h-10 text-emerald-300 mx-auto mb-3" />
+        <p className="font-semibold text-gray-700">No accepted cases found</p>
+        <p className="text-sm text-gray-500 mt-1">Completed nurse handovers with an accepting hospital appear here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border overflow-hidden shadow-sm">
+      <div className="px-4 py-3 border-b flex items-center justify-between gap-3 bg-emerald-50/80">
+        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">{cases.length} accepted case(s)</p>
+        {onExportPdf && (
+          <Button size="sm" variant="outline" className="rounded-lg font-bold gap-1.5" disabled={pdfExporting} onClick={onExportPdf}>
+            <Download className="w-3.5 h-3.5" />
+            Export PDF
+          </Button>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-gray-800/80 text-[10px] font-black uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-4 py-3 text-left">Case #</th>
+              <th className="px-4 py-3 text-left">Patient</th>
+              <th className="px-4 py-3 text-left">Mission</th>
+              <th className="px-4 py-3 text-left">Accepted hospital</th>
+              <th className="px-4 py-3 text-left">Prior rejections</th>
+              <th className="px-4 py-3 text-left">Handover</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-gray-800">
+            {cases.map((row) => {
+              const req = row.emergencyRequest
+              const hospitalName = row.acceptedHospital?.hospitalName ?? row.hospital?.name ?? '—'
+              const rejectCount = row.rejectedHospitals?.length ?? 0
+
+              return (
+                <tr key={row.id} className="hover:bg-emerald-50/40 dark:hover:bg-gray-800/40 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-mono text-xs font-bold text-teal-700">{row.caseNumber}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-gray-900 dark:text-white">{req?.patient?.fullName ?? 'Unknown'}</p>
+                    <p className="text-[10px] text-gray-400 uppercase">{req?.priority ?? row.priority}</p>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{req?.trackingCode ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-emerald-900 dark:text-emerald-200">{hospitalName}</p>
+                    {(row.acceptedHospital?.receivingStaffName || row.receivingStaffName) && (
+                      <p className="text-xs text-gray-500">Receiving: {row.acceptedHospital?.receivingStaffName ?? row.receivingStaffName}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {rejectCount > 0 ? (
+                      <span className="inline-flex text-[10px] font-bold uppercase px-2 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-100">
+                        {rejectCount} hospital{rejectCount > 1 ? 's' : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">None</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                    {new Date(row.handoverCompletedAt ?? row.updatedAt).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg font-bold gap-1.5"
+                      onClick={() => onShow(row)}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Details
+                    </Button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function CoordinationCaseDetailModal({
+  caseRow,
+  variant,
+  generatedBy,
+  onClose,
+}: {
+  caseRow: any
+  variant: 'accepted' | 'refused'
+  generatedBy?: string
+  onClose: () => void
+}) {
+  const [pdfBusy, setPdfBusy] = useState(false)
   const req = caseRow.emergencyRequest
   const hospital = caseRow.hospital
   const rejected = caseRow.rejectedHospitals ?? []
   const accepted = caseRow.acceptedHospital
   const nurse = caseRow.nurseHandover
+  const isAccepted = variant === 'accepted'
+
+  const exportDetailPdf = async () => {
+    setPdfBusy(true)
+    try {
+      const detailRows: Array<Array<string | number>> = [
+        ['Case number', caseRow.caseNumber],
+        ['Mission', req?.trackingCode ?? '—'],
+        ['Patient', req?.patient?.fullName ?? 'Unknown'],
+        ['Priority', req?.priority ?? caseRow.priority ?? '—'],
+        ['Pickup', req?.pickupLocation ?? '—'],
+        ['Ambulance', req?.ambulance?.ambulanceNumber ?? '—'],
+        ['Driver', formatEmployeeName(req?.driver)],
+        ['Nurse', nurse?.nurseName ?? formatEmployeeName(req?.nurse)],
+      ]
+      if (isAccepted && accepted) {
+        detailRows.push(
+          ['Accepted hospital', accepted.hospitalName ?? '—'],
+          ['Receiving staff', accepted.receivingStaffName ?? caseRow.receivingStaffName ?? '—'],
+          ['Handover completed', accepted.handoverCompletedAt ? new Date(accepted.handoverCompletedAt).toLocaleString() : '—'],
+        )
+      }
+      if (rejected.length) {
+        rejected.forEach((r: any, i: number) => {
+          detailRows.push(
+            [`Rejected hospital ${i + 1}`, r.hospitalName],
+            [`Reason ${i + 1}`, r.refusalReason ?? r.reason ?? '—'],
+            [`Notes ${i + 1}`, r.refusalNotes ?? r.notes ?? '—'],
+          )
+        })
+      }
+      if (nurse?.notes) detailRows.push(['Clinical notes', nurse.notes])
+      await downloadSectionPdf(
+        {
+          title: isAccepted ? 'Accepted Case — Handover Report' : 'Rejected Case — Coordination Report',
+          subtitle: `${caseRow.caseNumber} · ${req?.trackingCode ?? ''}`,
+          generatedBy,
+        },
+        {
+          title: 'Case details',
+          columns: ['Field', 'Value'],
+          rows: detailRows,
+        },
+        `coordination-case-${caseRow.caseNumber}.pdf`,
+      )
+      toast.success('Case PDF downloaded')
+    } catch {
+      toast.error('PDF export failed')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/75 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-900 w-full max-w-4xl max-h-[92vh] rounded-t-2xl sm:rounded-2xl border border-slate-200 dark:border-gray-800 shadow-2xl overflow-hidden flex flex-col">
-        <div className="bg-gradient-to-r from-rose-600 to-rose-700 px-6 py-5 flex items-start justify-between gap-4 shrink-0">
+        <div className={`bg-gradient-to-r px-6 py-5 flex items-start justify-between gap-4 shrink-0 ${isAccepted ? 'from-emerald-600 to-teal-700' : 'from-rose-600 to-rose-700'}`}>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-100">Rejected case details</p>
+            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isAccepted ? 'text-emerald-100' : 'text-rose-100'}`}>
+              {isAccepted ? 'Accepted case — handover report' : 'Rejected case details'}
+            </p>
             <h2 className="text-xl font-black text-white mt-1">{caseRow.caseNumber}</h2>
-            <p className="text-rose-100 text-sm mt-1">
+            <p className={`text-sm mt-1 ${isAccepted ? 'text-emerald-100' : 'text-rose-100'}`}>
               Mission {req?.trackingCode} · {req?.patient?.fullName ?? 'Patient'}
             </p>
           </div>
@@ -581,8 +848,12 @@ function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <DetailStat icon={User} label="Patient" value={req?.patient?.fullName ?? '—'} />
             <DetailStat icon={AlertTriangle} label="Priority" value={req?.priority ?? caseRow.priority ?? '—'} />
-            <DetailStat icon={Calendar} label="Rejected at" value={new Date(caseRow.updatedAt).toLocaleString()} />
-            <DetailStat icon={FileText} label="Status" value="Rejected" accent="rose" />
+            <DetailStat
+              icon={Calendar}
+              label={isAccepted ? 'Handover at' : 'Rejected at'}
+              value={new Date(caseRow.handoverCompletedAt ?? caseRow.updatedAt).toLocaleString()}
+            />
+            <DetailStat icon={FileText} label="Status" value={isAccepted ? 'Accepted' : 'Rejected'} accent={isAccepted ? 'green' : 'rose'} />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-5">
@@ -604,6 +875,46 @@ function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: (
             </SectionCard>
           </div>
 
+          {isAccepted && accepted && (
+            <SectionCard title="Accepted hospital" icon={CheckCircle2} accent="green">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <InfoLine label="Hospital" value={accepted.hospitalName ?? hospital?.name} />
+                <InfoLine label="Receiving staff" value={accepted.receivingStaffName ?? caseRow.receivingStaffName} />
+                <InfoLine
+                  label="Handover completed"
+                  value={
+                    accepted.handoverCompletedAt
+                      ? new Date(accepted.handoverCompletedAt).toLocaleString()
+                      : caseRow.handoverCompletedAt
+                        ? new Date(caseRow.handoverCompletedAt).toLocaleString()
+                        : undefined
+                  }
+                />
+                <InfoLine label="Source" value={accepted.source === 'nurse_handover' ? 'Nurse handover form' : 'Coordination'} />
+              </div>
+            </SectionCard>
+          )}
+
+          {rejected.length > 0 && (
+            <SectionCard title="Hospitals rejected before acceptance" icon={XCircle} accent="rose">
+              <div className="space-y-3">
+                {rejected.map((r: any, i: number) => (
+                  <div key={`${r.hospitalId}-${i}`} className="p-3 rounded-xl border border-rose-100 bg-rose-50/50">
+                    <p className="font-bold text-gray-900">{r.hospitalName}</p>
+                    <p className="text-sm text-rose-700 mt-0.5">{r.refusalReason ?? r.reason}</p>
+                    {(r.refusalNotes || r.notes) && (
+                      <p className="text-sm text-gray-600 mt-1">{r.refusalNotes ?? r.notes}</p>
+                    )}
+                    {r.source === 'nurse_handover' && (
+                      <p className="text-[10px] font-bold uppercase text-amber-600 mt-2">Recorded on nurse handover form</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {!isAccepted && (
           <SectionCard title="Rejected hospital" icon={Building2} accent="rose">
             <div className="grid sm:grid-cols-2 gap-4">
               <InfoLine label="Hospital" value={hospital?.name} />
@@ -626,35 +937,6 @@ function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: (
               {caseRow.refusalNotes && <p className="text-sm text-gray-700 mt-2">{caseRow.refusalNotes}</p>}
             </div>
           </SectionCard>
-
-          {rejected.length > 0 && (
-            <SectionCard title="All rejected hospitals for this mission" icon={XCircle} accent="rose">
-              <div className="space-y-3">
-                {rejected.map((r: any, i: number) => (
-                  <div key={`${r.hospitalId}-${i}`} className="p-3 rounded-xl border border-rose-100 bg-rose-50/50">
-                    <p className="font-bold text-gray-900">{r.hospitalName}</p>
-                    <p className="text-sm text-rose-700 mt-0.5">{r.refusalReason}</p>
-                    {r.refusalNotes && <p className="text-sm text-gray-600 mt-1">{r.refusalNotes}</p>}
-                    {r.rejectedAt && (
-                      <p className="text-[10px] text-gray-400 mt-2">{new Date(r.rejectedAt).toLocaleString()}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          {accepted && (
-            <SectionCard title="Accepted hospital" icon={CheckCircle2} accent="green">
-              <InfoLine label="Hospital" value={accepted.hospitalName} />
-              <InfoLine label="Receiving staff" value={accepted.receivingStaffName} />
-              {accepted.acceptedAt && (
-                <InfoLine label="Accepted at" value={new Date(accepted.acceptedAt).toLocaleString()} />
-              )}
-              {accepted.handoverCompletedAt && (
-                <InfoLine label="Handover completed" value={new Date(accepted.handoverCompletedAt).toLocaleString()} />
-              )}
-            </SectionCard>
           )}
 
           {nurse && (
@@ -669,7 +951,11 @@ function RefusedCaseDetailModal({ caseRow, onClose }: { caseRow: any; onClose: (
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 shrink-0 flex justify-end">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 shrink-0 flex justify-end gap-2">
+          <Button variant="outline" className="rounded-xl font-bold gap-1.5" disabled={pdfBusy} onClick={() => void exportDetailPdf()}>
+            <Download className="w-4 h-4" />
+            Download PDF
+          </Button>
           <Button variant="outline" className="rounded-xl font-bold" onClick={onClose}>
             Close
           </Button>
@@ -739,106 +1025,6 @@ function InfoLine({ label, value, mono }: { label: string; value?: string | null
     <div className="mb-2.5 last:mb-0">
       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
       <p className={`text-sm font-medium text-gray-800 dark:text-gray-200 ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
-  )
-}
-
-function CaseCard({
-  caseRow,
-  view,
-  onAction,
-}: {
-  caseRow: any
-  view: CoordinationView
-  onAction: () => void
-}) {
-  const req = caseRow.emergencyRequest
-  const accepted = caseRow.acceptedHospital
-  const rejected = caseRow.rejectedHospitals ?? []
-  const nurse = caseRow.nurseHandover
-
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b bg-gradient-to-r from-teal-50 to-white dark:from-teal-950/30 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest">{caseRow.caseNumber}</p>
-          <h3 className="font-black text-lg text-gray-900 dark:text-white">{req?.patient?.fullName ?? 'Patient'}</h3>
-          <p className="text-sm text-gray-500">
-            Mission {req?.trackingCode} · Priority {req?.priority ?? caseRow.priority}
-          </p>
-        </div>
-        <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${view === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-          {view === 'accepted' ? 'Accepted' : 'Rejected'}
-        </span>
-      </div>
-
-      <div className="p-5 grid lg:grid-cols-3 gap-4">
-        <div className="space-y-2 text-sm">
-          <p className="text-[10px] font-black uppercase text-gray-400">Transport</p>
-          <p><strong>Ambulance:</strong> {req?.ambulance?.plateNumber ?? '—'}</p>
-          <p><strong>Driver:</strong> {req?.driver?.fullName ?? '—'}</p>
-          <p><strong>Nurse:</strong> {nurse?.nurseName ?? req?.nurse?.fullName ?? '—'}</p>
-          {caseRow.destinationBranchName && (
-            <p className="flex items-center gap-1"><GitBranch className="w-3.5 h-3.5" /><strong>Branch:</strong> {caseRow.destinationBranchName}</p>
-          )}
-        </div>
-
-        {accepted && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm">
-            <p className="text-[10px] font-black uppercase text-emerald-700 mb-2 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Accepted Hospital
-            </p>
-            <p className="font-bold text-emerald-900">{accepted.hospitalName}</p>
-            {accepted.receivingStaffName && <p className="text-xs mt-1">Receiving: {accepted.receivingStaffName}</p>}
-            {accepted.handoverCompletedAt && (
-              <p className="text-xs text-emerald-700 mt-1">Handover: {new Date(accepted.handoverCompletedAt).toLocaleString()}</p>
-            )}
-          </div>
-        )}
-
-        {(view === 'refused' || rejected.length > 0) && (
-          <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm">
-            <p className="text-[10px] font-black uppercase text-red-700 mb-2 flex items-center gap-1">
-              <XCircle className="w-3.5 h-3.5" /> Rejected Hospitals
-            </p>
-            {rejected.length === 0 ? (
-              <p className="text-xs text-red-800">
-                {refusalReasonLabel(caseRow.refusalReason)} — {caseRow.hospital?.name}
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {rejected.map((r: any, i: number) => (
-                  <li key={`${r.hospitalId}-${i}`} className="text-xs border-b border-red-100 pb-2 last:border-0">
-                    <p className="font-bold text-red-900">{r.hospitalName}</p>
-                    <p className="text-red-700">{r.refusalReason}</p>
-                    {r.refusalNotes && <p className="text-gray-600 mt-0.5">{r.refusalNotes}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-
-      {nurse && (
-        <div className="px-5 pb-5">
-          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm">
-            <p className="text-[10px] font-black uppercase text-blue-700 mb-2 flex items-center gap-1">
-              <Stethoscope className="w-3.5 h-3.5" /> Nurse Handover
-            </p>
-            <p><strong>Nurse:</strong> {nurse.nurseName ?? '—'}</p>
-            {nurse.interventions && <p className="mt-1"><strong>Interventions:</strong> {String(nurse.interventions)}</p>}
-            {nurse.notes && <p className="mt-1 text-gray-600">{nurse.notes}</p>}
-          </div>
-        </div>
-      )}
-
-      {view === 'accepted' && (
-        <div className="px-5 pb-5 flex gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'ADMITTED'); toast.success('Marked admitted'); onAction() }}>Mark Admitted</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { await hospitalCoordinationService.updateCaseStatus(caseRow.id, 'DISCHARGED'); toast.success('Discharged'); onAction() }}>Discharge</Button>
-        </div>
-      )}
     </div>
   )
 }

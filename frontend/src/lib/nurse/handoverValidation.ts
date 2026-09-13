@@ -1,14 +1,18 @@
 import type { RejectedHospitalEntry } from '@/lib/emergency/buildCaseClosureDefaults'
 
 export type HandoverFormFields = {
+  patientName: string
   acceptedHospital: string
   rejectedHospitals: RejectedHospitalEntry[]
   category: string
   categoryOther: string
+  incidentCategoryId: string
+  emergencyTypeId: string
   patientOutcome: string
   patientCondition: string
   treatmentGiven: string
   receivingStaff: string
+  hospitalNotifyEmail: string
   notes: string
   signature: string
 }
@@ -44,12 +48,32 @@ export function validateHandoverForm(
   const nurseDestination = form.acceptedHospital.trim()
   const effectiveDestination = assignedDestination || nurseDestination
 
+  const patientName = form.patientName.trim()
+  if (!patientName) {
+    errors.patientName = 'Enter the patient name or register an unknown patient label'
+  } else if (patientName.length > MAX_NAME) {
+    errors.patientName = `Patient name must be ${MAX_NAME} characters or less`
+  }
+
   if (!effectiveDestination) {
     errors.acceptedHospital = assignedDestination
       ? 'Destination hospital is required'
       : 'Enter the destination hospital where the patient was handed over'
   } else if (!assignedDestination && nurseDestination.length > MAX_DESTINATION) {
     errors.acceptedHospital = `Destination must be ${MAX_DESTINATION} characters or less`
+  }
+
+  if (!form.incidentCategoryId?.trim()) {
+    errors.incidentCategoryId = 'Select an accident / incident category'
+  }
+
+  if (!form.emergencyTypeId?.trim()) {
+    errors.emergencyTypeId = 'Select an emergency type'
+  }
+
+  const email = form.hospitalNotifyEmail.trim()
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.hospitalNotifyEmail = 'Enter a valid hospital notification email'
   }
 
   if (!form.category?.trim()) {

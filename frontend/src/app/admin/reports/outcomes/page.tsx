@@ -1,7 +1,13 @@
 'use client'
 
-import AdminReportPage from '@/components/reports/AdminReportPage'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-export default function CaseOutcomeReportsPage() {
-  return <AdminReportPage type="outcomes" />
+/** Case Outcome Reports removed — redirect to Handover & Transfer Outcomes. */
+export default function OutcomesReportsRedirectPage() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/admin/reports/handover-outcomes')
+  }, [router])
+  return null
 }

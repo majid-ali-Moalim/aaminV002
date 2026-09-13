@@ -11,6 +11,7 @@ import { FieldLabel, fieldInputClass, FormActions, SectionCard, phoneDigitsOnly 
 import NurseRequiredField from './NurseRequiredField'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
+import { isOtherReferralReason, REFERRAL_REASON_OPTIONS } from '@/lib/emergency/referralReasons'
 import type { DispatchFormErrors, ReferralDispatchForm } from './types'
 
 const PRIORITIES = [
@@ -47,6 +48,8 @@ export default function ReferralDispatchFormView({
   onSubmit,
   submitting,
 }: Props) {
+  const showOtherReason = isOtherReferralReason(form.referralReason)
+
   return (
     <div className="space-y-6">
       <SectionCard title="Hospital Referral" icon={Building2} iconBg="bg-emerald-100 text-emerald-600">
@@ -77,19 +80,32 @@ export default function ReferralDispatchFormView({
             genderError={errors.gender}
             onChange={(patch) => onChange(patch)}
           />
-          <div>
-            <FieldLabel required error={errors.referringHospital}>Referring Hospital</FieldLabel>
-            <input
-              list="referring-hospitals"
-              className={fieldInputClass(errors.referringHospital)}
-              value={form.referringHospital}
-              onChange={(e) => onChange({ referringHospital: e.target.value })}
+          <div className="sm:col-span-2">
+            <HospitalDestinationPicker
+              combobox
+              branchRequired={false}
+              hospitals={hospitals}
+              hospitalLabel="Referring Hospital"
+              hospitalPlaceholder="Select or type referring hospital"
+              hospitalId={form.referringHospitalId}
+              hospitalName={form.referringHospital}
+              branchId={form.referringHospitalBranchId}
+              branchName={form.referringHospitalBranchName}
+              required
+              hospitalError={errors.referringHospitalId}
+              branchError={errors.referringHospitalBranchId}
+              onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
+                onChange({
+                  referringHospitalId: hospitalId,
+                  referringHospitalBranchId: branchId,
+                  referringHospitalBranchName: branchName,
+                  referringHospital: branchName
+                    ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
+                    : hospitalName,
+                })
+              }
+              onCreateCustomHospital={onCreateCustomHospital}
             />
-            <datalist id="referring-hospitals">
-              {hospitals.map((h) => (
-                <option key={h.id} value={h.name} />
-              ))}
-            </datalist>
           </div>
           <div className="sm:col-span-2">
             <HospitalDestinationPicker
@@ -109,7 +125,9 @@ export default function ReferralDispatchFormView({
                   receivingHospitalId: hospitalId,
                   receivingHospitalBranchId: branchId,
                   receivingHospitalBranchName: branchName,
-                  receivingHospital: hospitalName || branchName,
+                  receivingHospital: branchName
+                    ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
+                    : hospitalName,
                 })
               }
               onCreateCustomHospital={onCreateCustomHospital}
@@ -117,13 +135,36 @@ export default function ReferralDispatchFormView({
           </div>
           <div className="sm:col-span-2">
             <FieldLabel required error={errors.referralReason}>Reason for Referral</FieldLabel>
-            <textarea
-              className={`${fieldInputClass(errors.referralReason)} h-auto min-h-[72px] py-3 resize-y`}
-              rows={2}
+            <select
+              className={fieldInputClass(errors.referralReason)}
               value={form.referralReason}
-              onChange={(e) => onChange({ referralReason: e.target.value })}
-            />
+              onChange={(e) =>
+                onChange({
+                  referralReason: e.target.value,
+                  referralReasonOther: e.target.value === 'OTHER' ? form.referralReasonOther : '',
+                })
+              }
+            >
+              <option value="">Select reason…</option>
+              {REFERRAL_REASON_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
+          {showOtherReason && (
+            <div className="sm:col-span-2">
+              <FieldLabel required error={errors.referralReasonOther}>Describe referral reason</FieldLabel>
+              <input
+                className={fieldInputClass(errors.referralReasonOther)}
+                value={form.referralReasonOther}
+                onChange={(e) => onChange({ referralReasonOther: e.target.value })}
+                placeholder="Enter the specific reason for this referral"
+                maxLength={500}
+              />
+            </div>
+          )}
           <div>
             <FieldLabel required>Region</FieldLabel>
             <input
@@ -155,32 +196,6 @@ export default function ReferralDispatchFormView({
             error={errors.stationId}
             onChange={(stationId) => onChange({ stationId })}
           />
-          <div>
-            <FieldLabel error={errors.referringDoctor}>Referring Doctor</FieldLabel>
-            <input
-              className={fieldInputClass(errors.referringDoctor)}
-              value={form.referringDoctor}
-              onChange={(e) => onChange({ referringDoctor: e.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel error={errors.requiredEquipment}>Required Equipment</FieldLabel>
-            <input
-              className={fieldInputClass(errors.requiredEquipment)}
-              value={form.requiredEquipment}
-              onChange={(e) => onChange({ requiredEquipment: e.target.value })}
-              placeholder="Oxygen, monitor, etc."
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <FieldLabel error={errors.patientConditionSummary}>Patient Condition Summary</FieldLabel>
-            <textarea
-              className={`${fieldInputClass(errors.patientConditionSummary)} h-auto min-h-[72px] py-3 resize-y`}
-              rows={2}
-              value={form.patientConditionSummary}
-              onChange={(e) => onChange({ patientConditionSummary: e.target.value })}
-            />
-          </div>
           <div className="sm:col-span-2">
             <FieldLabel error={errors.additionalNotes}>Additional Notes</FieldLabel>
             <textarea
@@ -188,6 +203,7 @@ export default function ReferralDispatchFormView({
               rows={2}
               value={form.additionalNotes}
               onChange={(e) => onChange({ additionalNotes: e.target.value })}
+              placeholder="Any other details for dispatch or receiving hospital"
             />
           </div>
         </div>

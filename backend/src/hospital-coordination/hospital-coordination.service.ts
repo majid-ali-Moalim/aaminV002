@@ -336,7 +336,107 @@ export class HospitalCoordinationService {
     districtId?: string;
   }) {
     const rows = await this.listCasesRaw(filters);
-    return this.enrichCasesWithCoordinationContext(rows);
+    let merged = rows;
+    if (filters.stage === 'ACCEPTED' || filters.stage === 'REFUSED') {
+      const handoverRows = await this.listHandoverOnlyCases(filters.stage, filters);
+      const seen = new Set(rows.map((r) => r.emergencyRequestId));
+      merged = [...rows, ...handoverRows.filter((h) => !seen.has(h.emergencyRequestId))];
+    }
+    return this.enrichCasesWithCoordinationContext(merged);
+  }
+
+  private matchesCaseSearch(
+    req: {
+      trackingCode?: string | null;
+      patient?: { fullName?: string | null } | null;
+    } | null | undefined,
+    search?: string,
+  ) {
+    if (!search?.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return (
+      String(req?.trackingCode ?? '').toLowerCase().includes(q) ||
+      String(req?.patient?.fullName ?? '').toLowerCase().includes(q)
+    );
+  }
+
+  private async listHandoverOnlyCases(
+    stage: 'ACCEPTED' | 'REFUSED',
+    filters: {
+      search?: string;
+      regionId?: string;
+      districtId?: string;
+    },
+  ) {
+    const records = await this.prisma.patientCareRecord.findMany({
+      where: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        emergencyRequest: {
+          include: CASE_INCLUDE.emergencyRequest.include,
+        },
+      },
+    });
+
+    const latestByRequest = new Map<string, (typeof records)[number]>();
+    for (const record of records) {
+      if (!latestByRequest.has(record.requestId)) {
+        latestByRequest.set(record.requestId, record);
+      }
+    }
+
+    const synthetic: Awaited<ReturnType<HospitalCoordinationService['listCasesRaw']>> = [];
+
+    for (const record of latestByRequest.values()) {
+      const req = record.emergencyRequest;
+      if (!req) continue;
+      if (filters.regionId && req.regionId !== filters.regionId) continue;
+      if (filters.districtId && req.districtId !== filters.districtId) continue;
+      if (!this.matchesCaseSearch(req, filters.search)) continue;
+
+      const parsed = parseHandoverFromClinicalNotes(record.clinicalNotes);
+      if (!parsed) continue;
+
+      const hasAccepted = Boolean(parsed.acceptedHospital?.trim());
+      const hasRejected = Boolean(parsed.rejectedHospitals?.length);
+      if (stage === 'ACCEPTED' && !hasAccepted) continue;
+      if (stage === 'REFUSED' && !hasRejected) continue;
+
+      let hospital = null as (typeof synthetic)[number]['hospital'];
+      if (req.destinationHospitalId) {
+        hospital = await this.prisma.hospital.findUnique({
+          where: { id: req.destinationHospitalId },
+          include: { region: true, district: true },
+        });
+      }
+
+      synthetic.push({
+        id: `handover-${req.id}`,
+        caseNumber: req.trackingCode,
+        emergencyRequestId: req.id,
+        hospitalId: req.destinationHospitalId ?? hospital?.id ?? '',
+        stage,
+        status: stage === 'ACCEPTED' ? 'ACCEPTED' : 'REJECTED',
+        priority: req.priority,
+        receivingStaffName: parsed.receivingStaff ?? null,
+        refusalReason: stage === 'REFUSED' ? 'OTHER' : null,
+        refusalNotes:
+          stage === 'REFUSED'
+            ? parsed.rejectedHospitals
+                ?.map((r) => `${r.hospitalName}: ${r.reason}${r.notes ? ` — ${r.notes}` : ''}`)
+                .join('; ') ?? null
+            : null,
+        handoverCompletedAt: record.createdAt,
+        notes: parsed.notes ?? null,
+        deletedAt: null,
+        createdAt: record.createdAt,
+        updatedAt: record.createdAt,
+        emergencyRequest: req,
+        hospital,
+      } as (typeof synthetic)[number]);
+    }
+
+    return synthetic;
   }
 
   private refusalReasonLabel(reason?: string | null) {

@@ -4,9 +4,10 @@ import { NursesController } from './nurses.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { DriversAppModule } from '../drivers-app/drivers-app.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, DriversAppModule],
+  imports: [PrismaModule, NotificationsModule, DriversAppModule, MailModule],
   controllers: [NursesController],
   providers: [NursesService],
   exports: [NursesService],

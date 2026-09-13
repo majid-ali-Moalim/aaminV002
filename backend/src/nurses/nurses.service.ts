@@ -13,6 +13,36 @@ import {
 import { CaseWorkflowNotificationService } from '../notifications/case-workflow-notification.service';
 import { releaseCrewForCase } from '../common/occupied-crew';
 import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
+import { MailService } from '../auth/mail.service';
+
+const HANDOVER_PREFIX = '[EADS_HANDOVER]';
+
+type HandoverPayload = {
+  patientName?: string;
+  patientCondition?: string;
+  treatmentGiven?: string;
+  receivingStaff?: string;
+  notes?: string;
+  signature?: string;
+  patientOutcome?: string;
+  acceptedHospital?: string;
+  rejectedHospitals?: Array<{
+    hospitalName: string;
+    reason: string;
+    notes?: string;
+    branchName?: string;
+    phone?: string;
+    location?: string;
+  }>;
+  category?: string;
+  incidentCategoryName?: string;
+  emergencyTypeName?: string;
+  hospitalNotifyEmail?: string;
+  driverName?: string;
+  nurseName?: string;
+  ageGroup?: string;
+  gender?: string;
+};
 
 @Injectable()
 export class NursesService {
@@ -21,6 +51,7 @@ export class NursesService {
     private notifications: NotificationsService,
     private caseWorkflowNotifications: CaseWorkflowNotificationService,
     private driverGateway: DriversAppGateway,
+    private mailService: MailService,
   ) {}
 
   async findAll(filters?: { 
@@ -269,12 +300,13 @@ export class NursesService {
       });
     }
 
-    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith('[EADS_HANDOVER]')) {
+    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith(HANDOVER_PREFIX)) {
       await this.caseWorkflowNotifications.notifyCaseEvent({
         caseId: data.emergencyRequestId,
         event: 'HANDOVER_COMPLETED',
         actorUserId: result.nurse?.userId,
       });
+      await this.notifyHospitalHandoverEmail(data.emergencyRequestId, data.clinicalNotes);
     }
 
     return result;
@@ -332,7 +364,93 @@ export class NursesService {
       await this.notifyDriverPatientLoaded(existing.emergencyRequest.id);
     }
 
+    if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith(HANDOVER_PREFIX)) {
+      await this.notifyHospitalHandoverEmail(existing.emergencyRequest.id, data.clinicalNotes);
+    }
+
     return result;
+  }
+
+  private parseHandoverPayload(clinicalNotes: string): HandoverPayload | null {
+    if (!clinicalNotes.startsWith(HANDOVER_PREFIX)) return null;
+    try {
+      return JSON.parse(clinicalNotes.slice(HANDOVER_PREFIX.length)) as HandoverPayload;
+    } catch {
+      return null;
+    }
+  }
+
+  private async notifyHospitalHandoverEmail(emergencyRequestId: string, clinicalNotes: string) {
+    const handover = this.parseHandoverPayload(clinicalNotes);
+    const email = handover?.hospitalNotifyEmail?.trim();
+    if (!email || !handover) return;
+
+    const request = await this.prisma.emergencyRequest.findUnique({
+      where: { id: emergencyRequestId },
+      include: {
+        patient: true,
+        ambulance: true,
+        driver: true,
+        nurse: true,
+        region: true,
+        district: true,
+      },
+    });
+    if (!request) return;
+
+    const patientName = handover.patientName || request.patient?.fullName || 'Unknown';
+    const rejectedLines =
+      handover.rejectedHospitals
+        ?.filter((r) => r.hospitalName?.trim())
+        .map(
+          (r) =>
+            `• ${r.hospitalName}${r.branchName ? ` (${r.branchName})` : ''}: ${r.reason || 'No reason'}${r.notes ? ` — ${r.notes}` : ''}`,
+        )
+        .join('\n') || 'None recorded';
+
+    const message = [
+      `Aamin Ambulance is handing over a patient to your facility.`,
+      '',
+      `Case / Tracking: ${request.trackingCode}`,
+      `Priority: ${request.priority}`,
+      `Patient: ${patientName}`,
+      handover.ageGroup ? `Age group: ${handover.ageGroup}` : '',
+      handover.gender ? `Gender: ${handover.gender}` : '',
+      handover.incidentCategoryName ? `Incident category: ${handover.incidentCategoryName}` : '',
+      handover.emergencyTypeName ? `Emergency type: ${handover.emergencyTypeName}` : '',
+      handover.category ? `Handover category: ${handover.category}` : '',
+      '',
+      `Destination / accepting hospital: ${handover.acceptedHospital || request.destination || '—'}`,
+      `Patient status at handover: ${handover.patientOutcome || '—'}`,
+      handover.patientCondition ? `Condition summary: ${handover.patientCondition}` : '',
+      handover.treatmentGiven ? `Treatment en route: ${handover.treatmentGiven}` : '',
+      handover.receivingStaff ? `Receiving doctor: ${handover.receivingStaff}` : '',
+      '',
+      `Pickup location: ${request.pickupLocation || '—'}`,
+      request.region?.name || request.district?.name
+        ? `Area: ${[request.region?.name, request.district?.name].filter(Boolean).join(' / ')}`
+        : '',
+      request.ambulance?.ambulanceNumber
+        ? `Ambulance: ${request.ambulance.ambulanceNumber}`
+        : '',
+      handover.driverName ? `Driver: ${handover.driverName}` : '',
+      handover.nurseName ? `Handover nurse: ${handover.nurseName}` : '',
+      '',
+      'Previously rejected hospitals:',
+      rejectedLines,
+      handover.notes ? `\nAdditional notes:\n${handover.notes}` : '',
+      handover.signature ? `\nSigned by: ${handover.signature}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await this.mailService.sendNotificationEmail(email, {
+      title: `Patient handover — ${request.trackingCode}`,
+      message,
+      priority: request.priority,
+      senderName: handover.nurseName || 'Aamin Ambulance EMS',
+      actionUrl: '/admin/hospitals/accepted',
+    });
   }
 
   private async notifyDriverPatientLoaded(emergencyRequestId: string) {

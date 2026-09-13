@@ -18,7 +18,16 @@ import {
   User,
   CheckCircle2,
 } from 'lucide-react'
-import { emergencyRequestsService, getApiErrorMessage, hospitalsService, isApiNetworkError, nursesService } from '@/lib/api'
+import {
+  emergencyRequestsService,
+  getApiErrorMessage,
+  hospitalsService,
+  isApiNetworkError,
+  nursesService,
+  patientsService,
+  systemSetupService,
+} from '@/lib/api'
+import { fetchEmergencyTypesAuthenticated } from '@/lib/emergency/emergencyTypes'
 import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNurseCases } from '@/lib/nurse/useNurseCases'
@@ -174,14 +183,20 @@ function buildHandoverDefaults(mission: any, nurseName: string, records: any[] =
     ? `${mission.driver.firstName || ''} ${mission.driver.lastName || ''}`.trim()
     : ''
   return {
+    patientName: patient?.fullName || mission.callerName || '',
     acceptedHospital: mission.destinationHospital?.name || mission.destination || '',
     rejectedHospitals: [],
     category: '',
     categoryOther: '',
+    incidentCategoryId: mission.incidentCategoryId || mission.incidentCategory?.id || '',
+    incidentCategoryName: mission.incidentCategory?.name || '',
+    emergencyTypeId: mission.emergencyTypeId || mission.emergencyType?.id || '',
+    emergencyTypeName: mission.emergencyType?.name || '',
     patientOutcome: '',
     patientCondition: conditionSummaryFromRecords(records, mission),
     treatmentGiven: treatmentSummaryFromRecords(records),
     receivingStaff: '',
+    hospitalNotifyEmail: '',
     notes: '',
     signature: '',
     handoverDocumentUrl: '',
@@ -245,9 +260,15 @@ function handoverFromRecords(records: any[], defaults: HandoverFormState): Hando
   if (!parsed) return defaults
   return {
     ...defaults,
+    patientName: parsed.patientName || defaults.patientName,
     acceptedHospital: parsed.acceptedHospital || defaults.acceptedHospital,
     rejectedHospitals: parsed.rejectedHospitals?.length ? parsed.rejectedHospitals : defaults.rejectedHospitals,
     ...parseHandoverCategoryFields(parsed.category),
+    incidentCategoryId: parsed.incidentCategoryId || defaults.incidentCategoryId,
+    incidentCategoryName: parsed.incidentCategoryName || defaults.incidentCategoryName,
+    emergencyTypeId: parsed.emergencyTypeId || defaults.emergencyTypeId,
+    emergencyTypeName: parsed.emergencyTypeName || defaults.emergencyTypeName,
+    hospitalNotifyEmail: parsed.hospitalNotifyEmail || '',
     patientOutcome: parsed.patientOutcome || '',
     patientCondition: parsed.patientCondition || defaults.patientCondition,
     treatmentGiven: parsed.treatmentGiven || defaults.treatmentGiven,
@@ -299,14 +320,20 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     notes: '',
   })
   const [handoverForm, setHandoverForm] = useState<HandoverFormState>({
+    patientName: '',
     acceptedHospital: '',
     rejectedHospitals: [],
     category: '',
     categoryOther: '',
+    incidentCategoryId: '',
+    incidentCategoryName: '',
+    emergencyTypeId: '',
+    emergencyTypeName: '',
     patientOutcome: '',
     patientCondition: '',
     treatmentGiven: '',
     receivingStaff: '',
+    hospitalNotifyEmail: '',
     notes: '',
     signature: '',
     handoverDocumentUrl: '',
@@ -325,6 +352,10 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const [handoverErrors, setHandoverErrors] = useState<HandoverFieldErrors>({})
   const [handoverMedicalNotesPrompt, setHandoverMedicalNotesPrompt] = useState(false)
   const [hospitals, setHospitals] = useState<HospitalOption[]>([])
+  const [incidentCategories, setIncidentCategories] = useState<Array<{ id: string; name: string }>>([])
+  const [emergencyTypes, setEmergencyTypes] = useState<
+    Array<{ id: string; name: string; incidentCategoryId?: string | null }>
+  >([])
 
   useEffect(() => {
     void hospitalsService.getAll().then((rows) => {
@@ -338,6 +369,12 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           })),
       )
     }).catch(() => setHospitals([]))
+    void systemSetupService.getIncidentCategories().then((rows) => {
+      setIncidentCategories(
+        (Array.isArray(rows) ? rows : []).filter((c: { id?: string; name?: string }) => c.id && c.name),
+      )
+    }).catch(() => setIncidentCategories([]))
+    void fetchEmergencyTypesAuthenticated().then(setEmergencyTypes).catch(() => setEmergencyTypes([]))
   }, [])
 
   useEffect(() => {
@@ -746,6 +783,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     const saved = await saveRecord(
       {
         clinicalNotes: encodeHandover({
+          patientName: handoverForm.patientName.trim(),
           patientCondition: handoverForm.patientCondition,
           treatmentGiven: handoverForm.treatmentGiven,
           receivingStaff: handoverForm.receivingStaff,
@@ -764,6 +802,11 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           handoverDocumentUrl: handoverForm.handoverDocumentUrl || undefined,
           handoverDocumentName: handoverForm.handoverDocumentName || undefined,
           category: formatHandoverCategoryStored(handoverForm.category, handoverForm.categoryOther),
+          incidentCategoryId: handoverForm.incidentCategoryId || undefined,
+          incidentCategoryName: handoverForm.incidentCategoryName || undefined,
+          emergencyTypeId: handoverForm.emergencyTypeId || undefined,
+          emergencyTypeName: handoverForm.emergencyTypeName || undefined,
+          hospitalNotifyEmail: handoverForm.hospitalNotifyEmail.trim() || undefined,
         }),
       },
       'HOSPITAL_HANDOVER',
@@ -771,6 +814,16 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       existingHandoverId,
     )
     if (!saved) return
+
+    const trimmedName = handoverForm.patientName.trim()
+    if (mission.patientId && trimmedName && trimmedName !== (mission.patient?.fullName ?? '')) {
+      try {
+        await patientsService.update(mission.patientId, { fullName: trimmedName })
+      } catch {
+        /* handover saved; patient name sync is best-effort */
+      }
+    }
+
     setHandoverErrors({})
     setHandoverEditing(false)
     advanceTo('HOSPITAL_HANDOVER')
@@ -1121,6 +1174,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 nurseName={fullName}
                 assignedDestination={assignedDestination}
                 hospitals={hospitals}
+                incidentCategories={incidentCategories}
+                emergencyTypes={emergencyTypes}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}
               />

@@ -156,6 +156,12 @@ export type HandoverData = {
   handoverDocumentName?: string
   /** Stored label or "Other: …" */
   category?: string
+  patientName?: string
+  incidentCategoryId?: string
+  incidentCategoryName?: string
+  emergencyTypeId?: string
+  emergencyTypeName?: string
+  hospitalNotifyEmail?: string
 }
 
 export function encodeMonitoring(data: Omit<MonitoringData, '_type'>): string {

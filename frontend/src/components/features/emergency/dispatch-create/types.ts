@@ -57,18 +57,19 @@ export type ReferralDispatchForm = {
   ageGroup: string
   gender: string
   referringHospital: string
+  referringHospitalId: string
+  referringHospitalBranchId: string
+  referringHospitalBranchName: string
   receivingHospital: string
   receivingHospitalId: string
   receivingHospitalBranchId: string
   receivingHospitalBranchName: string
   referralReason: string
+  referralReasonOther: string
   priority: Priority
   regionId: string
   districtId: string
   stationId: string
-  referringDoctor: string
-  patientConditionSummary: string
-  requiredEquipment: string
   additionalNotes: string
   needsNurse: boolean | null
 }
@@ -135,18 +136,19 @@ export const defaultReferralForm = (): ReferralDispatchForm => ({
   ageGroup: '',
   gender: '',
   referringHospital: '',
+  referringHospitalId: '',
+  referringHospitalBranchId: '',
+  referringHospitalBranchName: '',
   receivingHospital: '',
   receivingHospitalId: '',
   receivingHospitalBranchId: '',
   receivingHospitalBranchName: '',
   referralReason: '',
+  referralReasonOther: '',
   priority: Priority.MEDIUM,
   regionId: '',
   districtId: '',
   stationId: '',
-  referringDoctor: '',
-  patientConditionSummary: '',
-  requiredEquipment: '',
   additionalNotes: '',
   needsNurse: null,
 })
@@ -199,6 +201,10 @@ export function normalizeDispatchDraft(raw: Partial<DispatchCreateDraft>): Dispa
   if (!('needsNurse' in referral)) referral.needsNurse = null
   if (!('ageGroup' in referral)) referral.ageGroup = ''
   if (!('gender' in referral)) referral.gender = ''
+  if (!('referralReasonOther' in referral)) referral.referralReasonOther = ''
+  if (!('referringHospitalId' in referral)) referral.referringHospitalId = ''
+  if (!('referringHospitalBranchId' in referral)) referral.referringHospitalBranchId = ''
+  if (!('referringHospitalBranchName' in referral)) referral.referringHospitalBranchName = ''
 
   return {
     ...base,

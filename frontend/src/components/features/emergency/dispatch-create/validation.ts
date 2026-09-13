@@ -1,4 +1,5 @@
 import { isFuneralTransport, isBookingWithin24Hours } from '@/lib/emergency/dispatchFormShared'
+import { isOtherReferralReason } from '@/lib/emergency/referralReasons'
 import { isOtherTransportType, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import { isValidSomaliaPhone } from '@/lib/driverFormValidation'
 import { isValidDispatchPatientName, isUnknownPatientName } from '@/lib/emergency/patientName'
@@ -114,13 +115,19 @@ export function validateReferralDispatchForm(data: ReferralDispatchForm): Dispat
   const errors: DispatchFormErrors = {}
   patientName(errors, 'patientName', data.patientName)
   phone(errors, 'phone', data.phone)
-  req(errors, 'referringHospital', data.referringHospital, 'Referring hospital')
+  const hasReferring =
+    Boolean(data.referringHospitalId) || Boolean(data.referringHospital.trim())
+  if (!hasReferring) errors.referringHospitalId = 'Referring hospital is required'
   if (!data.ageGroup) errors.ageGroup = 'Age group is required'
   if (!data.gender) errors.gender = 'Gender is required'
   const hasReceiving =
     Boolean(data.receivingHospitalId) || Boolean(data.receivingHospital.trim())
   if (!hasReceiving) errors.receivingHospitalId = 'Receiving hospital is required'
-  req(errors, 'referralReason', data.referralReason, 'Reason for referral')
+  if (!data.referralReason) {
+    errors.referralReason = 'Select a reason for referral'
+  } else if (isOtherReferralReason(data.referralReason) && !data.referralReasonOther.trim()) {
+    errors.referralReasonOther = 'Describe the referral reason'
+  }
   if (!data.priority) errors.priority = 'Priority is required'
   if (!data.regionId) errors.regionId = 'Region is required'
   if (!data.districtId) errors.districtId = 'District is required'

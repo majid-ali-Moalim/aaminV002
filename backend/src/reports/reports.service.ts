@@ -1723,13 +1723,6 @@ export class ReportsService {
           'Status',
           'Region',
           'District',
-          'Referral Acc.',
-          'Referral Rej.',
-          'Coord Acc.',
-          'Coord Rej.',
-          'Nurse Acc.',
-          'Nurse Rej.',
-          'Total Acc.',
           'Total Rej.',
           'Accept Rate',
           'Destination Cases',
@@ -1741,21 +1734,14 @@ export class ReportsService {
             s.referralAccepted + s.referralCompleted + s.coordAccepted + s.handoverAccepted;
           const rejected = s.referralRejected + s.coordRejected + s.handoverRejected;
           return [
-          h.name,
-          h.status,
-          h.region?.name ?? '—',
-          h.district?.name ?? '—',
-            s.referralAccepted + s.referralCompleted,
-            s.referralRejected,
-            s.coordAccepted,
-            s.coordRejected,
-            s.handoverAccepted,
-            s.handoverRejected,
-            accepted,
+            h.name,
+            h.status,
+            h.region?.name ?? '—',
+            h.district?.name ?? '—',
             rejected,
             accepted + rejected ? `${this.percent(accepted, accepted + rejected)}%` : '—',
             s.destinationCases,
-          h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
+            h.primaryPhone ?? h.contactNumber ?? h.emergencyHotline ?? '—',
           ];
         }),
       },
@@ -1918,21 +1904,24 @@ export class ReportsService {
       ];
     });
 
+    const avgResponse = responseCount ? Math.round(responseSum / responseCount) : 0;
+    const avgService = serviceCount ? Math.round(serviceSum / serviceCount) : 0;
+    const completionRate = this.percent(completed, cases.length);
+
     return {
       title: 'Response Time Analysis',
       subtitle:
-        'All cases in period — pending, dispatched, in progress, and completed — with response/service times computed from timestamps when needed.',
+        'Operational response and service-time performance for all cases in the selected period, with regional breakdown and lifecycle status metrics.',
       period,
+      filterScope: await this.describeAppliedFilters(filters, period),
       summary: [
-        {
-          label: 'Avg Response',
-          value: responseCount ? Math.round(responseSum / responseCount) : 0,
-          suffix: ' min',
-        },
+        { label: 'Avg Response Time', value: avgResponse, suffix: ' min' },
+        { label: 'Avg Service Time', value: avgService, suffix: ' min' },
         { label: 'Total Cases', value: cases.length },
-        { label: 'Pending', value: pending },
-        { label: 'Dispatched', value: dispatched },
+        { label: 'In Progress', value: inProgress + dispatched },
         { label: 'Completed', value: completed },
+        { label: 'Completion Rate', value: completionRate, suffix: '%' },
+        { label: 'Pending Queue', value: pending },
         { label: 'Cancelled', value: cancelled },
       ],
       table: {
@@ -2959,14 +2948,13 @@ export class ReportsService {
   }
 
   private async getExportReport(period: ReportPeriod, filters: AdminReportFilters) {
-    const [dashboard, emergency, utilization, performance, hospitals, responseTime, outcomes] = await Promise.all([
+    const [dashboard, emergency, utilization, performance, hospitals, responseTime] = await Promise.all([
       this.getDashboardStats(),
       this.getEmergencyOperationsReport(period, filters),
       this.getAmbulanceUtilizationReport(period, filters),
       this.getStaffPerformanceReport(period, filters),
       this.getHospitalAcceptanceReport(period, filters),
       this.getResponseTimeReport(period, filters),
-      this.getCaseOutcomeReport(period, filters),
     ]);
 
     return {
@@ -2974,7 +2962,7 @@ export class ReportsService {
       subtitle: 'Download complete report datasets for all analytics modules.',
       period,
       summary: [
-        { label: 'Available Reports', value: 6 },
+        { label: 'Available Reports', value: 5 },
         { label: 'Dashboard Metrics', value: Object.keys(dashboard.stats).length },
         { label: 'Generated At', value: new Date().toISOString().slice(0, 16).replace('T', ' ') },
       ],
@@ -2984,9 +2972,8 @@ export class ReportsService {
         { key: 'performance', label: 'Staff Performance Reports', rows: performance.table.rows.length },
         { key: 'hospitals', label: 'Hospital Acceptance Reports', rows: hospitals.table.rows.length },
         { key: 'response-time', label: 'Response Time Analysis', rows: responseTime.table.rows.length },
-        { key: 'outcomes', label: 'Case Outcome Reports', rows: outcomes.table.rows.length },
       ],
-      reports: { emergency, utilization, performance, hospitals, 'response-time': responseTime, outcomes },
+      reports: { emergency, utilization, performance, hospitals, 'response-time': responseTime },
       table: {
         title: 'Export Packages',
         columns: ['Report', 'Rows', 'Formats', 'Status'],
@@ -2996,7 +2983,6 @@ export class ReportsService {
           ['Staff Performance Reports', performance.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
           ['Hospital Acceptance Reports', hospitals.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
           ['Response Time Analysis', responseTime.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
-          ['Case Outcome Reports', outcomes.table.rows.length, 'CSV / JSON / PDF', 'Ready'],
         ],
       },
     };

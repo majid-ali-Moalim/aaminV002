@@ -3,6 +3,7 @@ import { UNKNOWN_PATIENT_NAME, isUnknownPatientName } from '@/lib/emergency/pati
 import { Gender, Priority, RequestSource } from '@/types'
 import { normalizePhoneDigits } from '@/lib/driverFormValidation'
 import type { EmergencyTypeOption } from '@/lib/emergency/emergencyTypes'
+import { formatReferralReasonStored } from '@/lib/emergency/referralReasons'
 import { isFuneralTransportCode, resolveTransportTypeLabel, type TransportTypeOption } from '@/lib/emergency/transportTypes'
 import type {
   DispatchRequestType,
@@ -149,13 +150,17 @@ export function buildNonEmergencyPayload(
 }
 
 export function buildReferralPayload(data: ReferralDispatchForm) {
+  const reasonLabel = formatReferralReasonStored(data.referralReason, data.referralReasonOther)
+  const referringLabel =
+    data.referringHospitalBranchName && data.referringHospital
+      ? `${data.referringHospital} — ${data.referringHospitalBranchName}`
+      : data.referringHospital.trim()
+
   const notes = [
     'Request Type: Referral',
-    `Referring Hospital: ${data.referringHospital.trim()}`,
+    `Referring Hospital: ${referringLabel}`,
     `Receiving Hospital: ${data.receivingHospital.trim()}`,
-    `Referral Reason: ${data.referralReason.trim()}`,
-    data.referringDoctor.trim() ? `Referring Doctor: ${data.referringDoctor.trim()}` : '',
-    data.requiredEquipment.trim() ? `Required Equipment: ${data.requiredEquipment.trim()}` : '',
+    `Referral Reason: ${reasonLabel}`,
     data.additionalNotes.trim() ? `Additional Notes: ${data.additionalNotes.trim()}` : '',
     nurseLine(data.needsNurse),
   ]
@@ -165,7 +170,7 @@ export function buildReferralPayload(data: ReferralDispatchForm) {
   return {
     priority: data.priority,
     requestSource: RequestSource.REFERRAL,
-    pickupLocation: data.referringHospital.trim(),
+    pickupLocation: referringLabel,
     destination: data.receivingHospitalBranchName || data.receivingHospital.trim(),
     destinationHospitalId: data.receivingHospitalId || undefined,
     destinationHospitalBranchId: data.receivingHospitalBranchId || undefined,
@@ -173,7 +178,7 @@ export function buildReferralPayload(data: ReferralDispatchForm) {
     regionId: data.regionId,
     districtId: data.districtId,
     stationId: data.stationId || undefined,
-    patientCondition: data.patientConditionSummary.trim() || `Referral: ${data.referralReason.trim()}`,
+    patientCondition: `Referral: ${reasonLabel}`,
     callerName: formatPatientName(data.patientName),
     callerPhone: phone(data.phone),
     notes,

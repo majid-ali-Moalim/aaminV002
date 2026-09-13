@@ -1,7 +1,7 @@
 'use client'
 
-import AdminReportPage from '@/components/reports/AdminReportPage'
+import ResponseTimeReportPage from '@/components/reports/ResponseTimeReportPage'
 
 export default function ResponseTimeReportsPage() {
-  return <AdminReportPage type="response-time" />
+  return <ResponseTimeReportPage />
 }

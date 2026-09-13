@@ -484,6 +484,7 @@ export type HandoverCaseContext = {
 }
 
 export type HandoverFormState = {
+  patientName: string
   acceptedHospital: string
   acceptedHospitalId?: string
   acceptedHospitalBranchId?: string
@@ -491,10 +492,15 @@ export type HandoverFormState = {
   rejectedHospitals: RejectedHospitalEntry[]
   category: string
   categoryOther: string
+  incidentCategoryId: string
+  incidentCategoryName: string
+  emergencyTypeId: string
+  emergencyTypeName: string
   patientOutcome: string
   patientCondition: string
   treatmentGiven: string
   receivingStaff: string
+  hospitalNotifyEmail: string
   notes: string
   signature: string
   handoverDocumentUrl?: string
@@ -740,6 +746,8 @@ export function HandoverTaskFields({
   destinationAssigned = false,
   assignedDestination = '',
   hospitals = [],
+  incidentCategories = [],
+  emergencyTypes = [],
   readOnly = false,
   errors = {},
 }: {
@@ -750,6 +758,8 @@ export function HandoverTaskFields({
   destinationAssigned?: boolean
   assignedDestination?: string
   hospitals?: HospitalOption[]
+  incidentCategories?: Array<{ id: string; name: string }>
+  emergencyTypes?: Array<{ id: string; name: string; incidentCategoryId?: string | null }>
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -779,8 +789,22 @@ export function HandoverTaskFields({
             <input value={caseContext.priority || '—'} readOnly className="readonly" />
           </label>
           <label className="span-2">
-            Patient name
-            <input value={caseContext.patientName || '—'} readOnly className="readonly" />
+            Patient name *
+            {readOnly ? (
+              <input value={form.patientName || caseContext.patientName || '—'} readOnly className="readonly" />
+            ) : (
+              <input
+                value={form.patientName}
+                onChange={(e) => setForm({ ...form, patientName: e.target.value })}
+                maxLength={120}
+                placeholder="Patient full name or Unknown"
+                aria-invalid={Boolean(errors.patientName)}
+              />
+            )}
+            <FieldError error={errors.patientName} />
+            {!readOnly && (
+              <p className="nmw-field-hint">Update if the patient was unknown at dispatch or the name was corrected in the field.</p>
+            )}
           </label>
           <label className="span-2">
             Pickup location
@@ -878,6 +902,67 @@ export function HandoverTaskFields({
       <label>
         Handover nurse
         <input value={nurseName || form.nurseName || ''} readOnly className="readonly" />
+      </label>
+
+      <p className="nmw-form-section-label span-2">Incident classification</p>
+      <label>
+        Accident / incident category *
+        {readOnly ? (
+          <input value={form.incidentCategoryName || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.incidentCategoryId}
+            onChange={(e) => {
+              const cat = incidentCategories.find((c) => c.id === e.target.value)
+              setForm({
+                ...form,
+                incidentCategoryId: e.target.value,
+                incidentCategoryName: cat?.name ?? '',
+                emergencyTypeId: '',
+                emergencyTypeName: '',
+              })
+            }}
+            aria-invalid={Boolean(errors.incidentCategoryId)}
+          >
+            <option value="">Select category…</option>
+            {incidentCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        <FieldError error={errors.incidentCategoryId} />
+      </label>
+      <label>
+        Emergency type *
+        {readOnly ? (
+          <input value={form.emergencyTypeName || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.emergencyTypeId}
+            onChange={(e) => {
+              const et = emergencyTypes.find((t) => t.id === e.target.value)
+              setForm({
+                ...form,
+                emergencyTypeId: e.target.value,
+                emergencyTypeName: et?.name ?? '',
+              })
+            }}
+            aria-invalid={Boolean(errors.emergencyTypeId)}
+          >
+            <option value="">Select type…</option>
+            {emergencyTypes
+              .filter(
+                (t) =>
+                  !form.incidentCategoryId ||
+                  !t.incidentCategoryId ||
+                  t.incidentCategoryId === form.incidentCategoryId,
+              )
+              .map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+          </select>
+        )}
+        <FieldError error={errors.emergencyTypeId} />
       </label>
 
       <p className="nmw-form-section-label span-2">Handover details</p>
@@ -984,6 +1069,22 @@ export function HandoverTaskFields({
           {...ro}
         />
         <FieldError error={errors.receivingStaff} />
+      </label>
+      <label className="span-2">
+        Hospital notification email <span className="nmw-optional">(optional)</span>
+        <input
+          type="email"
+          value={form.hospitalNotifyEmail}
+          onChange={(e) => setForm({ ...form, hospitalNotifyEmail: e.target.value })}
+          maxLength={120}
+          placeholder="Receiving hospital email — full handover details will be sent"
+          aria-invalid={Boolean(errors.hospitalNotifyEmail)}
+          {...ro}
+        />
+        <FieldError error={errors.hospitalNotifyEmail} />
+        {!readOnly && (
+          <p className="nmw-field-hint">An email with patient and handover information will be sent when you submit.</p>
+        )}
       </label>
       <label className="span-2">
         Handover notes <span className="nmw-optional">(optional)</span>
@@ -1141,6 +1242,8 @@ export function HandoverQuickFields({
   nurseName,
   assignedDestination = '',
   hospitals = [],
+  incidentCategories = [],
+  emergencyTypes = [],
   readOnly = false,
   errors = {},
 }: {
@@ -1149,6 +1252,8 @@ export function HandoverQuickFields({
   nurseName?: string
   assignedDestination?: string
   hospitals?: HospitalOption[]
+  incidentCategories?: Array<{ id: string; name: string }>
+  emergencyTypes?: Array<{ id: string; name: string; incidentCategoryId?: string | null }>
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -1158,6 +1263,22 @@ export function HandoverQuickFields({
 
   return (
     <>
+      <label className="span-2">
+        Patient name *
+        {readOnly ? (
+          <input value={form.patientName || '—'} readOnly className="readonly" />
+        ) : (
+          <input
+            value={form.patientName}
+            onChange={(e) => setForm({ ...form, patientName: e.target.value })}
+            maxLength={120}
+            placeholder="Full name or Unknown"
+            aria-invalid={Boolean(errors.patientName)}
+          />
+        )}
+        <FieldError error={errors.patientName} />
+      </label>
+
       {destination && (
         <label className="span-2">
           Hospital
@@ -1239,6 +1360,66 @@ export function HandoverQuickFields({
         error={errors.rejectedHospitals}
       />
 
+      <label>
+        Accident category *
+        {readOnly ? (
+          <input value={form.incidentCategoryName || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.incidentCategoryId}
+            onChange={(e) => {
+              const cat = incidentCategories.find((c) => c.id === e.target.value)
+              setForm({
+                ...form,
+                incidentCategoryId: e.target.value,
+                incidentCategoryName: cat?.name ?? '',
+                emergencyTypeId: '',
+                emergencyTypeName: '',
+              })
+            }}
+            aria-invalid={Boolean(errors.incidentCategoryId)}
+          >
+            <option value="">Select…</option>
+            {incidentCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        <FieldError error={errors.incidentCategoryId} />
+      </label>
+      <label>
+        Emergency type *
+        {readOnly ? (
+          <input value={form.emergencyTypeName || '—'} readOnly className="readonly" />
+        ) : (
+          <select
+            value={form.emergencyTypeId}
+            onChange={(e) => {
+              const et = emergencyTypes.find((t) => t.id === e.target.value)
+              setForm({
+                ...form,
+                emergencyTypeId: e.target.value,
+                emergencyTypeName: et?.name ?? '',
+              })
+            }}
+            aria-invalid={Boolean(errors.emergencyTypeId)}
+          >
+            <option value="">Select…</option>
+            {emergencyTypes
+              .filter(
+                (t) =>
+                  !form.incidentCategoryId ||
+                  !t.incidentCategoryId ||
+                  t.incidentCategoryId === form.incidentCategoryId,
+              )
+              .map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+          </select>
+        )}
+        <FieldError error={errors.emergencyTypeId} />
+      </label>
+
       <p className="nmw-form-section-label span-2">Patient details</p>
       <GenderField form={form} setForm={setForm} readOnly={readOnly} />
 
@@ -1297,6 +1478,19 @@ export function HandoverQuickFields({
           {...ro}
         />
         <FieldError error={errors.receivingStaff} />
+      </label>
+      <label className="span-2">
+        Hospital email <span className="nmw-optional">(optional)</span>
+        <input
+          type="email"
+          value={form.hospitalNotifyEmail}
+          onChange={(e) => setForm({ ...form, hospitalNotifyEmail: e.target.value })}
+          maxLength={120}
+          placeholder="Notify hospital with full handover details"
+          aria-invalid={Boolean(errors.hospitalNotifyEmail)}
+          {...ro}
+        />
+        <FieldError error={errors.hospitalNotifyEmail} />
       </label>
       <HandoverDocumentUpload form={form} setForm={setForm} readOnly={readOnly} />
       <label className="span-2">
