@@ -3,6 +3,8 @@ import type { RejectedHospitalEntry } from '@/lib/emergency/buildCaseClosureDefa
 export type HandoverFormFields = {
   acceptedHospital: string
   rejectedHospitals: RejectedHospitalEntry[]
+  category: string
+  categoryOther: string
   patientOutcome: string
   patientCondition: string
   treatmentGiven: string
@@ -48,6 +50,12 @@ export function validateHandoverForm(
       : 'Enter the destination hospital where the patient was handed over'
   } else if (!assignedDestination && nurseDestination.length > MAX_DESTINATION) {
     errors.acceptedHospital = `Destination must be ${MAX_DESTINATION} characters or less`
+  }
+
+  if (!form.category?.trim()) {
+    errors.category = 'Select a handover category'
+  } else if (form.category === 'OTHER' && !form.categoryOther.trim()) {
+    errors.category = 'Describe the custom handover category'
   }
 
   if (!form.patientOutcome) {

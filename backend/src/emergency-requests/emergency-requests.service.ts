@@ -52,6 +52,75 @@ type AuthUser = {
   employeeRole?: string;
 };
 
+export type CaseCompletionRole = 'NURSE' | 'DRIVER' | 'DISPATCHER' | 'ADMIN';
+
+function completionRoleLabel(role?: string | null) {
+  switch (role) {
+    case 'NURSE':
+      return 'Nurse';
+    case 'DRIVER':
+      return 'Driver';
+    case 'DISPATCHER':
+      return 'Dispatcher';
+    case 'ADMIN':
+      return 'Admin';
+    default:
+      return role ? String(role).replace(/_/g, ' ') : 'Not recorded';
+  }
+}
+
+function resolveManualCompletionCredit(
+  completedByRole: CaseCompletionRole,
+  existing: { nurseId?: string | null; driverId?: string | null; dispatcherId?: string | null },
+  actorEmployeeId?: string,
+): { completedByRole: CaseCompletionRole; completedByEmployeeId?: string } {
+  switch (completedByRole) {
+    case 'NURSE':
+      return { completedByRole: 'NURSE', completedByEmployeeId: existing.nurseId ?? actorEmployeeId };
+    case 'DRIVER':
+      return { completedByRole: 'DRIVER', completedByEmployeeId: existing.driverId ?? actorEmployeeId };
+    case 'DISPATCHER':
+      return {
+        completedByRole: 'DISPATCHER',
+        completedByEmployeeId: existing.dispatcherId ?? actorEmployeeId,
+      };
+    case 'ADMIN':
+      return { completedByRole: 'ADMIN', completedByEmployeeId: actorEmployeeId };
+    default:
+      return { completedByRole: 'ADMIN', completedByEmployeeId: actorEmployeeId };
+  }
+}
+
+function inferWorkflowCompletionCredit(
+  user: AuthUser | undefined,
+  existing: { nurseId?: string | null; driverId?: string | null },
+  actorEmployeeId?: string,
+): { completedByRole: CaseCompletionRole; completedByEmployeeId?: string } {
+  if (user?.role === 'ADMIN') {
+    return { completedByRole: 'ADMIN', completedByEmployeeId: actorEmployeeId };
+  }
+  if (
+    user?.role === 'EMPLOYEE' &&
+    String(user.employeeRole || '').toUpperCase().includes('DISPATCH')
+  ) {
+    return { completedByRole: 'DISPATCHER', completedByEmployeeId: actorEmployeeId };
+  }
+  if (actorEmployeeId && existing.nurseId === actorEmployeeId) {
+    return { completedByRole: 'NURSE', completedByEmployeeId: actorEmployeeId };
+  }
+  if (actorEmployeeId && existing.driverId === actorEmployeeId) {
+    return { completedByRole: 'DRIVER', completedByEmployeeId: actorEmployeeId };
+  }
+  const empRole = String(user?.employeeRole || '').toUpperCase();
+  if (empRole.includes('NURSE')) {
+    return { completedByRole: 'NURSE', completedByEmployeeId: actorEmployeeId ?? existing.nurseId ?? undefined };
+  }
+  if (empRole.includes('DRIVER')) {
+    return { completedByRole: 'DRIVER', completedByEmployeeId: actorEmployeeId ?? existing.driverId ?? undefined };
+  }
+  return { completedByRole: 'ADMIN', completedByEmployeeId: actorEmployeeId };
+}
+
 function caseRequiresNurse(caseRow: {
   notes?: string | null;
   manualDispatchNotes?: string | null;
@@ -1100,7 +1169,12 @@ export class EmergencyRequestsService {
     else if (status === 'ARRIVED_SCENE') updateData.arrivedAtSceneAt = new Date();
     else if (status === 'TRANSPORTING') updateData.departedSceneAt = new Date();
     else if (status === 'ARRIVED_HOSPITAL') updateData.arrivedDestinationAt = new Date();
-    else if (status === 'COMPLETED') updateData.completedAt = new Date();
+    else if (status === 'COMPLETED') {
+      updateData.completedAt = new Date();
+      const credit = inferWorkflowCompletionCredit(user, existing, employeeId);
+      updateData.completedByRole = credit.completedByRole;
+      updateData.completedByEmployeeId = credit.completedByEmployeeId ?? null;
+    }
     else if (status === 'CANCELLED') updateData.cancelledAt = new Date();
 
     Object.assign(updateData, this.deriveTimingMetrics(existing, updateData));
@@ -1282,6 +1356,7 @@ export class EmergencyRequestsService {
       treatmentSummary?: string
       handoverNotes?: string
       dispatcherNotes?: string
+      completedByRole?: CaseCompletionRole
     },
     employeeId?: string,
     user?: AuthUser,
@@ -1289,8 +1364,9 @@ export class EmergencyRequestsService {
     const existing = await this.prisma.emergencyRequest.findUnique({
       where: { id },
       include: {
-        driver: { select: { firstName: true, lastName: true } },
-        nurse: { select: { firstName: true, lastName: true } },
+        driver: { select: { id: true, firstName: true, lastName: true } },
+        nurse: { select: { id: true, firstName: true, lastName: true } },
+        dispatcher: { select: { id: true, firstName: true, lastName: true } },
         ambulance: { select: { ambulanceNumber: true } },
         destinationHospital: { select: { name: true } },
       },
@@ -1317,8 +1393,22 @@ export class EmergencyRequestsService {
       existing.destinationHospital?.name ||
       existing.destination ||
       '';
+    const completionCredit = inferWorkflowCompletionCredit(user, existing, employeeId);
+    let actorName = '';
+    if (employeeId) {
+      const actor = await this.prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { firstName: true, lastName: true, employeeCode: true },
+      });
+      actorName = actor
+        ? [actor.firstName, actor.lastName].filter(Boolean).join(' ').trim() || actor.employeeCode || ''
+        : '';
+    }
+
     const summaryLines = [
-      '[Dispatcher Completion]',
+      '[Manual Completion]',
+      `Completed by role: ${completionRoleLabel(completionCredit.completedByRole)}`,
+      actorName ? `Completed by: ${actorName}` : null,
       driverName ? `Driver: ${driverName}` : null,
       nurseName ? `Nurse: ${nurseName}` : null,
       existing.ambulance?.ambulanceNumber
@@ -1349,6 +1439,8 @@ export class EmergencyRequestsService {
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
+        completedByRole: completionCredit.completedByRole,
+        completedByEmployeeId: completionCredit.completedByEmployeeId ?? null,
         statusLogs: {
           create: {
             fromStatus: existing.status,

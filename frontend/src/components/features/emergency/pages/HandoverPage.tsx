@@ -72,6 +72,7 @@ function getHandoverSummary(request: EmergencyRequest): HandoverSummary | null {
       request.destination ||
       '—',
     outcome: handoverOutcomeLabel(parsed.patientOutcome),
+    category: parsed.category || '',
     condition: parsed.patientCondition || '',
     treatment: parsed.treatmentGiven || '',
     receivingDoctor: parsed.receivingStaff || '',
@@ -317,6 +318,12 @@ export default function HandoverPage() {
                             <dt className="text-[10px] font-bold uppercase text-slate-400">Patient status</dt>
                             <dd className="font-semibold text-slate-800">{summary.outcome}</dd>
                           </div>
+                          {summary.category && (
+                            <div>
+                              <dt className="text-[10px] font-bold uppercase text-slate-400">Handover category</dt>
+                              <dd className="font-medium text-slate-800">{summary.category}</dd>
+                            </div>
+                          )}
                           {summary.receivingDoctor && (
                             <div>
                               <dt className="text-[10px] font-bold uppercase text-slate-400">Receiving doctor</dt>

@@ -14,11 +14,17 @@ import {
 import {
   getAdminReport,
   getAdminReportFilterOptions,
+  getStaffPerformanceCases,
   type AdminReportFilterOptions,
+  type StaffPerformanceCaseType,
 } from '@/lib/reports/adminReportsApi'
-import { downloadMultiReportPdf, downloadReportPdf } from '@/lib/reports/exportPdf'
+import { downloadMultiReportPdf, downloadReportPdf, downloadSectionPdf } from '@/lib/reports/exportPdf'
 import ReportFiltersBar, { type ReportFilterDef } from '@/components/reports/ReportFiltersBar'
+import ReportSectionTable from '@/components/reports/ReportSectionTable'
+import RankingDetailModal from '@/components/reports/RankingDetailModal'
+import type { ReportCaseTable } from '@/lib/reports/reportRankingUtils'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/context/AuthContext'
 
 type SummaryItem = {
   label: string
@@ -30,6 +36,13 @@ type ReportTable = {
   title: string
   columns: string[]
   rows: Array<Array<string | number>>
+  staffMeta?: Array<{ employeeId: string; employeeName: string }>
+}
+
+const PERFORMANCE_CASE_COLUMNS: Record<number, StaffPerformanceCaseType> = {
+  8: 'driver',
+  9: 'nurse',
+  10: 'dispatch',
 }
 
 type ReportData = {
@@ -64,8 +77,10 @@ const FILTERS_BY_TYPE: Record<string, FilterDef[]> = {
   emergency: [
     { key: 'region', label: 'Region', source: 'regions' },
     { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
+    { key: 'requestType', label: 'Referral / Request Type', source: 'requestTypes' },
     { key: 'priority', label: 'Priority', source: 'priorities' },
     { key: 'status', label: 'Status', source: 'emergencyStatuses' },
+    { key: 'completedByRole', label: 'Completed By Role', source: 'completedByRoles' },
     { key: 'emergencyType', label: 'Category', source: 'incidentCategories' },
     { key: 'transportType', label: 'Transport Type', source: 'transportTypes' },
     { key: 'requestSource', label: 'Request Source', source: 'requestSources' },
@@ -123,6 +138,7 @@ const FILTERS_BY_TYPE: Record<string, FilterDef[]> = {
 }
 
 export default function AdminReportPage({ type }: { type: string }) {
+  const { user } = useAuth()
   const [range, setRange] = useState('30d')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -137,6 +153,16 @@ export default function AdminReportPage({ type }: { type: string }) {
   const [soleFilter, setSoleFilter] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [pdfExporting, setPdfExporting] = useState(false)
+  const [includeExecutiveSummary, setIncludeExecutiveSummary] = useState(false)
+  const [staffCasesModal, setStaffCasesModal] = useState<{
+    title: string
+    subtitle?: string
+    detail: ReportCaseTable | null
+    loading?: boolean
+  } | null>(null)
+
+  const generatedBy =
+    user?.username || user?.email || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || undefined
 
   useEffect(() => {
     let active = true
@@ -199,6 +225,52 @@ export default function AdminReportPage({ type }: { type: string }) {
 
   const heading = report?.title || REPORT_LABELS[type] || 'Analytics Report'
   const activeFilters = FILTERS_BY_TYPE[type] || []
+
+  const reportFilterParams = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(filters).filter(([, value]) => value.trim()),
+      ),
+    [filters],
+  )
+
+  const handlePerformanceCaseClick = async (
+    columnIndex: number,
+    _cell: string | number,
+    rowIndex: number,
+  ) => {
+    const caseType = PERFORMANCE_CASE_COLUMNS[columnIndex]
+    const row = visibleRows[rowIndex]
+    const staffMeta =
+      report?.table?.staffMeta?.find((m) => m.employeeName === String(row?.[0] ?? '')) ??
+      report?.table?.staffMeta?.[rowIndex]
+    if (!caseType || !staffMeta) return
+
+    setStaffCasesModal({
+      title: 'Loading cases…',
+      subtitle: staffMeta.employeeName,
+      detail: null,
+      loading: true,
+    })
+
+    try {
+      const detail = await getStaffPerformanceCases(staffMeta.employeeId, caseType, {
+        range,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        ...reportFilterParams,
+      })
+      setStaffCasesModal({
+        title: detail.title,
+        subtitle: detail.subtitle,
+        detail: detail.table,
+        loading: false,
+      })
+    } catch {
+      toast.error('Could not load case details')
+      setStaffCasesModal(null)
+    }
+  }
 
   const searchQuery = search.trim().toLowerCase()
 
@@ -310,13 +382,15 @@ export default function AdminReportPage({ type }: { type: string }) {
           title: report.title,
           subtitle: report.subtitle,
           periodLabel: report.period?.label,
-          summary: report.summary,
+          generatedBy,
+          includeSummary: includeExecutiveSummary,
+          summary: includeExecutiveSummary ? report.summary : undefined,
           table: {
             ...report.table,
             rows: visibleRows,
           },
           secondaryTable: report.secondaryTable
-            ? { ...report.secondaryTable }
+            ? { ...report.secondaryTable, rows: secondaryVisibleRows }
             : undefined,
         },
         `${type}-${range}.pdf`,
@@ -466,11 +540,14 @@ export default function AdminReportPage({ type }: { type: string }) {
           filtersLoading={filtersLoading}
           filtersError={filtersError}
           permissionLabel={report?.permissions?.join(', ') || 'report.view'}
+          includeExecutiveSummary={includeExecutiveSummary}
+          setIncludeExecutiveSummary={setIncludeExecutiveSummary}
           onClear={() => {
             setStartDate('')
             setEndDate('')
             setFilters({})
             setSearch('')
+            setIncludeExecutiveSummary(false)
           }}
         />
 
@@ -516,45 +593,28 @@ export default function AdminReportPage({ type }: { type: string }) {
 
       {!loading && !error && report && (
         <>
-          {summaryHorizontal && (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-4">
-                <h2 className="text-lg font-black text-slate-900">{summaryHorizontal.title}</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {summaryHorizontal.columns.length} KPI columns
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-max w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      {summaryHorizontal.columns.map((column) => (
-                        <th
-                          key={column}
-                          className="whitespace-nowrap px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500 border-r border-slate-100 last:border-r-0"
-                        >
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {summaryHorizontal.rows.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {row.map((cell, cellIndex) => (
-                          <td
-                            key={`${cellIndex}-${String(cell)}`}
-                            className="whitespace-nowrap px-4 py-3 text-sm font-bold text-slate-800 border-r border-slate-50 last:border-r-0"
-                          >
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {includeExecutiveSummary && summaryHorizontal && (
+            <ReportSectionTable
+              table={summaryHorizontal}
+              onExportCsv={() => {
+                const rows = [summaryHorizontal.columns, ...summaryHorizontal.rows]
+                downloadCsv('kpi-summary', rows)
+              }}
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: 'Executive Summary',
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    includeSummary: true,
+                    summary: report.summary,
+                  },
+                  summaryHorizontal,
+                  `${type}-executive-summary-${range}.pdf`,
+                )
+              }
+            />
           )}
 
           {type === 'export' && report.exportBundles && (
@@ -601,124 +661,105 @@ export default function AdminReportPage({ type }: { type: string }) {
           )}
 
           {report.table && (
-            <ReportTableSection
-              table={report.table}
-              search={search}
-              setSearch={setSearch}
-              visibleRows={visibleRows}
-              onRefresh={() => setReloadKey((c) => c + 1)}
-              hideSearch
+            <ReportSectionTable
+              table={{ ...report.table, rows: visibleRows }}
+              onExportCsv={() => downloadCsv(type, exportRows)}
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: report.table!.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    includeSummary: false,
+                  },
+                  { ...report.table!, rows: visibleRows },
+                  `${type}-main-${range}.pdf`,
+                )
+              }
+              isClickableCell={
+                type === 'performance'
+                  ? (columnIndex, cell) =>
+                      columnIndex in PERFORMANCE_CASE_COLUMNS && Number(cell) > 0
+                  : undefined
+              }
+              onCellClick={type === 'performance' ? handlePerformanceCaseClick : undefined}
             />
           )}
 
+          <RankingDetailModal
+            open={Boolean(staffCasesModal)}
+            onClose={() => setStaffCasesModal(null)}
+            title={staffCasesModal?.title ?? ''}
+            subtitle={
+              staffCasesModal?.loading
+                ? 'Loading case records…'
+                : staffCasesModal?.subtitle
+            }
+            detailTable={staffCasesModal?.loading ? null : staffCasesModal?.detail ?? null}
+            pdfMeta={
+              report && staffCasesModal?.detail
+                ? {
+                    title: report.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                  }
+                : undefined
+            }
+            pdfFilename={staffCasesModal?.title}
+          />
+
           {report.secondaryTable && (
-            <ReportTableSection
-              table={report.secondaryTable}
-              search=""
-              setSearch={() => {}}
-              visibleRows={secondaryVisibleRows}
-              onRefresh={() => setReloadKey((c) => c + 1)}
-              hideSearch
+            <ReportSectionTable
+              table={{ ...report.secondaryTable, rows: secondaryVisibleRows }}
+              onExportCsv={() =>
+                downloadCsv(
+                  `${type}-secondary`,
+                  [report.secondaryTable!.columns, ...secondaryVisibleRows],
+                )
+              }
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: report.secondaryTable!.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    includeSummary: false,
+                  },
+                  { ...report.secondaryTable!, rows: secondaryVisibleRows },
+                  `${type}-secondary-${range}.pdf`,
+                )
+              }
             />
           )}
 
           {report.tertiaryTable && (
-            <ReportTableSection
-              table={report.tertiaryTable}
-              search=""
-              setSearch={() => {}}
-              visibleRows={tertiaryVisibleRows}
-              onRefresh={() => setReloadKey((c) => c + 1)}
-              hideSearch
+            <ReportSectionTable
+              table={{ ...report.tertiaryTable, rows: tertiaryVisibleRows }}
+              onExportCsv={() =>
+                downloadCsv(
+                  `${type}-tertiary`,
+                  [report.tertiaryTable!.columns, ...tertiaryVisibleRows],
+                )
+              }
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: report.tertiaryTable!.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    includeSummary: false,
+                  },
+                  { ...report.tertiaryTable!, rows: tertiaryVisibleRows },
+                  `${type}-tertiary-${range}.pdf`,
+                )
+              }
             />
           )}
         </>
       )}
-    </div>
-  )
-}
-
-function ReportTableSection({
-  table,
-  search,
-  setSearch,
-  visibleRows,
-  onRefresh,
-  hideSearch,
-}: {
-  table: ReportTable
-  search: string
-  setSearch: (v: string) => void
-  visibleRows: Array<Array<string | number>>
-  onRefresh: () => void
-  hideSearch?: boolean
-}) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-black text-slate-900">{table.title}</h2>
-          <p className="mt-1 text-sm text-slate-500">{visibleRows.length} records</p>
-        </div>
-        {!hideSearch && (
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <label className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search table..."
-                className="h-10 rounded-xl border border-slate-200 pl-9 pr-3 text-sm font-semibold text-slate-700 outline-none focus:border-red-500"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              {table.columns.map((column) => (
-                <th
-                  key={column}
-                  className="whitespace-nowrap px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500"
-                >
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {visibleRows.map((row, rowIndex) => (
-              <tr key={`${rowIndex}-${String(row[0])}`} className="hover:bg-slate-50">
-                {row.map((cell, cellIndex) => (
-                  <td
-                    key={`${cellIndex}-${String(cell)}`}
-                    className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-700"
-                  >
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {visibleRows.length === 0 && (
-              <tr>
-                <td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={table.columns.length}>
-                  No records found for this period.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }

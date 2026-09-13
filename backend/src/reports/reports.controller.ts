@@ -82,6 +82,22 @@ export class ReportsController {
     return this.reportsService.getAdminReportFilterOptions();
   }
 
+  @Get('admin/staff-performance/cases')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('report.view')
+  getStaffPerformanceCases(@Query() query: Record<string, string | undefined>) {
+    const { employeeId = '', caseType = 'driver', ...filters } = query;
+    const normalized =
+      caseType === 'driver' || caseType === 'nurse' || caseType === 'dispatch'
+        ? caseType
+        : 'driver';
+    return this.reportsService.getStaffPerformanceCaseDetails(
+      employeeId,
+      normalized,
+      filters,
+    );
+  }
+
   @Get('admin/:type')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('report.view')

@@ -84,6 +84,36 @@ export function findLatestAssessmentRecord<T extends { clinicalNotes?: string | 
 const MONITORING_PREFIX = '[EADS_MONITORING]'
 const HANDOVER_PREFIX = '[EADS_HANDOVER]'
 
+export const HANDOVER_CATEGORY_OPTIONS = [
+  { value: 'EMERGENCY_TRANSFER', label: 'Emergency transfer' },
+  { value: 'ROUTINE_TRANSFER', label: 'Routine transfer' },
+  { value: 'INTER_FACILITY', label: 'Inter-facility transfer' },
+  { value: 'SPECIALIST_REFERRAL', label: 'Specialist referral' },
+  { value: 'DISCHARGE', label: 'Discharge transport' },
+  { value: 'OTHER', label: 'Other (specify)' },
+] as const
+
+export function formatHandoverCategoryStored(category?: string, categoryOther?: string): string | undefined {
+  if (!category) return undefined
+  if (category === 'OTHER') {
+    const other = categoryOther?.trim()
+    return other ? `Other: ${other}` : 'Other'
+  }
+  return HANDOVER_CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? category
+}
+
+export function parseHandoverCategoryFields(stored?: string): {
+  category: string
+  categoryOther: string
+} {
+  if (!stored?.trim()) return { category: '', categoryOther: '' }
+  if (stored.startsWith('Other:')) {
+    return { category: 'OTHER', categoryOther: stored.slice(6).trim() }
+  }
+  const opt = HANDOVER_CATEGORY_OPTIONS.find((o) => o.label === stored || o.value === stored)
+  return { category: opt?.value ?? stored, categoryOther: '' }
+}
+
 export type MonitoringData = {
   _type: 'monitoring'
   bloodPressure?: string
@@ -124,6 +154,8 @@ export type HandoverData = {
   nurseName?: string
   handoverDocumentUrl?: string
   handoverDocumentName?: string
+  /** Stored label or "Other: …" */
+  category?: string
 }
 
 export function encodeMonitoring(data: Omit<MonitoringData, '_type'>): string {

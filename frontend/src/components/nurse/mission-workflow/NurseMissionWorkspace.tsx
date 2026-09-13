@@ -33,6 +33,8 @@ import {
   normalizePainLevel,
   parseClinicalRecord,
   parseHandover,
+  formatHandoverCategoryStored,
+  parseHandoverCategoryFields,
 } from '@/lib/nurse/patientCareTypes'
 import {
   firstMedicalNotesError,
@@ -174,6 +176,8 @@ function buildHandoverDefaults(mission: any, nurseName: string, records: any[] =
   return {
     acceptedHospital: mission.destinationHospital?.name || mission.destination || '',
     rejectedHospitals: [],
+    category: '',
+    categoryOther: '',
     patientOutcome: '',
     patientCondition: conditionSummaryFromRecords(records, mission),
     treatmentGiven: treatmentSummaryFromRecords(records),
@@ -243,6 +247,7 @@ function handoverFromRecords(records: any[], defaults: HandoverFormState): Hando
     ...defaults,
     acceptedHospital: parsed.acceptedHospital || defaults.acceptedHospital,
     rejectedHospitals: parsed.rejectedHospitals?.length ? parsed.rejectedHospitals : defaults.rejectedHospitals,
+    ...parseHandoverCategoryFields(parsed.category),
     patientOutcome: parsed.patientOutcome || '',
     patientCondition: parsed.patientCondition || defaults.patientCondition,
     treatmentGiven: parsed.treatmentGiven || defaults.treatmentGiven,
@@ -296,6 +301,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const [handoverForm, setHandoverForm] = useState<HandoverFormState>({
     acceptedHospital: '',
     rejectedHospitals: [],
+    category: '',
+    categoryOther: '',
     patientOutcome: '',
     patientCondition: '',
     treatmentGiven: '',
@@ -756,6 +763,7 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           nurseName: handoverForm.nurseName || fullName || '',
           handoverDocumentUrl: handoverForm.handoverDocumentUrl || undefined,
           handoverDocumentName: handoverForm.handoverDocumentName || undefined,
+          category: formatHandoverCategoryStored(handoverForm.category, handoverForm.categoryOther),
         }),
       },
       'HOSPITAL_HANDOVER',

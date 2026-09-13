@@ -433,6 +433,7 @@ model Employee {
   dispatchedRequests   EmergencyRequest[]   @relation("DispatcherRequests")
   drivenRequests       EmergencyRequest[]   @relation("DriverRequests")
   nurseRequests        EmergencyRequest[]   @relation("NurseRequests")
+  completedRequests    EmergencyRequest[]   @relation("CompletedByRequests")
   patientCareRecords   PatientCareRecord[]
   incidentReports      IncidentReport[]
   statusLogs           EmergencyStatusLog[] @relation("EmployeeStatusLogs")
@@ -580,6 +581,8 @@ model EmergencyRequest {
   departedSceneAt      DateTime?
   arrivedDestinationAt DateTime?
   completedAt          DateTime?
+  completedByRole      String?
+  completedByEmployeeId String?
   cancelledAt          DateTime?
   responseMinutes      Int?
   serviceMinutes       Int?
@@ -592,6 +595,7 @@ model EmergencyRequest {
   district             District?              @relation(fields: [districtId], references: [id])
   driver               Employee?              @relation("DriverRequests", fields: [driverId], references: [id])
   nurse                Employee?              @relation("NurseRequests", fields: [nurseId], references: [id])
+  completedByEmployee  Employee?              @relation("CompletedByRequests", fields: [completedByEmployeeId], references: [id])
   incidentCategory     IncidentCategory?      @relation(fields: [incidentCategoryId], references: [id])
   patient              Patient                @relation(fields: [patientId], references: [id])
   destinationHospital  Hospital?              @relation(fields: [destinationHospitalId], references: [id])

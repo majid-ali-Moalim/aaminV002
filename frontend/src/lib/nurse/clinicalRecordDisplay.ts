@@ -124,6 +124,7 @@ export function buildHandoverFields(record: CareRecord): CaseFileField[] {
 
   const fields: CaseFileField[] = []
   pushField(fields, 'Hospital', handover.acceptedHospital)
+  pushField(fields, 'Handover category', handover.category)
   pushField(fields, 'Patient status', handoverOutcomeLabel(handover.patientOutcome))
   pushField(fields, 'Condition at handover', handover.patientCondition)
   if (handover.treatmentGiven && !isPlaceholderText(handover.treatmentGiven)) {

@@ -19,9 +19,12 @@ export type RejectedHospitalEntry = {
   notes: string
 }
 
+export type CaseCompletionRole = 'NURSE' | 'DRIVER' | 'DISPATCHER' | 'ADMIN'
+
 export type CaseClosureFormState = {
   acceptedHospital: string
   rejectedEntries: RejectedHospitalEntry[]
+  completedByRole: CaseCompletionRole
   consciousStatus: string
   breathingStatus: string
   bleedingStatus: string
@@ -111,6 +114,7 @@ export function buildCaseClosureDefaults(request: EmergencyRequest): CaseClosure
   return {
     acceptedHospital: accepted,
     rejectedEntries: [],
+    completedByRole: 'DISPATCHER',
     consciousStatus: request.consciousStatus || 'CONSCIOUS',
     breathingStatus: request.breathingStatus || 'NORMAL',
     bleedingStatus: request.bleedingStatus || 'NONE',

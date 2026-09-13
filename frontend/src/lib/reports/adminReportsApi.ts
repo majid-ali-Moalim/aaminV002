@@ -25,6 +25,8 @@ export type AdminReportFilterOptions = {
   patientOutcomes?: Array<{ value: string; label: string }>
   transportTypes?: Array<{ value: string; label: string; code?: string }>
   requestSources?: Array<{ value: string; label: string }>
+  requestTypes?: Array<{ value: string; label: string }>
+  completedByRoles?: Array<{ value: string; label: string }>
   stations?: Array<{ value: string; label: string }>
 }
 
@@ -62,6 +64,17 @@ function emptyOptions(): AdminReportFilterOptions {
       { value: 'Unknown', label: 'Unknown at handover' },
     ],
     transportTypes: [],
+    requestTypes: [
+      { value: 'Emergency', label: 'Emergency' },
+      { value: 'Non-Emergency', label: 'Non-Emergency' },
+      { value: 'Referral', label: 'Referral' },
+    ],
+    completedByRoles: [
+      { value: 'NURSE', label: 'Nurse' },
+      { value: 'DRIVER', label: 'Driver' },
+      { value: 'DISPATCHER', label: 'Dispatcher' },
+      { value: 'ADMIN', label: 'Admin' },
+    ],
   }
 }
 
@@ -127,6 +140,14 @@ function normalizeFilterOptions(raw: any): AdminReportFilterOptions {
         ? raw.patientOutcomes
         : base.patientOutcomes,
     transportTypes: Array.isArray(raw.transportTypes) ? raw.transportTypes : [],
+    requestTypes:
+      Array.isArray(raw.requestTypes) && raw.requestTypes.length
+        ? raw.requestTypes
+        : base.requestTypes,
+    completedByRoles:
+      Array.isArray(raw.completedByRoles) && raw.completedByRoles.length
+        ? raw.completedByRoles
+        : base.completedByRoles,
   }
 }
 
@@ -173,6 +194,33 @@ export async function getAdminReportFilterOptions(): Promise<AdminReportFilterOp
     return await loadSetupFallback()
   } catch {
     return emptyOptions()
+  }
+}
+
+export type StaffPerformanceCaseType = 'driver' | 'nurse' | 'dispatch'
+
+export async function getStaffPerformanceCases(
+  employeeId: string,
+  caseType: StaffPerformanceCaseType,
+  filters?: Record<string, string | undefined>,
+) {
+  const params = new URLSearchParams()
+  params.set('employeeId', employeeId)
+  params.set('caseType', caseType)
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value?.trim()) params.set(key, value.trim())
+    })
+  }
+  const { data } = await axios.get(
+    `${API_BASE_URL}/api/reports/admin/staff-performance/cases?${params.toString()}`,
+    { headers: authHeaders() },
+  )
+  return data as {
+    title: string
+    subtitle?: string
+    period?: { label: string }
+    table: { title: string; columns: string[]; rows: Array<Array<string | number>> }
   }
 }
 

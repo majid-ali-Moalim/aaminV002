@@ -421,6 +421,7 @@ export const emergencyRequestsService = {
       treatmentSummary?: string
       handoverNotes?: string
       dispatcherNotes?: string
+      completedByRole?: 'NURSE' | 'DRIVER' | 'DISPATCHER' | 'ADMIN'
     },
   ) => {
     const api = new ApiService()

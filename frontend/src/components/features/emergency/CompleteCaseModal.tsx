@@ -5,6 +5,12 @@ import { format } from 'date-fns'
 import { CheckCircle2, Loader2, Plus, Trash2, XCircle, History } from 'lucide-react'
 import { emergencyRequestsService } from '@/lib/api'
 import { EmergencyRequest } from '@/types'
+import { useAuth } from '@/context/AuthContext'
+import {
+  completionRoleLabel,
+  currentUserDisplayName,
+  inferCurrentUserCompletionRole,
+} from '@/lib/emergency/completionAttribution'
 import {
   buildCaseClosureDefaults,
   buildPatientStatusSummary,
@@ -209,10 +215,17 @@ function RejectedHospitalsSection({
 }
 
 export default function CompleteCaseModal({ request, onClose, onSuccess }: Props) {
+  const { user } = useAuth()
+  const completionRole = inferCurrentUserCompletionRole(user)
+  const completingAs = completionRoleLabel(completionRole)
+  const completingName = currentUserDisplayName(user)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [fullCase, setFullCase] = useState<EmergencyRequest | null>(null)
-  const [form, setForm] = useState<CaseClosureFormState>(buildCaseClosureDefaults(request))
+  const [form, setForm] = useState<CaseClosureFormState>(() => ({
+    ...buildCaseClosureDefaults(request),
+    completedByRole: completionRole,
+  }))
 
   useEffect(() => {
     let cancelled = false
@@ -222,7 +235,7 @@ export default function CompleteCaseModal({ request, onClose, onSuccess }: Props
         const data = await emergencyRequestsService.getById(request.id)
         if (!cancelled) {
           setFullCase(data)
-          setForm(buildCaseClosureDefaults(data))
+          setForm({ ...buildCaseClosureDefaults(data), completedByRole: completionRole })
         }
       } catch {
         if (!cancelled) setFullCase(request)
@@ -233,7 +246,7 @@ export default function CompleteCaseModal({ request, onClose, onSuccess }: Props
     return () => {
       cancelled = true
     }
-  }, [request])
+  }, [request, completionRole])
 
   const caseData = fullCase || request
   const readonly = caseClosureReadonlyFields(caseData)
@@ -248,6 +261,7 @@ export default function CompleteCaseModal({ request, onClose, onSuccess }: Props
       await emergencyRequestsService.completeRequest(caseData.id, {
         acceptedHospital: form.acceptedHospital,
         rejectedHospitals: serializeRejectedHospitals(form.rejectedEntries),
+        completedByRole: completionRole,
         consciousStatus: form.consciousStatus,
         breathingStatus: form.breathingStatus,
         bleedingStatus: form.bleedingStatus,
@@ -323,6 +337,25 @@ export default function CompleteCaseModal({ request, onClose, onSuccess }: Props
                   <input readOnly value={readonly.patientName} className={readonlyClass} />
                 </div>
               </div>
+
+              <section className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">Case completion attribution</h4>
+                  <p className="text-xs text-slate-500 mt-1 active-missions-muted">
+                    This case will be recorded as completed by you in reports and audit records.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className={labelClass}>Completed by</p>
+                    <input readOnly value={completingName} className={readonlyClass} />
+                  </div>
+                  <div>
+                    <p className={labelClass}>Role</p>
+                    <input readOnly value={completingAs} className={readonlyClass} />
+                  </div>
+                </div>
+              </section>
 
               <section className="rounded-xl border border-slate-200 p-4 space-y-4 bg-white">
                 <div>

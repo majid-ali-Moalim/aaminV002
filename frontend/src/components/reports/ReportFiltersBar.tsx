@@ -20,6 +20,8 @@ export type ReportFilterDef = {
     | 'patientOutcomes'
     | 'transportTypes'
     | 'requestSources'
+    | 'requestTypes'
+    | 'completedByRoles'
     | 'stations'
   dependsOnRegion?: boolean
 }
@@ -38,6 +40,8 @@ const SOLE_KEYS = new Set([
   'vehicleType',
   'staffRole',
   'requestSource',
+  'requestType',
+  'completedByRole',
   'station',
 ])
 
@@ -99,6 +103,10 @@ function getSelectOptions(
       return options.transportTypes ?? []
     case 'requestSources':
       return options.requestSources ?? []
+    case 'requestTypes':
+      return options.requestTypes ?? []
+    case 'completedByRoles':
+      return options.completedByRoles ?? []
     case 'stations':
       return options.stations ?? []
     default:
@@ -151,6 +159,8 @@ export default function ReportFiltersBar({
   filtersError,
   onClear,
   permissionLabel,
+  includeExecutiveSummary,
+  setIncludeExecutiveSummary,
 }: {
   filterOptions: AdminReportFilterOptions | null
   filters: Record<string, string>
@@ -166,6 +176,8 @@ export default function ReportFiltersBar({
   filtersError?: string
   onClear: () => void
   permissionLabel?: string
+  includeExecutiveSummary?: boolean
+  setIncludeExecutiveSummary?: (v: boolean) => void
 }) {
   const regionId = filters.region || ''
   const districtOptions = useMemo(
@@ -267,6 +279,17 @@ export default function ReportFiltersBar({
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
+        {setIncludeExecutiveSummary && (
+          <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeExecutiveSummary ?? false}
+              onChange={(e) => setIncludeExecutiveSummary(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+            />
+            Include Executive Summary
+          </label>
+        )}
         <button
           type="button"
           onClick={onClear}

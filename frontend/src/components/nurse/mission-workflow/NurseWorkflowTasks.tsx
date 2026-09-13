@@ -17,6 +17,7 @@ import {
   painLevelLabel,
   PATIENT_HANDOVER_OUTCOMES,
   handoverOutcomeLabel,
+  HANDOVER_CATEGORY_OPTIONS,
 } from '@/lib/nurse/patientCareTypes'
 import type { MedicalNotesFieldErrors } from '@/lib/nurse/medicalNotesValidation'
 import type { HandoverFieldErrors } from '@/lib/nurse/handoverValidation'
@@ -488,6 +489,8 @@ export type HandoverFormState = {
   acceptedHospitalBranchId?: string
   acceptedHospitalBranchName?: string
   rejectedHospitals: RejectedHospitalEntry[]
+  category: string
+  categoryOther: string
   patientOutcome: string
   patientCondition: string
   treatmentGiven: string
@@ -878,6 +881,46 @@ export function HandoverTaskFields({
       </label>
 
       <p className="nmw-form-section-label span-2">Handover details</p>
+      <label className="span-2">
+        Handover category *
+        {readOnly ? (
+          <input
+            value={
+              form.category === 'OTHER'
+                ? `Other: ${form.categoryOther || '—'}`
+                : HANDOVER_CATEGORY_OPTIONS.find((o) => o.value === form.category)?.label || form.category || '—'
+            }
+            readOnly
+            className="readonly"
+          />
+        ) : (
+          <select
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value, categoryOther: '' })}
+            required
+            aria-invalid={Boolean(errors.category)}
+          >
+            <option value="">Select category…</option>
+            {HANDOVER_CATEGORY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
+        <FieldError error={errors.category} />
+      </label>
+      {!readOnly && form.category === 'OTHER' && (
+        <label className="span-2">
+          Custom category *
+          <input
+            value={form.categoryOther}
+            onChange={(e) => setForm({ ...form, categoryOther: e.target.value })}
+            maxLength={120}
+            placeholder="Describe the handover category"
+            aria-invalid={Boolean(errors.category)}
+          />
+          <FieldError error={errors.category} />
+        </label>
+      )}
       <HandoverRejectedHospitalsSection
         entries={form.rejectedHospitals ?? []}
         onChange={(rejectedHospitals) => setForm({ ...form, rejectedHospitals })}
@@ -1146,6 +1189,46 @@ export function HandoverQuickFields({
           />
           <FieldError error={errors.acceptedHospital} />
         </div>
+      )}
+
+      <label className="span-2">
+        Handover category *
+        {readOnly ? (
+          <input
+            value={
+              form.category === 'OTHER'
+                ? `Other: ${form.categoryOther || '—'}`
+                : HANDOVER_CATEGORY_OPTIONS.find((o) => o.value === form.category)?.label || form.category || '—'
+            }
+            readOnly
+            className="readonly"
+          />
+        ) : (
+          <select
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value, categoryOther: '' })}
+            aria-invalid={Boolean(errors.category)}
+          >
+            <option value="">Select category…</option>
+            {HANDOVER_CATEGORY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
+        <FieldError error={errors.category} />
+      </label>
+      {!readOnly && form.category === 'OTHER' && (
+        <label className="span-2">
+          Custom category *
+          <input
+            value={form.categoryOther}
+            onChange={(e) => setForm({ ...form, categoryOther: e.target.value })}
+            maxLength={120}
+            placeholder="Describe the handover category"
+            aria-invalid={Boolean(errors.category)}
+          />
+          <FieldError error={errors.category} />
+        </label>
       )}
 
       <HandoverRejectedHospitalsSection

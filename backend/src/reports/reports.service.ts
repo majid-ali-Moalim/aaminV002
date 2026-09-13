@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmployeeAttendanceService } from '../employee-attendance/employee-attendance.service';
 import { isStaffEmployeeRole } from '../employee-attendance/shift-types';
 import { fetchRecentDriverIncidents } from '../common/driver-incident';
+import { parseAssignerUserIdFromNotes } from '../common/resolve-case-dispatcher';
 
 type ReportPeriod = {
   start: Date;
@@ -29,6 +30,8 @@ type AdminReportFilters = {
   patientOutcome?: string;
   transportType?: string;
   requestSource?: string;
+  requestType?: string;
+  completedByRole?: string;
   station?: string;
 };
 
@@ -1082,6 +1085,17 @@ export class ReportsService {
         { value: 'REFERRAL', label: 'Referral' },
         { value: 'OTHER', label: 'Other' },
       ],
+      requestTypes: [
+        { value: 'Emergency', label: 'Emergency' },
+        { value: 'Non-Emergency', label: 'Non-Emergency' },
+        { value: 'Referral', label: 'Referral' },
+      ],
+      completedByRoles: [
+        { value: 'NURSE', label: 'Nurse' },
+        { value: 'DRIVER', label: 'Driver' },
+        { value: 'DISPATCHER', label: 'Dispatcher' },
+        { value: 'ADMIN', label: 'Admin' },
+      ],
     };
   }
 
@@ -1217,8 +1231,9 @@ export class ReportsService {
       table: {
         title: 'All Emergency Cases',
         columns: [
-          'Tracking Code', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
+          'Tracking Code', 'Request Type', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
           'Pickup', 'Destination', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Service (min)', 'Created', 'Completed',
+          'Completed By', 'Completed By Role',
         ],
         rows,
       },
@@ -1314,7 +1329,7 @@ export class ReportsService {
           employeeRole: true,
           department: true,
           station: true,
-          user: { select: { email: true, username: true } },
+          user: { select: { id: true, email: true, username: true } },
           _count: {
             select: {
               drivenRequests: true,
@@ -1339,14 +1354,8 @@ export class ReportsService {
       (periodScores.employees ?? []).map((e) => [e.employeeId, e]),
     );
 
-    const periodCompletedByEmployee = await this.prisma.emergencyRequest.groupBy({
-      by: ['driverId'],
-      where: { ...where, status: 'COMPLETED', driverId: { not: null } },
-      _count: true,
-    });
-    const driverCompletedMap = Object.fromEntries(
-      periodCompletedByEmployee.map((r) => [r.driverId!, r._count]),
-    );
+    const { dispatchMap, driverMap, nurseMap } =
+      await this.countPeriodMissionCasesByEmployee(where, employees);
 
     const activeStaff = employees.filter((e) => presentTodayIds.has(e.id)).length;
     const { byRole, fieldStaff } = todayPresence;
@@ -1375,7 +1384,7 @@ export class ReportsService {
         columns: [
           'Employee', 'Role', 'Department', 'Station', 'Present Today', 'Period Present Days',
           'Period Absent Days', 'Attendance Score', 'Driver Cases', 'Nurse Cases', 'Dispatch Cases',
-          'Period Driver Completions', 'Email',
+          'Email',
         ],
         rows: employees.map((e) => {
           const score = scoreByEmployeeId[e.id];
@@ -1388,13 +1397,16 @@ export class ReportsService {
             score?.presentDays ?? 0,
             score?.absentDays ?? 0,
             score ? `${score.attendancePercentage}%` : '—',
-            e._count.drivenRequests,
-            e._count.nurseRequests,
-            e._count.dispatchedRequests,
-            driverCompletedMap[e.id] ?? 0,
+            driverMap[e.id] ?? 0,
+            nurseMap[e.id] ?? 0,
+            dispatchMap[e.id] ?? 0,
             e.user?.email ?? e.user?.username ?? '—',
           ];
         }),
+        staffMeta: employees.map((e) => ({
+          employeeId: e.id,
+          employeeName: this.employeeDisplayName(e),
+        })),
       },
       secondaryTable: {
         title: `Today's Attendance by Role (${todayPresence.date})`,
@@ -1412,6 +1424,62 @@ export class ReportsService {
             `${fieldStaff.total ? fieldStaff.presentPercentage : 0}%`],
         ],
       },
+    };
+  }
+
+  async getStaffPerformanceCaseDetails(
+    employeeId: string,
+    caseType: 'driver' | 'nurse' | 'dispatch',
+    filters: AdminReportFilters = {},
+  ) {
+    const period = this.resolveReportPeriod(filters);
+    const where = this.reportWhere(period, filters);
+    const allEmployees = await this.prisma.employee.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, user: { select: { id: true } } },
+    });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { firstName: true, lastName: true, employeeCode: true },
+    });
+    const employeeName = employee
+      ? this.employeeDisplayName(employee)
+      : 'Staff member';
+    const typeLabel =
+      caseType === 'driver' ? 'Driver' : caseType === 'nurse' ? 'Nurse' : 'Dispatch';
+
+    const { driverCases, nurseCases, dispatchCases } =
+      await this.countPeriodMissionCasesByEmployee(where, allEmployees);
+
+    const ids =
+      caseType === 'driver'
+        ? (driverCases[employeeId] ?? [])
+        : caseType === 'nurse'
+          ? (nurseCases[employeeId] ?? [])
+          : (dispatchCases[employeeId] ?? []);
+
+    const columns = [
+      'Tracking Code', 'Request Type', 'Patient', 'Priority', 'Status', 'Region', 'District', 'Category',
+      'Pickup', 'Destination', 'Ambulance', 'Driver', 'Nurse', 'Response (min)', 'Service (min)', 'Created', 'Completed',
+      'Completed By', 'Completed By Role',
+    ];
+
+    if (!ids.length) {
+      return {
+        title: `${typeLabel} cases — ${employeeName}`,
+        subtitle: `0 cases · ${period.label}`,
+        period,
+        table: { title: `${typeLabel} cases`, columns, rows: [] },
+      };
+    }
+
+    const rows = await this.getFullEmergencyRows({ id: { in: ids } });
+
+    return {
+      title: `${typeLabel} cases — ${employeeName}`,
+      subtitle: `${ids.length} case(s) · ${period.label}`,
+      period,
+      table: { title: `${typeLabel} cases`, columns, rows },
     };
   }
 
@@ -2407,6 +2475,7 @@ export class ReportsService {
           driver: true,
           nurse: true,
           dispatcher: true,
+          completedByEmployee: true,
           destinationHospital: true,
           incidentCategory: true,
           patientCareRecords: { select: { id: true, clinicalNotes: true } },
@@ -2741,7 +2810,7 @@ export class ReportsService {
         columns: [
           'Tracking Code', 'Type', 'Patient', 'Gender', 'Priority', 'Status',
           'Category', 'Destination', 'District', 'Station', 'Ambulance', 'Driver', 'Nurse',
-          'Response (min)', 'Total (min)', 'Created',
+          'Response (min)', 'Total (min)', 'Created', 'Completed By', 'Completed By Role',
         ],
         rows: cases.map((c) => {
           const category =
@@ -2752,6 +2821,7 @@ export class ReportsService {
             'Not recorded';
           const destination = this.resolveHandoverHospital(c) || 'Not assigned';
           const { response, service } = this.computeCaseResponseMinutes(c);
+          const completion = this.resolveCompletedByDisplay(c);
           return [
             cell(c.trackingCode),
             cell(this.parseRequestType(c.notes, c.requestSource)),
@@ -2769,6 +2839,8 @@ export class ReportsService {
             response ?? 'Not recorded',
             service ?? 'Not recorded',
             cell(c.createdAt.toISOString().slice(0, 16).replace('T', ' ')),
+            cell(completion.completedBy),
+            cell(completion.completedByRole),
           ];
         }),
       },
@@ -2938,6 +3010,95 @@ export class ReportsService {
     return [e.firstName, e.lastName].filter(Boolean).join(' ').trim() || e.employeeCode || 'Unnamed';
   }
 
+  private formatCompletedByRole(role?: string | null) {
+    switch (role) {
+      case 'NURSE':
+        return 'Nurse';
+      case 'DRIVER':
+        return 'Driver';
+      case 'DISPATCHER':
+        return 'Dispatcher';
+      case 'ADMIN':
+        return 'Admin';
+      default:
+        return role ? String(role).replace(/_/g, ' ') : 'Not recorded';
+    }
+  }
+
+  private formatCompletedBy(
+    role?: string | null,
+    employee?: { firstName?: string | null; lastName?: string | null; employeeCode?: string | null } | null,
+  ) {
+    const roleLabel = this.formatCompletedByRole(role);
+    if (!employee) return roleLabel !== 'Not recorded' ? roleLabel : 'Not recorded';
+    const name = this.employeeDisplayName(employee);
+    return roleLabel !== 'Not recorded' ? `${name} (${roleLabel})` : name;
+  }
+
+  private resolveCompletedByDisplay(caseRow: {
+    status?: string;
+    completedByRole?: string | null;
+    completedByEmployee?: { firstName?: string | null; lastName?: string | null; employeeCode?: string | null } | null;
+    nurse?: { firstName?: string | null; lastName?: string | null; employeeCode?: string | null } | null;
+    driver?: { firstName?: string | null; lastName?: string | null; employeeCode?: string | null } | null;
+    patientCareRecords?: Array<{ clinicalNotes?: string | null }>;
+  }) {
+    if (caseRow.completedByRole || caseRow.completedByEmployee) {
+      return {
+        completedBy: this.formatCompletedBy(caseRow.completedByRole, caseRow.completedByEmployee),
+        completedByRole: this.formatCompletedByRole(caseRow.completedByRole),
+      };
+    }
+    if (caseRow.status === 'COMPLETED') {
+      const hasHandover = (caseRow.patientCareRecords ?? []).some((r) =>
+        r.clinicalNotes?.startsWith('[EADS_HANDOVER]'),
+      );
+      if (hasHandover && caseRow.nurse) {
+        return {
+          completedBy: `${this.employeeDisplayName(caseRow.nurse)} (Nurse)`,
+          completedByRole: 'Nurse',
+        };
+      }
+      if (hasHandover && caseRow.driver) {
+        return {
+          completedBy: `${this.employeeDisplayName(caseRow.driver)} (Driver)`,
+          completedByRole: 'Driver',
+        };
+      }
+    }
+    return { completedBy: 'Not recorded', completedByRole: 'Not recorded' };
+  }
+
+  private mergeRequestTypeWhere(baseWhere: any, requestType?: string) {
+    if (!requestType?.trim()) return baseWhere;
+    const referralOr = [
+      { requestSource: RequestSource.REFERRAL },
+      { notes: { contains: 'Request Type: Referral' } },
+    ];
+    if (requestType === 'Referral') {
+      return { AND: [baseWhere, { OR: referralOr }] };
+    }
+    if (requestType === 'Non-Emergency') {
+      return {
+        AND: [
+          baseWhere,
+          { NOT: { OR: referralOr } },
+          { notes: { contains: 'Request Type: Non-Emergency' } },
+        ],
+      };
+    }
+    if (requestType === 'Emergency') {
+      return {
+        AND: [
+          baseWhere,
+          { NOT: { OR: referralOr } },
+          { NOT: { notes: { contains: 'Request Type: Non-Emergency' } } },
+        ],
+      };
+    }
+    return baseWhere;
+  }
+
   private async getFullEmergencyRows(where: any) {
     const rows = await this.prisma.emergencyRequest.findMany({
       where,
@@ -2950,6 +3111,7 @@ export class ReportsService {
         ambulance: true,
         driver: true,
         nurse: true,
+        completedByEmployee: true,
         destinationHospital: true,
         patientCareRecords: {
           where: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
@@ -2979,9 +3141,11 @@ export class ReportsService {
         r.destination ||
         'Not assigned';
       const { response, service } = this.computeCaseResponseMinutes(r);
+      const completion = this.resolveCompletedByDisplay(r);
 
       return [
         cell(r.trackingCode),
+        cell(this.parseRequestType(r.notes, r.requestSource)),
         cell(r.patient?.fullName, 'Unknown'),
         cell(r.priority),
         cell(r.status),
@@ -2999,6 +3163,8 @@ export class ReportsService {
         r.completedAt
           ? cell(r.completedAt.toISOString().slice(0, 16).replace('T', ' '))
           : 'Not completed',
+        cell(completion.completedBy),
+        cell(completion.completedByRole),
       ];
     });
   }
@@ -3132,6 +3298,12 @@ export class ReportsService {
     if (filters.transportType) {
       parts.push(`Transport type: ${filters.transportType}`);
     }
+    if (filters.requestType) {
+      parts.push(`Request type: ${filters.requestType}`);
+    }
+    if (filters.completedByRole) {
+      parts.push(`Completed by: ${this.formatCompletedByRole(filters.completedByRole)}`);
+    }
     if (filters.startDate || filters.endDate) {
       parts.push(`Custom dates: ${filters.startDate || '…'} to ${filters.endDate || '…'}`);
     } else {
@@ -3151,6 +3323,8 @@ export class ReportsService {
         filters.status ||
         filters.emergencyType ||
         filters.transportType ||
+        filters.requestType ||
+        filters.completedByRole ||
         filters.startDate ||
         filters.endDate,
     );
@@ -3167,11 +3341,158 @@ export class ReportsService {
     };
   }
 
+  private async countPeriodMissionCasesByEmployee(
+    where: Record<string, unknown>,
+    employees: Array<{
+      id: string
+      user?: { id?: string | null; email?: string | null; username?: string | null } | null
+    }>,
+  ) {
+    const userIdToEmployeeId = new Map<string, string>();
+    for (const employee of employees) {
+      if (employee.user?.id) userIdToEmployeeId.set(employee.user.id, employee.id);
+    }
+
+    const requests = await this.prisma.emergencyRequest.findMany({
+      where,
+      select: {
+        id: true,
+        dispatcherId: true,
+        driverId: true,
+        nurseId: true,
+        statusLogs: {
+          select: { changedByEmployeeId: true, notes: true },
+          where: {
+            OR: [
+              { notes: { contains: 'Team assigned' } },
+              { notes: { contains: 'Team reassigned' } },
+              { toStatus: { in: ['ASSIGNED', 'DISPATCHED'] } },
+            ],
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    const dispatchMap: Record<string, number> = {};
+    const driverMap: Record<string, number> = {};
+    const nurseMap: Record<string, number> = {};
+    const driverCases: Record<string, string[]> = {};
+    const nurseCases: Record<string, string[]> = {};
+    const dispatchCases: Record<string, string[]> = {};
+
+    const pushCase = (map: Record<string, string[]>, empId: string, requestId: string) => {
+      if (!map[empId]) map[empId] = [];
+      if (!map[empId].includes(requestId)) map[empId].push(requestId);
+    };
+
+    for (const req of requests) {
+      if (req.driverId) {
+        driverMap[req.driverId] = (driverMap[req.driverId] ?? 0) + 1;
+        pushCase(driverCases, req.driverId, req.id);
+      }
+      if (req.nurseId) {
+        nurseMap[req.nurseId] = (nurseMap[req.nurseId] ?? 0) + 1;
+        pushCase(nurseCases, req.nurseId, req.id);
+      }
+
+      let dispatchEmployeeId: string | null = req.dispatcherId ?? null;
+      if (!dispatchEmployeeId) {
+        for (const log of [...req.statusLogs].reverse()) {
+          const assignerUserId = parseAssignerUserIdFromNotes(log.notes);
+          if (assignerUserId && userIdToEmployeeId.has(assignerUserId)) {
+            dispatchEmployeeId = userIdToEmployeeId.get(assignerUserId)!;
+            break;
+          }
+          if (log.changedByEmployeeId) {
+            dispatchEmployeeId = log.changedByEmployeeId;
+            break;
+          }
+        }
+      }
+      if (dispatchEmployeeId) {
+        dispatchMap[dispatchEmployeeId] = (dispatchMap[dispatchEmployeeId] ?? 0) + 1;
+        pushCase(dispatchCases, dispatchEmployeeId, req.id);
+      }
+    }
+
+    return { dispatchMap, driverMap, nurseMap, driverCases, nurseCases, dispatchCases };
+  }
+
+  private applyCompletedByRoleFilter(baseWhere: any, role?: string) {
+    if (!role?.trim()) return baseWhere;
+
+    const handoverExists = {
+      patientCareRecords: {
+        some: { clinicalNotes: { startsWith: '[EADS_HANDOVER]' } },
+      },
+    };
+    const manualComplete = {
+      statusLogs: {
+        some: {
+          toStatus: 'COMPLETED',
+          OR: [
+            { notes: { startsWith: '[Manual Completion]' } },
+            { notes: { startsWith: '[Dispatcher Completion]' } },
+          ],
+        },
+      },
+    };
+
+    let roleFilter: any;
+    switch (role) {
+      case 'NURSE':
+        roleFilter = {
+          OR: [
+            { completedByRole: 'NURSE' },
+            {
+              completedByRole: null,
+              status: 'COMPLETED',
+              nurseId: { not: null },
+              ...handoverExists,
+            },
+          ],
+        };
+        break;
+      case 'DRIVER':
+        roleFilter = {
+          OR: [
+            { completedByRole: 'DRIVER' },
+            {
+              completedByRole: null,
+              status: 'COMPLETED',
+              driverId: { not: null },
+              ...handoverExists,
+            },
+          ],
+        };
+        break;
+      case 'DISPATCHER':
+        roleFilter = {
+          OR: [{ completedByRole: 'DISPATCHER' }, { completedByRole: null, status: 'COMPLETED', ...manualComplete }],
+        };
+        break;
+      case 'ADMIN':
+        roleFilter = {
+          OR: [{ completedByRole: 'ADMIN' }, { completedByRole: null, status: 'COMPLETED', ...manualComplete }],
+        };
+        break;
+      default:
+        roleFilter = { completedByRole: role };
+    }
+
+    return { AND: [baseWhere, roleFilter] };
+  }
+
   private reportWhere(period: ReportPeriod, filters: AdminReportFilters = {}) {
-    return {
-      ...this.emergencyDimensionWhere(filters),
+    const { completedByRole, requestType, ...rest } = filters;
+    const base = {
+      ...this.emergencyDimensionWhere(rest),
       createdAt: { gte: period.start, lte: period.end },
     };
+    let where = this.mergeRequestTypeWhere(base, requestType);
+    where = this.applyCompletedByRoleFilter(where, completedByRole);
+    return where;
   }
 
   private emergencyDimensionWhere(filters: AdminReportFilters = {}) {

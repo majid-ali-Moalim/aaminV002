@@ -12,13 +12,23 @@ import {
   Search,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/context/AuthContext'
 import {
   getAdminReport,
   getAdminReportFilterOptions,
   type AdminReportFilterOptions,
 } from '@/lib/reports/adminReportsApi'
 import { downloadOperationsReportPdf } from '@/lib/reports/exportOperationsPdf'
+import { downloadSectionPdf } from '@/lib/reports/exportPdf'
 import ReportFiltersBar from '@/components/reports/ReportFiltersBar'
+import ReportSectionTable from '@/components/reports/ReportSectionTable'
+import RankingDetailModal from '@/components/reports/RankingDetailModal'
+import {
+  filterCasesByRanking,
+  resolveRankingFilter,
+  TOP_TEN_COLUMN_LABELS,
+  type ReportCaseTable,
+} from '@/lib/reports/reportRankingUtils'
 
 type SummaryItem = { label: string; value: string | number; suffix?: string }
 type ReportTable = { title: string; columns: string[]; rows: Array<Array<string | number>> }
@@ -53,70 +63,8 @@ function rowMatches(row: Array<string | number>, q: string) {
   return row.some((cell) => String(cell ?? '').toLowerCase().includes(q))
 }
 
-function HorizontalTable({
-  table,
-  onExport,
-}: {
-  table: ReportTable
-  onExport: () => void
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-black text-slate-900">{table.title}</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {table.columns.length} columns · {table.rows.length} row{table.rows.length === 1 ? '' : 's'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onExport}
-          className="text-xs font-bold text-red-600 hover:text-red-700"
-        >
-          Export CSV
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-max">
-          <thead>
-            <tr className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-500">
-              {table.columns.map((col) => (
-                <th key={col} className="px-4 py-3 whitespace-nowrap border-r border-slate-100 last:border-r-0">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {table.rows.length === 0 ? (
-              <tr>
-                <td colSpan={table.columns.length} className="px-4 py-8 text-center text-slate-400">
-                  No matching records
-                </td>
-              </tr>
-            ) : (
-              table.rows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/80">
-                  {row.map((cell, ci) => (
-                    <td
-                      key={ci}
-                      className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap border-r border-slate-50 last:border-r-0"
-                    >
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 export default function OperationsReportPage() {
+  const { user } = useAuth()
   const [range, setRange] = useState('30d')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -131,6 +79,15 @@ export default function OperationsReportPage() {
   const [soleFilter, setSoleFilter] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [pdfExporting, setPdfExporting] = useState(false)
+  const [includeExecutiveSummary, setIncludeExecutiveSummary] = useState(false)
+  const [rankingModal, setRankingModal] = useState<{
+    title: string
+    subtitle?: string
+    detail: ReportCaseTable | null
+  } | null>(null)
+
+  const generatedBy =
+    user?.username || user?.email || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || undefined
 
   useEffect(() => {
     let active = true
@@ -269,6 +226,8 @@ export default function OperationsReportPage() {
           regionName,
           districtName,
           search,
+          generatedBy,
+          includeExecutiveSummary,
         },
       )
       toast.success('PDF report generated')
@@ -387,11 +346,14 @@ export default function OperationsReportPage() {
         filtersLoading={filtersLoading}
         filtersError={filtersError}
         permissionLabel={report?.permissions?.join(', ') || 'report.view'}
+        includeExecutiveSummary={includeExecutiveSummary}
+        setIncludeExecutiveSummary={setIncludeExecutiveSummary}
         onClear={() => {
           setStartDate('')
           setEndDate('')
           setFilters({})
           setSearch('')
+          setIncludeExecutiveSummary(false)
         }}
       />
 
@@ -414,16 +376,97 @@ export default function OperationsReportPage() {
 
       {!loading && !error && report && (
         <>
+          {includeExecutiveSummary && report.summary && report.summary.length > 0 && (
+            <ReportSectionTable
+              table={{
+                title: 'Executive Summary',
+                columns: report.summary.map((s) => s.label),
+                rows: [
+                  report.summary.map((s) =>
+                    s.suffix ? `${s.value}${s.suffix}` : s.value,
+                  ),
+                ],
+              }}
+              onExportCsv={() => {
+                const t = {
+                  title: 'Executive Summary',
+                  columns: report.summary!.map((s) => s.label),
+                  rows: [
+                    report.summary!.map((s) =>
+                      s.suffix ? `${s.value}${s.suffix}` : s.value,
+                    ),
+                  ],
+                }
+                downloadCsv(t, 'executive-summary')
+              }}
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: 'Executive Summary',
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    scopeNote: report.filterScope?.containsNote,
+                    includeSummary: true,
+                    summary: report.summary,
+                  },
+                  {
+                    title: 'Executive Summary',
+                    columns: report.summary!.map((s) => s.label),
+                    rows: [
+                      report.summary!.map((s) =>
+                        s.suffix ? `${s.value}${s.suffix}` : s.value,
+                      ),
+                    ],
+                  },
+                  `executive-summary-${range}.pdf`,
+                )
+              }
+            />
+          )}
+
           {filteredSections.map((section) => (
-            <HorizontalTable
+            <ReportSectionTable
               key={section.title}
               table={section}
-              onExport={() => downloadCsv(section, section.title.toLowerCase().replace(/\s+/g, '-'))}
+              onExportCsv={() => downloadCsv(section, section.title.toLowerCase().replace(/\s+/g, '-'))}
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: section.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    scopeNote: report.filterScope?.containsNote,
+                    includeSummary: false,
+                  },
+                  section,
+                  `${section.title.toLowerCase().replace(/\s+/g, '-')}-${range}.pdf`,
+                )
+              }
+              onRankingClick={(columnIndex, name, rowIndex) => {
+                const filterCol = resolveRankingFilter(section.title, columnIndex)
+                if (filterCol == null || !report.table) return
+                const detail = filterCasesByRanking(
+                  { ...report.table, rows: mainRows },
+                  filterCol,
+                  name,
+                )
+                const label =
+                  section.title === 'Top 10 Rankings'
+                    ? TOP_TEN_COLUMN_LABELS[columnIndex] ?? section.columns[columnIndex]
+                    : section.columns[0]
+                setRankingModal({
+                  title: `${label}: ${name}`,
+                  subtitle: `${detail?.rows.length ?? 0} related case(s) in this report period`,
+                  detail,
+                })
+              }}
             />
           ))}
 
           {report.table && (
-            <HorizontalTable
+            <ReportSectionTable
               table={{
                 ...report.table,
                 title: q
@@ -431,14 +474,44 @@ export default function OperationsReportPage() {
                   : `${report.table.title} (${mainRows.length})`,
                 rows: mainRows,
               }}
-              onExport={() =>
-                downloadCsv(
+              onExportCsv={() =>
+                downloadCsv({ ...report.table!, rows: mainRows }, 'operations-cases')
+              }
+              onExportPdf={() =>
+                downloadSectionPdf(
+                  {
+                    title: report.title,
+                    subtitle: report.table!.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    scopeNote: report.filterScope?.containsNote,
+                    includeSummary: false,
+                  },
                   { ...report.table!, rows: mainRows },
-                  'operations-cases',
+                  `operations-cases-${range}.pdf`,
                 )
               }
             />
           )}
+
+          <RankingDetailModal
+            open={Boolean(rankingModal)}
+            onClose={() => setRankingModal(null)}
+            title={rankingModal?.title ?? ''}
+            subtitle={rankingModal?.subtitle}
+            detailTable={rankingModal?.detail ?? null}
+            pdfMeta={
+              report
+                ? {
+                    title: report.title,
+                    periodLabel: report.period?.label,
+                    generatedBy,
+                    scopeNote: report.filterScope?.containsNote,
+                  }
+                : undefined
+            }
+            pdfFilename={rankingModal?.title}
+          />
         </>
       )}
     </div>

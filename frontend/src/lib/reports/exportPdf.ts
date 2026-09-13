@@ -11,12 +11,19 @@ export type PdfReportInput = {
   title: string
   subtitle?: string
   periodLabel?: string
+  organizationName?: string
+  generatedBy?: string
+  /** When false, executive summary KPI cards are omitted from the PDF. */
+  includeSummary?: boolean
   /** e.g. "This report contains specific data according to applied filters" */
   scopeNote?: string
   summary?: Array<{ label: string; value: string | number; suffix?: string }>
   table?: ReportTable
   secondaryTable?: ReportTable
 }
+
+const ORG_NAME = 'Aamin Ambulance'
+const ORG_TAGLINE = 'Emergency Medical Services & Dispatch Operations'
 
 /** Aamin Ambulance brand palette */
 const BRAND = {
@@ -29,30 +36,67 @@ const BRAND = {
   white: [255, 255, 255] as [number, number, number],
 } as const
 
-const LOGO_PATH = '/images/aamin-ambulance-logo.png'
+const LOGO_PATHS = ['/images/aamin-ambulance-logo.png', '/aamin-icon.svg']
 const MARGIN_X = 40
-const HEADER_FULL = 98
+const HEADER_FULL = 128
 const HEADER_COMPACT = 52
 const FOOTER_H = 34
 
 let logoDataUrlCache: Promise<string | null> | null = null
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function svgBlobToPngDataUrl(blob: Blob, size = 128): Promise<string | null> {
+  if (typeof document === 'undefined') return null
+  const svgText = await blob.text()
+  const svgUrl = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }))
+  try {
+    const img = new Image()
+    img.src = svgUrl
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = reject
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0, size, size)
+    return canvas.toDataURL('image/png')
+  } catch {
+    return null
+  } finally {
+    URL.revokeObjectURL(svgUrl)
+  }
+}
+
 async function loadLogoDataUrl(): Promise<string | null> {
   if (!logoDataUrlCache) {
     logoDataUrlCache = (async () => {
-      try {
-        const res = await fetch(LOGO_PATH)
-        if (!res.ok) return null
-        const blob = await res.blob()
-        return await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(blob)
-        })
-      } catch {
-        return null
+      for (const path of LOGO_PATHS) {
+        try {
+          const res = await fetch(path)
+          if (!res.ok) continue
+          const blob = await res.blob()
+          if (path.endsWith('.svg')) {
+            const png = await svgBlobToPngDataUrl(blob)
+            if (png) return png
+          } else {
+            return await blobToDataUrl(blob)
+          }
+        } catch {
+          /* try next path */
+        }
       }
+      return null
     })()
   }
   return logoDataUrlCache
@@ -94,59 +138,138 @@ function drawFooter(doc: jsPDF) {
 
 function drawFullHeader(doc: jsPDF, input: PdfReportInput, logo: string | null) {
   const pageWidth = doc.internal.pageSize.getWidth()
+  const orgName = input.organizationName || ORG_NAME
 
   doc.setFillColor(...BRAND.white)
   doc.rect(0, 0, pageWidth, HEADER_FULL, 'F')
-
   doc.setFillColor(...BRAND.red)
-  doc.rect(0, 0, pageWidth, 4, 'F')
+  doc.rect(0, 0, pageWidth, 5, 'F')
 
   if (logo) {
     try {
-      doc.addImage(logo, 'PNG', MARGIN_X, 14, 148, 42)
+      doc.addImage(logo, 'PNG', MARGIN_X, 16, 120, 34)
     } catch {
-      doc.setFontSize(16)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(...BRAND.red)
-      doc.text('AAMIN AMBULANCE', MARGIN_X, 36)
+      /* fallback text below */
     }
-  } else {
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...BRAND.red)
-    doc.text('AAMIN AMBULANCE', MARGIN_X, 36)
   }
 
-  const metaX = pageWidth - MARGIN_X
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.setTextColor(...BRAND.dark)
-  const titleLines = doc.splitTextToSize(input.title, 320)
-  doc.text(titleLines, metaX, 28, { align: 'right' })
+  doc.setFontSize(18)
+  doc.setTextColor(...BRAND.red)
+  doc.text(orgName.toUpperCase(), MARGIN_X, logo ? 62 : 32)
 
-  let metaY = 28 + titleLines.length * 16
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...BRAND.muted)
+  doc.text(ORG_TAGLINE, MARGIN_X, logo ? 76 : 46)
+
+  const metaX = pageWidth - MARGIN_X
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...BRAND.orange)
+  doc.text('OFFICIAL OPERATIONS REPORT', metaX, 24, { align: 'right' })
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(...BRAND.dark)
+  const titleLines = doc.splitTextToSize(input.title, 300)
+  doc.text(titleLines, metaX, 42, { align: 'right' })
+
+  let metaY = 42 + titleLines.length * 14
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...BRAND.muted)
+
+  const metaRows: string[] = []
+  metaRows.push(`Report date: ${formatGeneratedAt()}`)
+  if (input.periodLabel) metaRows.push(`Reporting period: ${input.periodLabel}`)
+  if (input.generatedBy?.trim()) metaRows.push(`Generated by: ${input.generatedBy.trim()}`)
+
+  for (const line of metaRows) {
+    doc.text(line, metaX, metaY, { align: 'right' })
+    metaY += 11
+  }
 
   if (input.subtitle) {
-    const subLines = doc.splitTextToSize(input.subtitle, 320)
-    doc.text(subLines, metaX, metaY, { align: 'right' })
-    metaY += subLines.length * 11 + 2
-  }
-  if (input.periodLabel) {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...BRAND.orange)
-    doc.text(`Period: ${input.periodLabel}`, metaX, metaY, { align: 'right' })
-    metaY += 12
+    const subLines = doc.splitTextToSize(input.subtitle, 300)
+    doc.text(subLines, metaX, metaY + 2, { align: 'right' })
+    metaY += subLines.length * 10 + 4
   }
 
   doc.setDrawColor(...BRAND.orange)
   doc.setLineWidth(2)
   doc.line(MARGIN_X, HEADER_FULL - 8, pageWidth - MARGIN_X, HEADER_FULL - 8)
-
   doc.setTextColor(...BRAND.dark)
   return HEADER_FULL
+}
+
+function drawSignaturePage(doc: jsPDF, input: PdfReportInput, logo: string | null) {
+  doc.addPage()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  let y = drawCompactHeader(doc, input, logo) + 20
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...BRAND.dark)
+  doc.text('Authorization & Signatures', MARGIN_X, y)
+  y += 8
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...BRAND.muted)
+  doc.text(
+    'This document certifies that the information contained herein is accurate to the best of our knowledge.',
+    MARGIN_X,
+    y + 10,
+  )
+  y += 32
+
+  const signatures: Array<[string, string]> = [
+    ['Prepared by', input.generatedBy?.trim() || ''],
+    ['Operations Manager', ''],
+    ['Quality Assurance / Reviewer', ''],
+  ]
+
+  const colW = (pageWidth - MARGIN_X * 2 - 20) / 2
+  signatures.forEach(([role, prefilled], index) => {
+    const col = index % 2
+    const row = Math.floor(index / 2)
+    const x = MARGIN_X + col * (colW + 20)
+    const sy = y + row * 72
+
+    doc.setDrawColor(...BRAND.line)
+    doc.setLineWidth(0.75)
+    doc.line(x, sy + 36, x + colW, sy + 36)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...BRAND.dark)
+    doc.text(role, x, sy + 50)
+
+    if (prefilled) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...BRAND.muted)
+      doc.text(prefilled, x, sy + 32)
+    }
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...BRAND.muted)
+    doc.text(`Date: ${formatGeneratedAt().slice(0, 12)}`, x, sy + 62)
+  })
+
+  y += Math.ceil(signatures.length / 2) * 72 + 16
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(8)
+  doc.setTextColor(...BRAND.muted)
+  doc.text(
+    `${input.organizationName || ORG_NAME} — Internal use only. Unauthorized distribution is prohibited.`,
+    MARGIN_X,
+    y,
+  )
+
+  drawFooter(doc)
 }
 
 function drawCompactHeader(doc: jsPDF, input: PdfReportInput, logo: string | null) {
@@ -177,8 +300,13 @@ function drawCompactHeader(doc: jsPDF, input: PdfReportInput, logo: string | nul
   return HEADER_COMPACT
 }
 
-function drawSummarySection(doc: jsPDF, startY: number, summary: PdfReportInput['summary']) {
-  if (!summary?.length) return startY
+function drawSummarySection(
+  doc: jsPDF,
+  startY: number,
+  summary: PdfReportInput['summary'],
+  includeSummary = false,
+) {
+  if (!includeSummary || !summary?.length) return startY
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const contentW = pageWidth - MARGIN_X * 2
@@ -536,10 +664,11 @@ export async function downloadPatientRegistryDossierPdf(
 export async function downloadReportPdf(input: PdfReportInput, filename: string) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const logo = await loadLogoDataUrl()
+  const includeSummary = input.includeSummary === true
 
   let y = drawFullHeader(doc, input, logo)
   y = drawScopeNote(doc, y, input.scopeNote)
-  y = drawSummarySection(doc, y, input.summary)
+  y = drawSummarySection(doc, y, input.summary, includeSummary)
 
   if (input.table) {
     y = renderTable(doc, input.table, y, input, logo)
@@ -552,7 +681,17 @@ export async function downloadReportPdf(input: PdfReportInput, filename: string)
     drawFooter(doc)
   }
 
+  drawSignaturePage(doc, input, logo)
   doc.save(filename)
+}
+
+/** Export a single report section (e.g. Top Drivers) as its own PDF. */
+export async function downloadSectionPdf(
+  input: PdfReportInput,
+  table: ReportTable,
+  filename: string,
+) {
+  await downloadReportPdf({ ...input, table, secondaryTable: undefined }, filename)
 }
 
 /** PDF with executive summary plus one or more report tables (operations / multi-section reports). */
@@ -568,15 +707,10 @@ export async function downloadFullReportPdf(
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const logo = await loadLogoDataUrl()
 
+  const includeSummary = input.includeSummary === true
   let y = drawFullHeader(doc, input, logo)
   y = drawScopeNote(doc, y, input.scopeNote)
-  y = drawSummarySection(doc, y, input.summary)
-
-  if (input.summary?.length) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...BRAND.muted)
-  }
+  y = drawSummarySection(doc, y, input.summary, includeSummary)
 
   tables.forEach((table, index) => {
     const pageHeight = doc.internal.pageSize.getHeight()
@@ -589,6 +723,7 @@ export async function downloadFullReportPdf(
     y = renderTable(doc, table, y, input, logo)
   })
 
+  drawSignaturePage(doc, input, logo)
   doc.save(filename)
 }
 

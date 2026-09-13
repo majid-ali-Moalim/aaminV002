@@ -33,6 +33,8 @@ export type OperationsReportPdfFilters = {
   regionName?: string
   districtName?: string
   search?: string
+  generatedBy?: string
+  includeExecutiveSummary?: boolean
 }
 
 const RANGE_LABELS: Record<string, string> = {
@@ -129,7 +131,9 @@ export async function downloadOperationsReportPdf(
       subtitle: scope.description,
       scopeNote: scope.containsNote,
       periodLabel: report.period?.label,
-      summary: report.summary,
+      generatedBy: filters.generatedBy,
+      includeSummary: filters.includeExecutiveSummary === true,
+      summary: filters.includeExecutiveSummary ? report.summary : undefined,
     },
     tables,
     `operations-${isFiltered ? 'filtered' : filters.range}.pdf`,
