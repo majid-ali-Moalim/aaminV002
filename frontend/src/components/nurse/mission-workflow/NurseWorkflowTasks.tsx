@@ -27,7 +27,9 @@ import { genderOptions } from '@/lib/nurseFormMasterData'
 import { formatGender } from '@/lib/patients/patientDisplay'
 import { downloadUploadedFile, uploadedFileUrl } from '@/lib/uploads/fileUrl'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import { HospitalHandoverField } from '@/components/hospitals/HospitalHandoverField'
+import { resolveIncidentCategoryId } from '@/lib/emergency/emergencyTypes'
 
 type TaskShellProps = {
   title: string
@@ -517,6 +519,50 @@ function formatAgeGroupLabel(value: string) {
   return AGE_GROUPS.find((g) => g.value === value)?.label || value || '—'
 }
 
+function handoverHospitalBaseName(
+  form: Pick<HandoverFormState, 'acceptedHospital' | 'acceptedHospitalId' | 'acceptedHospitalBranchName'>,
+  hospitals: HospitalOption[],
+): string {
+  if (form.acceptedHospitalId) {
+    const registered = hospitals.find((h) => h.id === form.acceptedHospitalId)?.name
+    if (registered) return registered
+  }
+  const branch = form.acceptedHospitalBranchName?.trim()
+  if (branch && form.acceptedHospital.includes(' — ')) {
+    return form.acceptedHospital.replace(/ — .*$/, '').trim()
+  }
+  return form.acceptedHospital
+}
+
+function handoverHospitalChange(
+  form: HandoverFormState,
+  hospitalId: string,
+  hospitalName: string,
+  branchId: string,
+  branchName: string,
+): HandoverFormState {
+  return {
+    ...form,
+    acceptedHospitalId: hospitalId || undefined,
+    acceptedHospital: branchName
+      ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
+      : hospitalName,
+    acceptedHospitalBranchId: branchId || undefined,
+    acceptedHospitalBranchName: branchName || undefined,
+  }
+}
+
+type EmergencyTypeRow = { id: string; name: string; incidentCategoryId?: string | null; incidentCategory?: { id: string } | null }
+
+function emergencyTypesForCategory(types: EmergencyTypeRow[], incidentCategoryId: string): EmergencyTypeRow[] {
+  if (!incidentCategoryId) return types
+  const filtered = types.filter((t) => {
+    const catId = resolveIncidentCategoryId(t)
+    return !catId || catId === incidentCategoryId
+  })
+  return filtered.length > 0 ? filtered : types
+}
+
 function GenderField({
   form,
   setForm,
@@ -748,6 +794,7 @@ export function HandoverTaskFields({
   hospitals = [],
   incidentCategories = [],
   emergencyTypes = [],
+  onCreateCustomHospital,
   readOnly = false,
   errors = {},
 }: {
@@ -759,7 +806,8 @@ export function HandoverTaskFields({
   assignedDestination?: string
   hospitals?: HospitalOption[]
   incidentCategories?: Array<{ id: string; name: string }>
-  emergencyTypes?: Array<{ id: string; name: string; incidentCategoryId?: string | null }>
+  emergencyTypes?: EmergencyTypeRow[]
+  onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -824,25 +872,19 @@ export function HandoverTaskFields({
           ) : (
             <div className="span-2">
               <HospitalDestinationPicker
+                variant="embedded"
                 combobox
                 hospitals={hospitals}
                 hospitalId={form.acceptedHospitalId ?? ''}
-                hospitalName={form.acceptedHospital}
+                hospitalName={handoverHospitalBaseName(form, hospitals)}
                 branchId={form.acceptedHospitalBranchId ?? ''}
                 branchName={form.acceptedHospitalBranchName ?? ''}
                 hospitalLabel="Destination hospital *"
                 hospitalPlaceholder="Select or type receiving hospital"
                 hospitalError={errors.acceptedHospital}
+                onCreateCustomHospital={onCreateCustomHospital}
                 onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
-                  setForm({
-                    ...form,
-                    acceptedHospitalId: hospitalId,
-                    acceptedHospital: branchName
-                      ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
-                      : hospitalName,
-                    acceptedHospitalBranchId: branchId,
-                    acceptedHospitalBranchName: branchName,
-                  })
+                  setForm(handoverHospitalChange(form, hospitalId, hospitalName, branchId, branchName))
                 }
               />
               <p className="nmw-field-hint">
@@ -950,17 +992,16 @@ export function HandoverTaskFields({
             aria-invalid={Boolean(errors.emergencyTypeId)}
           >
             <option value="">Select type…</option>
-            {emergencyTypes
-              .filter(
-                (t) =>
-                  !form.incidentCategoryId ||
-                  !t.incidentCategoryId ||
-                  t.incidentCategoryId === form.incidentCategoryId,
-              )
-              .map((t) => (
+            {emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
           </select>
+        )}
+        {!readOnly && !form.incidentCategoryId && (
+          <p className="nmw-field-hint">Select an accident category first to narrow emergency types.</p>
+        )}
+        {!readOnly && form.incidentCategoryId && emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).length === 0 && (
+          <p className="nmw-field-hint">No emergency types configured — contact dispatch.</p>
         )}
         <FieldError error={errors.emergencyTypeId} />
       </label>
@@ -1074,16 +1115,22 @@ export function HandoverTaskFields({
         Hospital notification email <span className="nmw-optional">(optional)</span>
         <input
           type="email"
+          inputMode="email"
+          autoComplete="email"
           value={form.hospitalNotifyEmail}
           onChange={(e) => setForm({ ...form, hospitalNotifyEmail: e.target.value })}
           maxLength={120}
-          placeholder="Receiving hospital email — full handover details will be sent"
+          placeholder="e.g. receiving@hospital.org"
+          pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+          title="Enter a valid email address"
           aria-invalid={Boolean(errors.hospitalNotifyEmail)}
           {...ro}
         />
         <FieldError error={errors.hospitalNotifyEmail} />
         {!readOnly && (
-          <p className="nmw-field-hint">An email with patient and handover information will be sent when you submit.</p>
+          <p className="nmw-field-hint">
+            Must be a valid email if provided (e.g. hospital@example.com). Handover details will be sent on submit.
+          </p>
         )}
       </label>
       <label className="span-2">
@@ -1244,6 +1291,7 @@ export function HandoverQuickFields({
   hospitals = [],
   incidentCategories = [],
   emergencyTypes = [],
+  onCreateCustomHospital,
   readOnly = false,
   errors = {},
 }: {
@@ -1253,7 +1301,8 @@ export function HandoverQuickFields({
   assignedDestination?: string
   hospitals?: HospitalOption[]
   incidentCategories?: Array<{ id: string; name: string }>
-  emergencyTypes?: Array<{ id: string; name: string; incidentCategoryId?: string | null }>
+  emergencyTypes?: EmergencyTypeRow[]
+  onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   readOnly?: boolean
   errors?: HandoverFieldErrors
 }) {
@@ -1288,24 +1337,19 @@ export function HandoverQuickFields({
       {!assignedDestination.trim() && !readOnly && (
         <div className="span-2">
           <HospitalDestinationPicker
+            variant="embedded"
             combobox
             hospitals={hospitals}
             hospitalId={form.acceptedHospitalId ?? ''}
-            hospitalName={form.acceptedHospital}
+            hospitalName={handoverHospitalBaseName(form, hospitals)}
             branchId={form.acceptedHospitalBranchId ?? ''}
             branchName={form.acceptedHospitalBranchName ?? ''}
             hospitalLabel="Hospital *"
+            hospitalPlaceholder="Type or select hospital"
             hospitalError={errors.acceptedHospital}
+            onCreateCustomHospital={onCreateCustomHospital}
             onHospitalChange={(hospitalId, hospitalName, branchId, branchName) =>
-              setForm({
-                ...form,
-                acceptedHospitalId: hospitalId,
-                acceptedHospital: branchName
-                  ? `${hospitalName}${hospitalName && branchName ? ' — ' : ''}${branchName}`
-                  : hospitalName,
-                acceptedHospitalBranchId: branchId,
-                acceptedHospitalBranchName: branchName,
-              })
+              setForm(handoverHospitalChange(form, hospitalId, hospitalName, branchId, branchName))
             }
           />
           <FieldError error={errors.acceptedHospital} />
@@ -1405,17 +1449,16 @@ export function HandoverQuickFields({
             aria-invalid={Boolean(errors.emergencyTypeId)}
           >
             <option value="">Select…</option>
-            {emergencyTypes
-              .filter(
-                (t) =>
-                  !form.incidentCategoryId ||
-                  !t.incidentCategoryId ||
-                  t.incidentCategoryId === form.incidentCategoryId,
-              )
-              .map((t) => (
+            {emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
           </select>
+        )}
+        {!readOnly && !form.incidentCategoryId && (
+          <p className="nmw-field-hint">Select an accident category first to narrow emergency types.</p>
+        )}
+        {!readOnly && form.incidentCategoryId && emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).length === 0 && (
+          <p className="nmw-field-hint">No emergency types configured — contact dispatch.</p>
         )}
         <FieldError error={errors.emergencyTypeId} />
       </label>
@@ -1483,14 +1526,20 @@ export function HandoverQuickFields({
         Hospital email <span className="nmw-optional">(optional)</span>
         <input
           type="email"
+          inputMode="email"
+          autoComplete="email"
           value={form.hospitalNotifyEmail}
           onChange={(e) => setForm({ ...form, hospitalNotifyEmail: e.target.value })}
           maxLength={120}
-          placeholder="Notify hospital with full handover details"
+          placeholder="e.g. receiving@hospital.org"
+          pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
           aria-invalid={Boolean(errors.hospitalNotifyEmail)}
           {...ro}
         />
         <FieldError error={errors.hospitalNotifyEmail} />
+        {!readOnly && (
+          <p className="nmw-field-hint">Must be a valid email if provided (e.g. hospital@example.com).</p>
+        )}
       </label>
       <HandoverDocumentUpload form={form} setForm={setForm} readOnly={readOnly} />
       <label className="span-2">

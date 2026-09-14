@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Building2, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -20,6 +21,9 @@ type Props = {
   hint?: string
 }
 
+const INPUT_CLASS =
+  'custom-hospital-modal__input w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-400 focus:border-teal-400 outline-none'
+
 export function CustomHospitalModal({
   open,
   onClose,
@@ -35,8 +39,22 @@ export function CustomHospitalModal({
     primaryPhone: '',
   })
   const [saving, setSaving] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  if (!open) return null
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !saving) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, saving, onClose])
+
+  if (!open || !mounted) return null
 
   const set = (patch: Partial<CustomHospitalDraft>) => setDraft((d) => ({ ...d, ...patch }))
 
@@ -50,7 +68,6 @@ export function CustomHospitalModal({
     try {
       await onCreate({
         ...draft,
-        // Address is required by the backend — fall back to branch or name.
         address: draft.address.trim() || draft.branchName.trim() || draft.name.trim(),
       })
       onClose()
@@ -69,35 +86,43 @@ export function CustomHospitalModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+  return createPortal(
+    <div
+      className="custom-hospital-modal fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-hospital-modal-title"
+    >
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden text-slate-900">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
               <Building2 className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">{title}</h3>
+            <h3 id="custom-hospital-modal-title" className="text-base font-bold text-slate-900">
+              {title}
+            </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <p className="text-sm text-slate-500">{hint}</p>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 bg-white">
+          <p className="text-sm text-slate-600">{hint}</p>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-              Hospital name <span className="text-red-500">*</span>
+            <label className="custom-hospital-modal__label block text-sm font-semibold text-slate-800 mb-1.5">
+              Hospital name <span className="text-red-600">*</span>
             </label>
             <input
               autoFocus
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+              className={INPUT_CLASS}
               value={draft.name}
               onChange={(e) => set({ name: e.target.value })}
               placeholder="e.g. Al Shifa Hospital"
@@ -106,11 +131,11 @@ export function CustomHospitalModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+            <label className="custom-hospital-modal__label block text-sm font-semibold text-slate-800 mb-1.5">
               Branch / Location name
             </label>
             <input
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+              className={INPUT_CLASS}
               value={draft.branchName}
               onChange={(e) => set({ branchName: e.target.value })}
               placeholder="e.g. Hodan Branch"
@@ -120,11 +145,11 @@ export function CustomHospitalModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                Address <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="custom-hospital-modal__label block text-sm font-semibold text-slate-800 mb-1.5">
+                Address <span className="text-slate-500 font-normal">(optional)</span>
               </label>
               <input
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                className={INPUT_CLASS}
                 value={draft.address}
                 onChange={(e) => set({ address: e.target.value })}
                 placeholder="Street / area"
@@ -132,11 +157,11 @@ export function CustomHospitalModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                Phone <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="custom-hospital-modal__label block text-sm font-semibold text-slate-800 mb-1.5">
+                Phone <span className="text-slate-500 font-normal">(optional)</span>
               </label>
               <input
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                className={INPUT_CLASS}
                 value={draft.primaryPhone}
                 onChange={(e) => set({ primaryPhone: e.target.value })}
                 placeholder="+2526..."
@@ -149,7 +174,7 @@ export function CustomHospitalModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-lg text-slate-600 font-semibold hover:bg-slate-100"
+              className="px-5 py-2.5 rounded-lg text-slate-700 font-semibold hover:bg-slate-100"
               disabled={saving}
             >
               Cancel
@@ -160,11 +185,12 @@ export function CustomHospitalModal({
               className="px-5 py-2.5 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 disabled:opacity-60 flex items-center gap-2"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Create & select
+              Create &amp; select
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

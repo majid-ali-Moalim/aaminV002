@@ -24,7 +24,10 @@ import { formatDateTimeShort } from '@/lib/patients/patientDisplay'
 import { ARCHIVED_PATIENT_CASE_STATUSES } from '@/lib/emergency/dateFilters'
 import { simpleActiveCaseStatus } from '@/components/features/emergency/missionStatusOptions'
 import UpdatePatientCaseModal from '@/components/features/patients/UpdatePatientCaseModal'
-import { downloadPatientCasesReportPdf } from '@/lib/patients/exportPatientCasesPdf'
+import {
+  downloadPatientCasesReportPdf,
+  downloadSinglePatientCasePdf,
+} from '@/lib/patients/exportPatientCasesPdf'
 
 const CLOSED_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED', 'ARRIVED_HOSPITAL']
 
@@ -69,6 +72,7 @@ export default function PatientCaseRecordsView({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [updatingCase, setUpdatingCase] = useState<EmergencyRequest | null>(null)
   const [pdfExporting, setPdfExporting] = useState(false)
+  const [pdfRowId, setPdfRowId] = useState<string | null>(null)
 
   useEffect(() => {
     if (patientFilter) setSearchTerm(patientFilter)
@@ -132,6 +136,20 @@ export default function PatientCaseRecordsView({
       active,
     }
   }, [scopedRequests])
+
+  const exportRowPdf = async (req: EmergencyRequest) => {
+    setPdfRowId(req.id)
+    const toastId = toast.loading(`Building dossier for ${req.trackingCode}…`)
+    try {
+      await downloadSinglePatientCasePdf(req)
+      toast.success('Case PDF downloaded', { id: toastId })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate PDF'
+      toast.error(message, { id: toastId })
+    } finally {
+      setPdfRowId(null)
+    }
+  }
 
   const exportPdf = async () => {
     if (!filteredRequests.length) {
@@ -360,6 +378,21 @@ export default function PatientCaseRecordsView({
                       </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-lg h-8 gap-1 border-red-200 text-red-700 hover:bg-red-50"
+                            onClick={() => void exportRowPdf(req)}
+                            disabled={pdfRowId === req.id}
+                            title="Download organized case dossier PDF"
+                          >
+                            {pdfRowId === req.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5" />
+                            )}
+                            PDF
+                          </Button>
                           <Link href={paths.emergencyCase(req.id)}>
                             <Button
                               variant="outline"

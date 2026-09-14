@@ -13,6 +13,9 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/context/AuthContext'
+import { emergencyRequestsService } from '@/lib/api'
+import { downloadPatientCasesReportPdf } from '@/lib/patients/exportPatientCasesPdf'
+import type { EmergencyRequest } from '@/types'
 import {
   getAdminReport,
   getAdminReportFilterOptions,
@@ -85,6 +88,8 @@ export default function OperationsReportPage() {
     subtitle?: string
     detail: ReportCaseTable | null
   } | null>(null)
+  const [selectedCaseRows, setSelectedCaseRows] = useState<Set<number>>(new Set())
+  const [selectedCasesPdfLoading, setSelectedCasesPdfLoading] = useState(false)
 
   const generatedBy =
     user?.username || user?.email || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || undefined
@@ -168,6 +173,56 @@ export default function OperationsReportPage() {
     if (!table) return []
     return q ? table.rows.filter((row) => rowMatches(row, q)) : table.rows
   }, [report?.table, q])
+
+  useEffect(() => {
+    setSelectedCaseRows(new Set())
+  }, [mainRows, report?.table?.title])
+
+  const trackingCodeColumnIndex = useMemo(() => {
+    const cols = report?.table?.columns ?? []
+    const idx = cols.findIndex((c) => c.toLowerCase().includes('tracking'))
+    return idx >= 0 ? idx : 0
+  }, [report?.table?.columns])
+
+  const exportSelectedCasesDossier = async () => {
+    if (!selectedCaseRows.size || !report?.table) {
+      toast.error('Select at least one case')
+      return
+    }
+    const codes = [...selectedCaseRows]
+      .map((idx) => String(mainRows[idx]?.[trackingCodeColumnIndex] ?? '').trim())
+      .filter(Boolean)
+    if (!codes.length) {
+      toast.error('Could not read tracking codes from selected rows')
+      return
+    }
+    setSelectedCasesPdfLoading(true)
+    const toastId = toast.loading(`Building dossier for ${codes.length} case(s)…`)
+    try {
+      const fetched = await Promise.all(
+        codes.map(async (code) => {
+          try {
+            return (await emergencyRequestsService.getByTrackingCode(code)) as EmergencyRequest
+          } catch {
+            return null
+          }
+        }),
+      )
+      const cases = fetched.filter((c): c is EmergencyRequest => c != null)
+      if (!cases.length) {
+        toast.error('Could not load case details for selected rows', { id: toastId })
+        return
+      }
+      await downloadPatientCasesReportPdf(cases, {
+        search: search || undefined,
+      })
+      toast.success(`PDF dossier downloaded (${cases.length} case(s))`, { id: toastId })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF', { id: toastId })
+    } finally {
+      setSelectedCasesPdfLoading(false)
+    }
+  }
 
   const downloadCsv = (table: ReportTable, name: string) => {
     const csv = [table.columns, ...table.rows]
@@ -474,6 +529,26 @@ export default function OperationsReportPage() {
                   : `${report.table.title} (${mainRows.length})`,
                 rows: mainRows,
               }}
+              selectable
+              selectedRows={selectedCaseRows}
+              onSelectedRowsChange={setSelectedCaseRows}
+              selectionActions={
+                selectedCaseRows.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => void exportSelectedCasesDossier()}
+                    disabled={selectedCasesPdfLoading}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg px-2.5 py-1 disabled:opacity-60"
+                  >
+                    {selectedCasesPdfLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="w-3.5 h-3.5" />
+                    )}
+                    Dossier PDF ({selectedCaseRows.size})
+                  </button>
+                ) : null
+              }
               onExportCsv={() =>
                 downloadCsv({ ...report.table!, rows: mainRows }, 'operations-cases')
               }

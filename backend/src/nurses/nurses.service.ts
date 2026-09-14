@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { Prisma, NotificationType, EmergencyRequestStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateNextEmployeeCode } from '../employees/employee-code.util';
@@ -14,38 +14,15 @@ import { CaseWorkflowNotificationService } from '../notifications/case-workflow-
 import { releaseCrewForCase } from '../common/occupied-crew';
 import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 import { MailService } from '../auth/mail.service';
+import { isValidEmailAddress } from '../common/email-address';
+import { buildHandoverEmailSections, parseHandoverEmailPayload } from './handover-email.util';
 
 const HANDOVER_PREFIX = '[EADS_HANDOVER]';
 
-type HandoverPayload = {
-  patientName?: string;
-  patientCondition?: string;
-  treatmentGiven?: string;
-  receivingStaff?: string;
-  notes?: string;
-  signature?: string;
-  patientOutcome?: string;
-  acceptedHospital?: string;
-  rejectedHospitals?: Array<{
-    hospitalName: string;
-    reason: string;
-    notes?: string;
-    branchName?: string;
-    phone?: string;
-    location?: string;
-  }>;
-  category?: string;
-  incidentCategoryName?: string;
-  emergencyTypeName?: string;
-  hospitalNotifyEmail?: string;
-  driverName?: string;
-  nurseName?: string;
-  ageGroup?: string;
-  gender?: string;
-};
-
 @Injectable()
 export class NursesService {
+  private readonly logger = new Logger(NursesService.name);
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
@@ -371,19 +348,28 @@ export class NursesService {
     return result;
   }
 
-  private parseHandoverPayload(clinicalNotes: string): HandoverPayload | null {
-    if (!clinicalNotes.startsWith(HANDOVER_PREFIX)) return null;
-    try {
-      return JSON.parse(clinicalNotes.slice(HANDOVER_PREFIX.length)) as HandoverPayload;
-    } catch {
-      return null;
-    }
+  private resolveUploadUrl(path?: string | null): string | undefined {
+    const value = path?.trim();
+    if (!value) return undefined;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    const apiBase = (
+      process.env.BACKEND_URL ||
+      process.env.API_URL ||
+      process.env.FRONTEND_URL?.replace(':3003', ':3002') ||
+      'http://127.0.0.1:3002'
+    ).replace(/\/$/, '');
+    return value.startsWith('/') ? `${apiBase}${value}` : `${apiBase}/${value}`;
   }
 
   private async notifyHospitalHandoverEmail(emergencyRequestId: string, clinicalNotes: string) {
-    const handover = this.parseHandoverPayload(clinicalNotes);
+    const handover = parseHandoverEmailPayload(clinicalNotes);
     const email = handover?.hospitalNotifyEmail?.trim();
-    if (!email || !handover) return;
+    if (!handover || !email) return;
+
+    if (!isValidEmailAddress(email)) {
+      this.logger.warn(`Handover email skipped — invalid address "${email}" for case ${emergencyRequestId}`);
+      return;
+    }
 
     const request = await this.prisma.emergencyRequest.findUnique({
       where: { id: emergencyRequestId },
@@ -394,63 +380,53 @@ export class NursesService {
         nurse: true,
         region: true,
         district: true,
+        incidentCategory: true,
+        destinationHospital: true,
+        patientCareRecords: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            clinicalNotes: true,
+            bloodPressure: true,
+            heartRate: true,
+            oxygenSaturation: true,
+            temperature: true,
+            respiratoryRate: true,
+            medications: true,
+            treatmentGiven: true,
+            createdAt: true,
+          },
+        },
       },
     });
     if (!request) return;
 
     const patientName = handover.patientName || request.patient?.fullName || 'Unknown';
-    const rejectedLines =
-      handover.rejectedHospitals
-        ?.filter((r) => r.hospitalName?.trim())
-        .map(
-          (r) =>
-            `• ${r.hospitalName}${r.branchName ? ` (${r.branchName})` : ''}: ${r.reason || 'No reason'}${r.notes ? ` — ${r.notes}` : ''}`,
-        )
-        .join('\n') || 'None recorded';
+    const documentUrl = this.resolveUploadUrl(handover.handoverDocumentUrl);
+    const sections = buildHandoverEmailSections({
+      handover,
+      request,
+      careRecords: request.patientCareRecords,
+      handoverRecordedAt: new Date(),
+      documentUrl,
+    });
 
-    const message = [
-      `Aamin Ambulance is handing over a patient to your facility.`,
-      '',
-      `Case / Tracking: ${request.trackingCode}`,
-      `Priority: ${request.priority}`,
-      `Patient: ${patientName}`,
-      handover.ageGroup ? `Age group: ${handover.ageGroup}` : '',
-      handover.gender ? `Gender: ${handover.gender}` : '',
-      handover.incidentCategoryName ? `Incident category: ${handover.incidentCategoryName}` : '',
-      handover.emergencyTypeName ? `Emergency type: ${handover.emergencyTypeName}` : '',
-      handover.category ? `Handover category: ${handover.category}` : '',
-      '',
-      `Destination / accepting hospital: ${handover.acceptedHospital || request.destination || '—'}`,
-      `Patient status at handover: ${handover.patientOutcome || '—'}`,
-      handover.patientCondition ? `Condition summary: ${handover.patientCondition}` : '',
-      handover.treatmentGiven ? `Treatment en route: ${handover.treatmentGiven}` : '',
-      handover.receivingStaff ? `Receiving doctor: ${handover.receivingStaff}` : '',
-      '',
-      `Pickup location: ${request.pickupLocation || '—'}`,
-      request.region?.name || request.district?.name
-        ? `Area: ${[request.region?.name, request.district?.name].filter(Boolean).join(' / ')}`
-        : '',
-      request.ambulance?.ambulanceNumber
-        ? `Ambulance: ${request.ambulance.ambulanceNumber}`
-        : '',
-      handover.driverName ? `Driver: ${handover.driverName}` : '',
-      handover.nurseName ? `Handover nurse: ${handover.nurseName}` : '',
-      '',
-      'Previously rejected hospitals:',
-      rejectedLines,
-      handover.notes ? `\nAdditional notes:\n${handover.notes}` : '',
-      handover.signature ? `\nSigned by: ${handover.signature}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const intro = `Aamin Ambulance is transferring patient ${patientName} (case ${request.trackingCode}) to your facility. The complete handover record is included below for your receiving team.`;
 
-    await this.mailService.sendNotificationEmail(email, {
-      title: `Patient handover — ${request.trackingCode}`,
-      message,
+    const sent = await this.mailService.sendHandoverReportEmail(email, {
+      subject: `Patient handover — ${request.trackingCode} — ${patientName}`,
+      intro,
+      sections,
       priority: request.priority,
       senderName: handover.nurseName || 'Aamin Ambulance EMS',
-      actionUrl: '/admin/hospitals/accepted',
     });
+
+    if (sent) {
+      this.logger.log(`Full handover email sent to ${email} for case ${request.trackingCode}`);
+    } else {
+      this.logger.warn(
+        `Handover email could not be sent to ${email} for case ${request.trackingCode} — check SMTP configuration`,
+      );
+    }
   }
 
   private async notifyDriverPatientLoaded(emergencyRequestId: string) {

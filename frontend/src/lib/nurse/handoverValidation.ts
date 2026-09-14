@@ -39,6 +39,15 @@ function optionalText(value: string, max: number, label: string): string | undef
   return undefined
 }
 
+export function validateHandoverEmail(email: string): string | undefined {
+  const trimmed = email.trim()
+  if (!trimmed) return undefined
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return 'Enter a valid email address (e.g. hospital@example.com)'
+  }
+  return undefined
+}
+
 export function validateHandoverForm(
   form: HandoverFormFields,
   options?: HandoverValidationOptions,
@@ -71,10 +80,8 @@ export function validateHandoverForm(
     errors.emergencyTypeId = 'Select an emergency type'
   }
 
-  const email = form.hospitalNotifyEmail.trim()
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.hospitalNotifyEmail = 'Enter a valid hospital notification email'
-  }
+  const emailErr = validateHandoverEmail(form.hospitalNotifyEmail)
+  if (emailErr) errors.hospitalNotifyEmail = emailErr
 
   if (!form.category?.trim()) {
     errors.category = 'Select a handover category'

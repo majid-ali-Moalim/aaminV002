@@ -250,7 +250,7 @@ export default function AdminDispatcherCommandCenter() {
             </p>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Dispatcher Dashboard</h1>
             <p className="text-red-100/90 mt-2 text-sm max-w-xl">
-              System-wide overview — pending queue, active missions, and crew readiness.
+              System-wide overview — pending queue, active cases, and crew readiness.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
@@ -326,7 +326,7 @@ export default function AdminDispatcherCommandCenter() {
                 <div className="max-h-[360px] overflow-y-auto">
                   {lists.activeMissions.length === 0 ? (
                     <p className="text-sm text-slate-400 text-center py-10 bg-slate-50 rounded-xl">
-                      No active missions
+                      No active cases
                     </p>
                   ) : (
                     lists.activeMissions.slice(0, 8).map((c) => <CaseRow key={c.id} item={c} />)

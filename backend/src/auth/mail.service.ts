@@ -142,6 +142,71 @@ export class MailService implements OnModuleInit {
     return this.send({ to, subject, text, html, context: `notification: ${data.title}` });
   }
 
+  /** Structured hospital handover report with sectioned patient/clinical details. */
+  async sendHandoverReportEmail(
+    to: string,
+    data: {
+      subject: string;
+      intro: string;
+      sections: Array<{ title: string; rows: Array<{ label: string; value: string }> }>;
+      senderName?: string;
+      priority?: string;
+    },
+  ): Promise<boolean> {
+    const escape = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const sectionHtml = data.sections
+      .map((section) => {
+        const rows = section.rows
+          .map(
+            (r) =>
+              `<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;width:38%;vertical-align:top;"><strong>${escape(r.label)}</strong></td><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:13px;white-space:pre-wrap;">${escape(r.value)}</td></tr>`,
+          )
+          .join('');
+        return `
+          <div style="margin-bottom:20px;">
+            <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#0d9488;">${escape(section.title)}</h3>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">${rows}</table>
+          </div>`;
+      })
+      .join('');
+
+    const textSections = data.sections
+      .map((section) => {
+        const body = section.rows.map((r) => `${r.label}: ${r.value}`).join('\n');
+        return `${section.title.toUpperCase()}\n${body}`;
+      })
+      .join('\n\n');
+
+    const subject = `[Aamin EMS] ${data.subject}`;
+    const text = [data.intro, '', textSections, '', data.senderName ? `From: ${data.senderName}` : '', data.priority ? `Priority: ${data.priority}` : '']
+      .filter(Boolean)
+      .join('\n');
+
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:680px;margin:0 auto;padding:24px;">
+        <div style="background:linear-gradient(135deg,#0d9488,#0f766e);color:#fff;padding:18px 22px;border-radius:12px 12px 0 0;">
+          <strong style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;">Aamin Ambulance EMS</strong>
+          <h1 style="margin:8px 0 0;font-size:22px;font-weight:800;">Patient Handover Report</h1>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:24px;background:#fff;">
+          <p style="margin:0 0 20px;color:#475569;line-height:1.6;font-size:14px;">${escape(data.intro)}</p>
+          ${data.priority ? `<p style="margin:0 0 16px;color:#64748b;font-size:13px;"><strong>Priority:</strong> ${escape(data.priority)}</p>` : ''}
+          ${sectionHtml}
+          ${data.senderName ? `<p style="margin:16px 0 0;color:#64748b;font-size:13px;"><strong>Submitted by:</strong> ${escape(data.senderName)}</p>` : ''}
+          <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px;">Automated handover notification — please confirm receipt with the arriving crew.</p>
+        </div>
+      </div>
+    `;
+
+    return this.send({ to, subject, text, html, context: `handover report: ${data.subject}` });
+  }
+
   private async send(options: {
     to: string;
     subject: string;

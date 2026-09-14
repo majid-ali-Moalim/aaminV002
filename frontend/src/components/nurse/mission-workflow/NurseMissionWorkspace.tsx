@@ -21,14 +21,17 @@ import {
 import {
   emergencyRequestsService,
   getApiErrorMessage,
+  hospitalCoordinationService,
   hospitalsService,
   isApiNetworkError,
   nursesService,
   patientsService,
   systemSetupService,
 } from '@/lib/api'
-import { fetchEmergencyTypesAuthenticated } from '@/lib/emergency/emergencyTypes'
+import { fetchEmergencyTypes, fetchEmergencyTypesAuthenticated } from '@/lib/emergency/emergencyTypes'
 import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
+import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
+import { loadLocationReferenceData } from '@/lib/cache/referenceData'
 import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
@@ -54,6 +57,7 @@ import {
 import {
   firstHandoverError,
   hasHandoverErrors,
+  validateHandoverEmail,
   validateHandoverForm,
   sanitizeHandoverRejectedHospitals,
   type HandoverFieldErrors,
@@ -374,7 +378,21 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         (Array.isArray(rows) ? rows : []).filter((c: { id?: string; name?: string }) => c.id && c.name),
       )
     }).catch(() => setIncidentCategories([]))
-    void fetchEmergencyTypesAuthenticated().then(setEmergencyTypes).catch(() => setEmergencyTypes([]))
+    void fetchEmergencyTypesAuthenticated()
+      .then(async (types) => {
+        if (types.length > 0) {
+          setEmergencyTypes(types)
+          return
+        }
+        setEmergencyTypes(await fetchEmergencyTypes())
+      })
+      .catch(async () => {
+        try {
+          setEmergencyTypes(await fetchEmergencyTypes())
+        } catch {
+          setEmergencyTypes([])
+        }
+      })
   }, [])
 
   useEffect(() => {
@@ -398,6 +416,62 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   useEffect(() => {
     if (mission && !missionId) setMissionId(mission.id)
   }, [mission, missionId])
+
+  const createCustomHospital = useCallback(
+    async (draft: CustomHospitalDraft): Promise<HospitalOption | null> => {
+      let regionId = mission?.regionId ?? mission?.region?.id ?? undefined
+      let districtId = mission?.districtId ?? mission?.district?.id ?? undefined
+      if (!regionId || !districtId) {
+        const { regions, districts } = await loadLocationReferenceData()
+        regionId = regionId || regions[0]?.id
+        districtId =
+          districtId ||
+          districts.find((d) => d.regionId === regionId)?.id ||
+          districts[0]?.id
+      }
+      if (!regionId || !districtId) {
+        toast.error('Could not determine region for this case. Contact dispatch.')
+        return null
+      }
+      try {
+        const created = await hospitalCoordinationService.createManualHospital({
+          name: draft.name.trim(),
+          address: draft.address.trim() || draft.name.trim(),
+          regionId,
+          districtId,
+          branchName: draft.branchName.trim() || undefined,
+          branchAddress: draft.branchAddress.trim() || undefined,
+          primaryPhone: draft.primaryPhone.trim() || undefined,
+        })
+        const option: HospitalOption = {
+          id: created.id,
+          name: created.name,
+          branches: created.branches,
+        }
+        setHospitals((prev) => [option, ...prev.filter((h) => h.id !== option.id)])
+        void hospitalsService
+          .getAll()
+          .then((rows) => {
+            setHospitals(
+              (Array.isArray(rows) ? rows : [])
+                .filter((h: { id?: string; name?: string }) => h.id && h.name)
+                .map((h: { id: string; name: string; branches?: unknown }) => ({
+                  id: h.id,
+                  name: h.name,
+                  branches: h.branches,
+                })),
+            )
+          })
+          .catch(() => undefined)
+        toast.success('Hospital created — edit full details later in Hospital Coordination')
+        return option
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to create hospital'))
+        return null
+      }
+    },
+    [mission],
+  )
 
   const { currentStepId, meta, syncWorkflow } = useNurseWorkflowState(mission)
   const missionClosed = currentStepId === 'MISSION_CLOSED' || (mission ? CLOSED.includes(mission.status) : false)
@@ -1167,15 +1241,29 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 setForm={(f) => {
                   if (handoverViewMode) return
                   setHandoverForm(f)
-                  if (Object.keys(handoverErrors).length > 0) {
-                    setHandoverErrors(validateHandoverForm(f, { assignedDestination }))
-                  }
+                  setHandoverErrors((prev) => {
+                    const emailErr = validateHandoverEmail(f.hospitalNotifyEmail)
+                    if (Object.keys(prev).length > 0) {
+                      const next = validateHandoverForm(f, { assignedDestination })
+                      if (emailErr) next.hospitalNotifyEmail = emailErr
+                      else delete next.hospitalNotifyEmail
+                      return next
+                    }
+                    if (emailErr) return { ...prev, hospitalNotifyEmail: emailErr }
+                    if (prev.hospitalNotifyEmail) {
+                      const next = { ...prev }
+                      delete next.hospitalNotifyEmail
+                      return next
+                    }
+                    return prev
+                  })
                 }}
                 nurseName={fullName}
                 assignedDestination={assignedDestination}
                 hospitals={hospitals}
                 incidentCategories={incidentCategories}
                 emergencyTypes={emergencyTypes}
+                onCreateCustomHospital={createCustomHospital}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}
               />

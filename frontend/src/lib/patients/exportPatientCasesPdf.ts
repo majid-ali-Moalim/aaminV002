@@ -28,6 +28,11 @@ async function enrichCasesForPdf(cases: EmergencyRequest[]): Promise<EmergencyRe
   return enriched
 }
 
+/** Full organized dossier PDF for a single patient case. */
+export async function downloadSinglePatientCasePdf(req: EmergencyRequest) {
+  await downloadPatientCasesReportPdf([req], {})
+}
+
 export async function downloadPatientCasesReportPdf(
   cases: EmergencyRequest[],
   filters: PatientCasesPdfFilters,

@@ -132,7 +132,7 @@ export default function CompletedRequestsPage() {
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-200 mb-2">
               Emergency Operations
             </p>
-            <h1 className="text-3xl font-black tracking-tight">Mission Completed</h1>
+            <h1 className="text-3xl font-black tracking-tight">Case Completed</h1>
             <p className="text-emerald-100/80 mt-2 max-w-2xl">
               Closed cases with nurse handover outcome, hospital, and crew details.
             </p>
@@ -171,12 +171,12 @@ export default function CompletedRequestsPage() {
       <div className="space-y-4">
         {isLoading && requests.length === 0 ? (
           <div className="p-16 text-center bg-white rounded-2xl border border-slate-100 text-slate-500">
-            Loading completed missions…
+            Loading completed cases…
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="p-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
             <CheckSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="font-semibold text-slate-700">No completed missions</p>
+            <p className="font-semibold text-slate-700">No completed cases</p>
             <p className="text-sm text-slate-500 mt-1">Closed cases will appear here after nurse handover.</p>
           </div>
         ) : (

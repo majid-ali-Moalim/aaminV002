@@ -1918,6 +1918,99 @@
   color: var(--n-muted, #71717a);
 }
 
+.nmw-hospital-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.nmw-hospital-picker label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.nmw-hospital-picker-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  color: #5eead4;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.nmw-hospital-picker-add-btn:hover {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
+.nmw-hospital-picker-link {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5eead4;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.nurse-app--light .nmw-hospital-picker-add-btn {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+  color: #0f766e;
+}
+
+.nurse-app--light .nmw-hospital-picker-link {
+  color: #0f766e;
+}
+
+/* Custom hospital modal — always light, isolated from nurse dark form styles */
+.custom-hospital-modal,
+.custom-hospital-modal * {
+  color-scheme: light;
+}
+
+.custom-hospital-modal__label {
+  display: block !important;
+  flex-direction: unset !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  gap: 0 !important;
+}
+
+.custom-hospital-modal__input {
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+.custom-hospital-modal__input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+
+.custom-hospital-modal__input:focus {
+  color: #0f172a !important;
+  background: #ffffff !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
 .nmw-rejected-hospitals {
   display: flex;
   flex-direction: column;

@@ -58,9 +58,9 @@ const emergencySections: MenuSection[] = [
     ],
   },
   {
-    title: 'Dispatch & Missions',
+    title: 'Dispatch & Cases',
     items: [
-      { href: '/admin/emergency-requests/active', label: 'Active Missions', icon: Siren },
+      { href: '/admin/emergency-requests/active', label: 'Active Cases', icon: Siren },
     ],
   },
   {

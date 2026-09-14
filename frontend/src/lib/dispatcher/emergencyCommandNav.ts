@@ -51,10 +51,10 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
     ],
   },
   {
-    title: 'Dispatch & Missions',
+    title: 'Dispatch & Cases',
     items: [
       { href: '/dispatcher/emergency-requests/pending', label: 'Dispatch Board', icon: LayoutGrid, accent: 'info', badgeKey: 'pending' },
-      { href: '/dispatcher/emergency-requests/active', label: 'My Active Missions', icon: Siren, badgeKey: 'active' },
+      { href: '/dispatcher/emergency-requests/active', label: 'My Active Cases', icon: Siren, badgeKey: 'active' },
     ],
   },
   {
@@ -65,7 +65,7 @@ export const DISPATCHER_EMERGENCY_SECTIONS: EmergencyCommandSection[] = [
       { href: '/dispatcher/emergency-requests/transporting', label: 'Transporting to Hospital', icon: Truck, accent: 'info' },
       { href: '/dispatcher/emergency-requests/at-hospital', label: 'Arrived at Hospital', icon: Building2 },
       { href: '/dispatcher/emergency-requests/handover', label: 'Patient Handover', icon: HeartHandshake },
-      { href: '/dispatcher/emergency-requests/completed', label: 'Mission Completed', icon: CheckCircle2, accent: 'success' },
+      { href: '/dispatcher/emergency-requests/completed', label: 'Case Completed', icon: CheckCircle2, accent: 'success' },
     ],
   },
   {

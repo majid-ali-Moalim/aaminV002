@@ -27,6 +27,7 @@ import { AVAILABILITY_STATUSES, refusalReasonLabel, parseHospitalBranches, type 
 import { Stethoscope, GitBranch } from 'lucide-react'
 import { downloadSectionPdf } from '@/lib/reports/exportPdf'
 import { useAuth } from '@/context/AuthContext'
+import ReportSectionTable from '@/components/reports/ReportSectionTable'
 
 function KpiCard({ label, value, icon: Icon, accent = 'teal' }: { label: string; value: number | string; icon: React.ElementType; accent?: string }) {
   const colors: Record<string, string> = {
@@ -244,6 +245,7 @@ export default function HospitalCoordinationView({ view }: { view: CoordinationV
           setRegionId={setRegionId}
           regions={regions}
           loading={dataLoading && !analytics}
+          generatedBy={generatedBy}
         />
       ) : view === 'refused' ? (
         <RefusedCasesTable
@@ -428,6 +430,7 @@ function AnalyticsPanel({
   setRegionId,
   regions,
   loading,
+  generatedBy,
 }: {
   analytics: any
   analyticsRange: { startDate: string; endDate: string }
@@ -437,59 +440,191 @@ function AnalyticsPanel({
   setRegionId: (v: string) => void
   regions: any[]
   loading?: boolean
+  generatedBy?: string
 }) {
-  const exportCsv = () => {
-    const rows = analytics?.byHospital ?? []
-    const csv = ['Hospital,Received,Accepted,Refused', ...rows.map((h: any) => `${h.name},${h.received},${h.accepted},${h.refused ?? 0}`)].join('\n')
+  const kpis = analytics?.kpis ?? {}
+  const byHospital = analytics?.byHospital ?? []
+  const refusalReasons = analytics?.refusalReasons ?? {}
+
+  const periodLabel =
+    analyticsRange.startDate && analyticsRange.endDate
+      ? `${analyticsRange.startDate} → ${analyticsRange.endDate}`
+      : analyticsRange.startDate
+        ? `From ${analyticsRange.startDate}`
+        : analyticsRange.endDate
+          ? `Until ${analyticsRange.endDate}`
+          : 'All time'
+
+  const regionLabel = regions.find((r: any) => r.id === regionId)?.name
+
+  const hospitalTable = {
+    title: 'Performance by Hospital',
+    columns: ['Hospital', 'Received', 'Accepted', 'Refused', 'Acceptance %'],
+    rows: byHospital.map((h: any) => {
+      const rate = h.received ? Math.round((h.accepted / h.received) * 100) : 0
+      return [h.name, h.received, h.accepted, h.refused ?? 0, `${rate}%`]
+    }),
+  }
+
+  const refusalTable = {
+    title: 'Refusal Reasons',
+    columns: ['Reason', 'Count'],
+    rows: Object.entries(refusalReasons).map(([code, count]) => [
+      refusalReasonLabel(code),
+      count as number,
+    ]),
+  }
+
+  const summaryTable = {
+    title: 'Key Performance Indicators',
+    columns: [
+      'Cases Received',
+      'Accepted',
+      'Refused',
+      'Acceptance Rate',
+      'Refusal Rate',
+      'Avg Handover (min)',
+    ],
+    rows: [
+      [
+        kpis.casesReceived ?? 0,
+        kpis.casesAccepted ?? 0,
+        kpis.casesRefused ?? 0,
+        `${kpis.acceptanceRate ?? 0}%`,
+        `${kpis.refusalRate ?? 0}%`,
+        kpis.avgHandoverTimeMins ?? 0,
+      ],
+    ],
+  }
+
+  const downloadCsv = (table: { columns: string[]; rows: Array<Array<string | number>> }, name: string) => {
+    const csv = [table.columns, ...table.rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'hospital-performance.csv'
+    a.download = `${name}.csv`
     a.click()
+    URL.revokeObjectURL(url)
+    toast.success('CSV downloaded')
+  }
+
+  const pdfMeta = {
+    title: 'Hospital Performance Analytics',
+    subtitle: regionLabel ? `${periodLabel} · ${regionLabel}` : periodLabel,
+    periodLabel,
+    generatedBy,
+    scopeNote: regionLabel ? `Filtered to region: ${regionLabel}` : undefined,
+    includeSummary: false,
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border p-4 flex flex-wrap gap-3">
-        <input type="date" className="h-10 rounded-xl border px-3 text-sm" value={analyticsRange.startDate} onChange={(e) => setAnalyticsRange({ ...analyticsRange, startDate: e.target.value })} />
-        <input type="date" className="h-10 rounded-xl border px-3 text-sm" value={analyticsRange.endDate} onChange={(e) => setAnalyticsRange({ ...analyticsRange, endDate: e.target.value })} />
-        <select className="h-10 rounded-xl border px-3 text-sm" value={regionId} onChange={(e) => setRegionId(e.target.value)}>
-          <option value="">All regions</option>
-          {regions.map((r: any) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
-        <Button variant="outline" className="rounded-xl" onClick={onApply}>Apply</Button>
-      </div>
-      <div className="grid lg:grid-cols-2 gap-6">
-        {loading ? (
-          <>
-            <div className="h-48 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
-            <div className="h-48 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
-          </>
-        ) : (
-          <>
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border p-6">
-          <h3 className="font-black mb-4">Performance</h3>
-          <p className="text-sm">Avg handover: {analytics?.kpis?.avgHandoverTimeMins ?? 0} min</p>
-          <p className="text-sm">Avg waiting: {analytics?.kpis?.avgWaitingTimeMins ?? 0} min</p>
-          <p className="text-sm">Acceptance rate: {analytics?.kpis?.acceptanceRate ?? 0}%</p>
-          <p className="text-sm">Refusal rate: {analytics?.kpis?.refusalRate ?? 0}%</p>
-          <p className="text-sm">Capacity utilization: {analytics?.kpis?.capacityUtilization ?? 0}%</p>
+      <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-teal-950 to-teal-800 p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="rounded-xl bg-teal-600 p-3">
+              <BarChart3 className="h-7 w-7" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-teal-200">
+                Coordination Analytics
+              </p>
+              <h2 className="mt-1 text-2xl font-black">Hospital Performance</h2>
+              <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                Acceptance rates, handover duration, and refusal breakdown across the coordination network.
+              </p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">Period: {periodLabel}</p>
+            </div>
+          </div>
         </div>
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border p-6">
-          <h3 className="font-black mb-4">By Hospital</h3>
-          <ul className="text-sm space-y-2">
-            {(analytics?.byHospital ?? []).map((h: any) => (
-              <li key={h.name} className="flex justify-between"><span>{h.name}</span><span>{h.accepted}/{h.received}</span></li>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Filters</p>
+        <div className="flex flex-wrap gap-3">
+          <input
+            type="date"
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700"
+            value={analyticsRange.startDate}
+            onChange={(e) => setAnalyticsRange({ ...analyticsRange, startDate: e.target.value })}
+          />
+          <input
+            type="date"
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700"
+            value={analyticsRange.endDate}
+            onChange={(e) => setAnalyticsRange({ ...analyticsRange, endDate: e.target.value })}
+          />
+          <select
+            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 min-w-[180px]"
+            value={regionId}
+            onChange={(e) => setRegionId(e.target.value)}
+          >
+            <option value="">All regions</option>
+            {regions.map((r: any) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
             ))}
-          </ul>
-          <Button variant="outline" size="sm" className="mt-4 rounded-xl" onClick={exportCsv}><Download className="w-4 h-4 mr-1" />Export CSV</Button>
+          </select>
+          <Button className="rounded-xl h-11 font-bold bg-teal-600 hover:bg-teal-700" onClick={onApply}>
+            Apply filters
+          </Button>
         </div>
-          </>
-        )}
       </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-2xl bg-slate-100 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <KpiCard label="Cases Received" value={kpis.casesReceived ?? 0} icon={Activity} accent="blue" />
+            <KpiCard label="Accepted" value={kpis.casesAccepted ?? 0} icon={CheckCircle2} accent="green" />
+            <KpiCard label="Refused" value={kpis.casesRefused ?? 0} icon={XCircle} accent="rose" />
+            <KpiCard label="Acceptance Rate" value={`${kpis.acceptanceRate ?? 0}%`} icon={BarChart3} accent="teal" />
+            <KpiCard label="Refusal Rate" value={`${kpis.refusalRate ?? 0}%`} icon={AlertTriangle} accent="amber" />
+            <KpiCard
+              label="Avg Handover"
+              value={`${kpis.avgHandoverTimeMins ?? 0}m`}
+              icon={Clock}
+              accent="blue"
+            />
+          </div>
+
+          <ReportSectionTable
+            table={summaryTable}
+            defaultCollapsed
+            onExportCsv={() => downloadCsv(summaryTable, 'hospital-kpis')}
+            onExportPdf={() =>
+              downloadSectionPdf(pdfMeta, summaryTable, 'hospital-analytics-kpis.pdf')
+            }
+          />
+
+          <ReportSectionTable
+            table={hospitalTable}
+            onExportCsv={() => downloadCsv(hospitalTable, 'hospital-performance')}
+            onExportPdf={() =>
+              downloadSectionPdf(pdfMeta, hospitalTable, 'hospital-performance-by-hospital.pdf')
+            }
+          />
+
+          {refusalTable.rows.length > 0 && (
+            <ReportSectionTable
+              table={refusalTable}
+              onExportCsv={() => downloadCsv(refusalTable, 'hospital-refusal-reasons')}
+              onExportPdf={() =>
+                downloadSectionPdf(pdfMeta, refusalTable, 'hospital-refusal-reasons.pdf')
+              }
+            />
+          )}
+        </>
+      )}
     </div>
   )
 }

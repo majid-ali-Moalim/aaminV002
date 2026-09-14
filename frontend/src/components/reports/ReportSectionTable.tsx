@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, FileText, Loader2 } from 'lucide-react'
 import {
   isLinkableRankingCell,
@@ -21,6 +21,11 @@ type Props = {
   onRankingClick?: (columnIndex: number, name: string, rowIndex: number) => void
   isClickableCell?: (columnIndex: number, cell: string | number, rowIndex: number) => boolean
   onCellClick?: (columnIndex: number, cell: string | number, rowIndex: number) => void
+  /** Row checkboxes for bulk report generation */
+  selectable?: boolean
+  selectedRows?: Set<number>
+  onSelectedRowsChange?: (selected: Set<number>) => void
+  selectionActions?: ReactNode
 }
 
 export default function ReportSectionTable({
@@ -31,9 +36,40 @@ export default function ReportSectionTable({
   onRankingClick,
   isClickableCell,
   onCellClick,
+  selectable = false,
+  selectedRows,
+  onSelectedRowsChange,
+  selectionActions,
 }: Props) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [pdfLoading, setPdfLoading] = useState(false)
+
+  const allSelected = useMemo(
+    () => table.rows.length > 0 && table.rows.every((_, idx) => selectedRows?.has(idx)),
+    [table.rows, selectedRows],
+  )
+
+  const someSelected = useMemo(
+    () => Boolean(selectedRows?.size) && !allSelected,
+    [selectedRows, allSelected],
+  )
+
+  const toggleAll = () => {
+    if (!onSelectedRowsChange) return
+    if (allSelected) {
+      onSelectedRowsChange(new Set())
+    } else {
+      onSelectedRowsChange(new Set(table.rows.map((_, idx) => idx)))
+    }
+  }
+
+  const toggleRow = (idx: number) => {
+    if (!onSelectedRowsChange || !selectedRows) return
+    const next = new Set(selectedRows)
+    if (next.has(idx)) next.delete(idx)
+    else next.add(idx)
+    onSelectedRowsChange(next)
+  }
 
   const handlePdf = async () => {
     setPdfLoading(true)
@@ -60,10 +96,12 @@ export default function ReportSectionTable({
             <h2 className="text-sm font-black text-slate-900">{table.title}</h2>
             <p className="text-xs text-slate-600 mt-0.5">
               {table.columns.length} columns · {table.rows.length} row{table.rows.length === 1 ? '' : 's'}
+              {selectable && selectedRows?.size ? ` · ${selectedRows.size} selected` : ''}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {selectable && selectionActions}
           <button
             type="button"
             onClick={onExportCsv}
@@ -88,6 +126,20 @@ export default function ReportSectionTable({
           <table className="w-full text-sm min-w-max">
             <thead>
               <tr className="bg-slate-50 text-left text-[10px] font-black uppercase tracking-wider text-slate-700">
+                {selectable && (
+                  <th className="px-3 py-3 w-10 border-r border-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected
+                      }}
+                      onChange={toggleAll}
+                      aria-label="Select all rows"
+                      className="rounded border-slate-300"
+                    />
+                  </th>
+                )}
                 {table.columns.map((col) => (
                   <th key={col} className="px-4 py-3 whitespace-nowrap border-r border-slate-100 last:border-r-0">
                     {col}
@@ -98,13 +150,30 @@ export default function ReportSectionTable({
             <tbody className="divide-y divide-slate-100">
               {table.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={table.columns.length} className="px-4 py-8 text-center text-slate-500">
+                  <td
+                    colSpan={table.columns.length + (selectable ? 1 : 0)}
+                    className="px-4 py-8 text-center text-slate-500"
+                  >
                     No matching records
                   </td>
                 </tr>
               ) : (
                 table.rows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80">
+                  <tr
+                    key={idx}
+                    className={`hover:bg-slate-50/80 ${selectedRows?.has(idx) ? 'bg-red-50/40' : ''}`}
+                  >
+                    {selectable && (
+                      <td className="px-3 py-2.5 border-r border-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows?.has(idx) ?? false}
+                          onChange={() => toggleRow(idx)}
+                          aria-label={`Select row ${idx + 1}`}
+                          className="rounded border-slate-300"
+                        />
+                      </td>
+                    )}
                     {row.map((cell, ci) => {
                       const rankingLinkable =
                         onRankingClick &&

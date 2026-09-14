@@ -427,7 +427,7 @@ export default function DispatcherCommandCenter() {
                 <div className="max-h-[360px] overflow-y-auto pr-1">
                   {activeMissions.filter(isActiveOngoingCase).length === 0 ? (
                     <p className="text-sm text-slate-400 text-center py-10 bg-slate-50 rounded-xl">
-                      No active missions right now
+                      No active cases right now
                     </p>
                   ) : (
                     activeMissions
