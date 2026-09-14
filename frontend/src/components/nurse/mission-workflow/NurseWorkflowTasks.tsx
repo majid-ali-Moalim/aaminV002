@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Save, ChevronLeft, ChevronRight, Plus, Trash2, Upload, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { uploadService } from '@/lib/api'
@@ -10,10 +10,11 @@ import {
   type RejectedHospitalEntry,
 } from '@/lib/emergency/buildCaseClosureDefaults'
 import {
-  BREATHING_STATUS,
+  BREATHING_STATUS_OPTIONS,
+  breathingStatusLabel,
+  normalizeBreathingStatus,
   CONSCIOUSNESS_LEVELS,
   PAIN_LEVEL_OPTIONS,
-  TREATMENT_TYPES,
   painLevelLabel,
   PATIENT_HANDOVER_OUTCOMES,
   handoverOutcomeLabel,
@@ -29,7 +30,14 @@ import { downloadUploadedFile, uploadedFileUrl } from '@/lib/uploads/fileUrl'
 import HospitalDestinationPicker, { type HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import { HospitalHandoverField } from '@/components/hospitals/HospitalHandoverField'
-import { resolveIncidentCategoryId } from '@/lib/emergency/emergencyTypes'
+import {
+  BASE_CHIEF_COMPLAINTS,
+  BASE_TREATMENT_OPTIONS,
+  CLINICAL_OTHER,
+  formatClinicalMultiDisplay,
+  parseClinicalMultiValue,
+  serializeClinicalMultiValue,
+} from '@/lib/nurse/nurseClinicalOptions'
 
 type TaskShellProps = {
   title: string
@@ -122,32 +130,143 @@ function FieldError({ error }: FieldErrorProps) {
   return <span className="nurse-field-error">{error}</span>
 }
 
+function ClinicalMultiSelect({
+  label,
+  required,
+  storedValue,
+  options,
+  onCommit,
+  readOnly,
+  error,
+  placeholder = 'Select one or more…',
+}: {
+  label: React.ReactNode
+  required?: boolean
+  storedValue: string
+  options: readonly string[]
+  onCommit: (value: string) => void
+  readOnly?: boolean
+  error?: string
+  placeholder?: string
+}) {
+  const parsed = useMemo(
+    () => parseClinicalMultiValue(storedValue, options),
+    [storedValue, options],
+  )
+  const [open, setOpen] = useState(false)
+  const [checked, setChecked] = useState<string[]>(parsed.selected)
+  const [otherText, setOtherText] = useState(parsed.other)
+
+  useEffect(() => {
+    setChecked(parsed.selected)
+    setOtherText(parsed.other)
+  }, [parsed.selected, parsed.other])
+
+  const commit = (nextChecked: string[], nextOther: string) => {
+    onCommit(serializeClinicalMultiValue(nextChecked, nextOther, options))
+  }
+
+  const toggleOption = (opt: string) => {
+    const has = checked.includes(opt)
+    const nextChecked = has ? checked.filter((v) => v !== opt) : [...checked, opt]
+    const nextOther = nextChecked.includes(CLINICAL_OTHER) ? otherText : ''
+    setChecked(nextChecked)
+    if (!nextChecked.includes(CLINICAL_OTHER)) setOtherText('')
+    commit(nextChecked, nextOther)
+  }
+
+  if (readOnly) {
+    return (
+      <label className="span-2">
+        {label}
+        <input
+          value={formatClinicalMultiDisplay(storedValue, options)}
+          readOnly
+          className="readonly"
+        />
+      </label>
+    )
+  }
+
+  const summary = formatClinicalMultiDisplay(
+    serializeClinicalMultiValue(checked, otherText, options),
+    options,
+  )
+  const showPlaceholder = summary === '—'
+
+  return (
+    <div className="span-2 clinical-multi-select">
+      <span className="clinical-multi-select__label">
+        {label}
+        {required && <span className="text-red-600"> *</span>}
+      </span>
+      <button
+        type="button"
+        className="clinical-multi-select__trigger"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-invalid={Boolean(error)}
+      >
+        {showPlaceholder ? placeholder : summary}
+      </button>
+      {open && (
+        <div className="clinical-multi-select__panel" role="listbox" aria-multiselectable>
+          {options.map((opt) => (
+            <label key={opt} className="clinical-multi-select__option">
+              <input
+                type="checkbox"
+                checked={checked.includes(opt)}
+                onChange={() => toggleOption(opt)}
+              />
+              <span>{opt}</span>
+            </label>
+          ))}
+          {checked.includes(CLINICAL_OTHER) && (
+            <input
+              className="clinical-multi-select__other mt-2"
+              value={otherText}
+              onChange={(e) => {
+                const next = e.target.value
+                setOtherText(next)
+                commit(checked, next)
+              }}
+              placeholder="Describe other (optional detail)"
+              maxLength={500}
+              aria-invalid={Boolean(error)}
+            />
+          )}
+        </div>
+      )}
+      <FieldError error={error} />
+    </div>
+  )
+}
+
 export function AssessmentTaskFields({
   form,
   setForm,
   errors = {},
   readOnly = false,
+  chiefComplaintOptions = [],
 }: {
   form: AssessmentFormState
   setForm: (f: AssessmentFormState) => void
   errors?: Partial<Record<keyof AssessmentFormState, string>>
   readOnly?: boolean
+  chiefComplaintOptions?: string[]
 }) {
   return (
     <>
-      <label className="span-2">
-        Chief complaint *
-        <input
-          value={form.chiefComplaint}
-          onChange={(e) => setForm({ ...form, chiefComplaint: e.target.value })}
-          maxLength={500}
-          required={!readOnly}
-          readOnly={readOnly}
-          className={readOnly ? 'readonly' : undefined}
-          aria-invalid={Boolean(errors.chiefComplaint)}
-        />
-        <FieldError error={errors.chiefComplaint} />
-      </label>
+      <ClinicalMultiSelect
+        label={<>Chief complaint</>}
+        required
+        storedValue={form.chiefComplaint}
+        options={chiefComplaintOptions.length ? chiefComplaintOptions : BASE_CHIEF_COMPLAINTS}
+        onCommit={(value) => setForm({ ...form, chiefComplaint: value.trim() })}
+        readOnly={readOnly}
+        error={errors.chiefComplaint}
+        placeholder="Tick one or more chief complaints…"
+      />
       <label className="span-2">
         Symptoms
         <textarea
@@ -188,11 +307,14 @@ export function AssessmentTaskFields({
       <label>
         Breathing status
         {readOnly ? (
-          <input value={form.breathingStatus} readOnly className="readonly" />
+          <input value={breathingStatusLabel(form.breathingStatus)} readOnly className="readonly" />
         ) : (
-          <select value={form.breathingStatus} onChange={(e) => setForm({ ...form, breathingStatus: e.target.value })}>
-            {BREATHING_STATUS.map((v) => (
-              <option key={v} value={v}>{v}</option>
+          <select
+            value={normalizeBreathingStatus(form.breathingStatus)}
+            onChange={(e) => setForm({ ...form, breathingStatus: e.target.value })}
+          >
+            {BREATHING_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         )}
@@ -386,45 +508,30 @@ export function TreatmentTaskFields({
   setForm,
   errors = {},
   readOnly = false,
+  treatmentOptions = [],
 }: {
   form: TreatmentFormState
   setForm: (f: TreatmentFormState) => void
   errors?: Partial<Record<keyof TreatmentFormState, string>>
   readOnly?: boolean
+  treatmentOptions?: string[]
 }) {
-  const isOther = form.treatmentType === 'Other'
+  const options = treatmentOptions.length ? treatmentOptions : BASE_TREATMENT_OPTIONS
   const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
 
   return (
     <>
-      <label className="span-2">
-        Treatment type
-        {readOnly ? (
-          <input value={form.treatmentType || '—'} readOnly className="readonly" />
-        ) : (
-          <select value={form.treatmentType} onChange={(e) => setForm({ ...form, treatmentType: e.target.value })}>
-            {TREATMENT_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        )}
-      </label>
-      {isOther && (
-        <label className="span-2">
-          Other treatment details *
-          <textarea
-            rows={2}
-            value={form.treatmentOtherDetails}
-            onChange={(e) => setForm({ ...form, treatmentOtherDetails: e.target.value })}
-            required={!readOnly}
-            maxLength={2000}
-            placeholder="Describe the treatment given"
-            aria-invalid={Boolean(errors.treatmentOtherDetails)}
-            {...ro}
-          />
-          <FieldError error={errors.treatmentOtherDetails} />
-        </label>
-      )}
+      <ClinicalMultiSelect
+        label={<>Treatment given</>}
+        storedValue={form.treatmentType}
+        options={options}
+        onCommit={(value) =>
+          setForm({ ...form, treatmentType: value.trim(), treatmentOtherDetails: '' })
+        }
+        readOnly={readOnly}
+        error={errors.treatmentType || errors.treatmentOtherDetails}
+        placeholder="Tick one or more treatments…"
+      />
       <label className="span-2">
         Medication / details
         <input
@@ -550,17 +657,6 @@ function handoverHospitalChange(
     acceptedHospitalBranchId: branchId || undefined,
     acceptedHospitalBranchName: branchName || undefined,
   }
-}
-
-type EmergencyTypeRow = { id: string; name: string; incidentCategoryId?: string | null; incidentCategory?: { id: string } | null }
-
-function emergencyTypesForCategory(types: EmergencyTypeRow[], incidentCategoryId: string): EmergencyTypeRow[] {
-  if (!incidentCategoryId) return types
-  const filtered = types.filter((t) => {
-    const catId = resolveIncidentCategoryId(t)
-    return !catId || catId === incidentCategoryId
-  })
-  return filtered.length > 0 ? filtered : types
 }
 
 function GenderField({
@@ -793,7 +889,6 @@ export function HandoverTaskFields({
   assignedDestination = '',
   hospitals = [],
   incidentCategories = [],
-  emergencyTypes = [],
   onCreateCustomHospital,
   readOnly = false,
   errors = {},
@@ -806,7 +901,6 @@ export function HandoverTaskFields({
   assignedDestination?: string
   hospitals?: HospitalOption[]
   incidentCategories?: Array<{ id: string; name: string }>
-  emergencyTypes?: EmergencyTypeRow[]
   onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   readOnly?: boolean
   errors?: HandoverFieldErrors
@@ -960,8 +1054,6 @@ export function HandoverTaskFields({
                 ...form,
                 incidentCategoryId: e.target.value,
                 incidentCategoryName: cat?.name ?? '',
-                emergencyTypeId: '',
-                emergencyTypeName: '',
               })
             }}
             aria-invalid={Boolean(errors.incidentCategoryId)}
@@ -973,37 +1065,6 @@ export function HandoverTaskFields({
           </select>
         )}
         <FieldError error={errors.incidentCategoryId} />
-      </label>
-      <label>
-        Emergency type *
-        {readOnly ? (
-          <input value={form.emergencyTypeName || '—'} readOnly className="readonly" />
-        ) : (
-          <select
-            value={form.emergencyTypeId}
-            onChange={(e) => {
-              const et = emergencyTypes.find((t) => t.id === e.target.value)
-              setForm({
-                ...form,
-                emergencyTypeId: e.target.value,
-                emergencyTypeName: et?.name ?? '',
-              })
-            }}
-            aria-invalid={Boolean(errors.emergencyTypeId)}
-          >
-            <option value="">Select type…</option>
-            {emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-          </select>
-        )}
-        {!readOnly && !form.incidentCategoryId && (
-          <p className="nmw-field-hint">Select an accident category first to narrow emergency types.</p>
-        )}
-        {!readOnly && form.incidentCategoryId && emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).length === 0 && (
-          <p className="nmw-field-hint">No emergency types configured — contact dispatch.</p>
-        )}
-        <FieldError error={errors.emergencyTypeId} />
       </label>
 
       <p className="nmw-form-section-label span-2">Handover details</p>
@@ -1087,19 +1148,6 @@ export function HandoverTaskFields({
         <FieldError error={errors.patientCondition} />
       </label>
       <label className="span-2">
-        Treatment given en route <span className="nmw-optional">(optional)</span>
-        <textarea
-          rows={2}
-          value={form.treatmentGiven}
-          onChange={(e) => setForm({ ...form, treatmentGiven: e.target.value })}
-          maxLength={2000}
-          placeholder="Treatments and interventions during transport"
-          aria-invalid={Boolean(errors.treatmentGiven)}
-          {...ro}
-        />
-        <FieldError error={errors.treatmentGiven} />
-      </label>
-      <label className="span-2">
         Receiving doctor (DR name) <span className="nmw-optional">(optional)</span>
         <input
           value={form.receivingStaff}
@@ -1172,27 +1220,30 @@ export function MedicalNotesQuickFields({
   setForm,
   errors = {},
   readOnly = false,
+  chiefComplaintOptions = [],
+  treatmentOptions = [],
 }: {
   form: MedicalNotesFormState
   setForm: (f: MedicalNotesFormState) => void
   errors?: MedicalNotesFieldErrors
   readOnly?: boolean
+  chiefComplaintOptions?: string[]
+  treatmentOptions?: string[]
 }) {
   const ro = readOnly ? { readOnly: true, className: 'readonly' as const } : {}
+
   return (
     <>
-      <label className="span-2">
-        Chief complaint *
-        <input
-          value={form.chiefComplaint}
-          onChange={(e) => setForm({ ...form, chiefComplaint: e.target.value })}
-          maxLength={500}
-          placeholder="Main reason for the call"
-          aria-invalid={Boolean(errors.chiefComplaint)}
-          {...ro}
-        />
-        <FieldError error={errors.chiefComplaint} />
-      </label>
+      <ClinicalMultiSelect
+        label={<>Chief complaint</>}
+        required
+        storedValue={form.chiefComplaint}
+        options={chiefComplaintOptions.length ? chiefComplaintOptions : BASE_CHIEF_COMPLAINTS}
+        onCommit={(value) => setForm({ ...form, chiefComplaint: value.trim() })}
+        readOnly={readOnly}
+        error={errors.chiefComplaint}
+        placeholder="Tick one or more chief complaints…"
+      />
       <label>
         Consciousness
         {readOnly ? (
@@ -1211,14 +1262,14 @@ export function MedicalNotesQuickFields({
       <label>
         Breathing
         {readOnly ? (
-          <input value={form.breathingStatus} readOnly className="readonly" />
+          <input value={breathingStatusLabel(form.breathingStatus)} readOnly className="readonly" />
         ) : (
           <select
-            value={form.breathingStatus}
+            value={normalizeBreathingStatus(form.breathingStatus)}
             onChange={(e) => setForm({ ...form, breathingStatus: e.target.value })}
           >
-            {BREATHING_STATUS.map((v) => (
-              <option key={v} value={v}>{v}</option>
+            {BREATHING_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         )}
@@ -1256,16 +1307,16 @@ export function MedicalNotesQuickFields({
         />
         <FieldError error={errors.oxygenSaturation} />
       </label>
-      <label className="span-2">
-        Treatment given <span className="nmw-optional">(optional)</span>
-        <input
-          value={form.treatmentType === 'Other' ? form.treatmentOtherDetails : form.treatmentType}
-          onChange={(e) => setForm({ ...form, treatmentType: e.target.value, treatmentOtherDetails: '' })}
-          maxLength={500}
-          placeholder="Oxygen, IV, medication…"
-          {...ro}
-        />
-      </label>
+      <ClinicalMultiSelect
+        label={<>Treatment given <span className="nmw-optional">(optional)</span></>}
+        storedValue={form.treatmentType}
+        options={treatmentOptions.length ? treatmentOptions : BASE_TREATMENT_OPTIONS}
+        onCommit={(value) =>
+          setForm({ ...form, treatmentType: value.trim(), treatmentOtherDetails: '' })
+        }
+        readOnly={readOnly}
+        placeholder="Tick one or more treatments…"
+      />
       <label className="span-2">
         Notes <span className="nmw-optional">(optional)</span>
         <textarea
@@ -1290,7 +1341,6 @@ export function HandoverQuickFields({
   assignedDestination = '',
   hospitals = [],
   incidentCategories = [],
-  emergencyTypes = [],
   onCreateCustomHospital,
   readOnly = false,
   errors = {},
@@ -1301,7 +1351,6 @@ export function HandoverQuickFields({
   assignedDestination?: string
   hospitals?: HospitalOption[]
   incidentCategories?: Array<{ id: string; name: string }>
-  emergencyTypes?: EmergencyTypeRow[]
   onCreateCustomHospital?: (draft: CustomHospitalDraft) => Promise<HospitalOption | null>
   readOnly?: boolean
   errors?: HandoverFieldErrors
@@ -1417,8 +1466,6 @@ export function HandoverQuickFields({
                 ...form,
                 incidentCategoryId: e.target.value,
                 incidentCategoryName: cat?.name ?? '',
-                emergencyTypeId: '',
-                emergencyTypeName: '',
               })
             }}
             aria-invalid={Boolean(errors.incidentCategoryId)}
@@ -1430,37 +1477,6 @@ export function HandoverQuickFields({
           </select>
         )}
         <FieldError error={errors.incidentCategoryId} />
-      </label>
-      <label>
-        Emergency type *
-        {readOnly ? (
-          <input value={form.emergencyTypeName || '—'} readOnly className="readonly" />
-        ) : (
-          <select
-            value={form.emergencyTypeId}
-            onChange={(e) => {
-              const et = emergencyTypes.find((t) => t.id === e.target.value)
-              setForm({
-                ...form,
-                emergencyTypeId: e.target.value,
-                emergencyTypeName: et?.name ?? '',
-              })
-            }}
-            aria-invalid={Boolean(errors.emergencyTypeId)}
-          >
-            <option value="">Select…</option>
-            {emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-          </select>
-        )}
-        {!readOnly && !form.incidentCategoryId && (
-          <p className="nmw-field-hint">Select an accident category first to narrow emergency types.</p>
-        )}
-        {!readOnly && form.incidentCategoryId && emergencyTypesForCategory(emergencyTypes, form.incidentCategoryId).length === 0 && (
-          <p className="nmw-field-hint">No emergency types configured — contact dispatch.</p>
-        )}
-        <FieldError error={errors.emergencyTypeId} />
       </label>
 
       <p className="nmw-form-section-label span-2">Patient details</p>
@@ -1498,19 +1514,6 @@ export function HandoverQuickFields({
         <FieldError error={errors.patientCondition} />
       </label>
       <label className="span-2">
-        Treatment en route <span className="nmw-optional">(optional)</span>
-        <textarea
-          rows={2}
-          value={form.treatmentGiven}
-          onChange={(e) => setForm({ ...form, treatmentGiven: e.target.value })}
-          maxLength={2000}
-          placeholder="Oxygen, IV, medication…"
-          aria-invalid={Boolean(errors.treatmentGiven)}
-          {...ro}
-        />
-        <FieldError error={errors.treatmentGiven} />
-      </label>
-      <label className="span-2">
         Receiving doctor <span className="nmw-optional">(optional)</span>
         <input
           value={form.receivingStaff}
@@ -1538,7 +1541,9 @@ export function HandoverQuickFields({
         />
         <FieldError error={errors.hospitalNotifyEmail} />
         {!readOnly && (
-          <p className="nmw-field-hint">Must be a valid email if provided (e.g. hospital@example.com).</p>
+          <p className="nmw-field-hint">
+            Handover report is emailed here when you save. Use a real hospital inbox (e.g. hospital@example.com).
+          </p>
         )}
       </label>
       <HandoverDocumentUpload form={form} setForm={setForm} readOnly={readOnly} />
@@ -1563,22 +1568,38 @@ export function MedicalNotesCombinedFields({
   setForm,
   errors = {},
   readOnly = false,
+  chiefComplaintOptions = [],
+  treatmentOptions = [],
 }: {
   form: MedicalNotesFormState
   setForm: (f: MedicalNotesFormState) => void
   errors?: MedicalNotesFieldErrors
   readOnly?: boolean
+  chiefComplaintOptions?: string[]
+  treatmentOptions?: string[]
 }) {
   return (
     <>
       <p className="nmw-form-section-label span-2">Assessment</p>
-      <AssessmentTaskFields form={form} setForm={setForm} errors={errors} readOnly={readOnly} />
+      <AssessmentTaskFields
+        form={form}
+        setForm={setForm}
+        errors={errors}
+        readOnly={readOnly}
+        chiefComplaintOptions={chiefComplaintOptions}
+      />
       <p className="nmw-form-section-label span-2">Vital signs</p>
       <VitalsTaskFields form={form} setForm={setForm} errors={errors} readOnly={readOnly} />
       <p className="nmw-form-section-label span-2">Clinical notes</p>
       <NotesTaskFields form={form} setForm={setForm} errors={errors} readOnly={readOnly} />
       <p className="nmw-form-section-label span-2">Treatment (if given)</p>
-      <TreatmentTaskFields form={form} setForm={setForm} errors={errors} readOnly={readOnly} />
+      <TreatmentTaskFields
+        form={form}
+        setForm={setForm}
+        errors={errors}
+        readOnly={readOnly}
+        treatmentOptions={treatmentOptions}
+      />
     </>
   )
 }

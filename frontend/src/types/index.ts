@@ -290,7 +290,8 @@ export enum RequestSource {
   WALK_IN = 'WALK_IN',
   STAFF = 'STAFF',
   REFERRAL = 'REFERRAL',
-  OTHER = 'OTHER'
+  WEBSITE = 'WEBSITE',
+  OTHER = 'OTHER',
 }
 
 export interface EmergencyStatusLog {

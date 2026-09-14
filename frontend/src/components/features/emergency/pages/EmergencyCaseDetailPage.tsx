@@ -23,6 +23,7 @@ import PriorityBadge from '@/components/features/emergency/PriorityBadge'
 import PickupGpsPanel from '@/components/features/emergency/PickupGpsPanel'
 import { useEmergencyPaths } from '@/lib/emergency/EmergencyPortalContext'
 import { simpleActiveCaseStatus } from '@/components/features/emergency/missionStatusOptions'
+import { formatRequestSourceLabel } from '@/lib/emergency/requestSourceLabels'
 import '@/components/features/emergency/case-detail.css'
 import CaseTimingPanel from '@/components/features/emergency/CaseTimingPanel'
 import CaseStationSummary from '@/components/features/emergency/CaseStationSummary'
@@ -169,7 +170,7 @@ export default function EmergencyCaseDetailPage() {
           <Field label="Status" value={simpleStatus} />
           <Field label="Priority" value={request.priority} />
           <Field label="Emergency type" value={request.incidentCategory?.name || request.patientCondition} />
-          <Field label="Source" value={request.requestSource?.replace(/_/g, ' ')} />
+          <Field label="Source" value={formatRequestSourceLabel(request.requestSource)} />
           <Field label="Patient" value={request.patient?.fullName} />
           <Field label="Patient phone" value={request.patient?.phone || request.callerPhone} />
           <Field

@@ -14,6 +14,7 @@ import { HospitalsService } from '../hospitals/hospitals.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { RequireAnyPermissions } from '../auth/decorators/any-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { HospitalCaseStage, HospitalRefusalReason, HospitalCaseStatus } from '@prisma/client';
 import { AssignHospitalDto } from './dto/assign-hospital.dto';
@@ -58,7 +59,7 @@ export class HospitalCoordinationController {
   }
 
   @Post('hospitals/manual')
-  @RequirePermissions('case.create')
+  @RequireAnyPermissions('case.create', 'nurse.handover', 'hospital.handover', 'hospital.manage')
   @ApiOperation({
     summary:
       'Quick-create a custom hospital + branch during dispatch (editable later in coordination)',

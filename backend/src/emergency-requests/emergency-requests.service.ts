@@ -37,6 +37,7 @@ import {
   occupyCrewForCase,
   releaseCrewForCase,
   reconcileCrewOccupancy,
+  resolveDuplicateActiveCrewCases,
 } from '../common/occupied-crew';
 import { isScheduledFutureCase, parseBookingDateTimeFromNotes } from '../common/booking-time';
 import {
@@ -546,11 +547,6 @@ export class EmergencyRequestsService {
         if (data.nurseId) {
           await assertDispatchEligibleStaff(this.prisma, data.nurseId, 'Nurse');
         }
-        await assertCrewAvailableForAssignment(this.prisma, {
-          driverId: data.driverId,
-          nurseId: data.nurseId,
-          ambulanceId: data.ambulanceId,
-        });
         finalPayload.status = 'ASSIGNED';
         finalPayload.assignedAt = new Date();
       } else {
@@ -576,15 +572,32 @@ export class EmergencyRequestsService {
           finalPayload.trackingCode = await this.generateTrackingCode();
         }
         try {
-          request = await this.prisma.emergencyRequest.create({
-            data: finalPayload,
-            include: {
-              patient: true,
-              driver: true,
-              nurse: true,
-              station: { select: { id: true, name: true } },
+          request = await this.prisma.$transaction(
+            async (tx) => {
+              if (isAssigned) {
+                await resolveDuplicateActiveCrewCases(tx);
+                await assertCrewAvailableForAssignment(tx, {
+                  driverId: data.driverId,
+                  nurseId: data.nurseId,
+                  ambulanceId: data.ambulanceId,
+                });
+              }
+              return tx.emergencyRequest.create({
+                data: finalPayload,
+                include: {
+                  patient: true,
+                  driver: true,
+                  nurse: true,
+                  station: { select: { id: true, name: true } },
+                },
+              });
             },
-          });
+            {
+              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+              maxWait: 10_000,
+              timeout: 20_000,
+            },
+          );
           break;
         } catch (createError: any) {
           const isDuplicateCode =
@@ -679,6 +692,11 @@ export class EmergencyRequestsService {
   }
 
   async findAllForUser(user?: AuthUser, queue?: string, status?: string) {
+    if (status === 'active') {
+      await reconcileCrewOccupancy(this.prisma);
+      await resolveDuplicateActiveCrewCases(this.prisma);
+    }
+
     let where: Prisma.EmergencyRequestWhereInput = {};
 
     if (status === 'active') {
@@ -925,12 +943,6 @@ export class EmergencyRequestsService {
       await assertDispatchEligibleStaff(this.prisma, data.nurseId, 'Nurse');
     }
 
-    await assertCrewAvailableForAssignment(this.prisma, {
-      driverId: data.driverId,
-      nurseId: data.nurseId,
-      ambulanceId: data.ambulanceId,
-    }, id);
-
     await assertAssignCrewMatchesCaseStation(this.prisma, existing.stationId, {
       driverId: data.driverId,
       nurseId: data.nurseId,
@@ -946,19 +958,6 @@ export class EmergencyRequestsService {
       (data.driverId !== existing.driverId ||
         data.ambulanceId !== existing.ambulanceId ||
         (data.nurseId ?? null) !== (existing.nurseId ?? null));
-
-    // Free previous resources when reassigning to a new team/unit
-    if (isReassign) {
-      if (existing.driverId && existing.driverId !== data.driverId) {
-        await releaseCrewForCase(this.prisma, { driverId: existing.driverId });
-      }
-      if (existing.nurseId && existing.nurseId !== data.nurseId) {
-        await releaseCrewForCase(this.prisma, { nurseId: existing.nurseId });
-      }
-      if (existing.ambulanceId && existing.ambulanceId !== data.ambulanceId) {
-        await releaseCrewForCase(this.prisma, { ambulanceId: existing.ambulanceId });
-      }
-    }
 
     const newStatus =
       data.status ??
@@ -981,45 +980,77 @@ export class EmergencyRequestsService {
 
     const assignNotes = formatAssignStatusNotes(isReassign, user?.sub);
 
-    const result = await this.prisma.emergencyRequest.update({
-      where: { id },
-      data: {
-        ...updateData,
-        statusLogs: {
-          create: {
-            fromStatus: existing.status,
-            toStatus: newStatus,
-            changedByEmployeeId: assignerEmployeeId ?? undefined,
-            notes: assignNotes,
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        await resolveDuplicateActiveCrewCases(tx);
+        await assertCrewAvailableForAssignment(
+          tx,
+          {
+            driverId: data.driverId,
+            nurseId: data.nurseId,
+            ambulanceId: data.ambulanceId,
+          },
+          id,
+        );
+
+        if (isReassign) {
+          if (existing.driverId && existing.driverId !== data.driverId) {
+            await releaseCrewForCase(tx, { driverId: existing.driverId });
+          }
+          if (existing.nurseId && existing.nurseId !== data.nurseId) {
+            await releaseCrewForCase(tx, { nurseId: existing.nurseId });
+          }
+          if (existing.ambulanceId && existing.ambulanceId !== data.ambulanceId) {
+            await releaseCrewForCase(tx, { ambulanceId: existing.ambulanceId });
           }
         }
-      },
-      include: {
-        patient: true,
-        dispatcher: true,
-        driver: { include: { user: true } },
-        nurse: { include: { user: true } },
-        ambulance: true,
-        statusLogs: true
-      },
-    });
 
-    // Keep the crew paired with the dispatched ambulance so the assignment is
-    // reflected system-wide (availability boards, driver/nurse apps, etc.).
-    await occupyCrewForCase(this.prisma, {
-      driverId: data.driverId,
-      nurseId: data.nurseId,
-      ambulanceId: data.ambulanceId,
-    });
-    if (data.ambulanceId) {
-      const crewIds = [data.driverId, data.nurseId].filter(Boolean) as string[];
-      if (crewIds.length) {
-        await this.prisma.employee.updateMany({
-          where: { id: { in: crewIds } },
-          data: { assignedAmbulanceId: data.ambulanceId },
+        const updated = await tx.emergencyRequest.update({
+          where: { id },
+          data: {
+            ...updateData,
+            statusLogs: {
+              create: {
+                fromStatus: existing.status,
+                toStatus: newStatus,
+                changedByEmployeeId: assignerEmployeeId ?? undefined,
+                notes: assignNotes,
+              },
+            },
+          },
+          include: {
+            patient: true,
+            dispatcher: true,
+            driver: { include: { user: true } },
+            nurse: { include: { user: true } },
+            ambulance: true,
+            statusLogs: true,
+          },
         });
-      }
-    }
+
+        await occupyCrewForCase(tx, {
+          driverId: data.driverId,
+          nurseId: data.nurseId,
+          ambulanceId: data.ambulanceId,
+        });
+        if (data.ambulanceId) {
+          const crewIds = [data.driverId, data.nurseId].filter(Boolean) as string[];
+          if (crewIds.length) {
+            await tx.employee.updateMany({
+              where: { id: { in: crewIds } },
+              data: { assignedAmbulanceId: data.ambulanceId },
+            });
+          }
+        }
+
+        return updated;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 20_000,
+      },
+    );
 
     const assignedIds = [result.driver?.userId, result.nurse?.userId].filter(Boolean) as string[];
 
@@ -1590,9 +1621,24 @@ export class EmergencyRequestsService {
   }
 
   update(id: string, data: Prisma.EmergencyRequestUpdateInput) {
+    const sanitized = { ...data } as Record<string, unknown>;
+    for (const key of [
+      'status',
+      'driverId',
+      'nurseId',
+      'ambulanceId',
+      'dispatcherId',
+      'driver',
+      'nurse',
+      'ambulance',
+      'dispatcher',
+    ]) {
+      delete sanitized[key];
+    }
+
     return this.prisma.emergencyRequest.update({
       where: { id },
-      data,
+      data: sanitized as Prisma.EmergencyRequestUpdateInput,
       include: {
         patient: true,
         ambulance: true,

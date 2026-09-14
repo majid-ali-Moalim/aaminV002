@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import { ANY_PERMISSIONS_KEY } from '../decorators/any-permissions.decorator';
 import { ALL_PERMISSION_KEYS } from '../../access-control/permission-catalog';
 import { AccessControlService } from '../../access-control/access-control.service';
 
@@ -12,12 +13,17 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const anyRequired = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
     const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    if (!required?.length) return true;
+    if (!anyRequired?.length && !required?.length) return true;
 
     const { user } = context.switchToHttp().getRequest();
     if (!user) throw new ForbiddenException('User not authenticated');
@@ -30,6 +36,16 @@ export class PermissionsGuard implements CanActivate {
       user.role,
       user.employeeRole,
     );
+
+    if (anyRequired?.length) {
+      const hasAny = anyRequired.some((p) => granted.includes(p));
+      if (!hasAny) {
+        throw new ForbiddenException(
+          `Missing required permission — need one of: ${anyRequired.join(', ')}`,
+        );
+      }
+      return true;
+    }
 
     const hasAll = required.every((p) => granted.includes(p));
     if (!hasAll) {

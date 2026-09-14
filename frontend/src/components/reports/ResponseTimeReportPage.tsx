@@ -332,7 +332,6 @@ export default function ResponseTimeReportPage() {
           { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
           { key: 'priority', label: 'Priority', source: 'priorities' },
           { key: 'status', label: 'Status', source: 'emergencyStatuses' },
-          { key: 'emergencyType', label: 'Category', source: 'incidentCategories' },
           { key: 'requestSource', label: 'Request Source', source: 'requestSources' },
           { key: 'station', label: 'Station', source: 'stations' },
         ]}

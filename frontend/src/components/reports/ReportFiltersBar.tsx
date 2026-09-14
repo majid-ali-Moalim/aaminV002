@@ -31,7 +31,6 @@ const SOLE_KEYS = new Set([
   'district',
   'priority',
   'status',
-  'emergencyType',
   'hospital',
   'patientOutcome',
   'transportType',

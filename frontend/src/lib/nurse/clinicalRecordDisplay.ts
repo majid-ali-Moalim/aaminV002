@@ -7,6 +7,11 @@ import {
   parseLoadPatient,
   parseMonitoring,
 } from '@/lib/nurse/patientCareTypes'
+import {
+  BASE_CHIEF_COMPLAINTS,
+  BASE_TREATMENT_OPTIONS,
+  formatClinicalMultiDisplay,
+} from '@/lib/nurse/nurseClinicalOptions'
 import { formatGender } from '@/lib/patients/patientDisplay'
 import { isImageUpload, uploadedFileUrl } from '@/lib/uploads/fileUrl'
 
@@ -79,7 +84,11 @@ export function buildMedicalNotesFields(record: CareRecord): CaseFileField[] {
   const fields: CaseFileField[] = []
 
   if (assessment && !isPlaceholderText(assessment.chiefComplaint)) {
-    pushField(fields, 'Chief complaint', assessment.chiefComplaint)
+    pushField(
+      fields,
+      'Chief complaint',
+      formatClinicalMultiDisplay(assessment.chiefComplaint, BASE_CHIEF_COMPLAINTS),
+    )
   }
   if (assessment?.symptoms && !isPlaceholderText(assessment.symptoms)) {
     pushField(fields, 'Symptoms', assessment.symptoms)
@@ -105,7 +114,11 @@ export function buildMedicalNotesFields(record: CareRecord): CaseFileField[] {
   pushField(fields, 'Temperature', record.temperature)
   pushField(fields, 'SpO₂', record.oxygenSaturation)
   if (record.treatmentGiven && !isPlaceholderText(record.treatmentGiven)) {
-    pushField(fields, 'Treatment', record.treatmentGiven)
+    pushField(
+      fields,
+      'Treatment',
+      formatClinicalMultiDisplay(record.treatmentGiven, BASE_TREATMENT_OPTIONS),
+    )
   }
   pushField(fields, 'Medication', record.medications)
   if (!isPlaceholderText(extras.treatmentNotes)) {
@@ -127,9 +140,6 @@ export function buildHandoverFields(record: CareRecord): CaseFileField[] {
   pushField(fields, 'Handover category', handover.category)
   pushField(fields, 'Patient status', handoverOutcomeLabel(handover.patientOutcome))
   pushField(fields, 'Condition at handover', handover.patientCondition)
-  if (handover.treatmentGiven && !isPlaceholderText(handover.treatmentGiven)) {
-    pushField(fields, 'Treatment en route', handover.treatmentGiven)
-  }
   pushField(fields, 'Receiving doctor', handover.receivingStaff)
   pushField(fields, 'Handover notes', handover.notes)
   pushField(fields, 'Nurse signature', handover.signature)

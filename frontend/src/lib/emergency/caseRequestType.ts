@@ -12,7 +12,7 @@ export function parseCaseRequestType(
   if (notes?.includes('Request Type: Emergency')) {
     return 'Emergency'
   }
-  if (requestSource === 'OTHER') {
+  if (requestSource === 'WEBSITE' || requestSource === 'OTHER') {
     return 'Non-Emergency'
   }
   return 'Emergency'

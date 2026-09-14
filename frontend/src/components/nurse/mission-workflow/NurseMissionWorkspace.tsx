@@ -28,7 +28,16 @@ import {
   patientsService,
   systemSetupService,
 } from '@/lib/api'
-import { fetchEmergencyTypes, fetchEmergencyTypesAuthenticated } from '@/lib/emergency/emergencyTypes'
+import {
+  BASE_CHIEF_COMPLAINTS,
+  BASE_TREATMENT_OPTIONS,
+  CLINICAL_OTHER,
+  getChiefComplaintOptions,
+  getTreatmentOptions,
+  parseClinicalMultiValue,
+  rememberChiefComplaint,
+  rememberTreatment,
+} from '@/lib/nurse/nurseClinicalOptions'
 import type { HospitalOption } from '@/components/hospitals/HospitalDestinationPicker'
 import type { CustomHospitalDraft } from '@/components/hospitals/CustomHospitalModal'
 import { loadLocationReferenceData } from '@/lib/cache/referenceData'
@@ -36,6 +45,7 @@ import { useNurseEmployee } from '@/lib/nurse/useNurseEmployee'
 import { useNurseCases } from '@/lib/nurse/useNurseCases'
 import {
   encodeAssessment,
+  normalizeBreathingStatus,
   encodeHandover,
   encodeLoadPatient,
   isAssessmentRecord,
@@ -135,11 +145,8 @@ const EMPTY_MEDICAL_NOTES: MedicalNotesFormState = {
 }
 
 function parseTreatmentFields(treatmentGiven?: string | null) {
-  if (!treatmentGiven) return { treatmentType: '', treatmentOtherDetails: '' }
-  if (treatmentGiven.startsWith('Other:')) {
-    return { treatmentType: 'Other', treatmentOtherDetails: treatmentGiven.slice(6).trim() }
-  }
-  return { treatmentType: treatmentGiven, treatmentOtherDetails: '' }
+  if (!treatmentGiven?.trim()) return { treatmentType: '', treatmentOtherDetails: '' }
+  return { treatmentType: treatmentGiven.trim(), treatmentOtherDetails: '' }
 }
 
 function treatmentSummaryFromRecords(records: any[]): string {
@@ -198,7 +205,7 @@ function buildHandoverDefaults(mission: any, nurseName: string, records: any[] =
     emergencyTypeName: mission.emergencyType?.name || '',
     patientOutcome: '',
     patientCondition: conditionSummaryFromRecords(records, mission),
-    treatmentGiven: treatmentSummaryFromRecords(records),
+    treatmentGiven: '',
     receivingStaff: '',
     hospitalNotifyEmail: '',
     notes: '',
@@ -239,7 +246,7 @@ function medicalNotesFromRecords(records: any[]): MedicalNotesFormState {
     symptoms: parsed?.symptoms || '',
     consciousnessLevel: parsed?.consciousnessLevel || 'Alert',
     painLevel: parsed?.painLevel ? normalizePainLevel(parsed.painLevel) : 'None',
-    breathingStatus: parsed?.breathingStatus || 'Normal',
+    breathingStatus: normalizeBreathingStatus(parsed?.breathingStatus || 'Normal'),
     injuryDescription: parsed?.injuryDescription || '',
     assessmentNotes: parsed?.assessmentNotes || '',
     bloodPressure: assessmentRecord.bloodPressure || '',
@@ -357,10 +364,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
   const [handoverMedicalNotesPrompt, setHandoverMedicalNotesPrompt] = useState(false)
   const [hospitals, setHospitals] = useState<HospitalOption[]>([])
   const [incidentCategories, setIncidentCategories] = useState<Array<{ id: string; name: string }>>([])
-  const [emergencyTypes, setEmergencyTypes] = useState<
-    Array<{ id: string; name: string; incidentCategoryId?: string | null }>
-  >([])
-
   useEffect(() => {
     void hospitalsService.getAll().then((rows) => {
       setHospitals(
@@ -378,21 +381,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         (Array.isArray(rows) ? rows : []).filter((c: { id?: string; name?: string }) => c.id && c.name),
       )
     }).catch(() => setIncidentCategories([]))
-    void fetchEmergencyTypesAuthenticated()
-      .then(async (types) => {
-        if (types.length > 0) {
-          setEmergencyTypes(types)
-          return
-        }
-        setEmergencyTypes(await fetchEmergencyTypes())
-      })
-      .catch(async () => {
-        try {
-          setEmergencyTypes(await fetchEmergencyTypes())
-        } catch {
-          setEmergencyTypes([])
-        }
-      })
   }, [])
 
   useEffect(() => {
@@ -471,6 +459,14 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
       }
     },
     [mission],
+  )
+
+  const clinicalOptions = useMemo(
+    () => ({
+      chiefComplaints: getChiefComplaintOptions(records),
+      treatments: getTreatmentOptions(records),
+    }),
+    [records],
   )
 
   const { currentStepId, meta, syncWorkflow } = useNurseWorkflowState(mission)
@@ -740,10 +736,20 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         activityLabel,
         ...payload,
       }
-      if (existingRecordId) {
-        await nursesService.updatePatientCareRecord(existingRecordId, body)
-      } else {
-        await nursesService.createPatientCareRecord(body)
+      const apiResult = existingRecordId
+        ? await nursesService.updatePatientCareRecord(existingRecordId, body)
+        : await nursesService.createPatientCareRecord(body)
+
+      const handoverEmail = (apiResult as { handoverEmail?: { sent: boolean; error?: string; skipped?: boolean } })
+        ?.handoverEmail
+      if (handoverEmail) {
+        if (handoverEmail.sent) {
+          toast.success('Handover report emailed to the hospital')
+        } else if (!handoverEmail.skipped) {
+          toast.error(handoverEmail.error || 'Handover saved but hospital email could not be sent')
+        } else if (handoverEmail.error && typeof payload.clinicalNotes === 'string') {
+          toast.error(handoverEmail.error)
+        }
       }
       if (stepId) {
         markStepComplete(mission.id, stepId)
@@ -795,13 +801,25 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
     }
     await ensurePatientLoaded()
     const treatmentGiven = medicalNotesForm.treatmentType.trim() || undefined
+
+    if (medicalNotesForm.chiefComplaint.trim()) {
+      const { selected, other } = parseClinicalMultiValue(
+        medicalNotesForm.chiefComplaint,
+        BASE_CHIEF_COMPLAINTS,
+      )
+      rememberChiefComplaint([...selected.filter((s) => s !== CLINICAL_OTHER), other].filter(Boolean))
+    }
+    if (treatmentGiven) {
+      const { selected, other } = parseClinicalMultiValue(treatmentGiven, BASE_TREATMENT_OPTIONS)
+      rememberTreatment([...selected.filter((s) => s !== CLINICAL_OTHER), other].filter(Boolean))
+    }
     const noteSections = [
       encodeAssessment({
         chiefComplaint: medicalNotesForm.chiefComplaint,
         symptoms: medicalNotesForm.symptoms,
         consciousnessLevel: medicalNotesForm.consciousnessLevel,
         painLevel: medicalNotesForm.painLevel,
-        breathingStatus: medicalNotesForm.breathingStatus,
+        breathingStatus: normalizeBreathingStatus(medicalNotesForm.breathingStatus),
         injuryDescription: medicalNotesForm.injuryDescription,
         assessmentNotes: medicalNotesForm.assessmentNotes,
       }),
@@ -859,7 +877,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
         clinicalNotes: encodeHandover({
           patientName: handoverForm.patientName.trim(),
           patientCondition: handoverForm.patientCondition,
-          treatmentGiven: handoverForm.treatmentGiven,
           receivingStaff: handoverForm.receivingStaff,
           notes: handoverForm.notes,
           signature: handoverForm.signature,
@@ -878,8 +895,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
           category: formatHandoverCategoryStored(handoverForm.category, handoverForm.categoryOther),
           incidentCategoryId: handoverForm.incidentCategoryId || undefined,
           incidentCategoryName: handoverForm.incidentCategoryName || undefined,
-          emergencyTypeId: handoverForm.emergencyTypeId || undefined,
-          emergencyTypeName: handoverForm.emergencyTypeName || undefined,
           hospitalNotifyEmail: handoverForm.hospitalNotifyEmail.trim() || undefined,
         }),
       },
@@ -1181,6 +1196,8 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 }}
                 errors={medicalNotesErrors}
                 readOnly={medicalNotesSaved && !medicalNotesEditing}
+                chiefComplaintOptions={clinicalOptions.chiefComplaints}
+                treatmentOptions={clinicalOptions.treatments}
               />
             </TaskShell>
           )}
@@ -1262,7 +1279,6 @@ export default function NurseMissionWorkspace({ selectedCaseId }: Props) {
                 assignedDestination={assignedDestination}
                 hospitals={hospitals}
                 incidentCategories={incidentCategories}
-                emergencyTypes={emergencyTypes}
                 onCreateCustomHospital={createCustomHospital}
                 readOnly={handoverViewMode}
                 errors={handoverErrors}

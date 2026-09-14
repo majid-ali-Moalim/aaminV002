@@ -517,8 +517,12 @@ export type PatientCaseDossierInput = {
     intake: Array<[string, string]>
     timing: Array<[string, string]>
     timeline: ReportTable
+    medicalNotes: Array<[string, string]>
+    handover: Array<[string, string]>
+    caseContacts: Array<[string, string]>
     careRecords: ReportTable | null
   }>
+  organizationContacts?: Array<[string, string]>
 }
 
 export async function downloadPatientCasesDossierPdf(
@@ -567,21 +571,40 @@ export async function downloadPatientCasesDossierPdf(
     doc.text(`Case ${caseItem.trackingCode}`, MARGIN_X + 8, y + 8)
     y += 28
 
-    y = drawKeyValueSection(doc, 'Patient & caller / relative', caseItem.patientRelative, y, pdfInput, logo)
-    y = drawKeyValueSection(doc, 'Mission details', caseItem.mission, y, pdfInput, logo)
-    y = drawKeyValueSection(doc, 'Assigned crew & resources', caseItem.crew, y, pdfInput, logo)
-    y = drawKeyValueSection(doc, 'Intake, triage & reported condition', caseItem.intake, y, pdfInput, logo)
-    y = drawKeyValueSection(doc, 'Case timing milestones', caseItem.timing, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '1. Request & patient', caseItem.patientRelative, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '2. Mission & locations', caseItem.mission, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '3. Intake & triage', caseItem.intake, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '4. Assigned crew', caseItem.crew, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '5. Medical notes (nurse)', caseItem.medicalNotes, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '6. Hospital handover', caseItem.handover, y, pdfInput, logo)
+    y = drawKeyValueSection(doc, '7. Case timing', caseItem.timing, y, pdfInput, logo)
     y = renderTable(doc, caseItem.timeline, y, pdfInput, logo)
     if (caseItem.careRecords) {
       y = renderTable(doc, caseItem.careRecords, y, pdfInput, logo)
     }
+    y = drawKeyValueSection(doc, '8. Case contacts', caseItem.caseContacts, y, pdfInput, logo)
 
     y += 8
     doc.setDrawColor(...BRAND.line)
     doc.setLineWidth(1)
     doc.line(MARGIN_X, y, doc.internal.pageSize.getWidth() - MARGIN_X, y)
     y += 16
+  }
+
+  if (input.organizationContacts?.length) {
+    const pageHeight = doc.internal.pageSize.getHeight()
+    if (y > pageHeight - FOOTER_H - 120) {
+      doc.addPage()
+      y = drawCompactHeader(doc, pdfInput, logo)
+      drawFooter(doc)
+      y += 12
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...BRAND.dark)
+    doc.text('Aamin Ambulance — contact & support', MARGIN_X, y)
+    y += 18
+    y = drawKeyValueSection(doc, 'Reach us', input.organizationContacts, y, pdfInput, logo)
   }
 
   doc.save(filename)

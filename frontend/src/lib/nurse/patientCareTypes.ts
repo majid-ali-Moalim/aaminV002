@@ -319,7 +319,40 @@ export function painLevelLabel(value: string): string {
   const normalized = normalizePainLevel(value)
   return PAIN_LEVEL_OPTIONS.find((o) => o.value === normalized)?.label ?? normalized
 }
-export const BREATHING_STATUS = ['Normal', 'Labored', 'Shallow', 'Absent', 'Assisted'] as const
+export const BREATHING_STATUS_OPTIONS = [
+  { value: 'Normal', label: 'Normal' },
+  { value: 'Hard to breathe', label: 'Hard to breathe' },
+  { value: 'Weak breathing', label: 'Weak breathing' },
+  { value: 'Not breathing', label: 'Not breathing' },
+  { value: 'Breathing assisted', label: 'Breathing assisted' },
+] as const
+
+export const BREATHING_STATUS = BREATHING_STATUS_OPTIONS.map((o) => o.value)
+
+const LEGACY_BREATHING_MAP: Record<string, string> = {
+  Labored: 'Hard to breathe',
+  Shallow: 'Weak breathing',
+  Absent: 'Not breathing',
+  Assisted: 'Breathing assisted',
+  NORMAL: 'Normal',
+  DIFFICULTY: 'Hard to breathe',
+  DIFFICULT: 'Hard to breathe',
+  LABORED: 'Hard to breathe',
+  NOT_BREATHING: 'Not breathing',
+  ARREST: 'Not breathing',
+}
+
+export function normalizeBreathingStatus(value?: string | null): string {
+  if (!value?.trim()) return 'Normal'
+  const trimmed = value.trim()
+  if (BREATHING_STATUS.includes(trimmed as (typeof BREATHING_STATUS)[number])) return trimmed
+  return LEGACY_BREATHING_MAP[trimmed] ?? LEGACY_BREATHING_MAP[trimmed.toUpperCase()] ?? trimmed
+}
+
+export function breathingStatusLabel(value?: string | null): string {
+  const normalized = normalizeBreathingStatus(value)
+  return BREATHING_STATUS_OPTIONS.find((o) => o.value === normalized)?.label ?? normalized
+}
 
 export const TREATMENT_TYPES = [
   'Oxygen Therapy',

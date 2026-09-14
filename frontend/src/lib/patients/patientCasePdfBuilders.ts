@@ -3,6 +3,14 @@ import { buildCaseTimeline } from '@/components/features/emergency/CaseMissionRe
 import { formatTimelineEventDetails } from '@/lib/emergency/caseMissionTimeline'
 import { buildCallerReport } from '@/lib/emergency/callerReport'
 import { buildCaseTimingRows } from '@/lib/emergency/caseTimingMetrics'
+import { formatRequestSourceLabel } from '@/lib/emergency/requestSourceLabels'
+import {
+  buildCaseFileClinicalBlocks,
+  type CaseFileField,
+} from '@/lib/nurse/clinicalRecordDisplay'
+import { formatClinicalMultiDisplay } from '@/lib/nurse/nurseClinicalOptions'
+import { BASE_CHIEF_COMPLAINTS, BASE_TREATMENT_OPTIONS } from '@/lib/nurse/nurseClinicalOptions'
+import { AAMIN_CONTACT } from '@/components/public/home/homeContent'
 import {
   formatBloodType,
   formatDateTimeShort,
@@ -117,7 +125,9 @@ export function buildPatientRelativeSection(req: EmergencyRequest): [string, str
     ['Allergies', p?.allergies || '—'],
     ['Conditions', p?.conditions || '—'],
     ['Insurance', p?.insuranceProvider || '—'],
-    ['Request source', req.requestSource?.replace(/_/g, ' ') || '—'],
+    ['Request source', formatRequestSourceLabel(req.requestSource)],
+    ['Caller name', req.callerName || '—'],
+    ['Caller phone', req.callerPhone || '—'],
   ]
   return rows
 }
@@ -192,7 +202,7 @@ export function buildCareRecordsTable(req: EmergencyRequest) {
   const records = req.patientCareRecords ?? []
   if (!records.length) return null
   return {
-    title: 'Nurse clinical records',
+    title: 'Nurse clinical records (raw log)',
     columns: ['Date / time', 'Nurse', 'BP', 'HR', 'SpO₂', 'Temp', 'Notes / treatment'],
     rows: records.map((r) => [
       formatDateTimeShort(r.createdAt),
@@ -201,7 +211,70 @@ export function buildCareRecordsTable(req: EmergencyRequest) {
       r.heartRate ?? '—',
       r.oxygenSaturation ?? '—',
       r.temperature ?? '—',
-      [r.treatmentGiven, r.medications, r.clinicalNotes].filter(Boolean).join(' · ') || '—',
+      [
+        r.treatmentGiven
+          ? formatClinicalMultiDisplay(r.treatmentGiven, BASE_TREATMENT_OPTIONS)
+          : '',
+        r.medications,
+      ]
+        .filter(Boolean)
+        .join(' · ') || '—',
     ]),
   }
+}
+
+function fieldsToRows(fields: CaseFileField[]): [string, string][] {
+  return fields.map((f) => [f.label, f.value])
+}
+
+export function buildMedicalNotesSection(req: EmergencyRequest): [string, string][] {
+  const blocks = buildCaseFileClinicalBlocks(req.patientCareRecords ?? [])
+  const medical = blocks.find((b) => b.title === 'Medical notes')
+  if (!medical) return [['Medical notes', 'Not recorded']]
+  const rows: [string, string][] = [['Recorded by', `${medical.nurseName} · ${formatDateTimeShort(medical.createdAt)}`]]
+  for (const field of medical.fields) {
+    let value = field.value
+    if (field.label === 'Chief complaint') {
+      value = formatClinicalMultiDisplay(value, BASE_CHIEF_COMPLAINTS)
+    }
+    if (field.label === 'Treatment') {
+      value = formatClinicalMultiDisplay(value, BASE_TREATMENT_OPTIONS)
+    }
+    rows.push([field.label, value])
+  }
+  return rows
+}
+
+export function buildHandoverSection(req: EmergencyRequest): [string, string][] {
+  const blocks = buildCaseFileClinicalBlocks(req.patientCareRecords ?? [])
+  const handover = blocks.find((b) => b.title === 'Hospital handover')
+  if (!handover) return [['Hospital handover', 'Not recorded']]
+  const rows: [string, string][] = [['Recorded by', `${handover.nurseName} · ${formatDateTimeShort(handover.createdAt)}`]]
+  rows.push(...fieldsToRows(handover.fields))
+  return rows
+}
+
+export function buildCaseContactsSection(req: EmergencyRequest): [string, string][] {
+  return [
+    ['Patient', req.patient?.fullName || '—'],
+    ['Patient phone', req.patient?.phone || req.callerPhone || '—'],
+    ['Caller', req.callerName || '—'],
+    ['Caller phone', req.callerPhone || '—'],
+    ['Dispatcher', empName(req.dispatcher)],
+    ['Driver', empName(req.driver)],
+    ['Nurse', empName(req.nurse)],
+    ['Destination hospital', req.destinationHospital?.name || req.destination || '—'],
+    ['Hospital branch', req.destinationHospitalBranchName || '—'],
+  ]
+}
+
+export function buildOrganizationContactsSection(): [string, string][] {
+  return [
+    ['Organization', 'Aamin Ambulance'],
+    ['Location', AAMIN_CONTACT.location],
+    ['Emergency line', AAMIN_CONTACT.emergencyDisplay],
+    ['Operations phone', AAMIN_CONTACT.phoneDisplay],
+    ['Email', AAMIN_CONTACT.emailPrimary],
+    ['Alternate email', AAMIN_CONTACT.emailSecondary],
+  ]
 }

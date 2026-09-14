@@ -574,7 +574,12 @@ export class ReportsService {
   ];
 
   // A "real emergency" is any request that isn't a hospital referral/other transfer.
-  private readonly EMERGENCY_REQUEST_SOURCES: RequestSource[] = ['PHONE_CALL', 'WALK_IN', 'STAFF'];
+  private readonly EMERGENCY_REQUEST_SOURCES: RequestSource[] = [
+    'PHONE_CALL',
+    'WALK_IN',
+    'STAFF',
+    'WEBSITE',
+  ];
 
   private async getDashboardKpiMetrics() {
     const now = new Date();
@@ -1080,10 +1085,8 @@ export class ReportsService {
       })),
       requestSources: [
         { value: 'PHONE_CALL', label: 'Phone call' },
-        { value: 'WALK_IN', label: 'Walk in' },
-        { value: 'STAFF', label: 'Staff' },
         { value: 'REFERRAL', label: 'Referral' },
-        { value: 'OTHER', label: 'Other' },
+        { value: 'WEBSITE', label: 'Website (online)' },
       ],
       requestTypes: [
         { value: 'Emergency', label: 'Emergency' },
@@ -2512,6 +2515,7 @@ export class ReportsService {
     const hospitals: Record<string, number> = {};
     const emergencyTypes: Record<string, number> = {};
     const transportTypes: Record<string, number> = {};
+    const requestSources: Record<string, number> = {};
     const cancelReasons: Record<string, number> = {};
     const responseBuckets: Record<string, number> = {
       '<5 min': 0,
@@ -2537,6 +2541,7 @@ export class ReportsService {
     for (const c of cases) {
       const reqType = this.parseRequestType(c.notes, c.requestSource);
       countBy(requestTypes, reqType);
+      countBy(requestSources, this.formatRequestSourceLabel(c.requestSource));
       if (reqType === 'Emergency') emergencyCount += 1;
       else if (reqType === 'Non-Emergency') nonEmergencyCount += 1;
       else if (reqType === 'Referral') referralCount += 1;
@@ -2692,7 +2697,6 @@ export class ReportsService {
       'Top Dispatcher',
       'Top Ambulance',
       'Top Hospital',
-      'Top Emergency Type',
       'Top Transport Type',
     ];
     const topTenRow: Array<string | number> = [
@@ -2704,7 +2708,6 @@ export class ReportsService {
       topDispatcher ? `${topDispatcher[0]} (${topDispatcher[1]})` : 'Not recorded',
       topAmbulance ? `${topAmbulance[0]} (${topAmbulance[1]})` : 'Not recorded',
       topHospital ? `${topHospital[0]} (${topHospital[1]})` : 'Not recorded',
-      topEmergencyType ? `${topEmergencyType[0]} (${topEmergencyType[1]})` : 'Not recorded',
       topTransportType ? `${topTransportType[0]} (${topTransportType[1]})` : 'Not recorded',
     ];
 
@@ -2776,14 +2779,14 @@ export class ReportsService {
           rows: topEntries(hospitals).map(([name, count]) => [cell(name), count]),
         },
         {
-          title: 'Emergency Types',
-          columns: ['Type', 'Count'],
-          rows: topEntries(emergencyTypes, 15).map(([name, count]) => [cell(name), count]),
-        },
-        {
           title: 'Non-Emergency Transport Types',
           columns: ['Transport Type', 'Count'],
           rows: topEntries(transportTypes, 15).map(([name, count]) => [cell(name), count]),
+        },
+        {
+          title: 'Requests by Source',
+          columns: ['Source', 'Count'],
+          rows: topEntries(requestSources, 10).map(([name, count]) => [cell(name), count]),
         },
         {
           title: 'Cancellation Reasons',
@@ -2797,7 +2800,7 @@ export class ReportsService {
             ? 'Filtered Cases Overview'
             : 'All Cases Overview',
         columns: [
-          'Tracking Code', 'Type', 'Patient', 'Gender', 'Priority', 'Status',
+          'Tracking Code', 'Type', 'Source', 'Patient', 'Gender', 'Priority', 'Status',
           'Category', 'Destination', 'District', 'Station', 'Ambulance', 'Driver', 'Nurse',
           'Response (min)', 'Total (min)', 'Created', 'Completed By', 'Completed By Role',
         ],
@@ -2814,6 +2817,7 @@ export class ReportsService {
           return [
             cell(c.trackingCode),
             cell(this.parseRequestType(c.notes, c.requestSource)),
+            cell(this.formatRequestSourceLabel(c.requestSource)),
             cell(c.patient?.fullName, 'Unknown'),
             cell(c.patient?.gender, 'Unknown'),
             cell(c.priority),
@@ -2846,7 +2850,26 @@ export class ReportsService {
     if (notes?.includes('Request Type: Referral') || requestSource === 'REFERRAL') return 'Referral';
     if (notes?.includes('Request Type: Non-Emergency')) return 'Non-Emergency';
     if (notes?.includes('Request Type: Emergency')) return 'Emergency';
+    if (requestSource === 'WEBSITE' || requestSource === 'OTHER') return 'Non-Emergency';
     return 'Emergency';
+  }
+
+  private formatRequestSourceLabel(source?: string | null): string {
+    switch (String(source ?? '').toUpperCase()) {
+      case 'PHONE_CALL':
+        return 'Phone call';
+      case 'REFERRAL':
+        return 'Referral';
+      case 'WEBSITE':
+      case 'OTHER':
+        return 'Website (online)';
+      case 'WALK_IN':
+        return 'Walk in';
+      case 'STAFF':
+        return 'Staff';
+      default:
+        return source?.replace(/_/g, ' ') || 'Not recorded';
+    }
   }
 
   private parseNoteField(notes: string | null | undefined, field: string) {
@@ -3284,6 +3307,9 @@ export class ReportsService {
     if (filters.transportType) {
       parts.push(`Transport type: ${filters.transportType}`);
     }
+    if (filters.requestSource) {
+      parts.push(`Request source: ${this.formatRequestSourceLabel(filters.requestSource)}`);
+    }
     if (filters.requestType) {
       parts.push(`Request type: ${filters.requestType}`);
     }
@@ -3309,6 +3335,7 @@ export class ReportsService {
         filters.status ||
         filters.emergencyType ||
         filters.transportType ||
+        filters.requestSource ||
         filters.requestType ||
         filters.completedByRole ||
         filters.startDate ||
@@ -3490,7 +3517,11 @@ export class ReportsService {
     if (filters.emergencyType) where.incidentCategoryId = filters.emergencyType;
     if (filters.hospital) where.destinationHospitalId = filters.hospital;
     if (filters.ambulance) where.ambulanceId = filters.ambulance;
-    if (filters.requestSource) where.requestSource = filters.requestSource;
+    if (filters.requestSource === 'WEBSITE') {
+      where.requestSource = { in: [RequestSource.WEBSITE, RequestSource.OTHER] };
+    } else if (filters.requestSource) {
+      where.requestSource = filters.requestSource;
+    }
     if (filters.station) where.stationId = filters.station;
     return where;
   }

@@ -33,5 +33,13 @@ export function normalizeUserEmail(
 
 export function resolveDeliverableEmail(raw?: string | null): string | null {
   const email = String(raw ?? '').trim();
-  return isValidEmailAddress(email) ? email.toLowerCase() : null;
+  if (!isValidEmailAddress(email)) return null;
+  if (isPlaceholderHospitalEmail(email)) return null;
+  return email.toLowerCase();
+}
+
+/** System-generated placeholder emails (manual hospital quick-create) must not receive mail. */
+export function isPlaceholderHospitalEmail(raw?: string | null): boolean {
+  const email = String(raw ?? '').trim().toLowerCase();
+  return email.endsWith('@aamin.local');
 }

@@ -3,11 +3,13 @@
  * Run: npx ts-node scripts/repair-stuck-crew.ts
  */
 import { PrismaClient } from '@prisma/client';
-import { reconcileCrewOccupancy } from '../src/common/occupied-crew';
+import { reconcileCrewOccupancy, resolveDuplicateActiveCrewCases } from '../src/common/occupied-crew';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const duplicateCases = await resolveDuplicateActiveCrewCases(prisma as any);
+  console.log(`Resolved ${duplicateCases} duplicate active crew assignment(s).`);
   const repaired = await reconcileCrewOccupancy(prisma as any);
 
   const fieldEmployees = await prisma.employee.findMany({

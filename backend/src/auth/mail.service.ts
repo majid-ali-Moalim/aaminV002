@@ -152,7 +152,7 @@ export class MailService implements OnModuleInit {
       senderName?: string;
       priority?: string;
     },
-  ): Promise<boolean> {
+  ): Promise<{ sent: boolean; error?: string }> {
     const escape = (s: string) =>
       s
         .replace(/&/g, '&amp;')
@@ -204,7 +204,49 @@ export class MailService implements OnModuleInit {
       </div>
     `;
 
-    return this.send({ to, subject, text, html, context: `handover report: ${data.subject}` });
+    return this.sendDetailed({ to, subject, text, html, context: `handover report: ${data.subject}` });
+  }
+
+  private async sendDetailed(options: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    context: string;
+  }): Promise<{ sent: boolean; error?: string }> {
+    const to = options.to.trim();
+    if (!isValidEmailAddress(to)) {
+      const error = `Invalid recipient address "${to}"`;
+      this.logger.warn(`Skipped ${options.context}: ${error}`);
+      return { sent: false, error };
+    }
+
+    if (!this.isConfigured() || !this.transporter) {
+      const error = 'SMTP is not configured — set SMTP_HOST, SMTP_USER, and SMTP_PASS in backend/.env';
+      this.logger.warn(`SMTP not configured — skipped ${options.context} for ${to}`);
+      return { sent: false, error };
+    }
+
+    try {
+      await this.transporter.sendMail({
+        from: this.smtpFrom,
+        to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+      });
+      this.logger.log(`${options.context} sent to ${to}`);
+      return { sent: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to send ${options.context} to ${to}: ${message}`);
+      return {
+        sent: false,
+        error: message.includes('BadCredentials') || message.includes('535')
+          ? 'Email login failed — update SMTP_USER and SMTP_PASS (Gmail app password) in backend/.env'
+          : message,
+      };
+    }
   }
 
   private async send(options: {

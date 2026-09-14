@@ -7,7 +7,6 @@ export type HandoverFormFields = {
   category: string
   categoryOther: string
   incidentCategoryId: string
-  emergencyTypeId: string
   patientOutcome: string
   patientCondition: string
   treatmentGiven: string
@@ -74,10 +73,6 @@ export function validateHandoverForm(
 
   if (!form.incidentCategoryId?.trim()) {
     errors.incidentCategoryId = 'Select an accident / incident category'
-  }
-
-  if (!form.emergencyTypeId?.trim()) {
-    errors.emergencyTypeId = 'Select an emergency type'
   }
 
   const emailErr = validateHandoverEmail(form.hospitalNotifyEmail)

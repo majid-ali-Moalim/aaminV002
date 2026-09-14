@@ -389,7 +389,7 @@ export default function OperationsReportPage() {
         filterDefs={[
           { key: 'region', label: 'Region', source: 'regions' },
           { key: 'district', label: 'District', source: 'districts', dependsOnRegion: true },
-          { key: 'emergencyType', label: 'Emergency type', source: 'incidentCategories' },
+          { key: 'requestSource', label: 'Request source', source: 'requestSources' },
           { key: 'transportType', label: 'Transport type', source: 'transportTypes' },
         ]}
         startDate={startDate}

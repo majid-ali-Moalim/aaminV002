@@ -4,6 +4,7 @@ import {
   BREATHING_STATUS_OPTIONS,
   CONSCIOUS_STATUS_OPTIONS,
 } from './triageOptions'
+import { formatRequestSourceLabel } from './requestSourceLabels'
 
 export type CallerReportRow = { label: string; value: string }
 
@@ -53,7 +54,7 @@ export function buildCallerReport(request: EmergencyRequest): CallerReportRow[] 
   if (request.patient?.gender) rows.push({ label: 'Gender', value: request.patient.gender })
   if (request.patient?.age != null) rows.push({ label: 'Age', value: String(request.patient.age) })
   if (request.requestSource) {
-    rows.push({ label: 'Request source', value: request.requestSource.replace(/_/g, ' ') })
+    rows.push({ label: 'Request source', value: formatRequestSourceLabel(request.requestSource) })
   }
 
   const pickup = norm(request.pickupLocation)

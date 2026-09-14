@@ -600,6 +600,7 @@ export function buildPayload(data: HireFormValues) {
   const wantsBooking = !emergency && data.scheduleMode === 'booking'
   const bookingTime = wantsBooking ? resolvedBookingTime(data) : ''
   const priority = emergency ? 'HIGH' : 'LOW'
+  const needsNurse = emergency
 
   return {
     callerName: data.patientName.trim() || 'Unknown Caller',
@@ -624,7 +625,8 @@ export function buildPayload(data: HireFormValues) {
     pickupLandmark,
     notes: [
       `Request Type: ${emergency ? 'Emergency' : 'Non-Emergency'}`,
-      emergency ? 'Triage details pending — to be completed by dispatch' : '',
+      emergency ? 'Intake: Public website — triage to be completed by dispatch' : '',
+      emergency ? 'Requires Nurse: Yes' : needsNurse ? 'Requires Nurse: Yes' : 'Requires Nurse: No',
       !emergency && transportLabel ? `Transport Type: ${transportLabel}` : '',
       !emergency && isOtherTransportType(data.transportType)
         ? `Transport Detail: ${data.transportTypeOther.trim()}`
@@ -639,6 +641,9 @@ export function buildPayload(data: HireFormValues) {
     ]
       .filter(Boolean)
       .join('\n'),
-    requestSource: 'OTHER',
+    manualDispatchNotes: needsNurse
+      ? 'NURSE REQUIRED — assign a nurse to this case before dispatch.'
+      : undefined,
+    requestSource: 'WEBSITE',
   }
 }

@@ -3,11 +3,15 @@ import { emergencyRequestsService } from '@/lib/api'
 import { downloadPatientCasesDossierPdf } from '@/lib/reports/exportPdf'
 import {
   buildCareRecordsTable,
+  buildCaseContactsSection,
   buildCaseSummaryStats,
   buildCasesOverviewTable,
   buildCrewSection,
+  buildHandoverSection,
   buildIntakeSection,
+  buildMedicalNotesSection,
   buildMissionSection,
+  buildOrganizationContactsSection,
   buildPatientCasesFilterScope,
   buildPatientRelativeSection,
   buildTimelineTable,
@@ -52,6 +56,9 @@ export async function downloadPatientCasesReportPdf(
     intake: buildIntakeSection(req),
     timing: buildTimingSection(req),
     timeline: buildTimelineTable(req),
+    medicalNotes: buildMedicalNotesSection(req),
+    handover: buildHandoverSection(req),
+    caseContacts: buildCaseContactsSection(req),
     careRecords: buildCareRecordsTable(req),
   }))
 
@@ -65,6 +72,7 @@ export async function downloadPatientCasesReportPdf(
       summary: buildCaseSummaryStats(enriched),
       overviewTable: buildCasesOverviewTable(enriched),
       cases: dossierCases,
+      organizationContacts: buildOrganizationContactsSection(),
     },
     `patient-cases-${scope.isFiltered ? 'filtered' : 'full'}-${stamp}.pdf`,
   )

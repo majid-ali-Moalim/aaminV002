@@ -21,7 +21,6 @@ export type HandoverEmailPayload = {
   }>;
   category?: string;
   incidentCategoryName?: string;
-  emergencyTypeName?: string;
   hospitalNotifyEmail?: string;
   driverName?: string;
   nurseName?: string;
@@ -230,7 +229,6 @@ export function buildHandoverEmailSections(input: {
       title: 'Incident & presentation',
       rows: rows(
         row('Incident category', incidentCategory),
-        row('Emergency type', handover.emergencyTypeName),
         row('Symptoms / complaint', assessment?.chiefComplaint || assessment?.symptoms || request.symptoms),
         row('Injury description', assessment?.injuryDescription),
         row('Consciousness (dispatch)', request.consciousStatus),

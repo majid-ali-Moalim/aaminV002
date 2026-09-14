@@ -14,7 +14,7 @@ import { CaseWorkflowNotificationService } from '../notifications/case-workflow-
 import { releaseCrewForCase } from '../common/occupied-crew';
 import { OCCUPIED_CASE_STATUSES } from '../common/active-case-statuses';
 import { MailService } from '../auth/mail.service';
-import { isValidEmailAddress } from '../common/email-address';
+import { isPlaceholderHospitalEmail, isValidEmailAddress, resolveDeliverableEmail } from '../common/email-address';
 import { buildHandoverEmailSections, parseHandoverEmailPayload } from './handover-email.util';
 
 const HANDOVER_PREFIX = '[EADS_HANDOVER]';
@@ -277,16 +277,17 @@ export class NursesService {
       });
     }
 
+    let handoverEmail: { sent: boolean; skipped?: boolean; error?: string } | undefined;
     if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith(HANDOVER_PREFIX)) {
       await this.caseWorkflowNotifications.notifyCaseEvent({
         caseId: data.emergencyRequestId,
         event: 'HANDOVER_COMPLETED',
         actorUserId: result.nurse?.userId,
       });
-      await this.notifyHospitalHandoverEmail(data.emergencyRequestId, data.clinicalNotes);
+      handoverEmail = await this.notifyHospitalHandoverEmail(data.emergencyRequestId, data.clinicalNotes);
     }
 
-    return result;
+    return handoverEmail ? { ...result, handoverEmail } : result;
   }
 
   async updatePatientCareRecord(recordId: string, data: any) {
@@ -341,11 +342,12 @@ export class NursesService {
       await this.notifyDriverPatientLoaded(existing.emergencyRequest.id);
     }
 
+    let handoverEmail: { sent: boolean; skipped?: boolean; error?: string } | undefined;
     if (typeof data.clinicalNotes === 'string' && data.clinicalNotes.startsWith(HANDOVER_PREFIX)) {
-      await this.notifyHospitalHandoverEmail(existing.emergencyRequest.id, data.clinicalNotes);
+      handoverEmail = await this.notifyHospitalHandoverEmail(existing.emergencyRequest.id, data.clinicalNotes);
     }
 
-    return result;
+    return handoverEmail ? { ...result, handoverEmail } : result;
   }
 
   private resolveUploadUrl(path?: string | null): string | undefined {
@@ -361,15 +363,42 @@ export class NursesService {
     return value.startsWith('/') ? `${apiBase}${value}` : `${apiBase}/${value}`;
   }
 
-  private async notifyHospitalHandoverEmail(emergencyRequestId: string, clinicalNotes: string) {
-    const handover = parseHandoverEmailPayload(clinicalNotes);
-    const email = handover?.hospitalNotifyEmail?.trim();
-    if (!handover || !email) return;
+  private resolveHandoverNotifyEmail(
+    handover: NonNullable<ReturnType<typeof parseHandoverEmailPayload>>,
+    request: {
+      destinationHospital?: {
+        email?: string | null;
+        branches?: unknown;
+      } | null;
+    },
+  ): string | null {
+    const fromForm = resolveDeliverableEmail(handover.hospitalNotifyEmail);
+    if (fromForm) return fromForm;
 
-    if (!isValidEmailAddress(email)) {
-      this.logger.warn(`Handover email skipped — invalid address "${email}" for case ${emergencyRequestId}`);
-      return;
+    const hospital = request.destinationHospital;
+    const hospitalEmail = resolveDeliverableEmail(hospital?.email);
+    if (hospitalEmail) return hospitalEmail;
+
+    const branches = Array.isArray(hospital?.branches) ? hospital.branches : [];
+    for (const branch of branches) {
+      if (!branch || typeof branch !== 'object') continue;
+      const branchEmail = resolveDeliverableEmail((branch as { email?: string }).email);
+      if (branchEmail) return branchEmail;
     }
+
+    const rawForm = handover.hospitalNotifyEmail?.trim();
+    if (rawForm && isValidEmailAddress(rawForm) && isPlaceholderHospitalEmail(rawForm)) {
+      return null;
+    }
+    return null;
+  }
+
+  private async notifyHospitalHandoverEmail(
+    emergencyRequestId: string,
+    clinicalNotes: string,
+  ): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
+    const handover = parseHandoverEmailPayload(clinicalNotes);
+    if (!handover) return { sent: false, skipped: true };
 
     const request = await this.prisma.emergencyRequest.findUnique({
       where: { id: emergencyRequestId },
@@ -398,7 +427,16 @@ export class NursesService {
         },
       },
     });
-    if (!request) return;
+    if (!request) return { sent: false, error: 'Case not found for handover email' };
+
+    const email = this.resolveHandoverNotifyEmail(handover, request);
+    if (!email) {
+      return {
+        sent: false,
+        skipped: true,
+        error: 'Enter a valid hospital email on handover to send the report',
+      };
+    }
 
     const patientName = handover.patientName || request.patient?.fullName || 'Unknown';
     const documentUrl = this.resolveUploadUrl(handover.handoverDocumentUrl);
@@ -412,7 +450,7 @@ export class NursesService {
 
     const intro = `Aamin Ambulance is transferring patient ${patientName} (case ${request.trackingCode}) to your facility. The complete handover record is included below for your receiving team.`;
 
-    const sent = await this.mailService.sendHandoverReportEmail(email, {
+    const mailResult = await this.mailService.sendHandoverReportEmail(email, {
       subject: `Patient handover — ${request.trackingCode} — ${patientName}`,
       intro,
       sections,
@@ -420,13 +458,16 @@ export class NursesService {
       senderName: handover.nurseName || 'Aamin Ambulance EMS',
     });
 
-    if (sent) {
+    if (mailResult.sent) {
       this.logger.log(`Full handover email sent to ${email} for case ${request.trackingCode}`);
-    } else {
-      this.logger.warn(
-        `Handover email could not be sent to ${email} for case ${request.trackingCode} — check SMTP configuration`,
-      );
+      return { sent: true };
     }
+
+    const error =
+      mailResult.error ||
+      'Email server is not configured or rejected the message — check SMTP settings in backend/.env';
+    this.logger.warn(`Handover email could not be sent to ${email} for case ${request.trackingCode} — ${error}`);
+    return { sent: false, error };
   }
 
   private async notifyDriverPatientLoaded(emergencyRequestId: string) {

@@ -1,7 +1,52 @@
-import { ConflictException } from '@nestjs/common';
-import { EmergencyRequestStatus } from '@prisma/client';
+import { ConflictException, Logger } from '@nestjs/common';
+import { EmergencyRequestStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OCCUPIED_CASE_STATUSES } from './active-case-statuses';
+
+const duplicateCrewLogger = new Logger('DuplicateActiveCrew');
+
+/** Prisma client or interactive transaction — used for atomic crew checks. */
+export type DbClient = PrismaService | Prisma.TransactionClient;
+
+const OCCUPIED_STATUS_RANK: Record<string, number> = {
+  ASSIGNED: 1,
+  DISPATCHED: 2,
+  EN_ROUTE: 3,
+  ARRIVED_SCENE: 4,
+  PATIENT_STABILIZED: 5,
+  TRANSPORTING: 6,
+  ARRIVED_HOSPITAL: 7,
+};
+
+function caseProgressScore(row: { status: string; updatedAt: Date }): number {
+  const rank = OCCUPIED_STATUS_RANK[row.status] ?? 0;
+  return rank * 1e15 + row.updatedAt.getTime();
+}
+
+type ActiveCrewRow = {
+  id: string;
+  trackingCode: string;
+  status: EmergencyRequestStatus;
+  driverId: string | null;
+  nurseId: string | null;
+  ambulanceId: string | null;
+  updatedAt: Date;
+};
+
+function groupActiveByKey(
+  rows: ActiveCrewRow[],
+  key: 'driverId' | 'nurseId' | 'ambulanceId',
+): Map<string, ActiveCrewRow[]> {
+  const map = new Map<string, ActiveCrewRow[]>();
+  for (const row of rows) {
+    const id = row[key];
+    if (!id) continue;
+    const list = map.get(id) ?? [];
+    list.push(row);
+    map.set(id, list);
+  }
+  return map;
+}
 
 /** Case is closed — crew on this case may be assigned elsewhere. */
 export const TERMINAL_CASE_STATUSES: EmergencyRequestStatus[] = ['COMPLETED', 'CANCELLED'];
@@ -25,7 +70,81 @@ export type CrewAssignmentIds = {
  * Clear crew links on pre-dispatch cases (PENDING/REVIEWING) and reset stuck ON_DUTY
  * employees/ambulances that are not on an in-progress mission.
  */
-export async function reconcileCrewOccupancy(prisma: PrismaService): Promise<number> {
+/**
+ * One driver/nurse/ambulance may only appear on a single in-progress case.
+ * Stale duplicates are returned to PENDING without crew so dispatch can reassign.
+ */
+export async function resolveDuplicateActiveCrewCases(prisma: DbClient): Promise<number> {
+  const active = await prisma.emergencyRequest.findMany({
+    where: { status: { in: OCCUPIED_CASE_STATUSES } },
+    select: {
+      id: true,
+      trackingCode: true,
+      status: true,
+      driverId: true,
+      nurseId: true,
+      ambulanceId: true,
+      updatedAt: true,
+    },
+  });
+
+  if (active.length < 2) return 0;
+
+  const staleIds = new Set<string>();
+
+  const markDuplicates = (groups: Map<string, typeof active>) => {
+    for (const cases of groups.values()) {
+      if (cases.length <= 1) continue;
+      const sorted = [...cases].sort((a, b) => caseProgressScore(b) - caseProgressScore(a));
+      const primary = sorted[0];
+      for (const row of sorted.slice(1)) {
+        staleIds.add(row.id);
+        duplicateCrewLogger.warn(
+          `Duplicate active crew: ${row.trackingCode} (${row.status}) shares crew with ${primary.trackingCode} (${primary.status}) — returning stale case to pending`,
+        );
+      }
+    }
+  };
+
+  markDuplicates(groupActiveByKey(active, 'driverId'));
+  markDuplicates(groupActiveByKey(active, 'nurseId'));
+  markDuplicates(groupActiveByKey(active, 'ambulanceId'));
+
+  if (!staleIds.size) return 0;
+
+  const byId = new Map(active.map((row) => [row.id, row]));
+  let repaired = 0;
+
+  for (const staleId of staleIds) {
+    const row = byId.get(staleId);
+    if (!row) continue;
+
+    await prisma.emergencyRequest.update({
+      where: { id: staleId },
+      data: {
+        status: 'PENDING',
+        driverId: null,
+        nurseId: null,
+        ambulanceId: null,
+        assignedAt: null,
+        dispatchedAt: null,
+        statusLogs: {
+          create: {
+            fromStatus: row.status,
+            toStatus: 'PENDING',
+            notes:
+              'System auto-resolved duplicate crew assignment — this case was returned to the pending queue. Reassign crew when ready.',
+          },
+        },
+      },
+    });
+    repaired += 1;
+  }
+
+  return repaired;
+}
+
+export async function reconcileCrewOccupancy(prisma: DbClient): Promise<number> {
   let repaired = 0;
 
   const orphanedCases = await prisma.emergencyRequest.findMany({
@@ -118,7 +237,7 @@ export async function reconcileCrewOccupancy(prisma: PrismaService): Promise<num
 
 /** Crew assigned to an in-progress mission cannot take another case. */
 export async function getBusyCrewMaps(
-  prisma: PrismaService,
+  prisma: DbClient,
   excludeCaseId?: string,
 ): Promise<BusyCrewMaps> {
   const rows = await prisma.emergencyRequest.findMany({
@@ -159,7 +278,7 @@ export async function getBusyCrewMaps(
 
 /** Block assignment when driver, nurse, or ambulance is already on another in-progress mission. */
 export async function assertCrewAvailableForAssignment(
-  prisma: PrismaService,
+  prisma: DbClient,
   params: CrewAssignmentIds,
   excludeCaseId?: string,
 ): Promise<void> {
@@ -192,7 +311,7 @@ export async function assertCrewAvailableForAssignment(
 }
 
 /** Mark crew and ambulance as occupied when linked to an in-progress mission. */
-export async function occupyCrewForCase(prisma: PrismaService, params: CrewAssignmentIds) {
+export async function occupyCrewForCase(prisma: DbClient, params: CrewAssignmentIds) {
   const crewIds = [params.driverId, params.nurseId].filter(Boolean) as string[];
   if (crewIds.length) {
     await prisma.employee.updateMany({
@@ -209,7 +328,7 @@ export async function occupyCrewForCase(prisma: PrismaService, params: CrewAssig
 }
 
 /** Free crew and ambulance when a case closes or crew is removed. */
-export async function releaseCrewForCase(prisma: PrismaService, params: CrewAssignmentIds) {
+export async function releaseCrewForCase(prisma: DbClient, params: CrewAssignmentIds) {
   const crewIds = [params.driverId, params.nurseId].filter(Boolean) as string[];
   if (crewIds.length) {
     await prisma.employee.updateMany({

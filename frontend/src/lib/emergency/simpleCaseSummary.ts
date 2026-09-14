@@ -5,6 +5,7 @@ import {
   CONSCIOUS_STATUS_OPTIONS,
 } from './triageOptions'
 import { normalizeBreathingStatus, triageOptionLabel } from './callerReport'
+import { formatRequestSourceLabel } from './requestSourceLabels'
 
 export type SimpleCaseField = { label: string; value: string }
 
@@ -52,7 +53,7 @@ export function buildSimpleCaseSummary(request: EmergencyRequest): SimpleCaseFie
   }
 
   if (request.requestSource) {
-    rows.push({ label: 'Source', value: request.requestSource.replace(/_/g, ' ') })
+    rows.push({ label: 'Source', value: formatRequestSourceLabel(request.requestSource) })
   }
 
   const statusLine = [
