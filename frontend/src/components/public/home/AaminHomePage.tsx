@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BookOpen,
   Building2,
-  Clock,
   HeartHandshake,
   HeartPulse,
   Mail,
@@ -25,6 +24,8 @@ import {
   HOME_VALUES,
   HOME_WHY,
 } from './homeContent'
+import HomeBlogSection from '@/components/public/blog/HomeBlogSection'
+import HeroImageCarousel from './HeroImageCarousel'
 
 const SERVICE_ICONS = {
   ambulance: Truck,
@@ -145,30 +146,7 @@ export default function AaminHomePage() {
               </div>
             </div>
 
-            <div className="relative">
-              <div className="rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/50">
-                <div className="aspect-[4/3] rounded-2xl bg-gradient-to-br from-[#0B1220] via-slate-800 to-red-900 flex flex-col items-center justify-center text-center p-8 relative overflow-hidden">
-                  <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_20%,#ef4444,transparent_50%)]" />
-                  <Truck className="h-20 w-20 text-red-400 mb-4 relative" strokeWidth={1.25} />
-                  <p className="text-white font-bold text-lg relative">Pre-Hospital Emergency Care</p>
-                  <p className="text-slate-300 text-sm mt-2 max-w-xs relative">
-                    Professional ambulance response for urgent medical situations in Mogadishu
-                  </p>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-slate-50 p-4">
-                    <Clock className="h-5 w-5 text-red-600 mb-2" />
-                    <p className="text-sm font-bold text-slate-900">24 Hours</p>
-                    <p className="text-xs text-slate-500 mt-1">Always available</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 p-4">
-                    <HeartPulse className="h-5 w-5 text-red-600 mb-2" />
-                    <p className="text-sm font-bold text-slate-900">Free Service</p>
-                    <p className="text-xs text-slate-500 mt-1">Ambulance response</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <HeroImageCarousel />
           </div>
         </div>
       </section>
@@ -373,6 +351,8 @@ export default function AaminHomePage() {
           </div>
         </div>
       </section>
+
+      <HomeBlogSection />
 
       {/* Contact */}
       <section id="contact" className="py-20 bg-slate-50 scroll-mt-28">

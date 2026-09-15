@@ -46,6 +46,7 @@ import {
   ShieldCheck,
   XCircle,
   ListTodo,
+  Newspaper,
 } from 'lucide-react'
 
 const SIDEBAR = {
@@ -117,6 +118,11 @@ const masterDataSubMenu = [
   { href: '/admin/master-data/mission', label: 'Mission Configuration', icon: ClipboardList },
 ]
 
+const contentManagementSubMenu = [
+  { href: '/admin/blog', label: 'Blog', icon: Newspaper, exact: true },
+  { href: '/admin/blog/create', label: 'Create Post', icon: PlusCircle },
+]
+
 export default function AdminSidebar() {
   const { logout } = useAuth()
   const pathname = usePathname()
@@ -147,6 +153,8 @@ export default function AdminSidebar() {
   const isAnalyticsActive = pathname.startsWith('/admin/reports')
   const isMasterDataActive = pathname.startsWith('/admin/master-data')
   const isSystemSettingsActive = pathname.startsWith('/admin/system-settings')
+  const isContentManagementActive =
+    pathname.startsWith('/admin/blog')
 
   const [emergencyOperationsOpen, setEmergencyOperationsOpen] = useState(isEmergencyOperationsActive)
   const [patientsOpen, setPatientsOpen] = useState(isPatientsActive)
@@ -161,6 +169,7 @@ export default function AdminSidebar() {
   const [analyticsOpen, setAnalyticsOpen] = useState(isAnalyticsActive)
   const [masterDataOpen, setMasterDataOpen] = useState(isMasterDataActive)
   const [accessControlOpen, setAccessControlOpen] = useState(isAccessControlActive)
+  const [contentManagementOpen, setContentManagementOpen] = useState(isContentManagementActive)
 
   const renderLink = (
     href: string,
@@ -404,6 +413,14 @@ export default function AdminSidebar() {
             setOpen={setAccessControlOpen}
           />
         </div>
+        {renderCollapsible(
+          'Content Management',
+          FileText,
+          isContentManagementActive,
+          contentManagementOpen,
+          setContentManagementOpen,
+          contentManagementSubMenu,
+        )}
         {renderLink('/admin/system-settings', 'System Settings', Settings, isSystemSettingsActive)}
       </nav>
 

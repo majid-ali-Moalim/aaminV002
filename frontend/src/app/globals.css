@@ -303,3 +303,48 @@
   border-radius: 12px;
   overflow: hidden;
 }
+
+.blog-article h1,
+.blog-article h2,
+.blog-article h3 {
+  color: #0f172a;
+  font-weight: 800;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  line-height: 1.25;
+}
+
+.blog-article p {
+  margin-bottom: 1em;
+  line-height: 1.75;
+  color: #334155;
+}
+
+.blog-article ul,
+.blog-article ol {
+  margin: 1em 0 1em 1.25em;
+  color: #334155;
+}
+
+.blog-article li {
+  margin-bottom: 0.35em;
+}
+
+.blog-article blockquote {
+  border-left: 4px solid #dc2626;
+  padding-left: 1rem;
+  margin: 1.25em 0;
+  color: #475569;
+  font-style: italic;
+}
+
+.blog-article a {
+  color: #dc2626;
+  text-decoration: underline;
+}
+
+.blog-editor h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.75em 0 0.35em;
+}

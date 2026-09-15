@@ -23,7 +23,7 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-class ApiService {
+export class ApiService {
   private api: AxiosInstance
 
   constructor() {

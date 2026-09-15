@@ -28,6 +28,7 @@ const Navbar = () => {
   const publicNavItems = [
     { href: '/', label: 'Home' },
     { href: '/about', label: 'About' },
+    { href: '/blog', label: 'Blog' },
     { href: '/contact', label: 'Contact' },
     { href: '/track', label: 'Tracking Patient' },
   ]
